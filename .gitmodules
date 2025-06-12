@@ -1,0 +1,12 @@
+[submodule "definable.ai"]
+	path = definable.ai
+	url = https://github.com/definableai/definable.ai
+[submodule "libs/definable"]
+	path = libs/definable
+	url = https://github.com/definableai/definable.ai
+[submodule "libs/definable-test"]
+	path = libs/definable-test
+	url = https://github.com/definableai/definable.ai
+[submodule "src/libs/definable-test"]
+	path = src/libs/definable-test
+	url = https://github.com/definableai/definable.ai
