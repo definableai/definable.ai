@@ -264,8 +264,6 @@ class OpenAIChat(Model):
     if self.request_params:
       request_params.update(self.request_params)
 
-    print(request_params)
-
     if request_params:
       log_debug(f"Calling {self.provider} with request parameters: {request_params}", log_level=2)
     return request_params
@@ -399,8 +397,6 @@ class OpenAIChat(Model):
         run_response.metrics.set_time_to_first_token()
 
       assistant_message.metrics.start_timer()
-      formatted_messages = [self._format_message(m, compress_tool_results) for m in messages]
-      print(formatted_messages)
 
       provider_response = self.get_client().chat.completions.create(
         model=self.id,

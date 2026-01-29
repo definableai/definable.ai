@@ -13,6 +13,12 @@ from pydantic import BaseModel
 
 @dataclass
 class RunContext:
+  """
+  Context passed through the agent execution pipeline.
+
+  Carries run identifiers, dependencies, state, and knowledge retrieval results.
+  """
+
   run_id: str
   session_id: str
   user_id: Optional[str] = None
@@ -22,6 +28,10 @@ class RunContext:
   metadata: Optional[Dict[str, Any]] = None
   session_state: Optional[Dict[str, Any]] = None
   output_schema: Optional[Union[Type[BaseModel], Dict[str, Any]]] = None
+
+  # Knowledge retrieval results (populated by KnowledgeMiddleware)
+  knowledge_context: Optional[str] = None  # Formatted context string for injection
+  knowledge_documents: Optional[List[Any]] = None  # Retrieved Document objects
 
 
 @dataclass
