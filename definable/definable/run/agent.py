@@ -455,7 +455,6 @@ RunOutputEvent = Union[
   CustomEvent,
 ]
 
-
 # Map event string to dataclass
 RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.run_started.value: RunStartedEvent,
