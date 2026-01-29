@@ -21,6 +21,7 @@ from definable.agents.toolkit import Toolkit
 from definable.agents.tracing.base import TraceWriter
 from definable.media import Audio, File, Image, Video
 from definable.models.message import Message
+from definable.models.metrics import Metrics
 from definable.models.response import ToolExecution
 from definable.run.agent import (
   RunCompletedEvent,
@@ -335,7 +336,7 @@ class Agent:
     output_schema: Optional[Type[BaseModel]] = None,
   ) -> Iterator[RunOutputEvent]:
     """
-    Streaming run that yields events as they occur.
+    Streaming run that yields events as they occur in real-time.
 
     Args:
         instruction: New user message.
@@ -348,36 +349,46 @@ class Agent:
     Yields:
         RunOutputEvent instances as the run progresses.
     """
+    import queue
+    import threading
 
-    # For sync streaming, we collect from async and yield
-    async def collect():
-      events = []
-      async for event in self.arun_stream(
-        instruction,
-        messages=messages,
-        session_id=session_id,
-        run_id=run_id,
-        images=images,
-        output_schema=output_schema,
-      ):
-        events.append(event)
-      return events
+    event_queue: queue.Queue[Union[RunOutputEvent, Exception, None]] = queue.Queue()
 
-    try:
-      loop = asyncio.get_running_loop()
-    except RuntimeError:
-      loop = None
+    def run_async_stream() -> None:
+      """Run async stream in background thread, push events to queue."""
 
-    if loop and loop.is_running():
-      import concurrent.futures
+      async def stream_to_queue() -> None:
+        try:
+          async for event in self.arun_stream(
+            instruction,
+            messages=messages,
+            session_id=session_id,
+            run_id=run_id,
+            images=images,
+            output_schema=output_schema,
+          ):
+            event_queue.put(event)
+        except Exception as e:
+          event_queue.put(e)
+        finally:
+          event_queue.put(None)  # Sentinel to signal completion
 
-      with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(asyncio.run, collect())
-        events = future.result()
-    else:
-      events = asyncio.run(collect())
+      asyncio.run(stream_to_queue())
 
-    yield from events
+    # Start background thread
+    thread = threading.Thread(target=run_async_stream, daemon=True)
+    thread.start()
+
+    # Yield events as they arrive
+    while True:
+      item = event_queue.get()
+      if item is None:  # Sentinel - stream complete
+        break
+      if isinstance(item, Exception):
+        raise item
+      yield item
+
+    thread.join()
 
   async def arun_stream(
     self,
@@ -445,12 +456,14 @@ class Agent:
 
       all_tool_executions: List[ToolExecution] = []
       final_content = ""
+      total_metrics: Optional[Metrics] = None
 
       # STREAMING AGENT LOOP - continues until model gives final answer
       while True:
         # Accumulate response while streaming
         accumulated_content = ""
         accumulated_tool_calls: List[Dict[str, Any]] = []
+        accumulated_metrics: Optional[Metrics] = None
 
         # Create assistant message (required by model.ainvoke_stream)
         assistant_message = Message(role="assistant")
@@ -479,14 +492,28 @@ class Agent:
           if hasattr(chunk, "tool_calls") and chunk.tool_calls:
             accumulated_tool_calls = self._merge_tool_call_deltas(accumulated_tool_calls, chunk.tool_calls)
 
+          # Accumulate metrics from chunks (usually in final chunk with usage info)
+          if hasattr(chunk, "response_usage") and chunk.response_usage is not None:
+            if accumulated_metrics is None:
+              accumulated_metrics = chunk.response_usage
+            else:
+              accumulated_metrics = accumulated_metrics + chunk.response_usage
+
         # After streaming complete, add assistant message to history
-        invoke_messages.append(
-          Message(
-            role="assistant",
-            content=accumulated_content or None,
-            tool_calls=accumulated_tool_calls or None,
-          )
+        assistant_msg = Message(
+          role="assistant",
+          content=accumulated_content or None,
+          tool_calls=accumulated_tool_calls or None,
         )
+        # Attach accumulated metrics to this message
+        if accumulated_metrics is not None:
+          assistant_msg.metrics = accumulated_metrics
+          # Aggregate into total_metrics for RunCompletedEvent
+          if total_metrics is None:
+            total_metrics = accumulated_metrics
+          else:
+            total_metrics = total_metrics + accumulated_metrics
+        invoke_messages.append(assistant_msg)
 
         # Check if no tool calls - model is done
         if not accumulated_tool_calls:
@@ -559,6 +586,7 @@ class Agent:
         agent_id=self.agent_id,
         agent_name=self.agent_name,
         content=final_content,
+        metrics=total_metrics,
       )
       self._emit(completed_event)
       yield completed_event
@@ -670,6 +698,9 @@ class Agent:
           content=response.content,
           tool_calls=response.tool_calls or None,
         )
+        # Attach metrics from model response to this message
+        if response.response_usage is not None:
+          assistant_msg.metrics = response.response_usage
         invoke_messages.append(assistant_msg)
 
         # Check if no tool calls - model is done, exit loop

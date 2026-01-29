@@ -546,6 +546,20 @@ class Model(ABC):
     """
     pass
 
+  def _calculate_cost_if_needed(self, metrics: "Metrics") -> None:
+    """
+    Calculate and set cost on metrics if not already set by provider.
+
+    This method should be called by provider implementations after setting
+    response_usage metrics. It uses the centralized pricing module.
+
+    Args:
+      metrics: Metrics object to update with calculated cost
+    """
+    if metrics.cost is None:
+      from definable.models.pricing import calculate_cost
+      metrics.cost = calculate_cost(self.provider, self.id, metrics)
+
   def _format_tools(self, tools: Optional[List[Union[Function, dict]]]) -> List[Dict[str, Any]]:
     _tool_dicts = []
     for tool in tools or []:
@@ -1039,6 +1053,10 @@ class Model(ABC):
       model_response.provider_data = provider_response.provider_data
     if provider_response.response_usage is not None:
       model_response.response_usage = provider_response.response_usage
+      # Calculate cost if not already set by provider
+      if model_response.response_usage.cost is None:
+        from definable.models.pricing import calculate_cost
+        model_response.response_usage.cost = calculate_cost(self.provider, self.id, model_response.response_usage)
 
   async def _aprocess_model_response(
     self,
@@ -1098,6 +1116,10 @@ class Model(ABC):
       model_response.provider_data = provider_response.provider_data
     if provider_response.response_usage is not None:
       model_response.response_usage = provider_response.response_usage
+      # Calculate cost if not already set by provider
+      if model_response.response_usage.cost is None:
+        from definable.models.pricing import calculate_cost
+        model_response.response_usage.cost = calculate_cost(self.provider, self.id, model_response.response_usage)
 
   def _populate_assistant_message(
     self,
@@ -1661,6 +1683,10 @@ class Model(ABC):
       assistant_message.role = stream_data.response_role
     if stream_data.response_metrics is not None:
       assistant_message.metrics = stream_data.response_metrics
+      # Calculate cost if not already set by provider
+      if assistant_message.metrics.cost is None:
+        from definable.models.pricing import calculate_cost
+        assistant_message.metrics.cost = calculate_cost(self.provider, self.id, assistant_message.metrics)
     if stream_data.response_content:
       assistant_message.content = stream_data.response_content
     if stream_data.response_reasoning_content:

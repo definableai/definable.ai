@@ -779,6 +779,7 @@ class OpenAIChat(Model):
 
     if response.usage is not None:
       model_response.response_usage = self._get_metrics(response.usage)
+      self._calculate_cost_if_needed(model_response.response_usage)
 
     if model_response.provider_data is None:
       model_response.provider_data = {}
@@ -876,6 +877,7 @@ class OpenAIChat(Model):
     # Add usage metrics if present
     if response_delta.usage is not None:
       model_response.response_usage = self._get_metrics(response_delta.usage)
+      self._calculate_cost_if_needed(model_response.response_usage)
 
     return model_response
 
