@@ -86,5 +86,35 @@
       "input_per_million": 6.00,
       "output_per_million": 6.00
     }
+  },
+  "cohere": {
+    "command-a-03-2025": {
+      "input_per_million": 2.50,
+      "output_per_million": 10.00
+    },
+    "command-a-translate-08-2025": {
+      "input_per_million": 2.50,
+      "output_per_million": 10.00
+    },
+    "command-a-reasoning-08-2025": {
+      "input_per_million": 2.50,
+      "output_per_million": 10.00
+    },
+    "command-a-vision-07-2025": {
+      "input_per_million": 2.50,
+      "output_per_million": 10.00
+    },
+    "command-r-08-2024": {
+      "input_per_million": 0.15,
+      "output_per_million": 0.60
+    },
+    "command-r-plus-08-2024": {
+      "input_per_million": 2.50,
+      "output_per_million": 10.00
+    },
+    "command-r7b-12-2024": {
+      "input_per_million": 0.0375,
+      "output_per_million": 0.15
+    }
   }
 }
