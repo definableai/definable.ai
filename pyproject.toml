@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "docstring-parser>=0.17.0",
-    "httpx>=0.28.1",
+    "httpx[http2]>=0.28.1",
     "openai>=2.15.0",
     "packaging>=26.0",
     "pydantic>=2.12.5",
