@@ -722,10 +722,6 @@ class RunOutput:
     for event in events or []:
       if "agent_id" in event:
         event = run_output_event_from_dict(event)
-      # else:
-      #   # Team events are not supported in this fork
-      #   # from agno.run.team import team_run_output_event_from_dict
-      #   # event = team_run_output_event_from_dict(event)
       final_events.append(event)
     events = final_events
 

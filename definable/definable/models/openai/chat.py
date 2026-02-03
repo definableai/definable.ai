@@ -264,8 +264,6 @@ class OpenAIChat(Model):
     if self.request_params:
       request_params.update(self.request_params)
 
-    print(request_params)
-
     if request_params:
       log_debug(f"Calling {self.provider} with request parameters: {request_params}", log_level=2)
     return request_params
@@ -399,8 +397,6 @@ class OpenAIChat(Model):
         run_response.metrics.set_time_to_first_token()
 
       assistant_message.metrics.start_timer()
-      formatted_messages = [self._format_message(m, compress_tool_results) for m in messages]
-      print(formatted_messages)
 
       provider_response = self.get_client().chat.completions.create(
         model=self.id,
@@ -410,7 +406,7 @@ class OpenAIChat(Model):
       )
       assistant_message.metrics.stop_timer()
 
-      # Parse the response into an Agno ModelResponse object
+      # Parse the response into a Definable ModelResponse object
       model_response = self._parse_provider_response(provider_response, response_format=response_format)
 
       return model_response
@@ -484,7 +480,7 @@ class OpenAIChat(Model):
       )
       assistant_message.metrics.stop_timer()
 
-      # Parse the response into an Agno ModelResponse object
+      # Parse the response into a Definable ModelResponse object
       provider_response: ModelResponse = self._parse_provider_response(response, response_format=response_format)
 
       return provider_response
@@ -883,7 +879,7 @@ class OpenAIChat(Model):
 
   def _get_metrics(self, response_usage: CompletionUsage) -> Metrics:
     """
-    Parse the given OpenAI-specific usage into an Agno Metrics object.
+    Parse the given OpenAI-specific usage into a Definable Metrics object.
 
     Args:
         response_usage: Usage data from OpenAI

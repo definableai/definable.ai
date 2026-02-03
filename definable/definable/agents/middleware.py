@@ -1,10 +1,14 @@
 """Middleware protocol and common implementations for agent execution."""
 
 import asyncio
+import json
 import logging
-from typing import TYPE_CHECKING, Awaitable, Callable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+  from definable.agents.config import KnowledgeConfig
+  from definable.knowledge import Document
+  from definable.models.message import Message
   from definable.run.agent import RunOutput
   from definable.run.base import RunContext
 
@@ -223,3 +227,196 @@ class MetricsMiddleware:
     self._run_count = 0
     self._total_latency_ms = 0.0
     self._error_count = 0
+
+
+class KnowledgeMiddleware:
+  """
+  Middleware for RAG (Retrieval-Augmented Generation) integration.
+
+  Retrieves relevant documents from a knowledge base before agent execution
+  and injects them into the context for enhanced responses.
+
+  Pipeline:
+    1. Extract query from user message(s)
+    2. Search knowledge base for relevant documents
+    3. Filter by minimum relevance score
+    4. Format documents as context string
+    5. Store in RunContext for system message injection
+
+  Example:
+    from definable.agents.middleware import KnowledgeMiddleware
+    from definable.agents.config import KnowledgeConfig
+
+    middleware = KnowledgeMiddleware(KnowledgeConfig(
+      knowledge=kb,
+      top_k=5,
+      rerank=True,
+      context_format="xml",
+    ))
+    agent.use(middleware)
+  """
+
+  def __init__(self, config: "KnowledgeConfig"):
+    """
+    Initialize knowledge middleware.
+
+    Args:
+      config: Knowledge configuration with retrieval settings.
+    """
+    self.config = config
+
+  async def __call__(
+    self,
+    context: "RunContext",
+    next_handler: NextHandler,
+  ) -> "RunOutput":
+    """
+    Retrieve knowledge and enrich context before execution.
+
+    Args:
+      context: Run context with metadata containing messages.
+      next_handler: Next middleware or core execution handler.
+
+    Returns:
+      RunOutput from the handler chain.
+    """
+    if not self.config.enabled:
+      return await next_handler(context)
+
+    # Extract query from messages stored in context metadata
+    messages = context.metadata.get("_messages") if context.metadata else None
+    if not messages:
+      return await next_handler(context)
+
+    query = self._extract_query(messages)
+    if not query:
+      return await next_handler(context)
+
+    # Retrieve relevant documents
+    try:
+      documents = await self.config.knowledge.asearch(
+        query=query,
+        top_k=self.config.top_k,
+        rerank=self.config.rerank,
+      )
+    except Exception:
+      # Don't fail the run if knowledge retrieval fails
+      return await next_handler(context)
+
+    # Filter by minimum score if configured
+    if self.config.min_score is not None:
+      documents = [
+        doc for doc in documents
+        if doc.reranking_score is not None and doc.reranking_score >= self.config.min_score
+      ]
+
+    if not documents:
+      return await next_handler(context)
+
+    # Format and store context
+    context_text = self._format_context(documents)
+    context.knowledge_context = context_text
+    context.knowledge_documents = documents
+
+    # Store position preference for agent to use
+    if context.metadata is None:
+      context.metadata = {}
+    context.metadata["_knowledge_position"] = self.config.context_position
+
+    return await next_handler(context)
+
+  def _extract_query(self, messages: List["Message"]) -> Optional[str]:
+    """
+    Extract search query from conversation messages.
+
+    Args:
+      messages: List of conversation messages.
+
+    Returns:
+      Query string or None if no user message found.
+    """
+    if self.config.query_from == "last_user":
+      # Find last user message
+      for msg in reversed(messages):
+        if msg.role == "user" and msg.content:
+          content = msg.content if isinstance(msg.content, str) else str(msg.content)
+          return content[: self.config.max_query_length]
+      return None
+
+    elif self.config.query_from == "full_conversation":
+      # Concatenate all user messages
+      user_contents: List[str] = []
+      for msg in messages:
+        if msg.role == "user" and msg.content:
+          content = msg.content if isinstance(msg.content, str) else str(msg.content)
+          user_contents.append(content)
+      if user_contents:
+        full_query = " ".join(user_contents)
+        return full_query[: self.config.max_query_length]
+      return None
+
+    return None
+
+  def _format_context(self, documents: List["Document"]) -> str:
+    """
+    Format retrieved documents as context string.
+
+    Args:
+      documents: List of retrieved documents.
+
+    Returns:
+      Formatted context string.
+    """
+    if self.config.context_format == "xml":
+      return self._format_xml(documents)
+    elif self.config.context_format == "markdown":
+      return self._format_markdown(documents)
+    elif self.config.context_format == "json":
+      return self._format_json(documents)
+    return self._format_xml(documents)
+
+  def _format_xml(self, documents: List["Document"]) -> str:
+    """Format as XML-style context block."""
+    lines = ["<knowledge_context>"]
+    for i, doc in enumerate(documents):
+      attrs = [f'index="{i + 1}"']
+      if doc.reranking_score is not None:
+        attrs.append(f'relevance="{doc.reranking_score:.3f}"')
+      if doc.source:
+        attrs.append(f'source="{doc.source}"')
+      if doc.name:
+        attrs.append(f'name="{doc.name}"')
+      attr_str = " ".join(attrs)
+      lines.append(f"  <document {attr_str}>")
+      lines.append(f"    {doc.content}")
+      lines.append("  </document>")
+    lines.append("</knowledge_context>")
+    return "\n".join(lines)
+
+  def _format_markdown(self, documents: List["Document"]) -> str:
+    """Format as Markdown."""
+    lines = ["## Retrieved Context\n"]
+    for i, doc in enumerate(documents):
+      score_str = f" (relevance: {doc.reranking_score:.3f})" if doc.reranking_score else ""
+      name_str = f" - {doc.name}" if doc.name else ""
+      lines.append(f"### Document {i + 1}{name_str}{score_str}")
+      lines.append("")
+      lines.append(doc.content)
+      if doc.source:
+        lines.append(f"\n*Source: {doc.source}*")
+      lines.append("")
+    return "\n".join(lines)
+
+  def _format_json(self, documents: List["Document"]) -> str:
+    """Format as JSON."""
+    data = [
+      {
+        "index": i + 1,
+        "content": doc.content,
+        "name": doc.name,
+        "source": doc.source,
+        "relevance": doc.reranking_score,
+      }
+      for i, doc in enumerate(documents)
+    ]
+    return json.dumps({"knowledge_context": data}, indent=2)

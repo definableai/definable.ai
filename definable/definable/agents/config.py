@@ -1,11 +1,57 @@
 """Agent configuration with immutable settings."""
 
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional
 
 if TYPE_CHECKING:
   from definable.agents.tracing.base import TraceExporter
+  from definable.knowledge import Knowledge
   from definable.run.base import BaseRunOutputEvent
+
+
+@dataclass
+class KnowledgeConfig:
+  """
+  Configuration for knowledge base integration with agents.
+
+  Controls how knowledge is retrieved and injected into the agent's context,
+  enabling RAG (Retrieval-Augmented Generation) capabilities.
+
+  Attributes:
+    knowledge: Knowledge base instance for retrieval.
+    top_k: Number of documents to retrieve per query.
+    rerank: Whether to rerank results for better relevance.
+    min_score: Minimum relevance score threshold (0.0 to 1.0).
+    context_format: Format for injected context ("xml", "markdown", "json").
+    context_position: Where to inject context ("system" or "before_user").
+    query_from: How to extract query ("last_user", "full_conversation").
+    max_query_length: Maximum characters to use from user message for query.
+    enabled: Runtime toggle to enable/disable retrieval.
+
+  Example:
+    from definable.agents.config import AgentConfig, KnowledgeConfig
+    from definable.knowledge import Knowledge
+
+    kb = Knowledge(vector_db=..., embedder=...)
+    config = AgentConfig(
+      knowledge=KnowledgeConfig(
+        knowledge=kb,
+        top_k=5,
+        rerank=True,
+        context_format="xml",
+      ),
+    )
+  """
+
+  knowledge: "Knowledge"
+  top_k: int = 5
+  rerank: bool = True
+  min_score: Optional[float] = None
+  context_format: Literal["xml", "markdown", "json"] = "xml"
+  context_position: Literal["system", "before_user"] = "system"
+  query_from: Literal["last_user", "full_conversation"] = "last_user"
+  max_query_length: int = 500
+  enabled: bool = True
 
 
 @dataclass
@@ -53,6 +99,9 @@ class AgentConfig:
   # Tracing configuration (not frozen, but typically set once)
   tracing: Optional[TracingConfig] = field(default=None, hash=False)
 
+  # Knowledge base configuration for RAG
+  knowledge: Optional[KnowledgeConfig] = field(default=None, hash=False)
+
   # Context defaults
   session_state: Optional[Dict[str, Any]] = field(default=None, hash=False)
   dependencies: Optional[Dict[str, Any]] = field(default=None, hash=False)
@@ -83,11 +132,14 @@ class AgentConfig:
     Returns:
         New AgentConfig instance with updated values.
     """
-    current = {k: v for k, v in asdict(self).items() if k not in ("tracing", "session_state", "dependencies")}
+    # Fields that cannot be serialized with asdict
+    non_serializable = ("tracing", "session_state", "dependencies", "knowledge")
+    current = {k: v for k, v in asdict(self).items() if k not in non_serializable}
     # Handle non-serializable fields separately
     current["tracing"] = self.tracing
     current["session_state"] = self.session_state
     current["dependencies"] = self.dependencies
+    current["knowledge"] = self.knowledge
     current.update(kwargs)
     return AgentConfig(**current)
 

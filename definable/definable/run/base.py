@@ -13,6 +13,12 @@ from pydantic import BaseModel
 
 @dataclass
 class RunContext:
+  """
+  Context passed through the agent execution pipeline.
+
+  Carries run identifiers, dependencies, state, and knowledge retrieval results.
+  """
+
   run_id: str
   session_id: str
   user_id: Optional[str] = None
@@ -22,6 +28,10 @@ class RunContext:
   metadata: Optional[Dict[str, Any]] = None
   session_state: Optional[Dict[str, Any]] = None
   output_schema: Optional[Union[Type[BaseModel], Dict[str, Any]]] = None
+
+  # Knowledge retrieval results (populated by KnowledgeMiddleware)
+  knowledge_context: Optional[str] = None  # Formatted context string for injection
+  knowledge_documents: Optional[List[Any]] = None  # Retrieved Document objects
 
 
 @dataclass
@@ -202,40 +212,6 @@ class BaseRunOutputEvent:
     metrics = data.pop("metrics", None)
     if metrics:
       data["metrics"] = Metrics(**metrics)
-
-    # session_summary = data.pop("session_summary", None)
-    # if session_summary:
-    #   from agno.session.summary import SessionSummary
-
-    #   data["session_summary"] = SessionSummary.from_dict(session_summary)
-
-    # run_input = data.pop("run_input", None)
-    # if run_input:
-    #   from agno.run.team import BaseTeamRunEvent
-
-    #   if issubclass(cls, BaseTeamRunEvent):
-    #     from agno.run.team import TeamRunInput
-
-    #     data["run_input"] = TeamRunInput.from_dict(run_input)
-    #   else:
-    #     from agno.run.agent import RunInput
-
-    #     data["run_input"] = RunInput.from_dict(run_input)
-
-    # Handle requirements
-
-    # Handle requirements
-    # requirements_data = data.pop("requirements", None)
-    # if requirements_data is not None:
-    #   from agno.run.requirement import RunRequirement
-
-    #   requirements_list: List[RunRequirement] = []
-    #   for item in requirements_data:
-    #     if isinstance(item, RunRequirement):
-    #       requirements_list.append(item)
-    #     elif isinstance(item, dict):
-    #       requirements_list.append(RunRequirement.from_dict(item))
-    #   data["requirements"] = requirements_list if requirements_list else None
 
     # Filter data to only include fields that are actually defined in the target class
     from dataclasses import fields

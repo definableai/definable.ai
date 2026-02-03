@@ -1,6 +1,7 @@
 """Model pricing calculation module for computing API costs based on token usage."""
-from dataclasses import dataclass
+
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -10,6 +11,7 @@ from definable.models.metrics import Metrics
 @dataclass
 class ModelPricing:
   """Pricing configuration for a specific model (rates per million tokens)."""
+
   input_per_million: float = 0.0
   output_per_million: float = 0.0
   cached_input_per_million: Optional[float] = None
@@ -65,6 +67,7 @@ class ModelPricing:
 
 class PricingRegistry:
   """Singleton registry for model pricing configurations."""
+
   _instance: Optional["PricingRegistry"] = None
   _pricing_data: dict[str, Any]
 

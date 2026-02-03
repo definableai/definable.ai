@@ -489,7 +489,7 @@ def count_image_tokens(image: Image) -> int:
 # =============================================================================
 # Audio Token Counting
 # =============================================================================
-# This is an Agno-specific implementation using a conservative estimate of 25 tokens per second of audio.
+# This is an Definable-specific implementation using a conservative estimate of 25 tokens per second of audio.
 # OpenAI's Whisper model actually uses ~50 tokens/second (20ms per token), but this estimate is more conservative for context window planning.
 # Example:
 #     10 seconds of audio: 10 * 25 = 250 tokens
@@ -506,7 +506,7 @@ def count_audio_tokens(audio: Audio) -> int:
 # =============================================================================
 # Video Token Counting
 # =============================================================================
-# This is an Agno-specific implementation that treats video as a sequence of
+# This is an Definable-specific implementation that treats video as a sequence of
 # images, applying the OpenAI image token formula to each frame.
 # Example:
 #     5 second video at 1 fps with 512x512 resolution:

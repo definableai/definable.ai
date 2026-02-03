@@ -2,7 +2,7 @@
 Definable Agents - Production-grade agent framework.
 
 This module provides the Agent class for building LLM-powered agents
-with tools, middleware, and tracing support.
+with tools, middleware, tracing, and knowledge base support.
 
 Quick Start:
     from definable.agents import Agent, AgentConfig
@@ -31,6 +31,42 @@ With Toolkits:
 
     agent = Agent(model=model, toolkits=[MyToolkit()])
 
+With Knowledge Base (RAG):
+    from definable.agents import Agent, AgentConfig, KnowledgeConfig
+    from definable.knowledge import Knowledge, Document, InMemoryVectorDB
+
+    # Setup knowledge base
+    kb = Knowledge(
+        vector_db=InMemoryVectorDB(),
+        embedder=VoyageAIEmbedder(api_key="..."),
+    )
+    kb.add(Document(content="Company policy: Employees get 20 days PTO."))
+
+    # Agent with automatic RAG
+    agent = Agent(
+        model=model,
+        instructions="You are a helpful HR assistant.",
+        config=AgentConfig(
+            knowledge=KnowledgeConfig(
+                knowledge=kb,
+                top_k=5,
+                rerank=True,
+            ),
+        ),
+    )
+
+    # Agent automatically retrieves relevant context
+    response = agent.run("How many PTO days do I get?")
+
+With KnowledgeToolkit (Explicit Search):
+    from definable.agents import Agent, KnowledgeToolkit
+
+    agent = Agent(
+        model=model,
+        toolkits=[KnowledgeToolkit(knowledge=kb, top_k=5)],
+        instructions="Search the knowledge base when you need information.",
+    )
+
 With Tracing:
     from definable.agents import AgentConfig
     from definable.agents.tracing import TracingConfig, JSONLExporter
@@ -53,8 +89,9 @@ With Middleware:
 """
 
 from definable.agents.agent import Agent
-from definable.agents.config import AgentConfig, TracingConfig
+from definable.agents.config import AgentConfig, KnowledgeConfig, TracingConfig
 from definable.agents.middleware import (
+    KnowledgeMiddleware,
     LoggingMiddleware,
     MetricsMiddleware,
     Middleware,
@@ -62,6 +99,7 @@ from definable.agents.middleware import (
 )
 from definable.agents.testing import AgentTestCase, MockModel, create_test_agent
 from definable.agents.toolkit import Toolkit
+from definable.agents.toolkits import KnowledgeToolkit
 from definable.agents.tracing import (
     JSONLExporter,
     NoOpExporter,
@@ -74,12 +112,15 @@ __all__ = [
     "Agent",
     "AgentConfig",
     "TracingConfig",
+    "KnowledgeConfig",
     "Toolkit",
+    "KnowledgeToolkit",
     # Middleware
     "Middleware",
     "LoggingMiddleware",
     "RetryMiddleware",
     "MetricsMiddleware",
+    "KnowledgeMiddleware",
     # Tracing
     "TraceExporter",
     "TraceWriter",

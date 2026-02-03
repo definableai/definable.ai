@@ -115,6 +115,12 @@ class Agent:
     self._middleware: List[Middleware] = []
     self._started = False
 
+    # Auto-register knowledge middleware if configured
+    if self.config.knowledge and self.config.knowledge.enabled:
+      from definable.agents.middleware import KnowledgeMiddleware
+
+      self._middleware.insert(0, KnowledgeMiddleware(self.config.knowledge))
+
   # --- Properties ---
 
   @property
@@ -248,19 +254,36 @@ class Agent:
         )
         return future.result()
     else:
-      return asyncio.run(
-        self.arun(
-          instruction,
-          messages=messages,
-          session_id=session_id,
-          run_id=run_id,
-          images=images,
-          videos=videos,
-          audio=audio,
-          files=files,
-          output_schema=output_schema,
+      # Create a new event loop to avoid "Event loop is closed" errors
+      # when making multiple sequential sync calls with async HTTP clients
+      loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
+      try:
+        return loop.run_until_complete(
+          self.arun(
+            instruction,
+            messages=messages,
+            session_id=session_id,
+            run_id=run_id,
+            images=images,
+            videos=videos,
+            audio=audio,
+            files=files,
+            output_schema=output_schema,
+          )
         )
-      )
+      finally:
+        # Clean up pending tasks before closing
+        try:
+          pending = asyncio.all_tasks(loop)
+          for task in pending:
+            task.cancel()
+          # Allow cancelled tasks to complete
+          if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        except Exception:
+          pass
+        loop.close()
 
   async def arun(
     self,
@@ -295,18 +318,19 @@ class Agent:
     run_id = run_id or str(uuid4())
     session_id = session_id or str(uuid4())
 
-    # Build context
+    # Normalize instruction to messages
+    new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
+    all_messages = (messages or []) + new_messages
+
+    # Build context with messages in metadata for middleware access
     context = RunContext(
       run_id=run_id,
       session_id=session_id,
       dependencies=self.config.dependencies,
       session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
+      metadata={"_messages": all_messages},
     )
-
-    # Normalize instruction to messages
-    new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
-    all_messages = (messages or []) + new_messages
 
     # Build the execution chain with middleware
     async def core_handler(ctx: RunContext) -> RunOutput:
@@ -417,18 +441,30 @@ class Agent:
     run_id = run_id or str(uuid4())
     session_id = session_id or str(uuid4())
 
-    # Build context
+    # Normalize instruction to messages
+    new_messages = self._normalize_instruction(instruction, images)
+    all_messages = (messages or []) + new_messages
+
+    # Build context with messages in metadata for middleware access
     context = RunContext(
       run_id=run_id,
       session_id=session_id,
       dependencies=self.config.dependencies,
       session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
+      metadata={"_messages": all_messages},
     )
 
-    # Normalize instruction to messages
-    new_messages = self._normalize_instruction(instruction, images)
-    all_messages = (messages or []) + new_messages
+    # Run knowledge middleware if configured (streaming doesn't use middleware chain)
+    if self.config.knowledge and self.config.knowledge.enabled:
+      from definable.agents.middleware import KnowledgeMiddleware
+
+      km = KnowledgeMiddleware(self.config.knowledge)
+      # Create a dummy next_handler since we just need the retrieval side effect
+      async def _dummy_handler(ctx: "RunContext") -> "RunOutput":
+        return RunOutput(run_id=ctx.run_id, session_id=ctx.session_id, status=RunStatus.completed)
+
+      await km(context, _dummy_handler)
 
     # Prepare tools
     tools = self._prepare_tools_for_run(context)
@@ -448,8 +484,19 @@ class Agent:
     try:
       # Build messages list with system message prepended if instructions exist
       invoke_messages = all_messages.copy()
-      if self.instructions:
-        invoke_messages.insert(0, Message(role="system", content=self.instructions))
+
+      # Build system message with optional knowledge context
+      system_content = self.instructions or ""
+      if context.knowledge_context:
+        position = (context.metadata or {}).get("_knowledge_position", "system")
+        if position == "system":
+          if system_content:
+            system_content = f"{system_content}\n\n{context.knowledge_context}"
+          else:
+            system_content = context.knowledge_context
+
+      if system_content:
+        invoke_messages.insert(0, Message(role="system", content=system_content))
 
       # Convert tools to dicts for the model API (OpenAI format)
       tools_dicts = [{"type": "function", "function": t.to_dict()} for t in tools.values()] if tools else None
@@ -670,8 +717,20 @@ class Agent:
     try:
       # Build messages list with system message prepended if instructions exist
       invoke_messages = messages.copy()
-      if self.instructions:
-        invoke_messages.insert(0, Message(role="system", content=self.instructions))
+
+      # Build system message with optional knowledge context
+      system_content = self.instructions or ""
+      if context.knowledge_context:
+        position = (context.metadata or {}).get("_knowledge_position", "system")
+        if position == "system":
+          # Append knowledge context to system message
+          if system_content:
+            system_content = f"{system_content}\n\n{context.knowledge_context}"
+          else:
+            system_content = context.knowledge_context
+
+      if system_content:
+        invoke_messages.insert(0, Message(role="system", content=system_content))
 
       # Convert tools to dicts for the model API (OpenAI format)
       tools_dicts = [{"type": "function", "function": t.to_dict()} for t in tools.values()] if tools else None
