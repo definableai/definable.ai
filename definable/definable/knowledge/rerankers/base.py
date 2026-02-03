@@ -1,10 +1,10 @@
 """Base class for reranker implementations."""
+
 from abc import ABC, abstractmethod
 from typing import List
 
-from pydantic import BaseModel, ConfigDict
-
 from definable.knowledge.document import Document
+from pydantic import BaseModel, ConfigDict
 
 
 class Reranker(BaseModel, ABC):

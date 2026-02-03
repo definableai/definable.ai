@@ -1,4 +1,5 @@
 """Text file reader implementation."""
+
 import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,9 +13,7 @@ from definable.knowledge.readers.base import Reader
 class TextReader(Reader):
   """Reader for plain text files."""
 
-  supported_extensions: Set[str] = field(
-    default_factory=lambda: {".txt", ".text", ".md", ".rst", ".csv", ".log"}
-  )
+  supported_extensions: Set[str] = field(default_factory=lambda: {".txt", ".text", ".md", ".rst", ".csv", ".log"})
 
   def __post_init__(self) -> None:
     super().__post_init__()

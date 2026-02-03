@@ -1,4 +1,5 @@
 """Knowledge base for agent memory and retrieval."""
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
@@ -57,6 +58,7 @@ class Knowledge:
     # Default to in-memory if no vector_db provided
     if self.vector_db is None:
       from definable.knowledge.vector_dbs.memory import InMemoryVectorDB
+
       self.vector_db = InMemoryVectorDB()
 
   def _require_vector_db(self) -> "VectorDB":

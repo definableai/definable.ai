@@ -380,6 +380,9 @@ class Agent:
 
     def run_async_stream() -> None:
       """Run async stream in background thread, push events to queue."""
+      # Create a new event loop for this thread
+      loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
 
       async def stream_to_queue() -> None:
         try:
@@ -397,7 +400,19 @@ class Agent:
         finally:
           event_queue.put(None)  # Sentinel to signal completion
 
-      asyncio.run(stream_to_queue())
+      try:
+        loop.run_until_complete(stream_to_queue())
+      finally:
+        # Clean up pending tasks before closing
+        try:
+          pending = asyncio.all_tasks(loop)
+          for task in pending:
+            task.cancel()
+          if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        except Exception:
+          pass
+        loop.close()
 
     # Start background thread
     thread = threading.Thread(target=run_async_stream, daemon=True)
