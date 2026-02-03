@@ -1440,7 +1440,7 @@ class Gemini(Model):
 
     def _get_metrics(self, response_usage: GenerateContentResponseUsageMetadata) -> Metrics:
         """
-        Parse the given Google Gemini usage into an Agno Metrics object.
+        Parse the given Google Gemini usage into an Definable Metrics object.
 
         Args:
             response_usage: Usage data from Google Gemini
