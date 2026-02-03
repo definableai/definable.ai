@@ -57,15 +57,135 @@
     }
   },
   "anthropic": {
+    "claude-opus-4-5-20250929": {
+      "input_per_million": 5.00,
+      "output_per_million": 25.00,
+      "cached_input_per_million": 0.50
+    },
+    "claude-opus-4-5": {
+      "input_per_million": 5.00,
+      "output_per_million": 25.00,
+      "cached_input_per_million": 0.50
+    },
+    "claude-opus-4-1-20250530": {
+      "input_per_million": 15.00,
+      "output_per_million": 75.00,
+      "cached_input_per_million": 1.50
+    },
+    "claude-opus-4-1": {
+      "input_per_million": 15.00,
+      "output_per_million": 75.00,
+      "cached_input_per_million": 1.50
+    },
+    "claude-opus-4-20250514": {
+      "input_per_million": 15.00,
+      "output_per_million": 75.00,
+      "cached_input_per_million": 1.50
+    },
+    "claude-opus-4": {
+      "input_per_million": 15.00,
+      "output_per_million": 75.00,
+      "cached_input_per_million": 1.50
+    },
+    "claude-sonnet-4-5-20250929": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-sonnet-4-5": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-sonnet-4-20250514": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-sonnet-4": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-3-7-sonnet-20250219": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-3-7-sonnet": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-haiku-4-5-20250929": {
+      "input_per_million": 1.00,
+      "output_per_million": 5.00,
+      "cached_input_per_million": 0.10
+    },
+    "claude-haiku-4-5": {
+      "input_per_million": 1.00,
+      "output_per_million": 5.00,
+      "cached_input_per_million": 0.10
+    },
+    "claude-3-5-haiku-20241022": {
+      "input_per_million": 0.80,
+      "output_per_million": 4.00,
+      "cached_input_per_million": 0.08
+    },
+    "claude-3-5-haiku-latest": {
+      "input_per_million": 0.80,
+      "output_per_million": 4.00,
+      "cached_input_per_million": 0.08
+    },
+    "claude-3-5-haiku": {
+      "input_per_million": 0.80,
+      "output_per_million": 4.00,
+      "cached_input_per_million": 0.08
+    },
+    "claude-3-5-sonnet-20241022": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-3-5-sonnet-20240620": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-3-5-sonnet-latest": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
     "claude-3-5-sonnet": {
       "input_per_million": 3.00,
       "output_per_million": 15.00,
       "cached_input_per_million": 0.30
     },
+    "claude-3-opus-20240229": {
+      "input_per_million": 15.00,
+      "output_per_million": 75.00,
+      "cached_input_per_million": 1.50
+    },
     "claude-3-opus": {
       "input_per_million": 15.00,
       "output_per_million": 75.00,
       "cached_input_per_million": 1.50
+    },
+    "claude-3-sonnet-20240229": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-3-sonnet": {
+      "input_per_million": 3.00,
+      "output_per_million": 15.00,
+      "cached_input_per_million": 0.30
+    },
+    "claude-3-haiku-20240307": {
+      "input_per_million": 0.25,
+      "output_per_million": 1.25,
+      "cached_input_per_million": 0.03
     },
     "claude-3-haiku": {
       "input_per_million": 0.25,
