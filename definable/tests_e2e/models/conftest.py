@@ -4,10 +4,20 @@ from os import getenv
 
 import pytest
 
+from definable.models.anthropic import Claude
 from definable.models.deepseek import DeepSeekChat
 from definable.models.moonshot import MoonshotChat
 from definable.models.openai import OpenAIChat
 from definable.models.xai import xAI
+
+
+@pytest.fixture
+def anthropic_model():
+    """Return an Anthropic Claude model instance, skip if no API key."""
+    api_key = getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        pytest.skip("ANTHROPIC_API_KEY environment variable not set")
+    return Claude(api_key=api_key, id="claude-3-5-haiku-latest")
 
 
 @pytest.fixture
