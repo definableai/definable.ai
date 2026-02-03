@@ -616,7 +616,7 @@ class Claude(Model):
 
             assistant_message.metrics.stop_timer()
 
-            # Parse the response into an Agno ModelResponse object
+            # Parse the response into an Definable ModelResponse object
             model_response = self._parse_provider_response(provider_response, response_format=response_format)  # type: ignore
 
             return model_response
@@ -742,7 +742,7 @@ class Claude(Model):
 
             assistant_message.metrics.stop_timer()
 
-            # Parse the response into an Agno ModelResponse object
+            # Parse the response into an Definable ModelResponse object
             model_response = self._parse_provider_response(provider_response, response_format=response_format)  # type: ignore
 
             return model_response
@@ -1105,7 +1105,7 @@ class Claude(Model):
 
     def _get_metrics(self, response_usage: Union[Usage, MessageDeltaUsage, BetaUsage]) -> Metrics:
         """
-        Parse the given Anthropic-specific usage into an Agno Metrics object.
+        Parse the given Anthropic-specific usage into an Definable Metrics object.
 
         Args:
             response_usage: Usage data from Anthropic
