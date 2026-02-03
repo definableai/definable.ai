@@ -67,17 +67,6 @@ class UIServer:
         async def serve_bridge():
             return FileResponse(Path(__file__).parent / "templates" / "bridge.js")
 
-        if not cdn_url:
-            ui_dir = Path(__file__).parent / "static"
-            
-            @self.app.get("/definable-chat.es.js")
-            async def serve_js():
-                return FileResponse(ui_dir / "definable-chat.es.js")
-
-            @self.app.get("/chat-widget.css")
-            async def serve_css():
-                return FileResponse(ui_dir / "chat-widget.css")
-
     def _get_css_url(self):
         return f"{self.cdn_url}/chat-widget.css" if self.cdn_url else "/chat-widget.css"
     

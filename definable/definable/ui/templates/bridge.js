@@ -129,7 +129,6 @@ class DefinableIPCBridge {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let fullContent = '';
 
       while (true) {
         const { done, value } = await reader.read();
