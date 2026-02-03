@@ -171,6 +171,11 @@ class BaseRunOutputEvent:
 
   @classmethod
   def from_dict(cls, data: Dict[str, Any]):
+    run_input = data.pop("run_input", None)
+    if run_input:
+      from definable.run.agent import RunInput
+
+      data["run_input"] = RunInput.from_dict(run_input)
     tool = data.pop("tool", None)
     if tool:
       from definable.models.response import ToolExecution

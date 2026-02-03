@@ -27,6 +27,7 @@ from definable.run.agent import (
   RunCompletedEvent,
   RunContentEvent,
   RunErrorEvent,
+  RunInput,
   RunOutput,
   RunOutputEvent,
   RunStartedEvent,
@@ -273,17 +274,24 @@ class Agent:
           )
         )
       finally:
-        # Clean up pending tasks before closing
+        # Robust cleanup sequence for async HTTP clients (httpx, etc.)
         try:
+          # 1. Cancel pending tasks
           pending = asyncio.all_tasks(loop)
           for task in pending:
             task.cancel()
           # Allow cancelled tasks to complete
           if pending:
             loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+          # 2. Shutdown async generators (critical for httpx cleanup)
+          loop.run_until_complete(loop.shutdown_asyncgens())
+          # 3. Shutdown default executor (Python 3.9+)
+          if hasattr(loop, "shutdown_default_executor"):
+            loop.run_until_complete(loop.shutdown_default_executor())
         except Exception:
           pass
-        loop.close()
+        finally:
+          loop.close()
 
   async def arun(
     self,
@@ -332,9 +340,17 @@ class Agent:
       metadata={"_messages": all_messages},
     )
 
+    run_input = RunInput(
+      input_content=instruction,
+      images=images,
+      videos=videos,
+      audios=audio,
+      files=files,
+    )
+
     # Build the execution chain with middleware
     async def core_handler(ctx: RunContext) -> RunOutput:
-      return await self._execute_run(ctx, all_messages)
+      return await self._execute_run(ctx, all_messages, run_input)
 
     # Wrap with middleware (innermost to outermost)
     handler = core_handler
@@ -374,15 +390,52 @@ class Agent:
         RunOutputEvent instances as the run progresses.
     """
     import queue
+    import sys
     import threading
+    import time
 
     event_queue: queue.Queue[Union[RunOutputEvent, Exception, None]] = queue.Queue()
+    stop_event = threading.Event()
+    loop_ready = threading.Event()
+    loop_holder: Dict[str, asyncio.AbstractEventLoop] = {}
+    queue_errors: List[BaseException] = []
+    queue_errors_lock = threading.Lock()
+
+    timeout_seconds = self.config.stream_timeout_seconds
+    if timeout_seconds is None:
+      timeout_seconds = 300.0
+    deadline = time.monotonic() + timeout_seconds if timeout_seconds and timeout_seconds > 0 else None
+
+    def record_queue_error(err: BaseException) -> None:
+      with queue_errors_lock:
+        queue_errors.append(err)
+
+    def safe_put(item: Union[RunOutputEvent, Exception, None]) -> None:
+      try:
+        event_queue.put(item)
+      except Exception as exc:
+        record_queue_error(exc)
+        stop_event.set()
+
+    def request_loop_cancel() -> None:
+      loop = loop_holder.get("loop")
+      if loop and loop.is_running():
+        try:
+          def _cancel_tasks() -> None:
+            for task in asyncio.all_tasks(loop):
+              task.cancel()
+
+          loop.call_soon_threadsafe(_cancel_tasks)
+        except Exception as exc:
+          record_queue_error(exc)
 
     def run_async_stream() -> None:
       """Run async stream in background thread, push events to queue."""
       # Create a new event loop for this thread
       loop = asyncio.new_event_loop()
       asyncio.set_event_loop(loop)
+      loop_holder["loop"] = loop
+      loop_ready.set()
 
       async def stream_to_queue() -> None:
         try:
@@ -394,40 +447,84 @@ class Agent:
             images=images,
             output_schema=output_schema,
           ):
-            event_queue.put(event)
+            if stop_event.is_set():
+              break
+            safe_put(event)
         except Exception as e:
-          event_queue.put(e)
+          safe_put(e)
         finally:
-          event_queue.put(None)  # Sentinel to signal completion
+          safe_put(None)  # Sentinel to signal completion
 
       try:
         loop.run_until_complete(stream_to_queue())
       finally:
-        # Clean up pending tasks before closing
-        try:
+        # Robust cleanup sequence for async HTTP clients (httpx, etc.)
+        with contextlib.suppress(Exception):
+          # 1. Cancel pending tasks
           pending = asyncio.all_tasks(loop)
           for task in pending:
             task.cancel()
           if pending:
             loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-        except Exception:
-          pass
-        loop.close()
+          # 2. Shutdown async generators (critical for httpx cleanup)
+          loop.run_until_complete(loop.shutdown_asyncgens())
+          # 3. Shutdown default executor (Python 3.9+)
+          if hasattr(loop, "shutdown_default_executor"):
+            loop.run_until_complete(loop.shutdown_default_executor())
+        with contextlib.suppress(Exception):
+          loop.close()
 
     # Start background thread
     thread = threading.Thread(target=run_async_stream, daemon=True)
     thread.start()
 
     # Yield events as they arrive
-    while True:
-      item = event_queue.get()
-      if item is None:  # Sentinel - stream complete
-        break
-      if isinstance(item, Exception):
-        raise item
-      yield item
-
-    thread.join()
+    try:
+      loop_ready.wait(timeout=1.0)
+      while True:
+        with queue_errors_lock:
+          if queue_errors:
+            raise queue_errors[0]
+        if deadline is None:
+          try:
+            item = event_queue.get()
+          except Exception as exc:
+            stop_event.set()
+            request_loop_cancel()
+            raise exc
+        else:
+          remaining = deadline - time.monotonic()
+          if remaining <= 0:
+            stop_event.set()
+            request_loop_cancel()
+            raise TimeoutError(f"Stream timed out after {timeout_seconds:.0f} seconds.")
+          try:
+            item = event_queue.get(timeout=remaining)
+          except queue.Empty:
+            with queue_errors_lock:
+              if queue_errors:
+                raise queue_errors[0]
+            stop_event.set()
+            request_loop_cancel()
+            raise TimeoutError(f"Stream timed out after {timeout_seconds:.0f} seconds.")
+          except Exception as exc:
+            stop_event.set()
+            request_loop_cancel()
+            raise exc
+        if item is None:  # Sentinel - stream complete
+          break
+        if isinstance(item, Exception):
+          raise item
+        yield item
+    finally:
+      stop_event.set()
+      request_loop_cancel()
+      thread.join(timeout=5.0)
+      if thread.is_alive():
+        request_loop_cancel()
+        thread.join(timeout=5.0)
+      if thread.is_alive() and sys.exc_info()[0] is None:
+        raise TimeoutError("Background stream thread did not terminate.")
 
   async def arun_stream(
     self,
@@ -475,6 +572,7 @@ class Agent:
       from definable.agents.middleware import KnowledgeMiddleware
 
       km = KnowledgeMiddleware(self.config.knowledge)
+
       # Create a dummy next_handler since we just need the retrieval side effect
       async def _dummy_handler(ctx: "RunContext") -> "RunOutput":
         return RunOutput(run_id=ctx.run_id, session_id=ctx.session_id, status=RunStatus.completed)
@@ -484,6 +582,11 @@ class Agent:
     # Prepare tools
     tools = self._prepare_tools_for_run(context)
 
+    run_input = RunInput(
+      input_content=instruction,
+      images=images,
+    )
+
     # Emit RunStarted
     started_event = RunStartedEvent(
       run_id=context.run_id,
@@ -492,6 +595,7 @@ class Agent:
       agent_name=self.agent_name,
       model=self.model.id,
       model_provider=self.model.provider,
+      run_input=run_input,
     )
     self._emit(started_event)
     yield started_event
@@ -547,7 +651,7 @@ class Agent:
               agent_name=self.agent_name,
               content=chunk.content,
             )
-            self._emit(content_event)
+            # Not traced - RunCompleted contains full content
             yield content_event
 
           # Accumulate tool calls from stream (they come in deltas)
@@ -712,6 +816,7 @@ class Agent:
     self,
     context: RunContext,
     messages: List[Message],
+    run_input: Optional[RunInput] = None,
   ) -> RunOutput:
     """Core execution logic with agent loop for tool calls."""
     # Prepare tools with injected context
@@ -726,6 +831,7 @@ class Agent:
         agent_name=self.agent_name,
         model=self.model.id,
         model_provider=self.model.provider,
+        run_input=run_input,
       )
     )
 

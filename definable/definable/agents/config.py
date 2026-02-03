@@ -85,6 +85,7 @@ class AgentConfig:
       dependencies: Dependencies to inject into tools.
       max_iterations: Maximum tool call loops before stopping.
       max_tokens: Optional token limit per run.
+      stream_timeout_seconds: Timeout for sync streaming runs.
       retry_transient_errors: Whether to retry on transient errors.
       max_retries: Maximum number of retry attempts.
       retry_backoff_base: Base for exponential backoff (seconds).
@@ -109,6 +110,7 @@ class AgentConfig:
   # Execution settings
   max_iterations: int = 10  # Max tool call loops before stopping
   max_tokens: Optional[int] = None  # Optional token limit per run
+  stream_timeout_seconds: float = 300.0  # Timeout for run_stream in seconds
 
   # Error handling
   retry_transient_errors: bool = True

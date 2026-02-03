@@ -198,6 +198,7 @@ class RunStartedEvent(BaseAgentRunEvent):
   event: str = RunEvent.run_started.value
   model: str = ""
   model_provider: str = ""
+  run_input: Optional[RunInput] = None
 
 
 @dataclass

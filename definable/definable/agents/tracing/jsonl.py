@@ -34,17 +34,26 @@ class JSONLExporter:
       {"created_at": 1706500002, "event": "RunCompleted", "run_id": "abc", ...}
   """
 
-  def __init__(self, trace_dir: str):
+  def __init__(
+    self,
+    trace_dir: str,
+    flush_each: bool = True,
+    mirror_stdout: bool = True,
+  ):
     """
     Initialize the JSONL exporter.
 
     Args:
         trace_dir: Directory path where trace files will be written.
             Will be created if it doesn't exist.
+        flush_each: Flush after each event write to make traces real-time.
+        mirror_stdout: Also emit each JSONL event line to stdout.
     """
     self.trace_dir = Path(trace_dir)
     self.trace_dir.mkdir(parents=True, exist_ok=True)
     self._handles: Dict[str, IO[str]] = {}
+    self.flush_each = flush_each
+    self.mirror_stdout = mirror_stdout
 
   def _get_handle(self, session_id: str) -> IO[str]:
     """
@@ -58,7 +67,7 @@ class JSONLExporter:
     """
     if session_id not in self._handles:
       path = self.trace_dir / f"{session_id}.jsonl"
-      self._handles[session_id] = open(path, "a", encoding="utf-8")
+      self._handles[session_id] = open(path, "a", encoding="utf-8", buffering=1)
     return self._handles[session_id]
 
   def export(self, event: "BaseRunOutputEvent") -> None:
@@ -74,6 +83,9 @@ class JSONLExporter:
     # Use the event's built-in serialization
     json_line = event.to_json(indent=None)
     handle.write(json_line + "\n")
+    if self.flush_each:
+      with contextlib.suppress(Exception):
+        handle.flush()
 
   def flush(self) -> None:
     """Flush all open file handles."""
