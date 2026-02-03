@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="{{ css_url }}">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+    }
+    definable-chat {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Definable Chat Web Component (Django-style template) -->
+  <definable-chat
+    id="chat"
+    title="{{ title }}"
+    theme="{{ theme }}"
+    api-url="/api"
+  ></definable-chat>
+  
+  <script>
+    // Pass config to web component
+    window.DEFINABLE_CHAT_CONFIG = {
+      title: "{{ title }}",
+      theme: "{{ theme }}"
+    };
+  </script>
+  
+  <!-- Load web component -->
+  <script type="module" src="{{ js_url }}"></script>
+</body>
+</html>

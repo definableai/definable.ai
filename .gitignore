@@ -183,3 +183,8 @@ servers.json
 input.json
 agno-sample-agent/
 src/servers/my_agent/
+
+# For ui-frontend
+ui-frontend/dist/
+ui-frontend/node_modules/
+definable/definable/ui/static/

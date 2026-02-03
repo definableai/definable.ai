@@ -29,6 +29,9 @@ class RunContext:
   session_state: Optional[Dict[str, Any]] = None
   output_schema: Optional[Union[Type[BaseModel], Dict[str, Any]]] = None
 
+  # UI instance (PyQt-style integration)
+  ui: Optional[Any] = None
+
   # Knowledge retrieval results (populated by KnowledgeMiddleware)
   knowledge_context: Optional[str] = None  # Formatted context string for injection
   knowledge_documents: Optional[List[Any]] = None  # Retrieved Document objects

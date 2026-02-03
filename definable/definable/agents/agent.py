@@ -87,6 +87,8 @@ class Agent:
     tools: Optional[List[Function]] = None,
     toolkits: Optional[List[Toolkit]] = None,
     instructions: Optional[str] = None,
+    # UI integration (PyQt-style)
+    ui: Optional[Any] = None,
     # Optional advanced configuration
     config: Optional[AgentConfig] = None,
   ):
@@ -98,6 +100,7 @@ class Agent:
         tools: List of tools (Function objects) available to the agent.
         toolkits: List of toolkits providing additional tools.
         instructions: System instructions for the agent.
+        ui: Optional UI instance (PyQt-style ChatWindow).
         config: Optional advanced configuration settings.
     """
     # Direct attributes
@@ -105,6 +108,7 @@ class Agent:
     self.tools = tools or []
     self.toolkits = toolkits or []
     self.instructions = instructions
+    self.ui = ui
 
     # Optional config for advanced settings
     self.config = config or AgentConfig()
@@ -120,6 +124,10 @@ class Agent:
       from definable.agents.middleware import KnowledgeMiddleware
 
       self._middleware.insert(0, KnowledgeMiddleware(self.config.knowledge))
+
+    # Auto-register with UI if provided (PyQt-style integration)
+    if self.ui is not None:
+      self.ui.agent = self
 
   # --- Properties ---
 
@@ -329,6 +337,7 @@ class Agent:
       dependencies=self.config.dependencies,
       session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
+      ui=self.ui,
       metadata={"_messages": all_messages},
     )
 
@@ -467,6 +476,7 @@ class Agent:
       dependencies=self.config.dependencies,
       session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
+      ui=self.ui,
       metadata={"_messages": all_messages},
     )
 
