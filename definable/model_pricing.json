@@ -1,4 +1,89 @@
 {
+  "google": {
+    "gemini-2.5-pro": {
+      "input_per_million": 1.25,
+      "output_per_million": 10.00,
+      "cached_input_per_million": 0.125
+    },
+    "gemini-2.5-pro-preview": {
+      "input_per_million": 1.25,
+      "output_per_million": 10.00,
+      "cached_input_per_million": 0.125
+    },
+    "gemini-2.5-pro-exp-03-25": {
+      "input_per_million": 1.25,
+      "output_per_million": 10.00,
+      "cached_input_per_million": 0.125
+    },
+    "gemini-2.5-flash": {
+      "input_per_million": 0.15,
+      "output_per_million": 0.60,
+      "cached_input_per_million": 0.0375
+    },
+    "gemini-2.5-flash-preview": {
+      "input_per_million": 0.15,
+      "output_per_million": 0.60,
+      "cached_input_per_million": 0.0375
+    },
+    "gemini-2.0-flash": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.40,
+      "cached_input_per_million": 0.025
+    },
+    "gemini-2.0-flash-001": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.40,
+      "cached_input_per_million": 0.025
+    },
+    "gemini-2.0-flash-exp": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.40,
+      "cached_input_per_million": 0.025
+    },
+    "gemini-2.0-flash-lite": {
+      "input_per_million": 0.075,
+      "output_per_million": 0.30,
+      "cached_input_per_million": 0.01875
+    },
+    "gemini-1.5-pro": {
+      "input_per_million": 1.25,
+      "output_per_million": 5.00,
+      "cached_input_per_million": 0.3125
+    },
+    "gemini-1.5-pro-001": {
+      "input_per_million": 1.25,
+      "output_per_million": 5.00,
+      "cached_input_per_million": 0.3125
+    },
+    "gemini-1.5-pro-002": {
+      "input_per_million": 1.25,
+      "output_per_million": 5.00,
+      "cached_input_per_million": 0.3125
+    },
+    "gemini-1.5-flash": {
+      "input_per_million": 0.075,
+      "output_per_million": 0.30,
+      "cached_input_per_million": 0.01875
+    },
+    "gemini-1.5-flash-001": {
+      "input_per_million": 0.075,
+      "output_per_million": 0.30,
+      "cached_input_per_million": 0.01875
+    },
+    "gemini-1.5-flash-002": {
+      "input_per_million": 0.075,
+      "output_per_million": 0.30,
+      "cached_input_per_million": 0.01875
+    },
+    "gemini-1.0-pro": {
+      "input_per_million": 0.50,
+      "output_per_million": 1.50
+    },
+    "gemini-1.0-pro-001": {
+      "input_per_million": 0.50,
+      "output_per_million": 1.50
+    }
+  },
   "openai": {
     "gpt-4o": {
       "input_per_million": 2.50,
