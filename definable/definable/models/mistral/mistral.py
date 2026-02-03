@@ -419,7 +419,7 @@ class MistralChat(Model):
 
     def _get_metrics(self, response_usage: Any) -> Metrics:
         """
-        Parse the given Mistral usage into an Agno Metrics object.
+        Parse the given Mistral usage into an Definable Metrics object.
 
         Args:
             response_usage: Usage data from Mistral
