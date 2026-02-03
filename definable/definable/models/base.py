@@ -439,7 +439,7 @@ class Model(ABC):
     if self.cache_dir:
       cache_dir = Path(self.cache_dir)
     else:
-      cache_dir = Path.home() / ".agno" / "cache" / "model_responses"
+      cache_dir = Path.home() / ".definable" / "cache" / "model_responses"
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir / f"{cache_key}.json"
@@ -792,7 +792,7 @@ class Model(ABC):
           self.client = None
         except AttributeError:
           log_warning(
-            "Your Gemini client is outdated. For Agno to properly handle the lifecycle of the client,"
+            "Your Gemini client is outdated. For Definable to properly handle the lifecycle of the client,"
             " please upgrade Gemini to the latest version: pip install -U google-genai"
           )
 
@@ -989,7 +989,7 @@ class Model(ABC):
           self.client = None
         except AttributeError:
           log_warning(
-            "Your Gemini client is outdated. For Agno to properly handle the lifecycle of the client,"
+            "Your Gemini client is outdated. For Definable to properly handle the lifecycle of the client,"
             " please upgrade Gemini to the latest version: pip install -U google-genai"
           )
 
@@ -1428,7 +1428,7 @@ class Model(ABC):
           self.client = None
         except AttributeError:
           log_warning(
-            "Your Gemini client is outdated. For Agno to properly handle the lifecycle of the client,"
+            "Your Gemini client is outdated. For Definable to properly handle the lifecycle of the client,"
             " please upgrade Gemini to the latest version: pip install -U google-genai"
           )
 
@@ -1671,7 +1671,7 @@ class Model(ABC):
           self.client = None
         except AttributeError:
           log_warning(
-            "Your Gemini client is outdated. For Agno to properly handle the lifecycle of the client,"
+            "Your Gemini client is outdated. For Definable to properly handle the lifecycle of the client,"
             " please upgrade Gemini to the latest version: pip install -U google-genai"
           )
 
@@ -1963,17 +1963,6 @@ class Model(ABC):
             if isinstance(item, CustomEvent):
               function_call_output += str(item)
               item.tool_call_id = function_call.call_id
-
-            # For WorkflowCompletedEvent, extract content for final output
-            # Workflows are not supported in this fork
-            # from agno.run.workflow import WorkflowCompletedEvent
-            #
-            # if isinstance(item, WorkflowCompletedEvent):
-            #   if item.content is not None:
-            #     if isinstance(item.content, BaseModel):
-            #       function_call_output += item.content.model_dump_json()
-            #     else:
-            #       function_call_output += str(item.content)
 
             # Yield the event itself to bubble it up
             yield item
@@ -2387,17 +2376,6 @@ class Model(ABC):
             if isinstance(item, CustomEvent):
               function_call_output += str(item)
               item.tool_call_id = function_call.call_id
-
-              # For WorkflowCompletedEvent, extract content for final output
-              # Workflows are not supported in this fork
-              # from agno.run.workflow import WorkflowCompletedEvent
-              #
-              # if isinstance(item, WorkflowCompletedEvent):
-              #   if item.content is not None:
-              #     if isinstance(item.content, BaseModel):
-              #       function_call_output += item.content.model_dump_json()
-              #     else:
-              #       function_call_output += str(item.content)
 
             # Put the event into the queue to be yielded
             await event_queue.put(item)

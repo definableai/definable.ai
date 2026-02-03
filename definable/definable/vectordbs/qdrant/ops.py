@@ -82,7 +82,7 @@ class Qdrant(VectorDb):
 
     # Dynamic ID generation based on unique identifiers
     if id is None:
-      from agno.utils.string import generate_id
+      from definable.utils.string import generate_id
 
       host_identifier = host or location or url or "localhost"
       seed = f"{host_identifier}#{collection}"
@@ -96,7 +96,7 @@ class Qdrant(VectorDb):
 
     # Embedder for embedding the document contents
     if embedder is None:
-      from agno.knowledge.embedder.openai import OpenAIEmbedder
+      from definable.knowledge.embedder.openai import OpenAIEmbedder
 
       embedder = OpenAIEmbedder()
       log_debug("Embedder not provided, using OpenAIEmbedder as default.")

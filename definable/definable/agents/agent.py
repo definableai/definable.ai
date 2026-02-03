@@ -254,19 +254,36 @@ class Agent:
         )
         return future.result()
     else:
-      return asyncio.run(
-        self.arun(
-          instruction,
-          messages=messages,
-          session_id=session_id,
-          run_id=run_id,
-          images=images,
-          videos=videos,
-          audio=audio,
-          files=files,
-          output_schema=output_schema,
+      # Create a new event loop to avoid "Event loop is closed" errors
+      # when making multiple sequential sync calls with async HTTP clients
+      loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(loop)
+      try:
+        return loop.run_until_complete(
+          self.arun(
+            instruction,
+            messages=messages,
+            session_id=session_id,
+            run_id=run_id,
+            images=images,
+            videos=videos,
+            audio=audio,
+            files=files,
+            output_schema=output_schema,
+          )
         )
-      )
+      finally:
+        # Clean up pending tasks before closing
+        try:
+          pending = asyncio.all_tasks(loop)
+          for task in pending:
+            task.cancel()
+          # Allow cancelled tasks to complete
+          if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        except Exception:
+          pass
+        loop.close()
 
   async def arun(
     self,
