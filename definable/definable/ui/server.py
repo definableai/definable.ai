@@ -56,21 +56,16 @@ class UIServer:
             data = await request.json()
             content = data.get("content", "")
             
-            async def generate_response():
+            def generate_response():
                 """Stream response chunks as Server-Sent Events"""
                 try:
                     # Call agent if registered
                     if self.chat_window.agent:
-                        # Use async streaming
-                        full_content = ""
-                        async for event in self.chat_window.agent.arun_stream(content):
+                        # Use synchronous streaming
+                        for event in self.chat_window.agent.run_stream(content):
                             # Stream content chunks
                             if hasattr(event, 'content') and event.content:
-                                chunk = event.content[len(full_content):]
-                                full_content = event.content
-                                
-                                # Send as SSE format
-                                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                                yield f"data: {json.dumps({'chunk': event.content})}\n\n"
                         
                         # Send final done event
                         yield f"data: {json.dumps({'done': True})}\n\n"
@@ -92,6 +87,12 @@ class UIServer:
                     "Connection": "keep-alive",
                 }
             )
+
+        # Serve IPC bridge
+        @self.app.get("/bridge.js")
+        async def serve_bridge():
+            bridge_path = Path(__file__).parent / "templates" / "bridge.js"
+            return FileResponse(str(bridge_path), media_type="application/javascript")
 
         # Serve static files if using local build
         if not cdn_url:

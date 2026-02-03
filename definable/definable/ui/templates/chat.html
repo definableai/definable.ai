@@ -20,12 +20,14 @@
   </style>
 </head>
 <body>
-  <!-- Definable Chat Web Component (Django-style template) -->
+  <!-- IPC Bridge (Electron-style communication) -->
+  <script src="/bridge.js"></script>
+  
+  <!-- Definable Chat Web Component -->
   <definable-chat
     id="chat"
     title="{{ title }}"
     theme="{{ theme }}"
-    api-url="/api"
   ></definable-chat>
   
   <script>

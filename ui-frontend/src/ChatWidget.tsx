@@ -11,7 +11,17 @@ interface Message {
 interface Config {
   title?: string
   theme?: string
-  apiUrl?: string
+}
+
+// Declare global window type for IPC bridge
+declare global {
+  interface Window {
+    definableChat: {
+      send: (channel: string, data: any) => Promise<void>
+      on: (channel: string, callback: (data: any) => void) => () => void
+      emit: (channel: string, data: any) => void
+    }
+  }
 }
 
 interface ChatWidgetProps {
@@ -24,26 +34,76 @@ export function ChatWidget({ config = {} }: ChatWidgetProps) {
   const [loading, setLoading] = useState(false)
   const [widgetConfig, setWidgetConfig] = useState<Config>({
     title: config.title || 'Definable Chat',
-    theme: config.theme || 'light',
-    apiUrl: config.apiUrl || '/api'
+    theme: config.theme || 'light'
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const assistantMsgIndexRef = useRef<number>(-1)
 
   useEffect(() => {
     // Update config when props change
     setWidgetConfig({
       title: config.title || widgetConfig.title,
-      theme: config.theme || widgetConfig.theme,
-      apiUrl: config.apiUrl || widgetConfig.apiUrl
+      theme: config.theme || widgetConfig.theme
     })
   }, [config])
+
+  useEffect(() => {
+    // Setup IPC listeners (Electron-style)
+    console.log('[ChatWidget] Using IPC mode')
+    
+    // Listen for streaming chunks
+    const unsubChunk = window.definableChat.on('chat:chunk', (data: any) => {
+      const { chunk } = data
+      setMessages(prev => {
+        const newMessages = [...prev]
+        if (assistantMsgIndexRef.current >= 0 && assistantMsgIndexRef.current < newMessages.length) {
+          // Append chunk to existing content
+          const currentMsg = newMessages[assistantMsgIndexRef.current]
+          newMessages[assistantMsgIndexRef.current] = {
+            ...currentMsg,
+            content: currentMsg.content + chunk
+          }
+        }
+        return newMessages
+      })
+    })
+
+    // Listen for errors
+    const unsubError = window.definableChat.on('chat:error', (data: any) => {
+      console.error('[ChatWidget] IPC Error:', data.error)
+      setMessages(prev => {
+        const newMessages = [...prev]
+        if (assistantMsgIndexRef.current >= 0) {
+          newMessages[assistantMsgIndexRef.current] = {
+            role: 'system',
+            content: `Error: ${data.error}`,
+            timestamp: Date.now()
+          }
+        }
+        return newMessages
+      })
+      setLoading(false)
+    })
+
+    // Listen for completion
+    const unsubComplete = window.definableChat.on('chat:message-complete', () => {
+      setLoading(false)
+      assistantMsgIndexRef.current = -1
+    })
+
+    return () => {
+      unsubChunk()
+      unsubError()
+      unsubComplete()
+    }
+  }, [])
 
   useEffect(() => {
     // Auto-scroll to bottom
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const sendMessage = async () => {
+  const sendMessage = () => {
     if (!input.trim() || loading) {
       return
     }
@@ -52,99 +112,29 @@ export function ChatWidget({ config = {} }: ChatWidgetProps) {
     setInput('')
     setLoading(true)
 
-    // Add user message immediately
-    const timestamp = Date.now()
-    setMessages(prev => [...prev, {
-      role: 'user',
-      content: userMessage,
-      timestamp
-    }])
-
-    // Add placeholder for assistant response
-    const assistantMsgIndex = messages.length + 1
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: '',
-      timestamp: Date.now()
-    }])
-
-    try {
-      // Send message to backend and stream response
-      const response = await fetch(`${widgetConfig.apiUrl}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    // Add user message and assistant placeholder together
+    setMessages(prev => {
+      // Set the index for the assistant message that we're about to add
+      assistantMsgIndexRef.current = prev.length + 1
+      
+      return [
+        ...prev,
+        {
+          role: 'user',
+          content: userMessage,
+          timestamp: Date.now()
         },
-        body: JSON.stringify({ content: userMessage }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to get response from server')
-      }
-
-      // Read streaming response
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let fullContent = ''
-
-      while (reader) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        // Decode chunk and add to buffer
-        buffer += decoder.decode(value, { stream: true })
-
-        // Process complete SSE messages
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // Keep incomplete line in buffer
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.substring(6))
-            
-            if (data.chunk) {
-              // Append chunk to assistant message
-              fullContent += data.chunk
-              setMessages(prev => {
-                const newMessages = [...prev]
-                newMessages[assistantMsgIndex] = {
-                  ...newMessages[assistantMsgIndex],
-                  content: fullContent
-                }
-                return newMessages
-              })
-            }
-            
-            if (data.error) {
-              // Show error
-              setMessages(prev => {
-                const newMessages = [...prev]
-                newMessages[assistantMsgIndex] = {
-                  role: 'system',
-                  content: `Error: ${data.error}`,
-                  timestamp: Date.now()
-                }
-                return newMessages
-              })
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error sending message:', error)
-      setMessages(prev => {
-        const newMessages = [...prev]
-        newMessages[assistantMsgIndex] = {
-          role: 'system',
-          content: `Error: ${error}`,
+        {
+          role: 'assistant',
+          content: '',
           timestamp: Date.now()
         }
-        return newMessages
-      })
-    } finally {
-      setLoading(false)
-    }
+      ]
+    })
+
+    // Send via IPC (Electron-style)
+    console.log('[ChatWidget] Sending via IPC:', userMessage)
+    window.definableChat.send('chat:message', { content: userMessage })
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
