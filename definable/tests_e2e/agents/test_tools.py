@@ -2,7 +2,7 @@
 
 import pytest
 
-from definable.agents.testing import AgentTestCase, MockModel, create_test_agent
+from definable.agents.testing import AgentTestCase
 from definable.tools.decorator import tool
 
 

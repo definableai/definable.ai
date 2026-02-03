@@ -28,7 +28,7 @@ class Qdrant(VectorDb):
     collection: str,
     name: Optional[str] = None,
     description: Optional[str] = None,
-    id: Optional[str] = None,
+    id: Optional[str] = None,  # noqa: A002
     embedder: Optional[Embedder] = None,
     distance: Distance = Distance.cosine,
     location: Optional[str] = None,
@@ -86,10 +86,12 @@ class Qdrant(VectorDb):
 
       host_identifier = host or location or url or "localhost"
       seed = f"{host_identifier}#{collection}"
-      id = generate_id(seed)
+      collection_id = generate_id(seed)
+    else:
+      collection_id = id
 
     # Initialize base class with name, description, and generated ID
-    super().__init__(id=id, name=name, description=description)
+    super().__init__(id=collection_id, name=name, description=description)
 
     # Collection attributes
     self.collection: str = collection
@@ -398,12 +400,12 @@ class Qdrant(VectorDb):
           if is_rate_limit:
             log_error(f"Rate limit detected during batch embedding. {e}")
             raise e
-          else:
-            log_warning(f"Async batch embedding failed, falling back to individual embeddings: {e}")
-            # Fall back to individual embedding
-            for doc in documents:
-              if self.search_type in [SearchType.vector, SearchType.hybrid]:
-                doc.embed(embedder=self.embedder)
+
+          log_warning(f"Async batch embedding failed, falling back to individual embeddings: {e}")
+          # Fall back to individual embedding
+          for doc in documents:
+            if self.search_type in [SearchType.vector, SearchType.hybrid]:
+              doc.embed(embedder=self.embedder)
       else:
         # Use individual embedding
         for doc in documents:
@@ -748,7 +750,7 @@ class Qdrant(VectorDb):
     count_result: models.CountResult = self.client.count(collection_name=self.collection, exact=True)
     return count_result.count
 
-  def point_exists(self, id: str) -> bool:
+  def point_exists(self, id: str) -> bool:  # noqa: A002
     """Check if a point with the given ID exists in the collection."""
     try:
       log_info(f"Checking if point with ID '{id}' (type: {type(id)}) exists in collection '{self.collection}'")
@@ -764,7 +766,7 @@ class Qdrant(VectorDb):
   def delete(self) -> bool:
     return self.client.delete_collection(collection_name=self.collection)
 
-  def delete_by_id(self, id: str) -> bool:
+  def delete_by_id(self, id: str) -> bool:  # noqa: A002
     try:
       # Check if point exists before deletion
       if not self.point_exists(id):
@@ -896,7 +898,7 @@ class Qdrant(VectorDb):
       log_warning(f"Error deleting points with content_id {content_id}: {e}")
       return False
 
-  def id_exists(self, id: str) -> bool:
+  def id_exists(self, id: str) -> bool:  # noqa: A002
     """Check if a point with the given ID exists in the collection.
 
     Args:

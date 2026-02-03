@@ -1,6 +1,6 @@
 """Agent E2E test fixtures."""
 
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from unittest.mock import MagicMock
 
 import pytest

@@ -1,23 +1,23 @@
 """Text file reader implementation."""
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Set, Union
+from typing import List, Set, Union
 
 from definable.knowledge.document import Document
-from definable.knowledge.readers.base import Reader, ReaderConfig
+from definable.knowledge.readers.base import Reader
 
 
 @dataclass
 class TextReader(Reader):
   """Reader for plain text files."""
 
-  supported_extensions: Set[str] = None
+  supported_extensions: Set[str] = field(
+    default_factory=lambda: {".txt", ".text", ".md", ".rst", ".csv", ".log"}
+  )
 
   def __post_init__(self) -> None:
     super().__post_init__()
-    if self.supported_extensions is None:
-      self.supported_extensions = {".txt", ".text", ".md", ".rst", ".csv", ".log"}
 
   def read(self, source: Union[str, Path]) -> List[Document]:
     """Read a text file and return as Document."""
@@ -51,7 +51,7 @@ class TextReader(Reader):
   async def aread(self, source: Union[str, Path]) -> List[Document]:
     """Async read a text file."""
     try:
-      import aiofiles
+      import aiofiles  # type: ignore[import-untyped]
     except ImportError:
       # Fallback to sync read in executor
       loop = asyncio.get_event_loop()

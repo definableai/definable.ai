@@ -1,8 +1,7 @@
 """URL reader implementation."""
-import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Union
+from typing import Any, List, Union, cast
 
 from definable.knowledge.document import Document
 from definable.knowledge.readers.base import Reader
@@ -14,12 +13,12 @@ class URLReader(Reader):
 
   user_agent: str = "Mozilla/5.0 (compatible; DefinableBot/1.0)"
   extract_links: bool = False
-  remove_tags: List[str] = None
+  remove_tags: List[str] = field(
+    default_factory=lambda: ["script", "style", "nav", "footer", "header", "aside"]
+  )
 
   def __post_init__(self) -> None:
     super().__post_init__()
-    if self.remove_tags is None:
-      self.remove_tags = ["script", "style", "nav", "footer", "header", "aside"]
 
   def read(self, source: Union[str, Path]) -> List[Document]:
     """Read a web page and return as Document."""
@@ -54,7 +53,9 @@ class URLReader(Reader):
     links: List[str] = []
     if self.extract_links:
       for a in soup.find_all("a", href=True):
-        links.append(a["href"])
+        href = cast(Any, a).get("href")
+        if href is not None:
+          links.append(str(href))
 
     meta_data = {
       "url": url,
@@ -111,7 +112,9 @@ class URLReader(Reader):
     links: List[str] = []
     if self.extract_links:
       for a in soup.find_all("a", href=True):
-        links.append(a["href"])
+        href = cast(Any, a).get("href")
+        if href is not None:
+          links.append(str(href))
 
     meta_data = {
       "url": url,

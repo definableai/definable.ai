@@ -1,6 +1,6 @@
 """Recursive text chunker implementation."""
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List
 from uuid import uuid4
 
 from definable.knowledge.chunkers.base import Chunker

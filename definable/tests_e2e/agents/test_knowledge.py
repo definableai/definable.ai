@@ -2,8 +2,8 @@
 
 import pytest
 
-from definable.agents.config import AgentConfig, KnowledgeConfig, TracingConfig
-from definable.agents.testing import AgentTestCase, MockModel
+from definable.agents.config import KnowledgeConfig
+from definable.agents.testing import AgentTestCase
 from definable.knowledge import Knowledge
 from definable.knowledge.document import Document
 from definable.knowledge.vector_dbs.memory import InMemoryVectorDB

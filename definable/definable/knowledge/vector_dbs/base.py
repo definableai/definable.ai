@@ -28,7 +28,7 @@ class VectorDB(ABC):
     self,
     query_embedding: List[float],
     top_k: int = 10,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """Search for similar documents by embedding vector."""
     ...
@@ -38,7 +38,7 @@ class VectorDB(ABC):
     self,
     query_embedding: List[float],
     top_k: int = 10,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """Async search for similar documents."""
     ...

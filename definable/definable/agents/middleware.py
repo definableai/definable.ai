@@ -3,7 +3,7 @@
 import asyncio
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
   from definable.agents.config import KnowledgeConfig

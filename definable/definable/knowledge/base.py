@@ -59,6 +59,11 @@ class Knowledge:
       from definable.knowledge.vector_dbs.memory import InMemoryVectorDB
       self.vector_db = InMemoryVectorDB()
 
+  def _require_vector_db(self) -> "VectorDB":
+    if self.vector_db is None:
+      raise ValueError("VectorDB required")
+    return self.vector_db
+
   def add(
     self,
     source: Union[str, Path, Document, List[Document]],
@@ -90,7 +95,8 @@ class Knowledge:
           doc.embed(self.embedder)
 
     # 4. Store in vector DB
-    return self.vector_db.add(documents)
+    vector_db = self._require_vector_db()
+    return vector_db.add(documents)
 
   async def aadd(
     self,
@@ -113,14 +119,15 @@ class Knowledge:
           await doc.async_embed(self.embedder)
 
     # 4. Store in vector DB
-    return await self.vector_db.aadd(documents)
+    vector_db = self._require_vector_db()
+    return await vector_db.aadd(documents)
 
   def search(
     self,
     query: str,
     top_k: int = 10,
     rerank: bool = True,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """
     Search the knowledge base.
@@ -142,7 +149,8 @@ class Knowledge:
 
     # 2. Vector search (fetch more if reranking)
     fetch_k = top_k * 2 if rerank and self.reranker else top_k
-    results = self.vector_db.search(query_embedding, top_k=fetch_k, filter=filter)
+    vector_db = self._require_vector_db()
+    results = vector_db.search(query_embedding, top_k=fetch_k, filter=filter)
 
     # 3. Rerank if requested
     if rerank and self.reranker and results:
@@ -155,7 +163,7 @@ class Knowledge:
     query: str,
     top_k: int = 10,
     rerank: bool = True,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """Async version of search."""
     # 1. Embed query
@@ -166,7 +174,8 @@ class Knowledge:
 
     # 2. Vector search
     fetch_k = top_k * 2 if rerank and self.reranker else top_k
-    results = await self.vector_db.asearch(query_embedding, top_k=fetch_k, filter=filter)
+    vector_db = self._require_vector_db()
+    results = await vector_db.asearch(query_embedding, top_k=fetch_k, filter=filter)
 
     # 3. Rerank if requested
     if rerank and self.reranker and results:
@@ -178,20 +187,24 @@ class Knowledge:
     """Remove documents by ID."""
     if isinstance(ids, str):
       ids = [ids]
-    self.vector_db.delete(ids)
+    vector_db = self._require_vector_db()
+    vector_db.delete(ids)
 
   async def aremove(self, ids: Union[str, List[str]]) -> None:
     """Async remove documents."""
     if isinstance(ids, str):
       ids = [ids]
-    await self.vector_db.adelete(ids)
+    vector_db = self._require_vector_db()
+    await vector_db.adelete(ids)
 
   def clear(self) -> None:
     """Clear all documents."""
-    self.vector_db.clear()
+    vector_db = self._require_vector_db()
+    vector_db.clear()
 
   def __len__(self) -> int:
-    return self.vector_db.count()
+    vector_db = self._require_vector_db()
+    return vector_db.count()
 
   def _read_source(
     self,

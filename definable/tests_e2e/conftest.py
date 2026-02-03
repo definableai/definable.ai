@@ -22,7 +22,7 @@ def reset_async_client():
     yield
     # Cleanup after each test to prevent event loop closed errors
     try:
-        from definable.utils.http import _async_client_lock, _global_async_client
+        from definable.utils.http import _async_client_lock
         import definable.utils.http as http_module
 
         with _async_client_lock:

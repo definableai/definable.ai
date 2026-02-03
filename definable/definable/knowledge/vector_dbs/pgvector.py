@@ -121,7 +121,7 @@ class PgVectorDB(VectorDB):
     self,
     query_embedding: List[float],
     top_k: int = 10,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """Search for similar documents by embedding vector."""
     # Build filter clause
@@ -155,7 +155,7 @@ class PgVectorDB(VectorDB):
           id=row[0],
           content=row[1],
           name=row[2],
-          meta_data=row[3] if row[3] else {},
+          meta_data=row[3] or {},
           source=row[4],
           source_type=row[5],
           chunk_index=row[6],
@@ -171,7 +171,7 @@ class PgVectorDB(VectorDB):
     self,
     query_embedding: List[float],
     top_k: int = 10,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """Async search for similar documents."""
     import asyncio

@@ -45,7 +45,7 @@ class InMemoryVectorDB(VectorDB):
     self,
     query_embedding: List[float],
     top_k: int = 10,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """Search for similar documents by embedding vector."""
     if not self._embeddings:
@@ -78,7 +78,7 @@ class InMemoryVectorDB(VectorDB):
     self,
     query_embedding: List[float],
     top_k: int = 10,
-    filter: Optional[Dict[str, Any]] = None,
+    filter: Optional[Dict[str, Any]] = None,  # noqa: A002
   ) -> List[Document]:
     """Async search for similar documents."""
     return self.search(query_embedding, top_k, filter)
@@ -102,9 +102,9 @@ class InMemoryVectorDB(VectorDB):
     """Return number of documents in collection."""
     return len(self._documents)
 
-  def _match_filter(self, doc: Document, filter: Dict[str, Any]) -> bool:
+  def _match_filter(self, doc: Document, filters: Dict[str, Any]) -> bool:
     """Check if document matches the filter criteria."""
-    for key, value in filter.items():
+    for key, value in filters.items():
       doc_value = doc.meta_data.get(key)
       if doc_value != value:
         return False

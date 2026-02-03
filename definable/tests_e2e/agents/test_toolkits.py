@@ -2,10 +2,9 @@
 
 import pytest
 
-from definable.agents.testing import AgentTestCase, MockModel
+from definable.agents.testing import AgentTestCase
 from definable.agents.toolkit import Toolkit
 from definable.tools.decorator import tool
-from definable.tools.function import Function
 
 
 @pytest.mark.e2e

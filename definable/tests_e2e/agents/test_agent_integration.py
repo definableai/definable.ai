@@ -4,7 +4,6 @@ import os
 
 import pytest
 
-from definable.agents.config import AgentConfig, KnowledgeConfig, TracingConfig
 from definable.agents.testing import AgentTestCase
 from definable.agents.toolkit import Toolkit
 from definable.knowledge import Knowledge
