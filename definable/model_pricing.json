@@ -86,5 +86,135 @@
       "input_per_million": 6.00,
       "output_per_million": 6.00
     }
+  },
+  "mistral": {
+    "mistral-large-3": {
+      "input_per_million": 0.50,
+      "output_per_million": 1.50
+    },
+    "mistral-medium-3": {
+      "input_per_million": 0.40,
+      "output_per_million": 2.00
+    },
+    "mistral-small-3.2": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.30
+    },
+    "mistral-small-creative": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.30
+    },
+    "devstral-2": {
+      "input_per_million": 0.40,
+      "output_per_million": 2.00
+    },
+    "devstral-small-2": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.30
+    },
+    "codestral": {
+      "input_per_million": 0.30,
+      "output_per_million": 0.90
+    },
+    "magistral-medium": {
+      "input_per_million": 2.00,
+      "output_per_million": 5.00
+    },
+    "magistral-small": {
+      "input_per_million": 0.50,
+      "output_per_million": 1.50
+    },
+    "ministral-3-3b": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.10
+    },
+    "ministral-3-8b": {
+      "input_per_million": 0.15,
+      "output_per_million": 0.15
+    },
+    "ministral-3-14b": {
+      "input_per_million": 0.20,
+      "output_per_million": 0.20
+    },
+    "pixtral-large": {
+      "input_per_million": 2.00,
+      "output_per_million": 6.00
+    },
+    "pixtral-12b": {
+      "input_per_million": 0.15,
+      "output_per_million": 0.15
+    },
+    "mixtral-8x22b": {
+      "input_per_million": 2.00,
+      "output_per_million": 6.00
+    },
+    "mixtral-8x7b": {
+      "input_per_million": 0.70,
+      "output_per_million": 0.70
+    },
+    "mistral-nemo": {
+      "input_per_million": 0.15,
+      "output_per_million": 0.15
+    },
+    "mistral-7b": {
+      "input_per_million": 0.25,
+      "output_per_million": 0.25
+    },
+    "voxtral-small": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.30
+    },
+    "voxtral-mini": {
+      "input_per_million": 0.04,
+      "output_per_million": 0.04
+    },
+    "mistral-embed": {
+      "input_per_million": 0.10
+    },
+    "codestral-embed": {
+      "input_per_million": 0.15
+    },
+    "mistral-moderation": {
+      "input_per_million": 0.10
+    },
+    "data-capture": {
+      "input_per_million": 0.04
+    },
+    "classifier-api-8b": {
+      "input_per_million": 0.10,
+      "output_per_million": 0.10
+    },
+    "classifier-api-3b": {
+      "input_per_million": 0.04,
+      "output_per_million": 0.04
+    },
+    "mistral-small-latest": {
+      "input_per_million": 0.20,
+      "output_per_million": 0.60
+    },
+    "mistral-medium-latest": {
+      "input_per_million": 0.70,
+      "output_per_million": 2.10
+    },
+    "mistral-large-latest": {
+      "input_per_million": 2.00,
+      "output_per_million": 6.00
+    },
+    "open-mistral-7b": {
+      "input_per_million": 0.25,
+      "output_per_million": 0.25
+    },
+    "open-mixtral-8x7b": {
+      "input_per_million": 0.70,
+      "output_per_million": 0.70
+    },
+    "open-mixtral-8x22b": {
+      "input_per_million": 2.00,
+      "output_per_million": 6.00
+    },
+    "codestral-latest": {
+      "input_per_million": 0.20,
+      "output_per_million": 0.60
+    }
   }
 }
