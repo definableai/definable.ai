@@ -558,6 +558,7 @@ class Model(ABC):
     """
     if metrics.cost is None:
       from definable.models.pricing import calculate_cost
+
       metrics.cost = calculate_cost(self.provider, self.id, metrics)
 
   def _format_tools(self, tools: Optional[List[Union[Function, dict]]]) -> List[Dict[str, Any]]:
@@ -1056,6 +1057,7 @@ class Model(ABC):
       # Calculate cost if not already set by provider
       if model_response.response_usage.cost is None:
         from definable.models.pricing import calculate_cost
+
         model_response.response_usage.cost = calculate_cost(self.provider, self.id, model_response.response_usage)
 
   async def _aprocess_model_response(
@@ -1119,6 +1121,7 @@ class Model(ABC):
       # Calculate cost if not already set by provider
       if model_response.response_usage.cost is None:
         from definable.models.pricing import calculate_cost
+
         model_response.response_usage.cost = calculate_cost(self.provider, self.id, model_response.response_usage)
 
   def _populate_assistant_message(
@@ -1686,6 +1689,7 @@ class Model(ABC):
       # Calculate cost if not already set by provider
       if assistant_message.metrics.cost is None:
         from definable.models.pricing import calculate_cost
+
         assistant_message.metrics.cost = calculate_cost(self.provider, self.id, assistant_message.metrics)
     if stream_data.response_content:
       assistant_message.content = stream_data.response_content
@@ -1946,9 +1950,7 @@ class Model(ABC):
       try:
         for item in function_execution_result.result:
           # This function yields agent/team/workflow run events
-          if (
-            isinstance(item, tuple(get_args(RunOutputEvent)))
-          ):
+          if isinstance(item, tuple(get_args(RunOutputEvent))):
             # We only capture content events for output accumulation
             if isinstance(item, RunContentEvent):
               if item.content is not None and isinstance(item.content, BaseModel):

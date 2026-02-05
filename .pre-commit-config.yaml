@@ -22,7 +22,7 @@ repos:
         types: [python]
         args:
           # Example Mypy flags—tailor these to your needs:
-          - src/
+          - definable/
           - --strict-equality
           - --pretty
           - --show-error-codes

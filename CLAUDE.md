@@ -4,6 +4,7 @@
 - Treat this repo as production software: correctness, safety, and stability first.
 - Never ship breaking changes without explicit justification and clear migration guidance.
 - Prefer explicit, predictable behavior over cleverness.
+- Keep `CLAUDE.md` up to date; when Claude Code changes behavior, architecture, or run steps, it should update this memory.
 
 ## Quality Gates (Every Change)
 - All tests must pass (unit + integration + e2e where applicable).
@@ -68,5 +69,20 @@
 ## Release Discipline
 - Changelogs or release notes should reflect behavior changes.
 - Avoid breaking API changes unless absolutely necessary and documented.
+
+## Project Architecture (High Level)
+- Core package is in `definable/definable/` with examples in `definable/examples/` and e2e tests in `definable/tests_e2e/`.
+- `agents/` orchestrates model calls, tools, middleware, tracing, and agent configuration.
+- `models/` provides provider-specific chat model implementations and shared message/response types.
+- `tools/` and `agents/toolkits/` define the tool decorator, tool wrappers, and toolkit composition.
+- `knowledge/` implements RAG: documents, chunkers, embedders, rerankers, and vector DB interfaces/implementations.
+- `tracing/` and `utils/` provide JSONL tracing exporters and shared utilities; `run/` contains runtime helpers.
+
+## Local Development & Running
+- Use the existing uv-managed virtualenv and activate it: `source .venv/bin/activate`.
+- Install locally for development: `pip install -e .`
+- Set API keys as env vars when needed (examples use `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MOONSHOT_API_KEY`, `XAI_API_KEY`, `VOYAGE_API_KEY`, `COHERE_API_KEY`).
+- Run an example from repo root, e.g. `python definable/examples/models/01_basic_invoke.py`.
+- E2E tests live in `definable/tests_e2e/` and some require API keys (see markers in `definable/tests_e2e/pytest.ini`).
 
 

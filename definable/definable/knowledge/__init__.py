@@ -24,38 +24,47 @@ def __getattr__(name: str):
   # Embedder implementations
   if name == "VoyageAIEmbedder":
     from definable.knowledge.embedders.voyageai import VoyageAIEmbedder
+
     return VoyageAIEmbedder
 
   # Reranker implementations
   if name == "CohereReranker":
     from definable.knowledge.rerankers.cohere import CohereReranker
+
     return CohereReranker
 
   # Reader implementations
   if name == "TextReader":
     from definable.knowledge.readers.text import TextReader
+
     return TextReader
   if name == "PDFReader":
     from definable.knowledge.readers.pdf import PDFReader
+
     return PDFReader
   if name == "URLReader":
     from definable.knowledge.readers.url import URLReader
+
     return URLReader
 
   # Chunker implementations
   if name == "TextChunker":
     from definable.knowledge.chunkers.text import TextChunker
+
     return TextChunker
   if name == "RecursiveChunker":
     from definable.knowledge.chunkers.recursive import RecursiveChunker
+
     return RecursiveChunker
 
   # VectorDB implementations
   if name == "InMemoryVectorDB":
     from definable.knowledge.vector_dbs.memory import InMemoryVectorDB
+
     return InMemoryVectorDB
   if name == "PgVectorDB":
     from definable.knowledge.vector_dbs.pgvector import PgVectorDB
+
     return PgVectorDB
 
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

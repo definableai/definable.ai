@@ -421,6 +421,7 @@ class Agent:
       loop = loop_holder.get("loop")
       if loop and loop.is_running():
         try:
+
           def _cancel_tasks() -> None:
             for task in asyncio.all_tasks(loop):
               task.cancel()
@@ -1038,7 +1039,10 @@ class Agent:
       # model_copy creates a new instance
       tool_copy = fn.model_copy()
       tool_copy._run_context = context
-      tool_copy._dependencies = self.config.dependencies
+      # Merge existing deps (from toolkit) with config deps
+      existing_deps = fn._dependencies or {}
+      config_deps = self.config.dependencies or {}
+      tool_copy._dependencies = {**existing_deps, **config_deps}
       tool_copy._session_state = context.session_state
       tools[name] = tool_copy
     return tools

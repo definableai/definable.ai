@@ -44,6 +44,7 @@ def inline_pydantic_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
   """
   Recursively inline Pydantic model schemas by replacing $ref with actual schema.
   """
+
   def resolve_ref(ref: str, defs: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve a $ref to its actual schema."""
     if not ref.startswith("#/$defs/"):

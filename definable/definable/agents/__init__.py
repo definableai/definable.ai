@@ -91,43 +91,57 @@ With Middleware:
 from definable.agents.agent import Agent
 from definable.agents.config import AgentConfig, KnowledgeConfig, TracingConfig
 from definable.agents.middleware import (
-    KnowledgeMiddleware,
-    LoggingMiddleware,
-    MetricsMiddleware,
-    Middleware,
-    RetryMiddleware,
+  KnowledgeMiddleware,
+  LoggingMiddleware,
+  MetricsMiddleware,
+  Middleware,
+  RetryMiddleware,
 )
 from definable.agents.testing import AgentTestCase, MockModel, create_test_agent
 from definable.agents.toolkit import Toolkit
 from definable.agents.toolkits import KnowledgeToolkit
 from definable.agents.tracing import (
-    JSONLExporter,
-    NoOpExporter,
-    TraceExporter,
-    TraceWriter,
+  JSONLExporter,
+  NoOpExporter,
+  TraceExporter,
+  TraceWriter,
 )
 
+
+# Lazy import to avoid circular dependency
+def __getattr__(name: str):
+  if name == "MCPToolkit":
+    from definable.mcp.toolkit import MCPToolkit
+
+    return MCPToolkit
+  raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+# Define MCPToolkit for static analysis (actual import is lazy)
+MCPToolkit: type
+
 __all__ = [
-    # Core
-    "Agent",
-    "AgentConfig",
-    "TracingConfig",
-    "KnowledgeConfig",
-    "Toolkit",
-    "KnowledgeToolkit",
-    # Middleware
-    "Middleware",
-    "LoggingMiddleware",
-    "RetryMiddleware",
-    "MetricsMiddleware",
-    "KnowledgeMiddleware",
-    # Tracing
-    "TraceExporter",
-    "TraceWriter",
-    "JSONLExporter",
-    "NoOpExporter",
-    # Testing
-    "MockModel",
-    "AgentTestCase",
-    "create_test_agent",
+  # Core
+  "Agent",
+  "AgentConfig",
+  "TracingConfig",
+  "KnowledgeConfig",
+  "Toolkit",
+  "KnowledgeToolkit",
+  "MCPToolkit",
+  # Middleware
+  "Middleware",
+  "LoggingMiddleware",
+  "RetryMiddleware",
+  "MetricsMiddleware",
+  "KnowledgeMiddleware",
+  # Tracing
+  "TraceExporter",
+  "TraceWriter",
+  "JSONLExporter",
+  "NoOpExporter",
+  # Testing
+  "MockModel",
+  "AgentTestCase",
+  "create_test_agent",
 ]

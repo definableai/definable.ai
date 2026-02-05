@@ -305,10 +305,7 @@ class KnowledgeMiddleware:
 
     # Filter by minimum score if configured
     if self.config.min_score is not None:
-      documents = [
-        doc for doc in documents
-        if doc.reranking_score is not None and doc.reranking_score >= self.config.min_score
-      ]
+      documents = [doc for doc in documents if doc.reranking_score is not None and doc.reranking_score >= self.config.min_score]
 
     if not documents:
       return await next_handler(context)

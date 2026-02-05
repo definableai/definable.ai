@@ -1,4 +1,5 @@
 """PDF file reader implementation."""
+
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path

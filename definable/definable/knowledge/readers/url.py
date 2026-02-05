@@ -1,4 +1,5 @@
 """URL reader implementation."""
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Union, cast
@@ -13,9 +14,7 @@ class URLReader(Reader):
 
   user_agent: str = "Mozilla/5.0 (compatible; DefinableBot/1.0)"
   extract_links: bool = False
-  remove_tags: List[str] = field(
-    default_factory=lambda: ["script", "style", "nav", "footer", "header", "aside"]
-  )
+  remove_tags: List[str] = field(default_factory=lambda: ["script", "style", "nav", "footer", "header", "aside"])
 
   def __post_init__(self) -> None:
     super().__post_init__()

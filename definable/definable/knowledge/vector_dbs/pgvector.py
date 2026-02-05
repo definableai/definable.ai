@@ -1,4 +1,5 @@
 """PostgreSQL + pgvector database implementation."""
+
 import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -26,9 +27,7 @@ class PgVectorDB(VectorDB):
         import psycopg
         from pgvector.psycopg import register_vector
       except ImportError:
-        raise ImportError(
-          "psycopg and pgvector required. Run: pip install 'psycopg[binary]' pgvector"
-        )
+        raise ImportError("psycopg and pgvector required. Run: pip install 'psycopg[binary]' pgvector")
 
       if not self.connection_string:
         raise ValueError("connection_string is required")
@@ -114,6 +113,7 @@ class PgVectorDB(VectorDB):
   async def aadd(self, documents: List[Document]) -> List[str]:
     """Async add documents to the vector store."""
     import asyncio
+
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, self.add, documents)
 
@@ -175,6 +175,7 @@ class PgVectorDB(VectorDB):
   ) -> List[Document]:
     """Async search for similar documents."""
     import asyncio
+
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, self.search, query_embedding, top_k, filter)
 
@@ -190,6 +191,7 @@ class PgVectorDB(VectorDB):
   async def adelete(self, ids: List[str]) -> None:
     """Async delete documents by IDs."""
     import asyncio
+
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, self.delete, ids)
 

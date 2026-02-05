@@ -1,4 +1,5 @@
 """Text chunker implementation."""
+
 from dataclasses import dataclass
 from typing import List
 from uuid import uuid4
