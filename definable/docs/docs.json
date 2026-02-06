@@ -68,6 +68,16 @@
             ]
           },
           {
+            "group": "Interfaces",
+            "pages": [
+              "interfaces/overview",
+              "interfaces/sessions",
+              "interfaces/hooks",
+              "interfaces/telegram",
+              "interfaces/custom-interfaces"
+            ]
+          },
+          {
             "group": "Knowledge",
             "pages": [
               "knowledge/overview",

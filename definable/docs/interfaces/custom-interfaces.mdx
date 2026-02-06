@@ -1,0 +1,190 @@
+---
+title: Custom Interfaces
+sidebarTitle: Custom Interfaces
+description: Build your own interface to connect agents to any messaging platform.
+icon: code
+---
+
+You can connect an agent to any messaging platform by subclassing `BaseInterface` and implementing four abstract methods. The base class handles sessions, hooks, concurrency, and error handling — you only write the platform-specific code.
+
+## What You Implement
+
+| Method | Purpose |
+|--------|---------|
+| `_start_receiver()` | Start listening for messages (polling, webhook, WebSocket) |
+| `_stop_receiver()` | Stop listening and clean up resources |
+| `_convert_inbound(raw)` | Convert a platform message into an `InterfaceMessage` |
+| `_send_response(msg, resp, raw)` | Send an `InterfaceResponse` back to the platform |
+
+Everything else — sessions, hooks, agent execution, error handling, concurrency — is handled by `BaseInterface`.
+
+## Skeleton Example
+
+Here is a minimal interface for a hypothetical Slack integration:
+
+```python
+from typing import Any, Optional, List
+from definable.interfaces import (
+    BaseInterface,
+    InterfaceConfig,
+    InterfaceMessage,
+    InterfaceResponse,
+)
+
+class SlackConfig(InterfaceConfig):
+    platform: str = "slack"
+    bot_token: str = ""
+    app_token: str = ""
+    # Add any Slack-specific settings here
+
+class SlackInterface(BaseInterface):
+    def __init__(self, agent, config: SlackConfig, **kwargs):
+        super().__init__(agent=agent, config=config, **kwargs)
+        self._slack_client = None
+
+    async def _start_receiver(self) -> None:
+        """Connect to Slack via Socket Mode."""
+        from slack_sdk.web.async_client import AsyncWebClient
+        from slack_sdk.socket_mode.aiohttp import SocketModeClient
+
+        self._slack_client = SocketModeClient(
+            app_token=self.config.app_token,
+            web_client=AsyncWebClient(token=self.config.bot_token),
+        )
+
+        # Register handler for incoming messages
+        self._slack_client.message_listeners.append(self._on_slack_event)
+        await self._slack_client.connect()
+
+    async def _stop_receiver(self) -> None:
+        """Disconnect from Slack."""
+        if self._slack_client:
+            await self._slack_client.disconnect()
+            self._slack_client = None
+
+    async def _convert_inbound(self, raw_message: Any) -> Optional[InterfaceMessage]:
+        """Convert a Slack event to InterfaceMessage."""
+        event = raw_message.get("event", {})
+
+        # Skip bot messages
+        if event.get("bot_id"):
+            return None
+
+        return InterfaceMessage(
+            platform="slack",
+            platform_user_id=event.get("user", ""),
+            platform_chat_id=event.get("channel", ""),
+            platform_message_id=event.get("ts", ""),
+            text=event.get("text", ""),
+            metadata={"thread_ts": event.get("thread_ts")},
+        )
+
+    async def _send_response(
+        self,
+        original_msg: InterfaceMessage,
+        response: InterfaceResponse,
+        raw_message: Any,
+    ) -> None:
+        """Send the response back to Slack."""
+        if response.content and self._slack_client:
+            await self._slack_client.web_client.chat_postMessage(
+                channel=original_msg.platform_chat_id,
+                text=response.content,
+                thread_ts=original_msg.metadata.get("thread_ts"),
+            )
+```
+
+## InterfaceMessage
+
+The platform-agnostic inbound message your `_convert_inbound` method must produce:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `platform` | `str` | Yes | Platform name (e.g., `"slack"`) |
+| `platform_user_id` | `str` | Yes | Sender's user ID |
+| `platform_chat_id` | `str` | Yes | Chat/channel ID |
+| `platform_message_id` | `str` | Yes | Message ID |
+| `text` | `str` | No | Text content |
+| `username` | `str` | No | Display name |
+| `images` | `List[Image]` | No | Attached images |
+| `audio` | `List[Audio]` | No | Attached audio |
+| `videos` | `List[Video]` | No | Attached videos |
+| `files` | `List[File]` | No | Attached files |
+| `reply_to_message_id` | `str` | No | ID of message being replied to |
+| `metadata` | `dict` | No | Arbitrary platform-specific data |
+
+Return `None` from `_convert_inbound` to silently skip a message (e.g., bot's own messages, unsupported message types).
+
+## InterfaceResponse
+
+The platform-agnostic response produced by the agent:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `str` | Text content |
+| `images` | `List[Image]` | Images to send |
+| `videos` | `List[Video]` | Videos to send |
+| `audio` | `List[Audio]` | Audio to send |
+| `files` | `List[File]` | Files to send |
+| `metadata` | `dict` | Platform-specific response data |
+
+Your `_send_response` method receives this and translates it into platform API calls.
+
+## Error Types
+
+Use the built-in error hierarchy for consistent error handling across interfaces:
+
+```python
+from definable.interfaces import (
+    InterfaceError,                 # Base — general interface failure
+    InterfaceConnectionError,       # 503 — cannot connect to platform
+    InterfaceAuthenticationError,   # 401 — invalid credentials
+    InterfaceRateLimitError,        # 429 — rate limited by platform
+    InterfaceMessageError,          # 400 — bad message (invalid chat, etc.)
+)
+```
+
+Raise these from your platform methods, and the base class handles them:
+- Runs all `on_error` hooks
+- Sends the configured `error_message` to the user
+- Logs the error
+
+### InterfaceRateLimitError
+
+Includes an optional `retry_after` field for backoff:
+
+```python
+raise InterfaceRateLimitError(
+    "Rate limited by Slack",
+    platform="slack",
+    retry_after=30.0,  # seconds
+)
+```
+
+## Implementation Checklist
+
+When building a custom interface:
+
+1. **Subclass `InterfaceConfig`** — Add platform-specific settings (tokens, URLs, modes). Use a frozen dataclass.
+
+2. **Implement `_start_receiver`** — Set up your connection (WebSocket, HTTP server, polling loop). Store any client objects on `self`.
+
+3. **Implement `_stop_receiver`** — Tear down connections. Must be idempotent (safe to call multiple times).
+
+4. **Implement `_convert_inbound`** — Parse the platform's message format. Extract text, media, user info. Return `None` for messages to skip.
+
+5. **Implement `_send_response`** — Send text, images, files back to the platform. Handle message splitting if the platform has length limits.
+
+6. **Call `handle_platform_message`** — From your receiver (event handler, webhook route, poll loop), call `await self.handle_platform_message(raw_message)`. This triggers the full pipeline.
+
+```python
+# In your polling loop or event handler:
+async def _on_slack_event(self, event):
+    await self.handle_platform_message(event)
+```
+
+The base class takes it from there — converting the message, running hooks, managing sessions, calling the agent, and invoking your `_send_response`.
+
+<Tip>
+Look at the Telegram implementation in `definable/definable/interfaces/telegram/interface.py` as a reference. It demonstrates polling, webhooks, media handling, message splitting, and error mapping.
+</Tip>

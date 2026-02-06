@@ -26,28 +26,36 @@ Definable is a Python framework for building AI-powered applications. It provide
   <Card title="Toolkits" icon="toolbox" href="/toolkits/overview">
     Bundle related tools into reusable toolkits. Built-in toolkits for knowledge search and MCP server integration.
   </Card>
+  <Card title="Interfaces" icon="message-bot" href="/interfaces/overview">
+    Connect agents to messaging platforms like Telegram. Automatic session management, hooks, media support, and concurrent request handling.
+  </Card>
 </CardGroup>
 
 ## Architecture Overview
 
 Definable is organized into composable layers that work together:
 
-```
-┌─────────────────────────────────────────────────┐
-│                    Agent                        │
-│  ┌───────────┐  ┌──────────┐  ┌─────────────┐  │
-│  │ Middleware │  │  Tracing  │  │   Config    │  │
-│  └───────────┘  └──────────┘  └─────────────┘  │
-├─────────────────────────────────────────────────┤
-│              Model (LLM Provider)               │
-│  OpenAI │ DeepSeek │ Moonshot │ xAI │ Custom   │
-├─────────────────────────────────────────────────┤
-│  Tools & Toolkits  │  Knowledge (RAG)  │  MCP  │
-│  @tool decorator    │  Readers/Chunkers │ stdio │
-│  Hooks & caching    │  Embedders/VecDBs │ SSE   │
-│  Dependencies       │  Rerankers        │ HTTP  │
-└─────────────────────────────────────────────────┘
-```
+````mermaid
+flowchart TD
+  subgraph agentLayer [Agent]
+    Middleware
+    Tracing
+    Config
+  end
+  subgraph modelLayer ["Model (LLM Provider)"]
+    OpenAI
+    DeepSeek
+    Moonshot
+    xAI
+    Custom
+  end
+  subgraph capLayer [Capabilities]
+    ToolsToolkits["Tools & Toolkits"]
+    KnowledgeRAG["Knowledge (RAG)"]
+    MCP
+  end
+  agentLayer --> modelLayer --> capLayer
+````
 
 ## Key Features
 
@@ -60,6 +68,7 @@ Definable is organized into composable layers that work together:
 - **MCP support**: Connect to any MCP server and use its tools, resources, and prompts inside your agents.
 - **Testing**: Mock models, test agents without API calls, and assert on tool execution.
 - **Cost tracking**: Automatic token counting and cost calculation across providers.
+- **Interfaces**: Deploy agents to Telegram (and more) with automatic sessions, hooks, and media handling.
 - **Type-safe**: Built on Pydantic with full type annotations and mypy support.
 
 ## Next Steps

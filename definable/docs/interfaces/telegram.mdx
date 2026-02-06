@@ -1,0 +1,288 @@
+---
+title: Telegram
+description: Deploy your agent as a Telegram bot with polling or webhooks.
+icon: paper-plane
+---
+
+The Telegram interface connects your agent to Telegram's Bot API. It supports both polling (for development) and webhooks (for production), handles photos, voice messages, audio files, and documents, and provides built-in access control.
+
+## Setup
+
+### 1. Create a Bot
+
+Open Telegram and message [@BotFather](https://t.me/BotFather):
+
+1. Send `/newbot`
+2. Choose a name and username
+3. Copy the bot token (e.g., `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
+
+### 2. Set the Token
+
+```bash
+export TELEGRAM_BOT_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+```
+
+### 3. Run Your Bot
+
+```python
+import asyncio
+import os
+from definable.agents import Agent
+from definable.models import OpenAIChat
+from definable.interfaces import TelegramInterface, TelegramConfig
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a helpful Telegram assistant.",
+)
+
+config = TelegramConfig(bot_token=os.environ["TELEGRAM_BOT_TOKEN"])
+interface = TelegramInterface(agent=agent, config=config)
+
+asyncio.run(interface.serve_forever())
+```
+
+Your bot is now live. Open Telegram, find your bot, and start chatting.
+
+## TelegramConfig Reference
+
+### Authentication
+
+<ParamField path="bot_token" type="str" required>
+  Telegram Bot API token from BotFather.
+</ParamField>
+
+### Receiver Mode
+
+<ParamField path="mode" type="str" default="polling">
+  How the bot receives messages. `"polling"` for development, `"webhook"` for production.
+</ParamField>
+
+<ParamField path="polling_interval" type="float" default="0.5">
+  Seconds between polling requests (polling mode only).
+</ParamField>
+
+<ParamField path="polling_timeout" type="int" default="30">
+  Long-polling timeout in seconds (polling mode only).
+</ParamField>
+
+### Webhook Settings
+
+<ParamField path="webhook_url" type="str">
+  Public HTTPS URL for receiving updates. Required when `mode="webhook"`.
+</ParamField>
+
+<ParamField path="webhook_path" type="str" default="/webhook/telegram">
+  URL path for the webhook endpoint.
+</ParamField>
+
+<ParamField path="webhook_port" type="int" default="8443">
+  Port for the webhook HTTP server.
+</ParamField>
+
+<ParamField path="webhook_secret" type="str">
+  Secret token for verifying webhook requests from Telegram.
+</ParamField>
+
+### Access Control
+
+<ParamField path="allowed_user_ids" type="List[int]">
+  Only accept messages from these Telegram user IDs. All users allowed if not set.
+</ParamField>
+
+<ParamField path="allowed_chat_ids" type="List[int]">
+  Only accept messages from these chat IDs. All chats allowed if not set.
+</ParamField>
+
+### Formatting
+
+<ParamField path="parse_mode" type="str" default="HTML">
+  Message formatting: `"HTML"`, `"MarkdownV2"`, `"Markdown"`, or `None` for plain text.
+</ParamField>
+
+<ParamField path="max_message_length" type="int" default="4096">
+  Telegram's message character limit. Long responses are split automatically.
+</ParamField>
+
+### Timeouts
+
+<ParamField path="connect_timeout" type="float" default="10.0">
+  HTTP connection timeout in seconds.
+</ParamField>
+
+<ParamField path="request_timeout" type="float" default="60.0">
+  HTTP request timeout in seconds.
+</ParamField>
+
+## Polling Mode (Development)
+
+Polling is the simplest mode. The bot periodically asks Telegram for new messages. No public URL or HTTPS certificate is needed.
+
+```python
+config = TelegramConfig(
+    bot_token="YOUR_TOKEN",
+    mode="polling",           # default
+    polling_interval=0.5,     # check every 500ms
+    polling_timeout=30,       # long-polling timeout
+)
+```
+
+<Tip>
+Use polling for local development and testing. It works behind NATs and firewalls with no setup.
+</Tip>
+
+## Webhook Mode (Production)
+
+Webhooks are more efficient for production. Telegram pushes updates to your server as they arrive — no polling delay.
+
+```python
+config = TelegramConfig(
+    bot_token="YOUR_TOKEN",
+    mode="webhook",
+    webhook_url="https://your-domain.com/webhook/telegram",
+    webhook_port=8443,
+    webhook_secret="your-secret-token",
+)
+```
+
+Requirements:
+- A publicly accessible HTTPS URL
+- Port 443, 80, 88, or 8443
+- Valid SSL certificate (use Let's Encrypt or a reverse proxy)
+
+<Warning>
+The `webhook_secret` is strongly recommended. It prevents unauthorized requests to your webhook endpoint. Telegram sends this token in the `X-Telegram-Bot-Api-Secret-Token` header.
+</Warning>
+
+## Media Support
+
+The interface automatically handles Telegram media types:
+
+| Telegram Type | Converted To | Notes |
+|---------------|-------------|-------|
+| Photos | `Image` | Largest resolution is selected |
+| Voice messages | `Audio` | Includes duration and mime type |
+| Audio files | `Audio` | Includes file metadata |
+| Documents | `File` | Includes filename and mime type |
+
+Media is passed to the agent in the `images`, `audio`, and `files` parameters, so tools and the model can access them.
+
+### Sending Media
+
+The agent can return media in its response. Images are sent as photos, and files are sent as documents:
+
+```python
+from definable.tools import tool
+from definable.media import Image
+
+@tool
+def generate_chart(data: str) -> Image:
+    """Generate a chart from data."""
+    chart_path = create_chart(data)
+    return Image(filepath=chart_path)
+```
+
+## Access Control
+
+Restrict who can use the bot:
+
+```python
+config = TelegramConfig(
+    bot_token="YOUR_TOKEN",
+    allowed_user_ids=[123456789, 987654321],    # Only these users
+    allowed_chat_ids=[111222333],                 # Only these chats
+)
+```
+
+Messages from unauthorized users or chats are silently ignored.
+
+<Tip>
+To find your Telegram user ID, message [@userinfobot](https://t.me/userinfobot).
+</Tip>
+
+## Agent with Tools
+
+Give your Telegram bot capabilities:
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+from definable.tools import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city."""
+    return f"Sunny, 24°C in {city}"
+
+@tool
+def set_reminder(text: str, minutes: int, _session_state: dict = None) -> str:
+    """Set a reminder."""
+    reminders = _session_state.setdefault("reminders", [])
+    reminders.append({"text": text, "minutes": minutes})
+    return f"Reminder set: '{text}' in {minutes} minutes."
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[get_weather, set_reminder],
+    instructions="You are a helpful Telegram assistant with weather and reminder tools.",
+)
+```
+
+Session state is preserved across messages, so the reminder list persists throughout the conversation.
+
+## Complete Production Example
+
+```python
+import asyncio
+import os
+import logging
+from definable.agents import Agent, AgentConfig, LoggingMiddleware
+from definable.models import OpenAIChat
+from definable.interfaces import (
+    TelegramInterface,
+    TelegramConfig,
+    LoggingHook,
+    AllowlistHook,
+)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("telegram_bot")
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a customer support agent for Acme Corp.",
+    config=AgentConfig(max_iterations=5),
+).use(LoggingMiddleware(logger))
+
+config = TelegramConfig(
+    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+    mode="webhook",
+    webhook_url="https://bot.acme.com/webhook/telegram",
+    webhook_secret=os.environ.get("WEBHOOK_SECRET"),
+    max_session_history=30,
+    session_ttl_seconds=1800,       # 30-minute sessions
+    max_concurrent_requests=20,
+    parse_mode="HTML",
+)
+
+interface = (
+    TelegramInterface(agent=agent, config=config)
+    .add_hook(LoggingHook())
+    .add_hook(AllowlistHook(allowed_user_ids={"12345", "67890"}))
+)
+
+asyncio.run(interface.serve_forever())
+```
+
+## Error Handling
+
+The Telegram interface maps API errors to specific exception types:
+
+| HTTP Status | Exception | Cause |
+|-------------|-----------|-------|
+| 401 | `InterfaceAuthenticationError` | Invalid bot token |
+| 429 | `InterfaceRateLimitError` | Telegram rate limit exceeded |
+| 400 | `InterfaceMessageError` | Bad request (invalid chat, etc.) |
+| Other | `InterfaceConnectionError` | Network or server error |
+
+When an error occurs during message processing, the configured `error_message` is sent to the user, and all `on_error` hooks are invoked.

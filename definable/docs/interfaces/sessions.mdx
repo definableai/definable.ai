@@ -1,0 +1,162 @@
+---
+title: Sessions
+description: Automatic per-user conversation management with history, state, and expiry.
+icon: clock-rotate-left
+---
+
+Every conversation between a user and your agent is tracked in a **session**. Sessions store the message history, custom state, and metadata needed to maintain context across multiple interactions.
+
+## How Sessions Work
+
+When a message arrives, the interface looks up (or creates) a session keyed by three values:
+
+````mermaid
+flowchart LR
+  Platform["platform"] --> SessionKey["Session Key"]
+  UserID["user_id"] --> SessionKey
+  ChatID["chat_id"] --> SessionKey
+  SessionKey --> Session["InterfaceSession"]
+````
+
+This means:
+- Each user gets a separate session per chat
+- Group chats have one session per user within the group
+- Sessions persist across messages until they expire
+
+## InterfaceSession
+
+Each session contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `session_id` | `str` | Unique identifier (auto-generated UUID) |
+| `platform` | `str` | Platform name (e.g., `"telegram"`) |
+| `platform_user_id` | `str` | User's ID on the platform |
+| `platform_chat_id` | `str` | Chat/conversation ID |
+| `messages` | `List[Message]` | Agent conversation history |
+| `session_state` | `dict` | Arbitrary key-value state (mutable) |
+| `last_run_output` | `RunOutput` | Most recent agent output |
+| `created_at` | `float` | Creation timestamp |
+| `last_activity_at` | `float` | Last message timestamp |
+
+## Conversation History
+
+The session's `messages` list is passed to the agent on every call, giving it full context of the conversation:
+
+```
+User: "What is Python?"
+Agent: "Python is a programming language..."
+
+User: "Who created it?"        ← agent sees both previous messages
+Agent: "Python was created by Guido van Rossum..."
+```
+
+History is automatically truncated to `max_session_history` (default: 50 messages) to stay within token limits. The most recent messages are always kept.
+
+## Session State
+
+Use `session_state` to store custom per-user data that persists across messages:
+
+```python
+from definable.tools import tool
+
+@tool
+def set_language(language: str, _session_state: dict = None) -> str:
+    """Set the user's preferred language."""
+    _session_state["language"] = language
+    return f"Language set to {language}."
+
+@tool
+def get_preferences(_session_state: dict = None) -> str:
+    """Get the user's preferences."""
+    lang = _session_state.get("language", "not set")
+    return f"Language: {lang}"
+```
+
+State set in one message is available in all subsequent messages within the same session.
+
+## SessionManager
+
+The `SessionManager` handles creation, lookup, and expiry of sessions. A default instance is created automatically, or you can provide your own.
+
+### Automatic Behavior
+
+By default, sessions are:
+- **Created** on the first message from a user/chat combination
+- **Reused** on subsequent messages from the same user/chat
+- **Expired** after `session_ttl_seconds` of inactivity (default: 1 hour)
+- **Cleaned up** automatically when expired sessions are encountered
+
+### Custom SessionManager
+
+```python
+from definable.interfaces import SessionManager, TelegramInterface
+
+# Sessions expire after 2 hours
+session_manager = SessionManager(session_ttl_seconds=7200)
+
+interface = TelegramInterface(
+    agent=agent,
+    config=config,
+    session_manager=session_manager,
+)
+```
+
+### SessionManager API
+
+| Method | Description |
+|--------|-------------|
+| `get_or_create(platform, user_id, chat_id)` | Get existing session or create a new one |
+| `get(platform, user_id, chat_id)` | Get session or `None` if not found/expired |
+| `remove(platform, user_id, chat_id)` | Remove a session manually |
+| `cleanup_expired()` | Remove all expired sessions, returns count |
+| `active_session_count` | Number of active (non-expired) sessions |
+
+### Manual Session Access
+
+```python
+session_manager = SessionManager(session_ttl_seconds=3600)
+
+# Get or create
+session = session_manager.get_or_create("telegram", "user-123", "chat-456")
+
+# Check state
+print(session.session_state)
+print(len(session.messages))
+
+# Cleanup
+removed = session_manager.cleanup_expired()
+print(f"Cleaned up {removed} expired sessions")
+print(f"Active sessions: {session_manager.active_session_count}")
+```
+
+## Session TTL
+
+Sessions expire based on `last_activity_at`. Every incoming message updates this timestamp via `session.touch()`. Once the time since last activity exceeds `session_ttl_seconds`, the session is considered expired and will be removed on the next access or cleanup.
+
+```python
+# Short sessions for quick interactions
+config = TelegramConfig(bot_token="...", session_ttl_seconds=300)  # 5 minutes
+
+# Long sessions for complex workflows
+config = TelegramConfig(bot_token="...", session_ttl_seconds=86400)  # 24 hours
+```
+
+When a session expires, the next message from that user starts a fresh conversation with no history.
+
+## History Truncation
+
+Long conversations are automatically truncated to prevent token limit issues:
+
+```python
+config = TelegramConfig(
+    bot_token="...",
+    max_session_history=20,  # Keep only the 20 most recent messages
+)
+```
+
+The session's `truncate_history(max_messages)` method removes the oldest messages, always keeping the most recent ones.
+
+<Note>
+`SessionManager` is thread-safe. All operations use internal locking, so it is safe to use with concurrent message processing.
+</Note>
