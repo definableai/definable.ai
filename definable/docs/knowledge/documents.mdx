@@ -1,0 +1,98 @@
+---
+title: Documents
+description: The core data unit in the knowledge pipeline.
+icon: file-lines
+---
+
+A `Document` represents a piece of text content along with its metadata, source information, and optional embedding vector. Documents are the fundamental unit that flows through the entire RAG pipeline.
+
+## Creating Documents
+
+```python
+from definable.knowledge import Document
+
+doc = Document(
+    content="Definable is a Python framework for building AI agents.",
+    name="intro",
+    meta_data={"category": "overview", "version": "1.0"},
+)
+```
+
+## Document Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `str` | The text content |
+| `id` | `str` | Unique identifier (auto-generated UUID) |
+| `name` | `str` | Human-readable name |
+| `meta_data` | `dict` | Arbitrary metadata for filtering and display |
+| `embedding` | `List[float]` | Vector embedding (set by embedder) |
+| `source` | `str` | Where the document came from (file path, URL) |
+| `source_type` | `str` | Type of source (`"text"`, `"pdf"`, `"url"`) |
+| `chunk_index` | `int` | Index within a chunked document |
+| `chunk_total` | `int` | Total number of chunks from the source |
+| `reranking_score` | `float` | Relevance score from reranking |
+
+## Generating Embeddings
+
+Embed a document manually using any embedder:
+
+<CodeGroup>
+```python Sync
+from definable.knowledge import OpenAIEmbedder
+
+embedder = OpenAIEmbedder()
+doc.embed(embedder)
+print(len(doc.embedding))  # 1536
+```
+
+```python Async
+await doc.async_embed(embedder)
+```
+</CodeGroup>
+
+<Note>
+When using the `Knowledge` class, embedding is handled automatically during `add()`. You only need to embed manually if you are working with documents directly.
+</Note>
+
+## Serialization
+
+Convert documents to and from dictionaries for storage or transmission:
+
+```python
+# To dictionary
+data = doc.to_dict()
+
+# From dictionary
+restored = Document.from_dict(data)
+```
+
+## Metadata and Filtering
+
+Attach metadata to documents for filtering during search:
+
+```python
+knowledge.add(
+    "Python 3.12 release notes...",
+    # Metadata is attached to the document
+)
+
+# Filter during search (depends on vector DB support)
+results = knowledge.search(
+    "What's new in Python?",
+    filter={"category": "release-notes"},
+)
+```
+
+## Chunked Documents
+
+When a large document is chunked, each chunk is a separate `Document` with chunk tracking:
+
+```python
+# After chunking a long document, you get:
+# chunk.chunk_index = 0, chunk.chunk_total = 5
+# chunk.chunk_index = 1, chunk.chunk_total = 5
+# ...
+```
+
+This lets you reconstruct the original document order or display chunk context to users.

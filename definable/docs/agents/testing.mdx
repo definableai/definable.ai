@@ -1,0 +1,189 @@
+---
+title: Testing
+description: Test agents without API calls using MockModel and assertion helpers.
+icon: flask-vial
+---
+
+Definable includes testing utilities that let you verify agent behavior without making real API calls. This keeps tests fast, deterministic, and free of cost.
+
+## MockModel
+
+`MockModel` simulates model responses with pre-defined outputs:
+
+```python
+from definable.agents import Agent, MockModel
+
+model = MockModel(responses=["The capital of France is Paris."])
+
+agent = Agent(model=model, instructions="You are a geography expert.")
+output = agent.run("What is the capital of France?")
+
+print(output.content)  # "The capital of France is Paris."
+```
+
+### Multiple Responses
+
+For multi-turn or tool-calling scenarios, provide multiple responses. They are consumed in order:
+
+```python
+model = MockModel(responses=[
+    "Let me search for that.",   # First model call
+    "The answer is 42.",         # After tool execution
+])
+```
+
+### Simulating Tool Calls
+
+Provide tool call data to simulate the model requesting tool execution:
+
+```python
+model = MockModel(
+    tool_calls=[
+        {"name": "get_weather", "arguments": {"city": "Paris"}},
+    ],
+    responses=["The weather in Paris is sunny."],
+)
+```
+
+### Custom Side Effects
+
+Use `side_effect` for dynamic behavior:
+
+```python
+def dynamic_response(*args, **kwargs):
+    return ModelResponse(content="Dynamic response!")
+
+model = MockModel(side_effect=dynamic_response)
+```
+
+### Reasoning Content
+
+Simulate models that produce reasoning:
+
+```python
+model = MockModel(
+    responses=["42"],
+    reasoning_content="Let me think step by step...",
+)
+```
+
+### Inspecting Calls
+
+`MockModel` tracks every call for assertions:
+
+```python
+model = MockModel(responses=["Hello!"])
+agent = Agent(model=model)
+agent.run("Hi!")
+
+print(model.call_count)    # 1
+print(model.call_history)  # List of call details
+
+model.assert_called()          # Passes
+model.assert_called_times(1)   # Passes
+model.reset()                  # Reset counters
+```
+
+## AgentTestCase
+
+A base class for test suites with built-in assertion helpers:
+
+```python
+from definable.agents import AgentTestCase, MockModel
+from definable.tools import tool
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two numbers."""
+    return a + b
+
+class TestMathAgent(AgentTestCase):
+    def test_uses_add_tool(self):
+        agent = self.create_agent(
+            model=MockModel(
+                tool_calls=[{"name": "add", "arguments": {"a": 2, "b": 3}}],
+                responses=["2 + 3 = 5"],
+            ),
+            tools=[add],
+        )
+        output = agent.run("What is 2 + 3?")
+
+        self.assert_no_errors(output)
+        self.assert_has_content(output)
+        self.assert_tool_called(output, "add")
+        self.assert_content_contains(output, "5")
+
+    def test_no_tools_needed(self):
+        agent = self.create_agent(
+            model=MockModel(responses=["Hello!"]),
+        )
+        output = agent.run("Say hello.")
+
+        self.assert_no_errors(output)
+        self.assert_tool_not_called(output, "add")
+```
+
+### Available Assertions
+
+| Method | Description |
+|--------|-------------|
+| `assert_no_errors(output)` | Verify the run completed without errors |
+| `assert_has_content(output)` | Verify the response contains non-empty content |
+| `assert_content_contains(output, text)` | Verify the content includes a substring |
+| `assert_tool_called(output, name)` | Verify a specific tool was called |
+| `assert_tool_not_called(output, name)` | Verify a specific tool was not called |
+| `assert_message_count(output, count)` | Verify the number of messages in the history |
+
+### create_agent Helper
+
+`AgentTestCase.create_agent()` creates agents with tracing disabled by default, keeping test output clean:
+
+```python
+agent = self.create_agent(
+    model=MockModel(responses=["test"]),
+    tools=[my_tool],
+    instructions="You are a test agent.",
+)
+```
+
+## Quick Test Helper
+
+For simple tests outside a test class, use `create_test_agent`:
+
+```python
+from definable.agents import create_test_agent
+
+agent = create_test_agent(
+    responses=["Hello!"],
+    tools=[my_tool],
+    instructions="You are a test agent.",
+)
+output = agent.run("Hi!")
+```
+
+## Example with pytest
+
+```python
+import pytest
+from definable.agents import Agent, MockModel, create_test_agent
+from definable.tools import tool
+
+@tool
+def search(query: str) -> str:
+    """Search for information."""
+    return f"Results for: {query}"
+
+def test_agent_searches():
+    agent = create_test_agent(
+        responses=["Let me search.", "Here are the results."],
+        tools=[search],
+    )
+    output = agent.run("Find info about Python.")
+    assert output.content is not None
+    assert output.status.value == "completed"
+
+def test_agent_handles_no_tools():
+    agent = create_test_agent(responses=["I can answer directly."])
+    output = agent.run("What is 2 + 2?")
+    assert "answer" in output.content.lower()
+```

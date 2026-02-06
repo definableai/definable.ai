@@ -1,0 +1,78 @@
+---
+title: DeepSeek
+description: Use DeepSeek models for cost-effective, high-quality AI generation.
+icon: bolt
+---
+
+## Setup
+
+```bash
+export DEEPSEEK_API_KEY="sk-..."
+```
+
+## Basic Usage
+
+```python
+from definable.models import DeepSeekChat
+
+model = DeepSeekChat(id="deepseek-chat")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+## Parameters
+
+<ParamField path="id" type="str" default="deepseek-chat">
+  Model identifier. Common values: `deepseek-chat`, `deepseek-reasoner`.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  DeepSeek API key. Defaults to the `DEEPSEEK_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="base_url" type="str" default="https://api.deepseek.com">
+  DeepSeek API base URL.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum output tokens.
+</ParamField>
+
+## Reasoning Support
+
+DeepSeek models can produce reasoning content alongside their response:
+
+```python
+model = DeepSeekChat(id="deepseek-reasoner")
+response = model.invoke(
+    messages=[{"role": "user", "content": "Solve: what is 15! / 13!?"}]
+)
+print(response.reasoning_content)  # Step-by-step reasoning
+print(response.content)            # Final answer
+```
+
+## Streaming
+
+```python
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "Explain quantum computing."}]
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+## Async Usage
+
+```python
+response = await model.ainvoke(
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+<Note>
+DeepSeek does not support native structured outputs (`supports_native_structured_outputs = False`). Structured output requests are handled via prompt engineering with JSON Schema instructions.
+</Note>

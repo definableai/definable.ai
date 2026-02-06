@@ -1,0 +1,148 @@
+---
+title: Running Agents
+sidebarTitle: Running Agents
+description: Execute agents synchronously, asynchronously, or with streaming.
+icon: play
+---
+
+Agents support four execution modes. Choose based on your application's needs.
+
+## Synchronous
+
+The simplest way to run an agent. Blocks until the full response is ready.
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a helpful assistant.",
+)
+
+output = agent.run("What is the capital of France?")
+print(output.content)  # "The capital of France is Paris."
+```
+
+## Asynchronous
+
+Use `arun()` in async contexts such as web servers or async pipelines:
+
+```python
+output = await agent.arun("What is the capital of France?")
+print(output.content)
+```
+
+## Streaming (Sync)
+
+Stream events in real time. Each event represents a step in the agent's execution:
+
+```python
+for event in agent.run_stream("Write a short story about a robot."):
+    if event.event == "RunContent":
+        print(event.content, end="", flush=True)
+    elif event.event == "ToolCallStarted":
+        print(f"\n→ Calling {event.tool_name}...")
+    elif event.event == "ToolCallCompleted":
+        print(f"  Done: {event.result[:100]}")
+    elif event.event == "RunCompleted":
+        print(f"\n\nTokens used: {event.metrics.total_tokens}")
+```
+
+## Streaming (Async)
+
+```python
+async for event in agent.arun_stream("Write a short story about a robot."):
+    if event.event == "RunContent":
+        print(event.content, end="", flush=True)
+```
+
+## Run Parameters
+
+All four methods accept the same parameters:
+
+<ParamField path="instruction" type="str" required>
+  The user's message or instruction to the agent.
+</ParamField>
+
+<ParamField path="messages" type="List[Message]">
+  Existing conversation history. The instruction is appended as the latest user message.
+</ParamField>
+
+<ParamField path="session_id" type="str">
+  Session identifier for grouping related runs together.
+</ParamField>
+
+<ParamField path="run_id" type="str">
+  Unique identifier for this run. Auto-generated if not provided.
+</ParamField>
+
+<ParamField path="images" type="List[Image]">
+  Images to include with the user message.
+</ParamField>
+
+<ParamField path="videos" type="List[Video]">
+  Videos to include with the user message.
+</ParamField>
+
+<ParamField path="audio" type="List[Audio]">
+  Audio files to include with the user message.
+</ParamField>
+
+<ParamField path="files" type="List[File]">
+  Files to include with the user message.
+</ParamField>
+
+<ParamField path="output_schema" type="Type[BaseModel]">
+  Pydantic model for structured output from the final response.
+</ParamField>
+
+## The RunOutput Object
+
+Every non-streaming run returns a `RunOutput` with the full results:
+
+```python
+output = agent.run("Hello!")
+
+# Content
+print(output.content)           # The agent's text response
+print(output.content_type)      # "text", "json", etc.
+
+# Metadata
+print(output.run_id)            # Unique run identifier
+print(output.agent_id)          # Agent that produced this output
+print(output.model)             # Model used
+print(output.status)            # RunStatus.COMPLETED
+
+# Metrics
+print(output.metrics.total_tokens)
+print(output.metrics.cost)
+print(output.metrics.duration)
+
+# Messages (full conversation history)
+print(len(output.messages))
+
+# Media outputs
+print(output.images)
+print(output.audio)
+```
+
+## Stream Event Types
+
+Streaming runs yield `RunOutputEvent` objects. Key event types:
+
+| Event | Description |
+|-------|-------------|
+| `RunStarted` | Agent execution has begun |
+| `RunContent` | A chunk of the agent's text response |
+| `RunContentCompleted` | Full content generation is done |
+| `ToolCallStarted` | A tool call is about to execute |
+| `ToolCallCompleted` | A tool call finished successfully |
+| `ToolCallError` | A tool call failed |
+| `ReasoningStep` | A reasoning step from a thinking model |
+| `RunCompleted` | The entire run is finished (includes final `RunOutput`) |
+| `RunError` | The run failed with an error |
+
+<Tip>
+The `RunCompleted` event contains the full `RunOutput` object in `event.output`, giving you access to aggregated metrics and the complete message history even when streaming.
+</Tip>

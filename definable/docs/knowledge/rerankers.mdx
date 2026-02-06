@@ -1,0 +1,127 @@
+---
+title: Rerankers
+description: Improve search result relevance with cross-encoder reranking.
+icon: ranking-star
+---
+
+Rerankers take the initial results from vector search and re-score them using a more powerful model. This second pass significantly improves relevance, especially when the initial retrieval returns many similar results.
+
+## How Reranking Works
+
+```
+Vector Search (fast, approximate)
+    → Top 20 candidates
+
+Reranker (slower, precise)
+    → Top 5 most relevant results
+```
+
+The vector database finds candidates quickly using embedding similarity. The reranker then reads each candidate alongside the query and produces a more accurate relevance score.
+
+## CohereReranker
+
+Uses Cohere's reranking API:
+
+```python
+from definable.knowledge.rerankers import CohereReranker
+
+reranker = CohereReranker(
+    model="rerank-multilingual-v3.0",
+    top_n=5,
+)
+```
+
+<ParamField path="model" type="str" default="rerank-multilingual-v3.0">
+  Cohere reranking model. Options: `rerank-multilingual-v3.0`, `rerank-english-v3.0`.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  Cohere API key. Defaults to the `COHERE_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="top_n" type="int">
+  Maximum number of results to return after reranking. If not set, returns all reranked results.
+</ParamField>
+
+<Note>
+Requires the `cohere` package. Install with `pip install cohere`.
+</Note>
+
+## Using with Knowledge
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.knowledge.rerankers import CohereReranker
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+    reranker=CohereReranker(top_n=5),
+)
+
+# Reranking happens automatically during search
+results = knowledge.search("What is Python?", rerank=True)
+```
+
+Set `rerank=False` to skip reranking for a specific query:
+
+```python
+results = knowledge.search("What is Python?", rerank=False)
+```
+
+## Standalone Usage
+
+<CodeGroup>
+```python Sync
+from definable.knowledge import Document
+
+documents = [
+    Document(content="Python is a programming language."),
+    Document(content="Java is used for enterprise software."),
+    Document(content="Python was created by Guido van Rossum."),
+]
+
+reranked = reranker.rerank("Who created Python?", documents)
+for doc in reranked:
+    print(f"[{doc.reranking_score:.3f}] {doc.content}")
+```
+
+```python Async
+reranked = await reranker.arerank("Who created Python?", documents)
+```
+</CodeGroup>
+
+## Creating a Custom Reranker
+
+Subclass `Reranker`:
+
+```python
+from definable.knowledge.rerankers import Reranker
+from definable.knowledge import Document
+
+class SimpleReranker(Reranker):
+    def rerank(self, query: str, documents: list[Document]) -> list[Document]:
+        # Score by keyword overlap
+        for doc in documents:
+            query_words = set(query.lower().split())
+            doc_words = set(doc.content.lower().split())
+            doc.reranking_score = len(query_words & doc_words) / len(query_words)
+
+        return sorted(documents, key=lambda d: d.reranking_score or 0, reverse=True)
+
+    async def arerank(self, query: str, documents: list[Document]) -> list[Document]:
+        return self.rerank(query, documents)
+```
+
+## When to Use Reranking
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Small knowledge base (<100 docs) | Optional — vector search is usually sufficient |
+| Large knowledge base | Recommended — significantly improves precision |
+| Multilingual content | Use `rerank-multilingual-v3.0` |
+| English only | Use `rerank-english-v3.0` for best performance |
+
+<Tip>
+A common pattern is to retrieve more candidates than needed (e.g., `top_k=20`) and let the reranker select the best 5. This gives the reranker more material to work with.
+</Tip>

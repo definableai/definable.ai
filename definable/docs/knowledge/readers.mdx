@@ -1,0 +1,137 @@
+---
+title: Readers
+description: Read content from text files, PDFs, and web pages into documents.
+icon: file-import
+---
+
+Readers convert raw sources (files, URLs, strings) into `Document` objects that can be chunked, embedded, and stored. Definable includes readers for plain text, PDF, and web content.
+
+## Auto-Detection
+
+By default, `Knowledge` detects the correct reader from the source:
+
+```python
+knowledge.add("plain text content")         # TextReader
+knowledge.add("/path/to/file.txt")          # TextReader
+knowledge.add("/path/to/report.pdf")        # PDFReader
+knowledge.add("https://example.com/page")   # URLReader
+```
+
+## TextReader
+
+Reads plain text files (`.txt`, `.md`, `.rst`, `.csv`, `.log`).
+
+```python
+from definable.knowledge.readers import TextReader
+
+reader = TextReader()
+documents = reader.read("/path/to/notes.md")
+```
+
+Also handles raw text strings:
+
+```python
+documents = reader.read("This is plain text content.")
+```
+
+## PDFReader
+
+Reads PDF files page by page.
+
+```python
+from definable.knowledge.readers import PDFReader
+
+reader = PDFReader()
+documents = reader.read("/path/to/report.pdf")
+
+for doc in documents:
+    print(f"Page content: {doc.content[:100]}...")
+```
+
+<Note>
+Requires the `pypdf` package. Install it with `pip install pypdf`.
+</Note>
+
+## URLReader
+
+Fetches and extracts text content from web pages.
+
+```python
+from definable.knowledge.readers import URLReader
+
+reader = URLReader()
+documents = reader.read("https://example.com/article")
+```
+
+The reader fetches the page, strips HTML tags, and extracts clean text content.
+
+<Note>
+Requires `httpx` (included) and `beautifulsoup4`. Install with `pip install beautifulsoup4`.
+</Note>
+
+## Specifying a Reader
+
+Override auto-detection by passing a reader explicitly:
+
+```python
+from definable.knowledge.readers import PDFReader
+
+knowledge.add("/path/to/file.dat", reader=PDFReader())
+```
+
+## Async Reading
+
+All readers support async:
+
+```python
+documents = await reader.aread("/path/to/file.txt")
+```
+
+## Creating a Custom Reader
+
+Subclass `Reader` and implement `read()` and optionally `can_read()`:
+
+```python
+from definable.knowledge.readers import Reader
+from definable.knowledge import Document
+
+class CSVReader(Reader):
+    def can_read(self, source: str) -> bool:
+        return source.endswith(".csv")
+
+    def read(self, source: str) -> list[Document]:
+        import csv
+
+        documents = []
+        with open(source) as f:
+            reader = csv.DictReader(f)
+            for i, row in enumerate(reader):
+                documents.append(Document(
+                    content=str(row),
+                    name=f"row-{i}",
+                    source=source,
+                    source_type="csv",
+                    meta_data=dict(row),
+                ))
+        return documents
+```
+
+Register it with your knowledge base:
+
+```python
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+    readers=[CSVReader(), TextReader(), PDFReader(), URLReader()],
+)
+```
+
+## Reader Interface
+
+All readers implement:
+
+| Method | Description |
+|--------|-------------|
+| `read(source) -> List[Document]` | Read documents synchronously |
+| `aread(source) -> List[Document]` | Read documents asynchronously |
+| `can_read(source) -> bool` | Check if this reader can handle the source |

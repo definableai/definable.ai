@@ -1,0 +1,90 @@
+---
+title: xAI
+description: Use xAI Grok models with optional live search capabilities.
+icon: magnifying-glass
+---
+
+## Setup
+
+```bash
+export XAI_API_KEY="xai-..."
+```
+
+## Basic Usage
+
+```python
+from definable.models import xAI
+
+model = xAI(id="grok-beta")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+## Parameters
+
+<ParamField path="id" type="str" default="grok-beta">
+  Model identifier. Common values: `grok-beta`, `grok-2`.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  xAI API key. Defaults to the `XAI_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="base_url" type="str" default="https://api.x.ai/v1">
+  xAI API base URL.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum output tokens.
+</ParamField>
+
+<ParamField path="search_parameters" type="dict">
+  Configuration for Grok's live search capabilities.
+</ParamField>
+
+## Live Search
+
+xAI Grok models can search the web for real-time information:
+
+```python
+model = xAI(
+    id="grok-beta",
+    search_parameters={"mode": "auto"},
+)
+
+response = model.invoke(
+    messages=[{"role": "user", "content": "What happened in tech news today?"}]
+)
+print(response.content)
+
+# Access citations if available
+if response.citations:
+    for url in response.citations.urls:
+        print(f"  Source: {url.url} - {url.title}")
+```
+
+## Streaming
+
+```python
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "Explain the latest AI developments."}]
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+## Async Usage
+
+```python
+response = await model.ainvoke(
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+<Note>
+xAI uses an OpenAI-compatible API with extensions for live search. Citations are returned in the response when search is enabled.
+</Note>

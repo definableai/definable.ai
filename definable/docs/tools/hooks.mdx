@@ -1,0 +1,137 @@
+---
+title: Tool Hooks
+sidebarTitle: Hooks
+description: Run logic before and after tool execution.
+icon: anchor
+---
+
+Hooks let you run custom logic around tool execution — validate inputs, transform outputs, log calls, enforce permissions, or trigger side effects.
+
+## Pre-Hooks and Post-Hooks
+
+Use `pre_hook` and `post_hook` on the `@tool` decorator:
+
+```python
+from definable.tools import tool
+
+def log_before(tool_name, args):
+    print(f"Calling {tool_name} with {args}")
+
+def log_after(tool_name, args, result):
+    print(f"{tool_name} returned: {result}")
+
+@tool(pre_hook=log_before, post_hook=log_after)
+def calculate(expression: str) -> str:
+    """Evaluate a math expression."""
+    return str(eval(expression))
+```
+
+### Pre-Hook Signature
+
+```python
+def pre_hook(tool_name: str, args: dict) -> None:
+    ...
+```
+
+Pre-hooks receive the tool name and arguments before execution. They can:
+- Log the call
+- Validate arguments beyond schema checks
+- Raise an exception to prevent execution
+
+### Post-Hook Signature
+
+```python
+def post_hook(tool_name: str, args: dict, result: Any) -> None:
+    ...
+```
+
+Post-hooks receive the tool name, arguments, and the result after execution. They can:
+- Log or audit the result
+- Send notifications
+- Update metrics
+
+## Hook Chains
+
+Use `tool_hooks` to attach a list of hooks that run in order:
+
+```python
+def audit_hook(tool_name, args):
+    audit_log.append({"tool": tool_name, "args": args})
+
+def rate_limit_hook(tool_name, args):
+    if not check_rate_limit(tool_name):
+        raise Exception(f"Rate limit exceeded for {tool_name}")
+
+@tool(tool_hooks=[audit_hook, rate_limit_hook])
+def send_email(to: str, subject: str, body: str) -> str:
+    """Send an email."""
+    return f"Email sent to {to}"
+```
+
+All hooks in the list run before execution. If any hook raises an exception, the tool is not called.
+
+## Practical Examples
+
+### Permission Check
+
+```python
+def require_admin(tool_name, args):
+    if not current_user.is_admin:
+        raise PermissionError(f"Admin required for {tool_name}")
+
+@tool(pre_hook=require_admin)
+def delete_user(user_id: str) -> str:
+    """Delete a user account."""
+    return f"Deleted user {user_id}"
+```
+
+### Result Sanitization
+
+```python
+def redact_pii(tool_name, args, result):
+    # Redact any email addresses from tool results
+    import re
+    return re.sub(r'\S+@\S+', '[REDACTED]', str(result))
+
+@tool(post_hook=redact_pii)
+def lookup_customer(customer_id: str) -> str:
+    """Look up customer details."""
+    return "John Doe, john@example.com, Account #12345"
+```
+
+### Timing
+
+```python
+import time
+
+_timings = {}
+
+def start_timer(tool_name, args):
+    _timings[tool_name] = time.perf_counter()
+
+def stop_timer(tool_name, args, result):
+    elapsed = time.perf_counter() - _timings.pop(tool_name, 0)
+    print(f"{tool_name} took {elapsed:.3f}s")
+
+@tool(pre_hook=start_timer, post_hook=stop_timer)
+def slow_search(query: str) -> str:
+    """Search with timing."""
+    time.sleep(1)
+    return f"Results for {query}"
+```
+
+## Async Hooks
+
+Hooks can be async functions when used with async agent execution:
+
+```python
+async def async_audit(tool_name, args):
+    await audit_service.log(tool_name, args)
+
+@tool(pre_hook=async_audit)
+async def fetch_data(url: str) -> str:
+    """Fetch data from a URL."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url)
+        return resp.text
+```

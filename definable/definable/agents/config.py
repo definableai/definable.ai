@@ -1,12 +1,48 @@
 """Agent configuration with immutable settings."""
 
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Union
 
 if TYPE_CHECKING:
   from definable.agents.tracing.base import TraceExporter
   from definable.knowledge import Knowledge
+  from definable.models.base import Model
   from definable.run.base import BaseRunOutputEvent
+
+
+@dataclass
+class CompressionConfig:
+  """
+  Configuration for tool result compression in agents.
+
+  Controls automatic compression of tool results to save context space
+  while preserving critical information during agent execution.
+
+  Attributes:
+    enabled: Whether compression is enabled.
+    model: Model instance or string to use for compression.
+           If None, uses the agent's model.
+    tool_results_limit: Compress after N uncompressed tool results.
+    token_limit: Compress when context exceeds this token threshold.
+    instructions: Custom compression prompt/instructions.
+
+  Example:
+    from definable.agents.config import AgentConfig, CompressionConfig
+
+    config = AgentConfig(
+      compression=CompressionConfig(
+        enabled=True,
+        tool_results_limit=3,
+        # model not specified - uses agent's model
+      ),
+    )
+  """
+
+  enabled: bool = True
+  model: Optional[Union[str, "Model"]] = None  # Model instance or string (default: agent's model)
+  tool_results_limit: Optional[int] = 3  # Compress after N tool results
+  token_limit: Optional[int] = None  # Or compress at token threshold
+  instructions: Optional[str] = None  # Custom compression prompt
 
 
 @dataclass
@@ -103,6 +139,9 @@ class AgentConfig:
   # Knowledge base configuration for RAG
   knowledge: Optional[KnowledgeConfig] = field(default=None, hash=False)
 
+  # Compression configuration for tool results
+  compression: Optional[CompressionConfig] = field(default=None, hash=False)
+
   # Context defaults
   session_state: Optional[Dict[str, Any]] = field(default=None, hash=False)
   dependencies: Optional[Dict[str, Any]] = field(default=None, hash=False)
@@ -135,13 +174,14 @@ class AgentConfig:
         New AgentConfig instance with updated values.
     """
     # Fields that cannot be serialized with asdict
-    non_serializable = ("tracing", "session_state", "dependencies", "knowledge")
+    non_serializable = ("tracing", "session_state", "dependencies", "knowledge", "compression")
     current = {k: v for k, v in asdict(self).items() if k not in non_serializable}
     # Handle non-serializable fields separately
     current["tracing"] = self.tracing
     current["session_state"] = self.session_state
     current["dependencies"] = self.dependencies
     current["knowledge"] = self.knowledge
+    current["compression"] = self.compression
     current.update(kwargs)
     return AgentConfig(**current)
 

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 40" fill="none">
+  <rect width="36" height="36" x="2" y="2" rx="8" fill="#818CF8"/>
+  <text x="20" y="27" font-family="system-ui, sans-serif" font-size="22" font-weight="bold" fill="white" text-anchor="middle">D</text>
+  <text x="50" y="28" font-family="system-ui, sans-serif" font-size="20" font-weight="600" fill="#E0E7FF">definable</text>
+</svg>

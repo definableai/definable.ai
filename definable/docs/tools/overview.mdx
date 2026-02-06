@@ -1,0 +1,113 @@
+---
+title: Tools Overview
+sidebarTitle: Overview
+description: Define functions that agents can call to interact with the world.
+icon: wrench
+---
+
+Tools are Python functions that agents can invoke to perform actions — search databases, call APIs, read files, do calculations, or anything else your application needs.
+
+## Defining a Tool
+
+Use the `@tool` decorator on any function:
+
+```python
+from definable.tools import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city."""
+    return f"Sunny, 72°F in {city}"
+```
+
+That's it. Definable automatically:
+
+1. Extracts the function name as the tool name
+2. Parses the docstring as the tool description
+3. Generates a JSON Schema from the type hints
+4. Makes the tool available to any agent
+
+## Using Tools with Agents
+
+Pass tools when creating an agent:
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[get_weather],
+)
+
+output = agent.run("What's the weather in Tokyo?")
+print(output.content)
+# "The weather in Tokyo is Sunny, 72°F."
+```
+
+The agent decides when and how to call tools based on the user's request.
+
+## Decorator Options
+
+The `@tool` decorator accepts several options to customize behavior:
+
+```python
+@tool(
+    name="weather",                   # Override the tool name
+    description="Get current weather", # Override the description
+    show_result=True,                  # Show result in agent output
+    stop_after_tool_call=True,         # Return immediately after this tool
+    instructions="Use this for weather queries only.",
+)
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    return f"Sunny, 72°F in {city}"
+```
+
+### All Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `name` | `str` | Function name | Tool name shown to the model |
+| `description` | `str` | From docstring | Tool description shown to the model |
+| `strict` | `bool` | `False` | Enable strict parameter validation |
+| `instructions` | `str` | `None` | Usage instructions added to system prompt |
+| `add_instructions` | `bool` | `True` | Whether to add instructions to system prompt |
+| `show_result` | `bool` | `False` | Show tool result in agent streaming output |
+| `stop_after_tool_call` | `bool` | `False` | Stop the agent loop after calling this tool |
+| `requires_confirmation` | `bool` | `False` | Pause and require user confirmation before executing |
+| `requires_user_input` | `bool` | `False` | Pause and request user input before executing |
+| `pre_hook` | `Callable` | `None` | Function to run before tool execution |
+| `post_hook` | `Callable` | `None` | Function to run after tool execution |
+| `tool_hooks` | `List[Callable]` | `None` | List of hook functions |
+| `cache_results` | `bool` | `False` | Cache results for identical arguments |
+| `cache_ttl` | `int` | `3600` | Cache time-to-live in seconds |
+
+## How Tool Calling Works
+
+When you give tools to an agent, the following happens during execution:
+
+1. The model receives the tool definitions as JSON Schema
+2. If the model decides to call a tool, it returns a `tool_calls` response with the function name and arguments
+3. Definable executes the function with the provided arguments
+4. The result is sent back to the model as a tool message
+5. The model incorporates the result and continues
+
+This loop repeats until the model produces a final text response.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Parameters" icon="list" href="/tools/parameters">
+    Type hints, descriptions, and JSON Schema generation.
+  </Card>
+  <Card title="Hooks" icon="anchor" href="/tools/hooks">
+    Run logic before and after tool execution.
+  </Card>
+  <Card title="Caching" icon="database" href="/tools/caching">
+    Cache tool results to avoid redundant work.
+  </Card>
+  <Card title="Dependencies" icon="puzzle-piece" href="/tools/dependencies">
+    Inject services and state into tools.
+  </Card>
+</CardGroup>

@@ -1,0 +1,160 @@
+---
+title: Model Examples
+sidebarTitle: Models
+description: Examples for invoking LLMs across providers.
+icon: microchip
+---
+
+## 01 — Basic Invocation
+
+The simplest way to call an LLM. Sends a message and prints the response.
+
+```python
+from definable.models.openai import OpenAIChat
+from definable.models.message import Message
+
+model = OpenAIChat(id="gpt-4o-mini")
+
+messages = [
+    Message(role="system", content="You are a helpful assistant."),
+    Message(role="user", content="What is the capital of France?"),
+]
+
+response = model.invoke(
+    messages=messages,
+    assistant_message=Message(role="assistant", content=""),
+)
+
+print(response.content)
+print(f"Tokens: {response.response_usage.total_tokens}")
+```
+
+```bash
+python definable/examples/models/01_basic_invoke.py
+```
+
+## 02 — Async Invocation
+
+Same as above, but using `asyncio` for non-blocking execution.
+
+```python
+import asyncio
+from definable.models.openai import OpenAIChat
+from definable.models.message import Message
+
+async def main():
+    model = OpenAIChat(id="gpt-4o-mini")
+    messages = [Message(role="user", content="Hello!")]
+    response = await model.ainvoke(
+        messages=messages,
+        assistant_message=Message(role="assistant", content=""),
+    )
+    print(response.content)
+
+asyncio.run(main())
+```
+
+```bash
+python definable/examples/models/02_async_invoke.py
+```
+
+## 03 — Streaming
+
+Stream tokens as they are generated for real-time output.
+
+```python
+from definable.models.openai import OpenAIChat
+from definable.models.message import Message
+
+model = OpenAIChat(id="gpt-4o-mini")
+messages = [Message(role="user", content="Tell me a short story.")]
+
+for chunk in model.invoke_stream(
+    messages=messages,
+    assistant_message=Message(role="assistant", content=""),
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+```bash
+python definable/examples/models/03_streaming.py
+```
+
+## 04 — Structured Output
+
+Return Pydantic models instead of free text.
+
+```python
+from pydantic import BaseModel
+from definable.models.openai import OpenAIChat
+from definable.models.message import Message
+
+class Movie(BaseModel):
+    title: str
+    year: int
+    genre: str
+
+model = OpenAIChat(id="gpt-4o-mini")
+response = model.invoke(
+    messages=[Message(role="user", content="Recommend a sci-fi movie.")],
+    assistant_message=Message(role="assistant", content=""),
+    response_format=Movie,
+)
+print(response.parsed)  # Movie(title=..., year=..., genre=...)
+```
+
+```bash
+python definable/examples/models/04_structured_output.py
+```
+
+## 05 — Multi-Provider
+
+Use the same message format across OpenAI, DeepSeek, Moonshot, and xAI.
+
+```python
+from definable.models.openai import OpenAIChat
+from definable.models.deepseek import DeepSeekChat
+from definable.models.moonshot import MoonshotChat
+from definable.models.xai import xAI
+
+providers = [
+    OpenAIChat(id="gpt-4o-mini"),
+    DeepSeekChat(id="deepseek-chat"),
+    MoonshotChat(id="kimi-k2-turbo-preview"),
+    xAI(id="grok-beta"),
+]
+
+for model in providers:
+    response = model.invoke(messages=[...])
+    print(f"{model.provider}: {response.content[:100]}")
+```
+
+```bash
+python definable/examples/models/05_multi_provider.py
+```
+
+<Note>
+Requires API keys for each provider: `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MOONSHOT_API_KEY`, `XAI_API_KEY`.
+</Note>
+
+## 06 — Vision & Audio
+
+Send images and audio to multimodal models.
+
+```python
+from definable.models.openai import OpenAIChat
+from definable.media import Image
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(messages=[{
+    "role": "user",
+    "content": "Describe this image.",
+    "images": [Image(url="https://example.com/photo.jpg")],
+}])
+print(response.content)
+```
+
+```bash
+python definable/examples/models/06_vision_and_audio.py
+```

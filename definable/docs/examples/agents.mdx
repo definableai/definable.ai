@@ -1,0 +1,177 @@
+---
+title: Agent Examples
+sidebarTitle: Agents
+description: Examples for building agents with tools, toolkits, and streaming.
+icon: robot
+---
+
+## 01 — Simple Agent
+
+Create an agent with just a model and instructions.
+
+```python
+from definable.agents import Agent
+from definable.models.openai import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    instructions="You are a helpful assistant.",
+)
+
+output = agent.run("What is the capital of Japan?")
+print(output.content)
+print(f"Tokens: {output.metrics.total_tokens}")
+```
+
+```bash
+python definable/examples/agents/01_simple_agent.py
+```
+
+## 02 — Agent with Tools
+
+Give the agent tools to call during execution.
+
+```python
+from definable.agents import Agent
+from definable.models.openai import OpenAIChat
+from definable.tools.decorator import tool
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two numbers together."""
+    return a + b
+
+@tool
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers together."""
+    return a * b
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    tools=[add, multiply],
+    instructions="You are a calculator. Use the provided tools.",
+)
+
+output = agent.run("What is 15 + 27, then multiply the result by 3?")
+print(output.content)
+```
+
+```bash
+python definable/examples/agents/02_agent_with_tools.py
+```
+
+## 03 — Agent with Toolkit
+
+Bundle related tools into a Toolkit class.
+
+```python
+from definable.agents import Agent, Toolkit
+from definable.models.openai import OpenAIChat
+from definable.tools.decorator import tool
+
+class MathToolkit(Toolkit):
+    @tool
+    def add(self, a: int, b: int) -> int:
+        """Add two numbers."""
+        return a + b
+
+    @tool
+    def multiply(self, a: int, b: int) -> int:
+        """Multiply two numbers."""
+        return a * b
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    toolkits=[MathToolkit()],
+)
+
+output = agent.run("What is 5 + 3, then multiply by 2?")
+print(output.content)
+```
+
+```bash
+python definable/examples/agents/03_agent_with_toolkit.py
+```
+
+## 04 — Multi-Turn Conversation
+
+Maintain context across multiple interactions.
+
+```python
+from definable.agents import Agent
+from definable.models.openai import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    instructions="You are a math tutor.",
+)
+
+# First turn
+output1 = agent.run("What is 15 * 23?")
+print(f"Turn 1: {output1.content}")
+
+# Second turn — carries forward conversation
+output2 = agent.run("Now divide that by 5.", messages=output1.messages)
+print(f"Turn 2: {output2.content}")
+```
+
+```bash
+python definable/examples/agents/04_multi_turn.py
+```
+
+## 05 — Streaming Agent
+
+Stream agent output in real time with typed events.
+
+```python
+from definable.agents import Agent
+from definable.models.openai import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    instructions="You are a storyteller.",
+)
+
+for event in agent.run_stream("Tell me a short story about a robot."):
+    if event.event == "RunContent":
+        print(event.content, end="", flush=True)
+    elif event.event == "ToolCallStarted":
+        print(f"\n[Calling {event.tool_name}...]")
+    elif event.event == "RunCompleted":
+        print(f"\n\nDone. Tokens: {event.output.metrics.total_tokens}")
+```
+
+```bash
+python definable/examples/agents/05_streaming_agent.py
+```
+
+## 06 — Async Agent
+
+Run agents asynchronously with `arun()` and `arun_stream()`.
+
+```python
+import asyncio
+from definable.agents import Agent
+from definable.models.openai import OpenAIChat
+
+async def main():
+    agent = Agent(
+        model=OpenAIChat(id="gpt-4o-mini"),
+        instructions="You are a helpful assistant.",
+    )
+
+    # Async run
+    output = await agent.arun("Hello!")
+    print(output.content)
+
+    # Async streaming
+    async for event in agent.arun_stream("Tell me a joke."):
+        if event.event == "RunContent":
+            print(event.content, end="", flush=True)
+
+asyncio.run(main())
+```
+
+```bash
+python definable/examples/agents/06_async_agent.py
+```

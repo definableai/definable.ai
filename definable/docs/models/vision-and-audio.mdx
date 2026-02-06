@@ -1,0 +1,150 @@
+---
+title: Vision & Audio
+description: Send images, audio, video, and files to multimodal LLMs.
+icon: image
+---
+
+Definable provides unified media types that work across all providers supporting multimodal input.
+
+## Images
+
+Pass images from URLs, local files, or raw bytes:
+
+```python
+from definable.models import OpenAIChat
+from definable.media import Image
+
+model = OpenAIChat(id="gpt-4o")
+
+# From a URL
+response = model.invoke(messages=[{
+    "role": "user",
+    "content": "Describe what you see.",
+    "images": [Image(url="https://example.com/photo.jpg")],
+}])
+print(response.content)
+```
+
+### Image Sources
+
+<CodeGroup>
+```python URL
+image = Image(url="https://example.com/photo.jpg")
+```
+
+```python Local file
+image = Image(filepath="/path/to/photo.png")
+```
+
+```python Base64
+image = Image.from_base64(base64_string, format="png")
+```
+
+```python Raw bytes
+image = Image(content=raw_bytes, format="jpeg")
+```
+</CodeGroup>
+
+### Detail Level
+
+Control the resolution used for analysis:
+
+```python
+image = Image(url="https://example.com/chart.png", detail="high")
+# Options: "low", "high", "auto" (default)
+```
+
+## Audio
+
+Send audio input and receive audio output from supported models:
+
+### Audio Input
+
+```python
+from definable.media import Audio
+
+response = model.invoke(messages=[{
+    "role": "user",
+    "content": "Transcribe this audio.",
+    "audio": [Audio(filepath="/path/to/recording.mp3")],
+}])
+```
+
+### Audio Output
+
+```python
+model = OpenAIChat(
+    id="gpt-4o-audio-preview",
+    modalities=["text", "audio"],
+    audio={"voice": "alloy", "format": "wav"},
+)
+
+response = model.invoke(
+    messages=[{"role": "user", "content": "Read this sentence aloud: Hello world!"}]
+)
+
+# Access the audio output
+print(response.audio.transcript)
+audio_bytes = response.audio.get_content_bytes()
+```
+
+## Video
+
+Pass video files for analysis:
+
+```python
+from definable.media import Video
+
+response = model.invoke(messages=[{
+    "role": "user",
+    "content": "Summarize what happens in this video.",
+    "videos": [Video(filepath="/path/to/clip.mp4")],
+}])
+```
+
+## Files
+
+Send documents and other files:
+
+```python
+from definable.media import File
+
+response = model.invoke(messages=[{
+    "role": "user",
+    "content": "Summarize this document.",
+    "files": [File(filepath="/path/to/report.pdf", mime_type="application/pdf")],
+}])
+```
+
+## Using Media with Agents
+
+Agents accept media directly in the `run()` call:
+
+```python
+from definable.agents import Agent
+from definable.media import Image
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a helpful visual assistant.",
+)
+
+output = agent.run(
+    "What's in this image?",
+    images=[Image(url="https://example.com/photo.jpg")],
+)
+print(output.content)
+```
+
+## Supported Formats
+
+| Type | Supported Formats |
+|------|------------------|
+| Image | JPEG, PNG, GIF, WebP |
+| Audio | MP3, WAV, FLAC, OGG, M4A |
+| Video | MP4, WebM |
+| File | PDF, JSON, TXT, Python, Markdown, and more |
+
+<Note>
+Not all providers support all media types. Check your provider's documentation for specific format and size limits.
+</Note>

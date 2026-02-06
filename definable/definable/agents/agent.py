@@ -40,6 +40,7 @@ from definable.utils.tools import get_function_call_for_tool_call
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
+  from definable.compression import CompressionManager
   from definable.models.base import Model
 
 
@@ -113,6 +114,7 @@ class Agent:
     # Internal state
     self._tools_dict: Dict[str, Function] = self._flatten_tools()
     self._trace_writer: Optional[TraceWriter] = self._init_tracing()
+    self._compression_manager: Optional["CompressionManager"] = self._init_compression()
     self._middleware: List[Middleware] = []
     self._started = False
 
@@ -627,6 +629,11 @@ class Agent:
 
       # STREAMING AGENT LOOP - continues until model gives final answer
       while True:
+        # Compress tool results if needed (before model call to stay within context limits)
+        if self._compression_manager is not None:
+          if await self._compression_manager.ashould_compress(invoke_messages, tools_dicts, model=self.model):
+            await self._compression_manager.acompress(invoke_messages)
+
         # Accumulate response while streaming
         accumulated_content = ""
         accumulated_tool_calls: List[Dict[str, Any]] = []
@@ -862,6 +869,11 @@ class Agent:
 
       # AGENT LOOP - continues until model gives final answer (no tool calls)
       while True:
+        # Compress tool results if needed (before model call to stay within context limits)
+        if self._compression_manager is not None:
+          if await self._compression_manager.ashould_compress(invoke_messages, tools_dicts, model=self.model):
+            await self._compression_manager.acompress(invoke_messages)
+
         # Create assistant message (required by model.ainvoke)
         assistant_message = Message(role="assistant")
 
@@ -1025,6 +1037,33 @@ class Agent:
     """Initialize trace writer if tracing is configured."""
     if self.config.tracing and self.config.tracing.exporters:
       return TraceWriter(self.config.tracing)
+    return None
+
+  def _init_compression(self) -> Optional["CompressionManager"]:
+    """Initialize compression manager if compression is configured."""
+    if self.config.compression and self.config.compression.enabled:
+      from definable.compression import CompressionManager
+
+      # Use specified model or fall back to agent's model
+      compression_model: Optional["Model"] = None
+      config_model = self.config.compression.model
+      if config_model is None:
+        compression_model = self.model
+      elif isinstance(config_model, str):
+        # String model specs are not fully supported - use agent's model
+        # (get_model() in CompressionManager only supports 'aimlapi' provider)
+        compression_model = self.model
+      else:
+        # Model instance passed directly
+        compression_model = config_model
+
+      return CompressionManager(
+        model=compression_model,
+        compress_tool_results=True,
+        compress_tool_results_limit=self.config.compression.tool_results_limit,
+        compress_token_limit=self.config.compression.token_limit,
+        compress_tool_call_instructions=self.config.compression.instructions,
+      )
     return None
 
   def _prepare_tools_for_run(self, context: RunContext) -> Dict[str, Function]:

@@ -1,0 +1,139 @@
+---
+title: OpenAI
+description: Use OpenAI models including GPT-4o, GPT-4o-mini, o1, and more.
+icon: brain
+---
+
+## Setup
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+## Basic Usage
+
+```python
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+## Parameters
+
+<ParamField path="id" type="str" default="gpt-4o">
+  Model identifier. Common values: `gpt-4o`, `gpt-4o-mini`, `o1`, `o1-mini`, `o3-mini`.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  OpenAI API key. Defaults to the `OPENAI_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="base_url" type="str">
+  Override the API base URL.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature (0.0 to 2.0).
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum number of output tokens.
+</ParamField>
+
+<ParamField path="top_p" type="float">
+  Nucleus sampling parameter.
+</ParamField>
+
+<ParamField path="frequency_penalty" type="float">
+  Frequency penalty (-2.0 to 2.0).
+</ParamField>
+
+<ParamField path="presence_penalty" type="float">
+  Presence penalty (-2.0 to 2.0).
+</ParamField>
+
+<ParamField path="seed" type="int">
+  Seed for deterministic sampling.
+</ParamField>
+
+<ParamField path="strict_output" type="bool" default="true">
+  Whether to use strict mode for structured outputs.
+</ParamField>
+
+## Structured Output
+
+OpenAI supports native structured outputs via JSON Schema:
+
+```python
+from pydantic import BaseModel
+
+class Movie(BaseModel):
+    title: str
+    year: int
+    genre: str
+
+response = model.invoke(
+    messages=[{"role": "user", "content": "Recommend a sci-fi movie."}],
+    response_format=Movie,
+)
+print(response.parsed)  # Movie(title='Interstellar', year=2014, genre='Science Fiction')
+```
+
+## Audio Support
+
+OpenAI models support audio input and output:
+
+```python
+from definable.media import Audio
+
+model = OpenAIChat(
+    id="gpt-4o-audio-preview",
+    modalities=["text", "audio"],
+    audio={"voice": "alloy", "format": "wav"},
+)
+
+response = model.invoke(
+    messages=[{
+        "role": "user",
+        "content": "Say hello in French.",
+    }]
+)
+print(response.audio.transcript)
+```
+
+## Vision
+
+Pass images in messages for visual understanding:
+
+```python
+from definable.media import Image
+
+response = model.invoke(
+    messages=[{
+        "role": "user",
+        "content": "What's in this image?",
+        "images": [Image(url="https://example.com/photo.jpg")],
+    }]
+)
+print(response.content)
+```
+
+## Async Usage
+
+```python
+response = await model.ainvoke(
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+## Streaming
+
+```python
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "Tell me a story."}]
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```

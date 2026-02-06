@@ -1,0 +1,160 @@
+---
+title: Cost Tracking
+description: Track token usage and costs across models, agents, and sessions.
+icon: dollar-sign
+---
+
+Definable automatically tracks token usage and calculates costs for every model call. This data flows through the entire stack — from individual model invocations to aggregated agent runs.
+
+## Per-Call Metrics
+
+Every model call returns usage metrics:
+
+```python
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+
+metrics = response.response_usage
+print(f"Input:  {metrics.input_tokens} tokens")
+print(f"Output: {metrics.output_tokens} tokens")
+print(f"Total:  {metrics.total_tokens} tokens")
+print(f"Cost:   ${metrics.cost:.6f}")
+```
+
+## Agent Run Metrics
+
+Agent runs aggregate metrics across all model calls in the run (including tool execution loops):
+
+```python
+from definable.agents import Agent
+
+agent = Agent(model=model, tools=[my_tool])
+output = agent.run("Analyze this data and create a summary.")
+
+print(f"Total tokens: {output.metrics.total_tokens}")
+print(f"Total cost:   ${output.metrics.cost:.4f}")
+print(f"Duration:     {output.metrics.duration:.2f}s")
+```
+
+## Tracking Across Multiple Runs
+
+Use `Metrics` addition to aggregate costs across a session or batch:
+
+```python
+from definable.models.metrics import Metrics
+
+session_metrics = Metrics()
+
+for question in customer_questions:
+    output = agent.run(question)
+    session_metrics = session_metrics + output.metrics
+
+print(f"Session total:")
+print(f"  Tokens: {session_metrics.total_tokens}")
+print(f"  Cost:   ${session_metrics.cost:.4f}")
+```
+
+Or use Python's `sum()`:
+
+```python
+all_metrics = [agent.run(q).metrics for q in questions]
+total = sum(all_metrics)
+print(f"Batch cost: ${total.cost:.4f}")
+```
+
+## MetricsMiddleware
+
+The `MetricsMiddleware` tracks aggregate stats across all runs for an agent:
+
+```python
+from definable.agents import Agent, MetricsMiddleware
+
+metrics_mw = MetricsMiddleware()
+agent = Agent(model=model).use(metrics_mw)
+
+# Run the agent multiple times
+for q in questions:
+    agent.run(q)
+
+print(f"Total runs:       {metrics_mw.run_count}")
+print(f"Error count:      {metrics_mw.error_count}")
+print(f"Avg latency (ms): {metrics_mw.average_latency_ms:.0f}")
+```
+
+## Cost Breakdown
+
+The `Metrics` class tracks all cost dimensions:
+
+| Field | Description |
+|-------|-------------|
+| `input_tokens` | Tokens in the prompt |
+| `output_tokens` | Tokens generated |
+| `cache_read_tokens` | Tokens served from provider cache |
+| `cache_write_tokens` | Tokens written to provider cache |
+| `reasoning_tokens` | Tokens used for chain-of-thought |
+| `audio_input_tokens` | Audio input tokens |
+| `audio_output_tokens` | Audio output tokens |
+| `cost` | Total estimated cost in USD |
+
+## Pricing Registry
+
+Definable includes a built-in pricing registry (`model_pricing.json`) with rates for all supported models. Cost is calculated automatically based on the model and token counts.
+
+Prices are defined per million tokens:
+
+```json
+{
+  "openai": {
+    "gpt-4o": {
+      "input_per_million": 2.50,
+      "output_per_million": 10.00,
+      "cached_input_per_million": 1.25
+    }
+  }
+}
+```
+
+## Serializing Metrics
+
+Export metrics for logging, dashboards, or billing systems:
+
+```python
+metrics_dict = output.metrics.to_dict()
+# {
+#   'input_tokens': 150,
+#   'output_tokens': 87,
+#   'total_tokens': 237,
+#   'cost': 0.001245,
+#   'duration': 1.83
+# }
+```
+
+Zero values and `None` fields are excluded automatically for clean output.
+
+## Cost Budgets
+
+Implement a simple cost guard using middleware:
+
+```python
+class CostBudgetMiddleware:
+    def __init__(self, max_cost: float):
+        self.max_cost = max_cost
+        self.total_cost = 0.0
+
+    async def __call__(self, context, next_handler):
+        result = await next_handler(context)
+
+        if result.metrics and result.metrics.cost:
+            self.total_cost += result.metrics.cost
+            if self.total_cost > self.max_cost:
+                raise Exception(
+                    f"Cost budget exceeded: ${self.total_cost:.4f} > ${self.max_cost:.4f}"
+                )
+
+        return result
+
+# Limit spending to $1.00
+agent.use(CostBudgetMiddleware(max_cost=1.00))
+```

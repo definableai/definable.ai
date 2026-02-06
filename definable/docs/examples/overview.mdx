@@ -1,0 +1,110 @@
+---
+title: Examples Overview
+sidebarTitle: Overview
+description: Runnable code examples for every major feature.
+icon: graduation-cap
+---
+
+The `definable/examples/` directory contains self-contained, runnable Python scripts demonstrating all major features. Each example includes a docstring explaining what it covers and any required API keys.
+
+## Running Examples
+
+```bash
+# From the repository root
+python definable/examples/models/01_basic_invoke.py
+python definable/examples/agents/02_agent_with_tools.py
+```
+
+## Prerequisites
+
+Set API keys for the providers you want to use:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+export DEEPSEEK_API_KEY="sk-..."       # For DeepSeek examples
+export MOONSHOT_API_KEY="sk-..."       # For Moonshot examples
+export XAI_API_KEY="xai-..."           # For xAI examples
+export VOYAGE_API_KEY="pa-..."         # For Voyage AI embeddings
+export COHERE_API_KEY="..."            # For Cohere reranking
+```
+
+Only the keys for examples you want to run are needed.
+
+## Example Categories
+
+<CardGroup cols={2}>
+  <Card title="Models" icon="microchip" href="/examples/models">
+    Basic invocation, async, streaming, structured output, multi-provider, vision and audio.
+  </Card>
+  <Card title="Agents" icon="robot" href="/examples/agents">
+    Simple agents, tools, toolkits, multi-turn, streaming, and async.
+  </Card>
+  <Card title="Tools" icon="wrench" href="/examples/tools">
+    Basic tools, parameters, async tools, hooks, caching, and dependencies.
+  </Card>
+  <Card title="Knowledge" icon="book" href="/examples/knowledge">
+    Basic RAG, document management, chunking, embedders, vector databases, reranking.
+  </Card>
+  <Card title="MCP" icon="plug" href="/examples/mcp">
+    Basic MCP, multiple servers, resources, config files, mock servers, prompts, error handling.
+  </Card>
+</CardGroup>
+
+## Directory Structure
+
+```
+examples/
+├── models/                         # LLM model invocation
+│   ├── 01_basic_invoke.py          # Sync invocation
+│   ├── 02_async_invoke.py          # Async invocation
+│   ├── 03_streaming.py             # Streaming responses
+│   ├── 04_structured_output.py     # Pydantic response models
+│   ├── 05_multi_provider.py        # OpenAI, DeepSeek, Moonshot, xAI
+│   └── 06_vision_and_audio.py      # Multimodal inputs
+│
+├── agents/                         # Agent framework
+│   ├── 01_simple_agent.py          # Basic agent setup
+│   ├── 02_agent_with_tools.py      # Agent using @tool decorator
+│   ├── 03_agent_with_toolkit.py    # Custom Toolkit class
+│   ├── 04_multi_turn.py            # Conversation sessions
+│   ├── 05_streaming_agent.py       # run_stream() usage
+│   └── 06_async_agent.py           # arun() and arun_stream()
+│
+├── tools/                          # Tool definitions
+│   ├── 01_basic_tool.py            # Simple @tool decorator
+│   ├── 02_tool_parameters.py       # Complex parameter types
+│   ├── 03_async_tools.py           # Async tool functions
+│   ├── 04_tool_hooks.py            # pre_hook and post_hook
+│   ├── 05_tool_caching.py          # cache_results and cache_ttl
+│   └── 06_tool_dependencies.py     # Injected dependencies
+│
+├── toolkits/                       # Toolkit classes
+│   ├── 01_custom_toolkit.py        # Building a Toolkit class
+│   ├── 02_toolkit_dependencies.py  # Shared dependencies
+│   └── 03_knowledge_toolkit.py     # KnowledgeToolkit usage
+│
+├── knowledge/                      # RAG and knowledge bases
+│   ├── 01_basic_rag.py             # Simple RAG setup
+│   ├── 02_document_management.py   # Adding/removing documents
+│   ├── 03_chunking_strategies.py   # TextChunker vs RecursiveChunker
+│   ├── 04_custom_embedder.py       # OpenAI and VoyageAI embedders
+│   ├── 05_vector_databases.py      # InMemory vs PgVector
+│   ├── 06_agent_with_knowledge.py  # KnowledgeConfig integration
+│   └── 07_reranking.py             # CohereReranker usage
+│
+├── mcp/                            # Model Context Protocol
+│   ├── 01_basic_mcp.py             # Connect to an MCP server
+│   ├── 02_multiple_servers.py      # Multiple simultaneous servers
+│   ├── 03_resources.py             # Read MCP resources
+│   ├── 04_config_file.py           # Load config from JSON
+│   ├── 05_mock_server_basics.py    # Test with mock servers
+│   ├── 06_prompts_provider.py      # Use MCP prompt templates
+│   ├── 07_error_handling.py        # Handle MCP errors
+│   └── 08_mock_server_agent.py     # Full agent + mock MCP test
+│
+└── advanced/                       # Advanced features
+    ├── 01_middleware.py             # Custom middleware
+    ├── 02_tracing.py               # JSONLExporter for debugging
+    ├── 03_error_handling.py        # Retry logic and exceptions
+    └── 04_cost_tracking.py         # Metrics and pricing
+```

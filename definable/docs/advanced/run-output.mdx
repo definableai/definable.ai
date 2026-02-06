@@ -1,0 +1,172 @@
+---
+title: Run Output & Events
+sidebarTitle: Run Output
+description: Understand the data returned from every agent run.
+icon: square-poll-vertical
+---
+
+Every agent execution produces structured output. Non-streaming runs return a `RunOutput` object; streaming runs yield a sequence of `RunOutputEvent` objects.
+
+## RunOutput
+
+The `RunOutput` dataclass contains everything from a completed run:
+
+```python
+output = agent.run("Summarize this document.")
+```
+
+### Content
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `str` | The agent's final text response |
+| `content_type` | `str` | Content type (`"text"`, `"json"`) |
+| `reasoning_content` | `str` | Chain-of-thought reasoning (if applicable) |
+| `reasoning_steps` | `list` | Individual reasoning steps |
+
+### Identity
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `run_id` | `str` | Unique identifier for this run |
+| `agent_id` | `str` | Agent that produced this output |
+| `session_id` | `str` | Session this run belongs to |
+| `parent_run_id` | `str` | Parent run ID (for nested runs) |
+| `model` | `str` | Model used (e.g., `"gpt-4o"`) |
+| `model_provider` | `str` | Provider name (e.g., `"OpenAI"`) |
+
+### Execution
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `status` | `RunStatus` | `COMPLETED`, `ERROR`, `PAUSED`, `CANCELLED` |
+| `messages` | `List[Message]` | Full conversation history |
+| `metrics` | `Metrics` | Aggregated token usage, cost, and timing |
+| `events` | `list` | All events that occurred during the run |
+
+### Media
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `images` | `List[Image]` | Generated images |
+| `videos` | `List[Video]` | Generated videos |
+| `audio` | `List[Audio]` | Generated audio |
+| `files` | `List[File]` | Generated files |
+| `response_audio` | `Audio` | Audio response (for audio models) |
+
+### Control
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `requirements` | `list` | Pending requirements (confirmations, user input) |
+| `is_paused` | `bool` | Whether the run is waiting for user action |
+
+## RunStatus
+
+```python
+from definable.run import RunStatus
+
+# Possible values:
+RunStatus.PENDING      # Not yet started
+RunStatus.RUNNING      # Currently executing
+RunStatus.COMPLETED    # Finished successfully
+RunStatus.PAUSED       # Waiting for user action
+RunStatus.CANCELLED    # Cancelled by user or system
+RunStatus.ERROR        # Failed with an error
+```
+
+## Stream Events
+
+Streaming runs yield typed events. Each event has an `event` field identifying its type.
+
+### Lifecycle Events
+
+```python
+for event in agent.run_stream("Hello"):
+    match event.event:
+        case "RunStarted":
+            print(f"Run {event.run_id} started")
+        case "RunCompleted":
+            print(f"Done! Tokens: {event.output.metrics.total_tokens}")
+        case "RunError":
+            print(f"Error: {event.error}")
+```
+
+### Content Events
+
+```python
+for event in agent.run_stream("Write a story"):
+    match event.event:
+        case "RunContent":
+            print(event.content, end="", flush=True)
+        case "RunContentCompleted":
+            print("\n--- Content complete ---")
+```
+
+### Tool Events
+
+```python
+for event in agent.run_stream("Check the weather"):
+    match event.event:
+        case "ToolCallStarted":
+            print(f"Calling {event.tool_name}({event.tool_args})")
+        case "ToolCallCompleted":
+            print(f"  Result: {event.result}")
+        case "ToolCallError":
+            print(f"  Error: {event.error}")
+```
+
+### Reasoning Events
+
+```python
+for event in agent.run_stream("Solve this math problem"):
+    match event.event:
+        case "ReasoningStep":
+            print(f"[thinking] {event.content}")
+        case "ReasoningContentDelta":
+            print(event.delta, end="")
+```
+
+## Complete Event Reference
+
+| Event | Key Fields | Description |
+|-------|-----------|-------------|
+| `RunStarted` | `run_id`, `agent_id` | Execution began |
+| `RunContent` | `content` | Content chunk |
+| `RunContentCompleted` | `full_content` | All content generated |
+| `IntermediateRunContent` | `content` | Intermediate content (between tool calls) |
+| `ToolCallStarted` | `tool_name`, `tool_args` | Tool call began |
+| `ToolCallCompleted` | `tool_name`, `result` | Tool call finished |
+| `ToolCallError` | `tool_name`, `error` | Tool call failed |
+| `PreHookStarted` | `tool_name` | Pre-hook began |
+| `PreHookCompleted` | `tool_name` | Pre-hook finished |
+| `PostHookStarted` | `tool_name` | Post-hook began |
+| `PostHookCompleted` | `tool_name` | Post-hook finished |
+| `ReasoningStarted` | | Reasoning began |
+| `ReasoningStep` | `content` | One reasoning step |
+| `ReasoningContentDelta` | `delta` | Reasoning text chunk |
+| `ReasoningCompleted` | | Reasoning finished |
+| `RunPaused` | `requirements` | Waiting for user action |
+| `RunContinued` | | Resumed after pause |
+| `RunCompleted` | `output` | Run finished (includes full `RunOutput`) |
+| `RunError` | `error` | Run failed |
+| `RunCancelled` | | Run was cancelled |
+| `CustomEvent` | `data` | Application-defined event |
+
+## Getting RunOutput from a Stream
+
+The `RunCompleted` event contains the full `RunOutput`:
+
+```python
+final_output = None
+
+for event in agent.run_stream("Hello"):
+    if event.event == "RunContent":
+        print(event.content, end="")
+    elif event.event == "RunCompleted":
+        final_output = event.output
+
+# Now you have full metrics, messages, etc.
+print(f"\nTokens: {final_output.metrics.total_tokens}")
+print(f"Cost: ${final_output.metrics.cost:.4f}")
+```

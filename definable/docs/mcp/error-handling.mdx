@@ -1,0 +1,135 @@
+---
+title: MCP Error Handling
+sidebarTitle: Error Handling
+description: Handle connection failures, timeouts, and protocol errors.
+icon: triangle-exclamation
+---
+
+MCP interactions involve network communication, subprocess management, and protocol negotiation. Definable provides specific exception types for each failure mode so you can handle errors precisely.
+
+## Error Hierarchy
+
+All MCP errors inherit from `MCPError`:
+
+```
+MCPError
+├── MCPConnectionError     — Failed to connect to server
+├── MCPTimeoutError        — Request or connection timed out
+├── MCPProtocolError       — Invalid JSON-RPC or protocol violation
+├── MCPToolNotFoundError   — Requested tool doesn't exist
+├── MCPServerNotFoundError — Server name not in configuration
+├── MCPResourceNotFoundError — Resource URI not found
+└── MCPPromptNotFoundError — Prompt name not found
+```
+
+## Handling Connection Errors
+
+```python
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+from definable.mcp.errors import MCPConnectionError, MCPTimeoutError
+
+config = MCPConfig(servers=[
+    MCPServerConfig(name="my-server", transport="stdio", command="my-mcp-server"),
+])
+
+try:
+    async with MCPToolkit(config=config) as toolkit:
+        agent = Agent(model=model, toolkits=[toolkit])
+        output = await agent.arun("Do something")
+except MCPConnectionError as e:
+    print(f"Could not connect to MCP server: {e}")
+except MCPTimeoutError as e:
+    print(f"Connection timed out: {e}")
+```
+
+## Handling Tool Errors
+
+```python
+from definable.mcp.errors import MCPToolNotFoundError
+
+try:
+    result = await client.call_tool("my-server", "nonexistent_tool", {})
+except MCPToolNotFoundError as e:
+    print(f"Tool not found: {e}")
+```
+
+## Handling Server Not Found
+
+```python
+from definable.mcp.errors import MCPServerNotFoundError
+
+try:
+    tools = await client.list_tools("unknown-server")
+except MCPServerNotFoundError as e:
+    print(f"Server not configured: {e}")
+```
+
+## Automatic Reconnection
+
+By default, MCP connections automatically reconnect on failure:
+
+```python
+MCPServerConfig(
+    name="my-server",
+    transport="stdio",
+    command="my-mcp-server",
+    reconnect_on_failure=True,     # Default
+    max_reconnect_attempts=3,      # Default
+)
+```
+
+Reconnection uses exponential backoff. If all attempts fail, an `MCPConnectionError` is raised.
+
+## Timeout Configuration
+
+Set timeouts at the server level:
+
+```python
+MCPServerConfig(
+    name="slow-server",
+    transport="http",
+    url="https://mcp.example.com/mcp",
+    connect_timeout=60.0,    # Time to establish connection
+    request_timeout=120.0,   # Time for each request
+)
+```
+
+## Graceful Degradation
+
+When using multiple MCP servers, handle failures for individual servers:
+
+```python
+config = MCPConfig(servers=[
+    MCPServerConfig(name="primary", transport="stdio", command="server-a"),
+    MCPServerConfig(name="fallback", transport="stdio", command="server-b"),
+])
+
+client = MCPClient(config)
+await client.connect()
+
+# Connect to servers individually for resilience
+for server_name in ["primary", "fallback"]:
+    try:
+        await client.connect_server(server_name)
+        print(f"Connected to {server_name}")
+    except MCPConnectionError:
+        print(f"Failed to connect to {server_name}, skipping")
+```
+
+## Protocol Errors
+
+Protocol errors indicate a bug in the MCP server or an incompatible protocol version:
+
+```python
+from definable.mcp.errors import MCPProtocolError
+
+try:
+    result = await client.call_tool("server", "tool", {"arg": "value"})
+except MCPProtocolError as e:
+    print(f"Protocol error: {e}")
+    # This usually means the server returned an invalid JSON-RPC response
+```
+
+<Warning>
+If you encounter `MCPProtocolError` consistently, check that the MCP server is using a compatible version of the protocol and that the transport type matches the server's expectations.
+</Warning>

@@ -1,0 +1,162 @@
+---
+title: Media Types
+description: Work with images, audio, video, and files across models and agents.
+icon: photo-film
+---
+
+Definable provides unified media classes for handling images, audio, video, and files. These work consistently across all models and agents that support multimodal input and output.
+
+## Image
+
+```python
+from definable.media import Image
+
+# From URL
+image = Image(url="https://example.com/photo.jpg")
+
+# From file
+image = Image(filepath="/path/to/photo.png")
+
+# From raw bytes
+image = Image(content=raw_bytes, format="jpeg")
+
+# From base64
+image = Image.from_base64(base64_string, format="png")
+```
+
+### Image Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | `str` | Image URL |
+| `filepath` | `str` | Local file path |
+| `content` | `bytes` | Raw image bytes |
+| `format` | `str` | Image format (`jpeg`, `png`, `gif`, `webp`) |
+| `mime_type` | `str` | MIME type (auto-detected from format) |
+| `detail` | `str` | Analysis detail: `"low"`, `"high"`, or `"auto"` |
+
+### Image Output Fields
+
+When a model generates an image:
+
+| Field | Description |
+|-------|-------------|
+| `original_prompt` | The prompt used for generation |
+| `revised_prompt` | The revised prompt (if the model modified it) |
+| `alt_text` | Generated alt text |
+
+## Audio
+
+```python
+from definable.media import Audio
+
+# From file
+audio = Audio(filepath="/path/to/recording.mp3")
+
+# From URL
+audio = Audio(url="https://example.com/audio.wav")
+
+# From bytes
+audio = Audio(content=raw_bytes, format="wav")
+```
+
+### Audio Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | `str` | Audio URL |
+| `filepath` | `str` | Local file path |
+| `content` | `bytes` | Raw audio bytes |
+| `format` | `str` | Audio format (`mp3`, `wav`, `flac`, `ogg`) |
+| `duration` | `float` | Duration in seconds |
+| `sample_rate` | `int` | Sample rate in Hz |
+| `channels` | `int` | Number of audio channels |
+| `transcript` | `str` | Text transcript (for audio output) |
+
+## Video
+
+```python
+from definable.media import Video
+
+# From file
+video = Video(filepath="/path/to/clip.mp4")
+
+# From URL
+video = Video(url="https://example.com/video.mp4")
+```
+
+### Video Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | `str` | Video URL |
+| `filepath` | `str` | Local file path |
+| `content` | `bytes` | Raw video bytes |
+| `format` | `str` | Video format (`mp4`, `webm`) |
+| `duration` | `float` | Duration in seconds |
+| `width` | `int` | Width in pixels |
+| `height` | `int` | Height in pixels |
+
+## File
+
+```python
+from definable.media import File
+
+# From file
+file = File(filepath="/path/to/report.pdf", mime_type="application/pdf")
+
+# From URL
+file = File(url="https://example.com/data.json", mime_type="application/json")
+```
+
+### File Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | `str` | File URL |
+| `filepath` | `str` | Local file path |
+| `content` | `bytes` | Raw file bytes |
+| `mime_type` | `str` | MIME type (required for validation) |
+| `filename` | `str` | Original filename |
+| `size` | `int` | File size in bytes |
+| `external` | `Any` | Provider-specific file object |
+
+## Common Methods
+
+All media types share these methods:
+
+| Method | Description |
+|--------|-------------|
+| `get_content_bytes()` | Read the content as bytes |
+| `to_base64()` | Encode content as base64 string |
+| `to_dict()` | Serialize to dictionary |
+| `from_base64(data, format)` | Create from base64 string |
+
+## Using with Models
+
+Pass media in messages:
+
+```python
+response = model.invoke(messages=[{
+    "role": "user",
+    "content": "Describe what you see and hear.",
+    "images": [Image(url="https://example.com/photo.jpg")],
+    "audio": [Audio(filepath="recording.mp3")],
+}])
+```
+
+## Using with Agents
+
+Pass media directly to agent runs:
+
+```python
+output = agent.run(
+    "Analyze this document and image.",
+    images=[Image(filepath="chart.png")],
+    files=[File(filepath="data.csv", mime_type="text/csv")],
+)
+```
+
+<Note>
+Each media type requires exactly one content source (`url`, `filepath`, or `content`). Providing none or multiple sources raises a validation error. The `File` type additionally supports an `external` source for provider-specific file objects.
+</Note>

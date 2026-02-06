@@ -1,0 +1,107 @@
+---
+title: MCP Resources
+sidebarTitle: Resources
+description: Read data from MCP servers using the resource provider.
+icon: folder-open
+---
+
+MCP resources let you read data exposed by MCP servers — files, configurations, live feeds, or any structured data the server makes available.
+
+## Listing Resources
+
+Use `MCPResourceProvider` to discover and read resources:
+
+```python
+from definable.mcp import MCPClient, MCPConfig, MCPServerConfig
+
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/data"],
+    ),
+])
+
+client = MCPClient(config)
+await client.connect()
+
+# List resources from all servers
+all_resources = await client.list_all_resources()
+for server_name, resources in all_resources.items():
+    print(f"\n{server_name}:")
+    for resource in resources:
+        print(f"  {resource.uri} — {resource.name}")
+```
+
+## Reading Resources
+
+Read a resource's content by its URI:
+
+```python
+contents = await client.read_resource("filesystem", "file:///data/config.json")
+for content in contents:
+    print(content.text)
+```
+
+## MCPResourceProvider
+
+For a higher-level interface, use `MCPResourceProvider`:
+
+```python
+from definable.mcp import MCPResourceProvider
+
+provider = MCPResourceProvider(client)
+
+# List resources (optionally filter by server)
+resources = await provider.list_resources(server_name="filesystem")
+
+# Read as text
+text = await provider.read_text("filesystem", "file:///data/config.json")
+print(text)
+
+# Find which server has a resource
+server = await provider.find_resource("file:///data/config.json")
+print(f"Found on server: {server}")
+
+# Get resource metadata
+info = await provider.get_resource_info("filesystem", "file:///data/config.json")
+print(f"Name: {info.name}, MIME: {info.mime_type}")
+```
+
+## Resource Types
+
+Resources have a URI scheme and optional MIME type:
+
+| Property | Description |
+|----------|-------------|
+| `uri` | Resource identifier (e.g., `file:///path/to/file`) |
+| `name` | Human-readable name |
+| `description` | Optional description |
+| `mime_type` | Content type (e.g., `text/plain`, `application/json`) |
+
+## Using Resources in an Agent
+
+Combine resource reading with agent tool calls:
+
+```python
+from definable.tools import tool
+from definable.agents import Agent
+from definable.mcp import MCPClient, MCPConfig
+
+@tool
+async def read_config(_dependencies: dict = None) -> str:
+    """Read the application configuration."""
+    client = _dependencies["mcp_client"]
+    return await client.read_resource("filesystem", "file:///app/config.json")
+
+agent = Agent(
+    model=model,
+    tools=[read_config],
+    config=AgentConfig(dependencies={"mcp_client": client}),
+)
+```
+
+<Note>
+Resources are read-only. To modify data on an MCP server, use the server's tools instead.
+</Note>

@@ -1,0 +1,155 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Definable AI",
+  "colors": {
+    "primary": "#4F46E5",
+    "light": "#818CF8",
+    "dark": "#3730A3"
+  },
+  "favicon": "/favicon.svg",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Models",
+            "pages": [
+              "models/overview",
+              "models/openai",
+              "models/deepseek",
+              "models/moonshot",
+              "models/xai",
+              "models/openai-like",
+              "models/streaming",
+              "models/structured-output",
+              "models/vision-and-audio",
+              "models/metrics-and-pricing"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "agents/overview",
+              "agents/configuration",
+              "agents/running-agents",
+              "agents/multi-turn",
+              "agents/middleware",
+              "agents/tracing",
+              "agents/testing"
+            ]
+          },
+          {
+            "group": "Tools",
+            "pages": [
+              "tools/overview",
+              "tools/parameters",
+              "tools/hooks",
+              "tools/caching",
+              "tools/dependencies",
+              "tools/async-tools"
+            ]
+          },
+          {
+            "group": "Toolkits",
+            "pages": [
+              "toolkits/overview",
+              "toolkits/knowledge-toolkit",
+              "toolkits/mcp-toolkit"
+            ]
+          },
+          {
+            "group": "Knowledge",
+            "pages": [
+              "knowledge/overview",
+              "knowledge/documents",
+              "knowledge/readers",
+              "knowledge/chunkers",
+              "knowledge/embedders",
+              "knowledge/rerankers",
+              "knowledge/vector-databases",
+              "knowledge/agent-integration"
+            ]
+          },
+          {
+            "group": "MCP",
+            "pages": [
+              "mcp/overview",
+              "mcp/getting-started",
+              "mcp/configuration",
+              "mcp/resources",
+              "mcp/prompts",
+              "mcp/error-handling",
+              "mcp/mock-servers"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/error-handling",
+              "advanced/cost-tracking",
+              "advanced/media-types",
+              "advanced/run-output"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/overview",
+              "examples/models",
+              "examples/agents",
+              "examples/tools",
+              "examples/knowledge",
+              "examples/mcp"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/definable-ai/definable",
+          "icon": "github"
+        },
+        {
+          "anchor": "PyPI",
+          "href": "https://pypi.org/project/definable-ai/",
+          "icon": "cube"
+        }
+      ]
+    }
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/definable-ai/definable"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/definable-ai"
+    }
+  }
+}

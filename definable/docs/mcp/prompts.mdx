@@ -1,0 +1,111 @@
+---
+title: MCP Prompts
+sidebarTitle: Prompts
+description: Use reusable prompt templates from MCP servers.
+icon: message
+---
+
+MCP servers can expose reusable prompt templates — parameterized instructions that produce formatted messages. This is useful for standardized analysis, code review, or any repeatable workflow.
+
+## Listing Prompts
+
+```python
+from definable.mcp import MCPClient, MCPConfig, MCPServerConfig
+
+client = MCPClient(config)
+await client.connect()
+
+# List prompts from all servers
+all_prompts = await client.list_all_prompts()
+for server_name, prompts in all_prompts.items():
+    print(f"\n{server_name}:")
+    for prompt in prompts:
+        print(f"  {prompt.name}: {prompt.description}")
+```
+
+## Getting a Prompt
+
+Fetch a prompt with arguments to produce formatted messages:
+
+```python
+result = await client.get_prompt(
+    server_name="my-server",
+    prompt_name="code_review",
+    arguments={"language": "python", "code": "def hello(): print('hi')"},
+)
+
+for message in result.messages:
+    print(f"[{message.role}] {message.content}")
+```
+
+## MCPPromptProvider
+
+For a higher-level interface:
+
+```python
+from definable.mcp import MCPPromptProvider
+
+provider = MCPPromptProvider(client)
+
+# List all prompts
+prompts = await provider.list_prompts()
+
+# Get prompt as text
+text = await provider.get_text(
+    "my-server",
+    "code_review",
+    arguments={"language": "python", "code": "def hello(): ..."},
+)
+print(text)
+
+# Get as message list
+messages = await provider.get_messages(
+    "my-server",
+    "code_review",
+    arguments={"language": "python", "code": "..."},
+)
+
+# Discover prompt arguments
+arg_names = await provider.get_prompt_arguments("my-server", "code_review")
+print(f"Required arguments: {arg_names}")
+
+# Find which server has a prompt
+server = await provider.find_prompt("code_review")
+```
+
+## Using Prompts with Agents
+
+Feed prompt content into an agent's instruction:
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+# Get the prompt text
+prompt_text = await provider.get_text(
+    "templates",
+    "analyze_code",
+    arguments={"language": "python"},
+)
+
+# Use as agent instructions
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions=prompt_text,
+)
+
+output = await agent.arun("Review this function: def add(a, b): return a + b")
+print(output.content)
+```
+
+## Prompt Structure
+
+An MCP prompt has:
+
+| Property | Description |
+|----------|-------------|
+| `name` | Prompt identifier |
+| `description` | What the prompt does |
+| `arguments` | List of named parameters the prompt accepts |
+
+When resolved, a prompt produces a list of messages with `role` and `content`, ready to be passed to a model.

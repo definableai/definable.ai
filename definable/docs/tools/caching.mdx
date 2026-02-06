@@ -1,0 +1,90 @@
+---
+title: Tool Caching
+sidebarTitle: Caching
+description: Cache tool results to avoid redundant computation and API calls.
+icon: database
+---
+
+Tool caching stores results for previously seen arguments, so repeated calls with the same input return instantly without re-executing the function.
+
+## Enabling Caching
+
+Set `cache_results=True` on the `@tool` decorator:
+
+```python
+from definable.tools import tool
+
+@tool(cache_results=True)
+def search_database(query: str) -> str:
+    """Search the database (expensive operation)."""
+    # This only runs once per unique query
+    return expensive_db_query(query)
+```
+
+## Cache TTL
+
+Control how long cached results remain valid:
+
+```python
+@tool(cache_results=True, cache_ttl=1800)  # 30 minutes
+def get_stock_price(symbol: str) -> str:
+    """Get the current stock price."""
+    return fetch_price(symbol)
+```
+
+<ParamField path="cache_results" type="bool" default="false">
+  Enable result caching for this tool.
+</ParamField>
+
+<ParamField path="cache_ttl" type="int" default="3600">
+  Cache time-to-live in seconds. Results older than this are re-fetched.
+</ParamField>
+
+<ParamField path="cache_dir" type="str">
+  Directory to store cache files. Defaults to a system temp directory.
+</ParamField>
+
+## How It Works
+
+1. When a tool is called, the arguments are serialized to a cache key
+2. If a cached result exists and is within the TTL, it is returned immediately
+3. If no cache hit, the function executes and the result is stored
+
+Cache keys are based on the function name and a hash of the serialized arguments, so different inputs always produce different cache entries.
+
+## When to Use Caching
+
+Caching works best for:
+
+- **Expensive API calls** — external search, database queries, web scraping
+- **Deterministic functions** — same input always produces the same output
+- **Frequently repeated calls** — agents that search for the same thing multiple times in a conversation
+
+<Warning>
+Do not cache tools with side effects (sending emails, writing to databases) or tools that return time-sensitive data where staleness matters.
+</Warning>
+
+## Example: Caching an API Call
+
+```python
+import httpx
+from definable.tools import tool
+
+@tool(cache_results=True, cache_ttl=300)  # 5-minute cache
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    resp = httpx.get(f"https://api.weather.com/current?city={city}")
+    data = resp.json()
+    return f"{data['temp']}°F, {data['condition']}"
+```
+
+The first call for each city hits the API. Subsequent calls within 5 minutes return the cached result.
+
+## Custom Cache Directory
+
+```python
+@tool(cache_results=True, cache_dir="./cache/tools")
+def expensive_analysis(text: str) -> str:
+    """Run expensive text analysis."""
+    return analyze(text)
+```

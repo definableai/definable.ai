@@ -76,7 +76,7 @@ class SSETransport(BaseTransport):
 
     # Background reader task
     self._reader_task: Optional[asyncio.Task[None]] = None
-    self._shutdown_event = asyncio.Event()
+    self._shutdown_event: Optional[asyncio.Event] = None
 
   async def connect(self) -> None:
     """Establish SSE connection to the MCP server.
@@ -144,8 +144,8 @@ class SSETransport(BaseTransport):
         self._messages_endpoint = f"{base_url}/message"
         self._session_id = str(uuid.uuid4())
 
-      # Start background reader for SSE events
-      self._shutdown_event.clear()
+      # Start background reader for SSE events (create Event in async context to bind to current loop)
+      self._shutdown_event = asyncio.Event()
       self._reader_task = asyncio.create_task(self._read_sse_events())
 
       self._connected = True
@@ -196,7 +196,8 @@ class SSETransport(BaseTransport):
       return
 
     self._connected = False
-    self._shutdown_event.set()
+    if self._shutdown_event:
+      self._shutdown_event.set()
 
     # Cancel pending requests
     for future in self._pending_requests.values():
@@ -375,7 +376,7 @@ class SSETransport(BaseTransport):
     event_type = ""
     try:
       async for line in self._sse_response.aiter_lines():
-        if self._shutdown_event.is_set():
+        if self._shutdown_event and self._shutdown_event.is_set():
           break
 
         line = line.strip()
@@ -397,11 +398,11 @@ class SSETransport(BaseTransport):
     except asyncio.CancelledError:
       pass
     except Exception as e:
-      if not self._shutdown_event.is_set():
+      if self._shutdown_event and not self._shutdown_event.is_set():
         log_error(f"MCP [{self.server_name}] SSE reader error: {e}")
 
     # Mark connection as closed
-    if self._connected and not self._shutdown_event.is_set():
+    if self._connected and (not self._shutdown_event or not self._shutdown_event.is_set()):
       self._connected = False
       for future in self._pending_requests.values():
         if not future.done():

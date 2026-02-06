@@ -67,8 +67,9 @@ class HTTPTransport(BaseTransport):
     # Explicitly re-declare for type checking
     self._connected: bool = False
 
-    # HTTP client
+    # HTTP client and the event loop it was created in
     self._client: Optional[httpx.AsyncClient] = None
+    self._client_loop: Optional[asyncio.AbstractEventLoop] = None
 
     # Request tracking
     self._request_id: int = 0
@@ -85,31 +86,51 @@ class HTTPTransport(BaseTransport):
     if self._connected:
       return
 
-    log_debug(f"MCP [{self.server_name}] Creating HTTP client for: {self._url}")
+    await self._ensure_client()
+    self._connected = True
 
-    try:
-      self._client = httpx.AsyncClient(
-        timeout=httpx.Timeout(
-          connect=self._connect_timeout,
-          read=self._request_timeout,
-          write=self._request_timeout,
-          pool=self._connect_timeout,
-        ),
-        headers={
-          **self._headers,
-          "Content-Type": "application/json",
-          "Accept": "application/json, text/event-stream",
-        },
-      )
-      self._connected = True
-      log_debug(f"MCP [{self.server_name}] HTTP client ready")
+  async def _ensure_client(self) -> None:
+    """Ensure HTTP client exists and is bound to the current event loop.
 
-    except Exception as e:
-      raise MCPConnectionError(
-        f"Failed to create HTTP client for '{self.server_name}': {e}",
-        server_name=self.server_name,
-        original_error=e,
-      )
+    Recreates the client if called from a different event loop than
+    where it was originally created. This handles the case where the
+    toolkit is initialized in one asyncio.run() call but tools are
+    executed in a different asyncio.run() call.
+    """
+    current_loop = asyncio.get_running_loop()
+
+    # Check if we need to recreate the client (different event loop)
+    if self._client is not None and self._client_loop is not current_loop:
+      log_debug(f"MCP [{self.server_name}] Recreating HTTP client for new event loop")
+      with contextlib.suppress(Exception):
+        await self._client.aclose()
+      self._client = None
+      self._client_loop = None
+
+    if self._client is None:
+      log_debug(f"MCP [{self.server_name}] Creating HTTP client for: {self._url}")
+      try:
+        self._client = httpx.AsyncClient(
+          timeout=httpx.Timeout(
+            connect=self._connect_timeout,
+            read=self._request_timeout,
+            write=self._request_timeout,
+            pool=self._connect_timeout,
+          ),
+          headers={
+            **self._headers,
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+          },
+        )
+        self._client_loop = current_loop
+        log_debug(f"MCP [{self.server_name}] HTTP client ready")
+      except Exception as e:
+        raise MCPConnectionError(
+          f"Failed to create HTTP client for '{self.server_name}': {e}",
+          server_name=self.server_name,
+          original_error=e,
+        )
 
   async def disconnect(self) -> None:
     """Close the HTTP client.
@@ -125,6 +146,7 @@ class HTTPTransport(BaseTransport):
       with contextlib.suppress(Exception):
         await self._client.aclose()
       self._client = None
+      self._client_loop = None
 
     log_debug(f"MCP [{self.server_name}] HTTP client closed")
 
@@ -149,11 +171,15 @@ class HTTPTransport(BaseTransport):
         MCPTimeoutError: If request times out.
         MCPProtocolError: If response is invalid.
     """
-    if not self._connected or not self._client:
+    if not self._connected:
       raise MCPConnectionError(
         f"MCP server '{self.server_name}' not connected",
         server_name=self.server_name,
       )
+
+    # Ensure client is valid for current event loop
+    await self._ensure_client()
+    assert self._client is not None
 
     # Generate request ID
     self._request_id += 1
@@ -289,11 +315,15 @@ class HTTPTransport(BaseTransport):
     Raises:
         MCPConnectionError: If not connected or request fails.
     """
-    if not self._connected or not self._client:
+    if not self._connected:
       raise MCPConnectionError(
         f"MCP server '{self.server_name}' not connected",
         server_name=self.server_name,
       )
+
+    # Ensure client is valid for current event loop
+    await self._ensure_client()
+    assert self._client is not None
 
     notification = JSONRPCNotification(
       method=method,

@@ -1,0 +1,116 @@
+---
+title: Metrics & Pricing
+description: Track token usage, latency, and cost across all model calls.
+icon: chart-line
+---
+
+Every model invocation automatically tracks token usage, timing, and cost. This data is available on every response and aggregated across agent runs.
+
+## Token Usage
+
+Access usage metrics on any `ModelResponse`:
+
+```python
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+
+metrics = response.response_usage
+print(f"Input tokens:  {metrics.input_tokens}")
+print(f"Output tokens: {metrics.output_tokens}")
+print(f"Total tokens:  {metrics.total_tokens}")
+```
+
+## The Metrics Class
+
+The `Metrics` dataclass tracks all usage dimensions:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `input_tokens` | `int` | Tokens in the prompt |
+| `output_tokens` | `int` | Tokens generated |
+| `total_tokens` | `int` | Total tokens consumed |
+| `reasoning_tokens` | `int` | Tokens used for chain-of-thought reasoning |
+| `cache_read_tokens` | `int` | Tokens served from cache |
+| `cache_write_tokens` | `int` | Tokens written to cache |
+| `audio_input_tokens` | `int` | Audio input tokens |
+| `audio_output_tokens` | `int` | Audio output tokens |
+| `cost` | `float` | Estimated cost in USD |
+| `duration` | `float` | Total call duration in seconds |
+| `time_to_first_token` | `float` | Time to first token in seconds |
+
+## Cost Calculation
+
+Definable includes a built-in pricing registry with per-token rates for all supported models. Cost is calculated automatically when available:
+
+```python
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(f"Cost: ${response.response_usage.cost:.6f}")
+```
+
+The pricing registry loads from `model_pricing.json` and covers input, output, cached, reasoning, and audio token rates for each model.
+
+## Aggregating Metrics
+
+`Metrics` objects can be added together, which is useful for tracking total usage across multiple calls:
+
+```python
+from definable.models.metrics import Metrics
+
+total = Metrics()
+for question in questions:
+    response = model.invoke(messages=[{"role": "user", "content": question}])
+    total = total + response.response_usage
+
+print(f"Total tokens: {total.total_tokens}")
+print(f"Total cost:   ${total.cost:.4f}")
+```
+
+The `Metrics` class also works with Python's built-in `sum()`:
+
+```python
+all_metrics = [resp.response_usage for resp in responses]
+total = sum(all_metrics)
+```
+
+## Agent-Level Metrics
+
+When using agents, metrics are aggregated across all model calls in a run:
+
+```python
+from definable.agents import Agent
+
+agent = Agent(model=model, tools=[my_tool])
+output = agent.run("Do something complex.")
+
+print(f"Total tokens: {output.metrics.total_tokens}")
+print(f"Total cost:   ${output.metrics.cost:.4f}")
+print(f"Duration:     {output.metrics.duration:.2f}s")
+```
+
+## Serialization
+
+Convert metrics to a dictionary for logging or storage. Zero values and `None` fields are excluded automatically:
+
+```python
+metrics_dict = response.response_usage.to_dict()
+# {'input_tokens': 12, 'output_tokens': 45, 'total_tokens': 57, 'cost': 0.000285}
+```
+
+## Timing Metrics
+
+Track execution time with the built-in timer:
+
+```python
+metrics = Metrics()
+metrics.start_timer()
+
+# ... your operation ...
+
+metrics.set_time_to_first_token()  # Call when first token arrives
+
+# ... continue processing ...
+
+metrics.stop_timer()  # Sets metrics.duration automatically
+```

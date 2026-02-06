@@ -1,0 +1,138 @@
+---
+title: Error Handling
+description: Handle exceptions, configure retries, and build resilient agents.
+icon: shield
+---
+
+Definable is designed to fail fast with clear, actionable errors. This page covers the exception types, retry strategies, and patterns for building resilient agents.
+
+## Exception Types
+
+### Agent Errors
+
+| Exception | When It's Raised |
+|-----------|-----------------|
+| `AgentError` | General agent execution failure |
+| `MaxIterationsError` | Agent exceeded `max_iterations` in the tool-call loop |
+| `ToolExecutionError` | A tool raised an exception during execution |
+
+### Model Errors
+
+Model errors typically come from the underlying provider SDK (e.g., `openai.APIError`). Common cases:
+
+| Error | Cause | Recommended Action |
+|-------|-------|-------------------|
+| `AuthenticationError` | Invalid API key | Check your API key |
+| `RateLimitError` | Too many requests | Use retries with backoff |
+| `APIConnectionError` | Network failure | Use retries |
+| `APITimeoutError` | Request timed out | Increase timeout or use retries |
+| `BadRequestError` | Invalid request parameters | Check model parameters |
+
+### MCP Errors
+
+See [MCP Error Handling](/mcp/error-handling) for the full MCP error hierarchy.
+
+## Agent-Level Retries
+
+Configure retries directly on the agent:
+
+```python
+from definable.agents import Agent, AgentConfig
+
+agent = Agent(
+    model=model,
+    config=AgentConfig(
+        retry_transient_errors=True,
+        max_retries=3,
+    ),
+)
+```
+
+This retries the entire agent run on transient errors (connection failures, timeouts).
+
+## Model-Level Retries
+
+Configure retries on the model itself for finer control:
+
+```python
+from definable.models import OpenAIChat
+
+model = OpenAIChat(
+    id="gpt-4o",
+    retries=3,
+    delay_between_retries=2,
+    exponential_backoff=True,
+)
+```
+
+Model retries apply to individual API calls. Agent retries wrap the entire run.
+
+## Retry Middleware
+
+For the most control, use `RetryMiddleware`:
+
+```python
+from definable.agents import Agent, RetryMiddleware
+
+agent = Agent(model=model).use(
+    RetryMiddleware(
+        max_retries=3,
+        backoff_base=1.0,
+        backoff_max=60.0,
+    )
+)
+```
+
+The middleware retries on `ConnectionError`, `TimeoutError`, and `OSError` with exponential backoff.
+
+## Tool Error Handling
+
+When a tool raises an exception, the error message is sent back to the model. The model can then decide to retry the call, try a different approach, or inform the user:
+
+```python
+from definable.tools import tool
+
+@tool
+def divide(a: float, b: float) -> str:
+    """Divide two numbers."""
+    if b == 0:
+        raise ValueError("Cannot divide by zero")
+    return str(a / b)
+```
+
+If the model calls `divide(10, 0)`, it receives the error `"Cannot divide by zero"` and can adjust its approach.
+
+## Catching Errors in Application Code
+
+```python
+from definable.agents import Agent
+
+agent = Agent(model=model, tools=[my_tool])
+
+try:
+    output = agent.run("Do something risky.")
+except Exception as e:
+    print(f"Agent failed: {e}")
+    # Log, notify, or fall back
+```
+
+## Streaming Error Handling
+
+During streaming, errors arrive as `RunErrorEvent`:
+
+```python
+for event in agent.run_stream("Do something."):
+    if event.event == "RunError":
+        print(f"Error: {event.error}")
+        break
+    if event.event == "RunContent":
+        print(event.content, end="")
+```
+
+## Best Practices
+
+1. **Set appropriate timeouts** — Don't let requests hang indefinitely
+2. **Use retries for transient errors** — Network issues are temporary
+3. **Raise clear errors in tools** — The model uses error messages to self-correct
+4. **Log errors** — Use `LoggingMiddleware` for visibility into failures
+5. **Test error paths** — Use `MockModel` with `side_effect` to simulate failures

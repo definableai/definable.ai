@@ -1,0 +1,65 @@
+---
+title: Moonshot
+description: Use Moonshot (Kimi) models for AI generation.
+icon: moon
+---
+
+## Setup
+
+```bash
+export MOONSHOT_API_KEY="sk-..."
+```
+
+## Basic Usage
+
+```python
+from definable.models import MoonshotChat
+
+model = MoonshotChat(id="kimi-k2-turbo-preview")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+## Parameters
+
+<ParamField path="id" type="str" default="kimi-k2-turbo-preview">
+  Model identifier.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  Moonshot API key. Defaults to the `MOONSHOT_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="base_url" type="str" default="https://api.moonshot.ai/v1">
+  Moonshot API base URL.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum output tokens.
+</ParamField>
+
+## Streaming
+
+```python
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "Write a haiku about coding."}]
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+## Async Usage
+
+```python
+response = await model.ainvoke(
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+<Note>
+Moonshot uses an OpenAI-compatible API. All standard parameters like `temperature`, `max_tokens`, `top_p`, and `stop` are supported.
+</Note>

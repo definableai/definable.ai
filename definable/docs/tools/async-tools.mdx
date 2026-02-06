@@ -1,0 +1,136 @@
+---
+title: Async Tools
+sidebarTitle: Async Tools
+description: Define asynchronous tools for non-blocking operations.
+icon: rotate
+---
+
+Definable fully supports async tool functions. Use them when your tool performs I/O operations like HTTP requests, database queries, or file operations.
+
+## Defining Async Tools
+
+Use `async def` with the `@tool` decorator:
+
+```python
+import httpx
+from definable.tools import tool
+
+@tool
+async def fetch_url(url: str) -> str:
+    """Fetch the contents of a URL."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.text[:500]
+```
+
+The tool is used exactly the same way as a sync tool — the agent runtime handles the async execution automatically.
+
+## Using Async Tools
+
+Async tools work with both sync and async agent execution:
+
+<CodeGroup>
+```python Async (recommended)
+output = await agent.arun("Fetch https://example.com")
+```
+
+```python Sync
+# Also works — Definable manages the event loop internally
+output = agent.run("Fetch https://example.com")
+```
+</CodeGroup>
+
+## When to Use Async Tools
+
+Use async tools when your function:
+
+- Makes HTTP requests
+- Queries a database
+- Reads or writes files
+- Calls other async services
+- Performs any I/O that benefits from non-blocking execution
+
+```python
+@tool
+async def search_and_summarize(query: str) -> str:
+    """Search multiple sources and combine results."""
+    async with httpx.AsyncClient() as client:
+        results = await asyncio.gather(
+            client.get(f"https://api1.example.com/search?q={query}"),
+            client.get(f"https://api2.example.com/search?q={query}"),
+        )
+        return "\n".join(r.text[:200] for r in results)
+```
+
+## Async with Dependencies
+
+Dependency injection works the same way with async tools:
+
+```python
+@tool
+async def query_database(sql: str, _dependencies: dict = None) -> str:
+    """Run a database query."""
+    db = _dependencies["async_db"]
+    rows = await db.fetch(sql)
+    return str(rows)
+```
+
+## Async with Hooks
+
+Hooks can also be async:
+
+```python
+async def async_audit(tool_name, args):
+    await audit_service.log(tool=tool_name, args=args)
+
+@tool(pre_hook=async_audit)
+async def sensitive_action(action: str) -> str:
+    """Perform a sensitive action."""
+    return f"Completed: {action}"
+```
+
+## Generators
+
+Definable also supports generator and async generator tools for streaming results:
+
+<CodeGroup>
+```python Async generator
+@tool
+async def stream_data(source: str):
+    """Stream data from a source."""
+    async for chunk in data_source.stream(source):
+        yield chunk
+```
+
+```python Sync generator
+@tool
+def read_lines(filepath: str):
+    """Read a file line by line."""
+    with open(filepath) as f:
+        for line in f:
+            yield line.strip()
+```
+</CodeGroup>
+
+## Mixing Sync and Async
+
+You can freely mix sync and async tools on the same agent. The runtime handles both:
+
+```python
+@tool
+def calculate(expression: str) -> str:
+    """Evaluate a math expression (sync — no I/O needed)."""
+    return str(eval(expression))
+
+@tool
+async def fetch_data(url: str) -> str:
+    """Fetch data from a URL (async — I/O bound)."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url)
+        return resp.text
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[calculate, fetch_data],  # Both work together
+)
+```

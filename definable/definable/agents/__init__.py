@@ -89,7 +89,7 @@ With Middleware:
 """
 
 from definable.agents.agent import Agent
-from definable.agents.config import AgentConfig, KnowledgeConfig, TracingConfig
+from definable.agents.config import AgentConfig, CompressionConfig, KnowledgeConfig, TracingConfig
 from definable.agents.middleware import (
   KnowledgeMiddleware,
   LoggingMiddleware,
@@ -126,6 +126,7 @@ __all__ = [
   "AgentConfig",
   "TracingConfig",
   "KnowledgeConfig",
+  "CompressionConfig",
   "Toolkit",
   "KnowledgeToolkit",
   "MCPToolkit",

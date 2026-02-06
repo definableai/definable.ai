@@ -1,0 +1,112 @@
+---
+title: Quickstart
+description: Get up and running with Definable in under 5 minutes.
+icon: bolt
+---
+
+## Install
+
+<CodeGroup>
+```bash pip
+pip install definable-ai
+```
+
+```bash uv
+uv add definable-ai
+```
+</CodeGroup>
+
+## Set Your API Key
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+## Your First Model Call
+
+Call an LLM with three lines of code:
+
+```python
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+## Your First Agent
+
+Create an agent with tools that can take actions:
+
+```python
+from definable.models import OpenAIChat
+from definable.tools import tool
+from definable.agents import Agent
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city."""
+    return f"The weather in {city} is sunny, 72°F."
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[get_weather],
+    instructions="You are a helpful weather assistant.",
+)
+
+output = agent.run("What's the weather in San Francisco?")
+print(output.content)
+```
+
+## Your First RAG Query
+
+Build a knowledge base and search it:
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+)
+
+# Add documents
+knowledge.add("Definable is a Python framework for building AI agents.")
+knowledge.add("It supports OpenAI, DeepSeek, Moonshot, and xAI models.")
+
+# Search
+results = knowledge.search("What models does Definable support?")
+for doc in results:
+    print(doc.content)
+```
+
+## Stream Responses
+
+Get tokens as they are generated:
+
+```python
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+
+for chunk in model.invoke_stream(messages=[{"role": "user", "content": "Tell me a story."}]):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Models" icon="microchip" href="/models/overview">
+    Explore all supported LLM providers and configurations.
+  </Card>
+  <Card title="Agents" icon="robot" href="/agents/overview">
+    Learn about the agent lifecycle, middleware, and tracing.
+  </Card>
+  <Card title="Tools" icon="wrench" href="/tools/overview">
+    Define custom tools with hooks, caching, and dependencies.
+  </Card>
+  <Card title="Knowledge" icon="book" href="/knowledge/overview">
+    Build complete RAG pipelines with readers, chunkers, and vector databases.
+  </Card>
+</CardGroup>

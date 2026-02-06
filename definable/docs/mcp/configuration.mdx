@@ -1,0 +1,216 @@
+---
+title: MCP Configuration
+sidebarTitle: Configuration
+description: Configure MCP servers, transports, timeouts, and tool filtering.
+icon: gear
+---
+
+## MCPServerConfig
+
+Each MCP server is defined with an `MCPServerConfig`:
+
+```python
+from definable.mcp import MCPServerConfig
+
+server = MCPServerConfig(
+    name="my-server",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-filesystem", "/home"],
+    connect_timeout=30.0,
+    request_timeout=60.0,
+)
+```
+
+### Connection Parameters
+
+<ParamField path="name" type="str" required>
+  Unique identifier for this server. Used in tool name prefixes and logs.
+</ParamField>
+
+<ParamField path="transport" type="str" default="stdio">
+  Transport type: `"stdio"`, `"sse"`, or `"http"`.
+</ParamField>
+
+### stdio Transport
+
+<ParamField path="command" type="str">
+  Command to launch the server process (e.g., `"npx"`, `"python"`, `"node"`).
+</ParamField>
+
+<ParamField path="args" type="List[str]">
+  Command-line arguments for the server process.
+</ParamField>
+
+### SSE / HTTP Transport
+
+<ParamField path="url" type="str">
+  Server URL for SSE or HTTP transports.
+</ParamField>
+
+<ParamField path="headers" type="Dict[str, str]">
+  Custom HTTP headers (e.g., authentication tokens).
+</ParamField>
+
+### Timeouts
+
+<ParamField path="connect_timeout" type="float" default="30.0">
+  Maximum time in seconds to establish the initial connection.
+</ParamField>
+
+<ParamField path="request_timeout" type="float" default="60.0">
+  Maximum time in seconds for individual requests (tool calls, resource reads).
+</ParamField>
+
+### Reliability
+
+<ParamField path="reconnect_on_failure" type="bool" default="true">
+  Automatically reconnect if the connection drops.
+</ParamField>
+
+<ParamField path="max_reconnect_attempts" type="int" default="3">
+  Maximum number of reconnection attempts.
+</ParamField>
+
+### Tool Filtering
+
+<ParamField path="allowed_tools" type="List[str]">
+  Whitelist of tool names. Only these tools will be exposed to the agent.
+</ParamField>
+
+<ParamField path="blocked_tools" type="List[str]">
+  Blacklist of tool names. These tools will be hidden from the agent.
+</ParamField>
+
+```python
+# Only expose read operations
+MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-filesystem", "/data"],
+    allowed_tools=["read_file", "list_directory", "search_files"],
+)
+
+# Block dangerous operations
+MCPServerConfig(
+    name="filesystem",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-filesystem", "/data"],
+    blocked_tools=["write_file", "delete_file", "move_file"],
+)
+```
+
+## MCPConfig
+
+Group multiple servers into a single configuration:
+
+```python
+from definable.mcp import MCPConfig, MCPServerConfig
+
+config = MCPConfig(
+    servers=[
+        MCPServerConfig(name="filesystem", transport="stdio", command="npx", args=["..."]),
+        MCPServerConfig(name="github", transport="stdio", command="npx", args=["..."]),
+        MCPServerConfig(name="api", transport="http", url="https://mcp.example.com"),
+    ],
+    auto_connect=True,
+    reconnect_on_failure=True,
+)
+```
+
+<ParamField path="servers" type="List[MCPServerConfig]" required>
+  List of server configurations.
+</ParamField>
+
+<ParamField path="auto_connect" type="bool" default="true">
+  Automatically connect to all servers on initialization.
+</ParamField>
+
+<ParamField path="reconnect_on_failure" type="bool" default="true">
+  Global reconnection setting (can be overridden per server).
+</ParamField>
+
+## Loading from a File
+
+Store configuration in a JSON file and load it:
+
+```json
+{
+  "servers": [
+    {
+      "name": "filesystem",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    {
+      "name": "api",
+      "transport": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {"Authorization": "Bearer token"}
+    }
+  ]
+}
+```
+
+```python
+config = MCPConfig.from_file("mcp_config.json")
+```
+
+Save configuration back to a file:
+
+```python
+config.to_file("mcp_config.json")
+```
+
+## Managing Servers
+
+Add or remove servers dynamically:
+
+```python
+config = MCPConfig(servers=[])
+
+# Add a server
+config.add_server(MCPServerConfig(name="fs", transport="stdio", command="npx", args=[...]))
+
+# Get a specific server
+server = config.get_server("fs")
+
+# Remove a server
+config.remove_server("fs")
+```
+
+## Transport-Specific Examples
+
+<CodeGroup>
+```python stdio (local)
+MCPServerConfig(
+    name="sqlite",
+    transport="stdio",
+    command="npx",
+    args=["-y", "@modelcontextprotocol/server-sqlite", "database.db"],
+)
+```
+
+```python SSE (remote)
+MCPServerConfig(
+    name="remote-api",
+    transport="sse",
+    url="https://mcp.example.com/sse",
+    headers={"Authorization": "Bearer sk-..."},
+    connect_timeout=10.0,
+)
+```
+
+```python HTTP (streamable)
+MCPServerConfig(
+    name="modern-api",
+    transport="http",
+    url="https://mcp.example.com/mcp",
+    headers={"Authorization": "Bearer sk-..."},
+    request_timeout=120.0,
+)
+```
+</CodeGroup>

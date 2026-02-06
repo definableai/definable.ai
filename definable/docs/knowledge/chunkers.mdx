@@ -1,0 +1,121 @@
+---
+title: Chunkers
+description: Split documents into smaller, overlapping pieces for better retrieval.
+icon: scissors
+---
+
+Chunking splits large documents into smaller pieces that fit within embedding model limits and improve retrieval precision. Smaller, focused chunks tend to match queries more accurately than entire documents.
+
+## Why Chunk?
+
+- **Embedding models have token limits** — most accept 512-8192 tokens
+- **Smaller chunks are more precise** — a paragraph about "authentication" matches better than a full page with mixed topics
+- **Overlap preserves context** — overlapping boundaries prevent information loss at chunk edges
+
+## TextChunker
+
+Splits text on a single separator (e.g., double newlines for paragraphs):
+
+```python
+from definable.knowledge.chunkers import TextChunker
+
+chunker = TextChunker(
+    chunk_size=500,
+    chunk_overlap=50,
+    separator="\n\n",
+)
+```
+
+<ParamField path="chunk_size" type="int" default="1000">
+  Target size for each chunk in characters.
+</ParamField>
+
+<ParamField path="chunk_overlap" type="int" default="200">
+  Number of characters to overlap between adjacent chunks.
+</ParamField>
+
+<ParamField path="separator" type="str" default='"\\n\\n"'>
+  The separator to split on.
+</ParamField>
+
+<ParamField path="keep_separator" type="bool" default="false">
+  Whether to keep the separator in chunk content.
+</ParamField>
+
+## RecursiveChunker
+
+Splits text using a hierarchy of separators, falling back to finer-grained splits when chunks are too large. This is the default chunker and generally produces the best results.
+
+```python
+from definable.knowledge.chunkers import RecursiveChunker
+
+chunker = RecursiveChunker(
+    chunk_size=1000,
+    chunk_overlap=200,
+    separators=["\n\n", "\n", ". ", " ", ""],
+)
+```
+
+<ParamField path="separators" type="List[str]" default='["\\n\\n", "\\n", ". ", " ", ""]'>
+  Ordered list of separators to try. The chunker uses the first separator that produces chunks within the size limit, then recurses with finer separators for any chunks that are still too large.
+</ParamField>
+
+The default separator hierarchy:
+1. `\n\n` — paragraph breaks (preferred)
+2. `\n` — line breaks
+3. `. ` — sentence endings
+4. ` ` — word boundaries
+5. `""` — character-level split (last resort)
+
+## Using with Knowledge
+
+Pass a chunker when creating a knowledge base:
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.knowledge.chunkers import RecursiveChunker
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+    chunker=RecursiveChunker(chunk_size=500, chunk_overlap=100),
+)
+```
+
+## Disabling Chunking
+
+If your documents are already the right size, skip chunking:
+
+```python
+knowledge.add("Short content", chunk=False)
+```
+
+## Chunker Interface
+
+Both chunkers implement:
+
+| Method | Description |
+|--------|-------------|
+| `chunk(document) -> List[Document]` | Chunk a single document |
+| `chunk_many(documents) -> List[Document]` | Chunk multiple documents |
+
+## Example: Comparing Chunkers
+
+```python
+from definable.knowledge import Document
+from definable.knowledge.chunkers import TextChunker, RecursiveChunker
+
+doc = Document(content="Long document content here...")
+
+# TextChunker — splits on paragraphs only
+text_chunks = TextChunker(chunk_size=200).chunk(doc)
+print(f"TextChunker: {len(text_chunks)} chunks")
+
+# RecursiveChunker — smart multi-level splitting
+recursive_chunks = RecursiveChunker(chunk_size=200).chunk(doc)
+print(f"RecursiveChunker: {len(recursive_chunks)} chunks")
+```
+
+<Tip>
+Start with the default `RecursiveChunker` settings. Adjust `chunk_size` based on your embedding model's sweet spot — typically 500-1000 characters for most use cases.
+</Tip>

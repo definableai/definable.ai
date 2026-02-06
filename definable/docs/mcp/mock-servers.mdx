@@ -1,0 +1,136 @@
+---
+title: Mock MCP Servers
+sidebarTitle: Mock Servers
+description: Test MCP integrations without running real servers.
+icon: flask-vial
+---
+
+Testing MCP integrations often requires running external server processes. Mock servers let you test your agent's MCP behavior without any external dependencies.
+
+## Why Mock?
+
+- **Fast** — No subprocess or network overhead
+- **Deterministic** — Predictable responses for every test
+- **Isolated** — No external dependencies or credentials
+- **CI-friendly** — Works in any environment
+
+## Basic Mock Server
+
+Create a mock by defining the tools, resources, and prompts you want to simulate:
+
+```python
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+
+# Create a config pointing to a mock server
+# In your test, you can mock the transport layer
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="mock-server",
+        transport="stdio",
+        command="python",
+        args=["mock_mcp_server.py"],
+    ),
+])
+```
+
+## Testing Agent with MCP Tools
+
+Combine `MockModel` with a mock MCP server to test the full agent-MCP integration:
+
+```python
+from definable.agents import Agent, MockModel, create_test_agent
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+
+async def test_agent_uses_mcp_tools():
+    # Setup mock MCP server
+    config = MCPConfig(servers=[
+        MCPServerConfig(
+            name="test-server",
+            transport="stdio",
+            command="python",
+            args=["path/to/mock_server.py"],
+        ),
+    ])
+
+    async with MCPToolkit(config=config) as toolkit:
+        agent = Agent(
+            model=MockModel(responses=["I found the file contents."]),
+            toolkits=[toolkit],
+        )
+        output = await agent.arun("Read the config file")
+        assert output.content is not None
+```
+
+## Writing a Mock MCP Server
+
+Create a simple Python script that implements the MCP protocol over stdio:
+
+```python
+#!/usr/bin/env python3
+"""Simple mock MCP server for testing."""
+import json
+import sys
+
+def handle_request(request):
+    method = request.get("method")
+
+    if method == "initialize":
+        return {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "mock-server", "version": "1.0.0"},
+        }
+
+    if method == "tools/list":
+        return {
+            "tools": [
+                {
+                    "name": "read_file",
+                    "description": "Read a file",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string", "description": "File path"}
+                        },
+                        "required": ["path"],
+                    },
+                }
+            ]
+        }
+
+    if method == "tools/call":
+        tool_name = request["params"]["name"]
+        if tool_name == "read_file":
+            return {"content": [{"type": "text", "text": "Mock file contents"}]}
+
+    return {"error": {"code": -32601, "message": "Method not found"}}
+
+# Read requests from stdin, write responses to stdout
+for line in sys.stdin:
+    request = json.loads(line.strip())
+    result = handle_request(request)
+    response = {"jsonrpc": "2.0", "id": request.get("id"), "result": result}
+    sys.stdout.write(json.dumps(response) + "\n")
+    sys.stdout.flush()
+```
+
+## Testing Tips
+
+<CardGroup cols={2}>
+  <Card title="Use MockModel">
+    Combine mock MCP servers with `MockModel` to test the full pipeline without any real API calls.
+  </Card>
+  <Card title="Test Tool Filtering">
+    Verify that `allowed_tools` and `blocked_tools` configuration works correctly with your mock server.
+  </Card>
+  <Card title="Test Error Paths">
+    Make your mock server return errors to verify your agent handles MCP failures gracefully.
+  </Card>
+  <Card title="Test Reconnection">
+    Simulate connection drops to verify the reconnection logic works.
+  </Card>
+</CardGroup>
+
+<Tip>
+For simple unit tests, you may not need a full mock server. You can test agent logic with `MockModel` alone and test MCP integration separately with real or mock servers in integration tests.
+</Tip>

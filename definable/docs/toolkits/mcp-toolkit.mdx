@@ -1,0 +1,138 @@
+---
+title: MCPToolkit
+description: Expose tools from MCP servers to your agents.
+icon: plug
+---
+
+The `MCPToolkit` connects to one or more MCP (Model Context Protocol) servers and exposes their tools as native agent tools. Your agent can call any tool from any connected MCP server without additional configuration.
+
+## Basic Usage
+
+```python
+from definable.agents import Agent
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+from definable.models import OpenAIChat
+
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    ),
+])
+
+toolkit = MCPToolkit(config=config)
+
+async with toolkit:
+    agent = Agent(
+        model=OpenAIChat(id="gpt-4o"),
+        toolkits=[toolkit],
+    )
+    output = await agent.arun("List the files in /tmp")
+    print(output.content)
+```
+
+## Parameters
+
+<ParamField path="config" type="MCPConfig" required>
+  MCP configuration with server definitions.
+</ParamField>
+
+<ParamField path="tool_name_prefix" type="str" default='""'>
+  Prefix added to all tool names (e.g., `"mcp_"`).
+</ParamField>
+
+<ParamField path="include_server_prefix" type="bool" default="true">
+  Whether to include the server name in tool names (e.g., `filesystem_list_files`).
+</ParamField>
+
+<ParamField path="require_confirmation" type="bool" default="false">
+  Require user confirmation before executing any MCP tool.
+</ParamField>
+
+## Multiple Servers
+
+Connect to several MCP servers at once. Tools from all servers are available to the agent:
+
+```python
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    ),
+    MCPServerConfig(
+        name="github",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-github"],
+    ),
+])
+
+toolkit = MCPToolkit(config=config)
+```
+
+## Context Manager
+
+`MCPToolkit` must be used as a context manager to properly manage server connections:
+
+<CodeGroup>
+```python Async (recommended)
+async with MCPToolkit(config=config) as toolkit:
+    agent = Agent(model=model, toolkits=[toolkit])
+    output = await agent.arun("Do something")
+```
+
+```python Sync
+with MCPToolkit(config=config) as toolkit:
+    agent = Agent(model=model, toolkits=[toolkit])
+    output = agent.run("Do something")
+```
+</CodeGroup>
+
+Alternatively, manage the lifecycle manually:
+
+```python
+toolkit = MCPToolkit(config=config)
+await toolkit.initialize()
+
+try:
+    agent = Agent(model=model, toolkits=[toolkit])
+    output = await agent.arun("Do something")
+finally:
+    await toolkit.shutdown()
+```
+
+## Tool Discovery
+
+After initialization, inspect available tools:
+
+```python
+async with MCPToolkit(config=config) as toolkit:
+    for t in toolkit.tools:
+        print(f"{t.name}: {t.description}")
+```
+
+## Refreshing Tools
+
+If server tools change at runtime, refresh the tool list:
+
+```python
+await toolkit.refresh_tools()
+```
+
+## Combining with Other Toolkits
+
+MCP toolkit works alongside other toolkits and individual tools:
+
+```python
+agent = Agent(
+    model=model,
+    tools=[my_custom_tool],
+    toolkits=[MCPToolkit(config=mcp_config), MathToolkit()],
+)
+```
+
+For more on MCP configuration, transports, and advanced features, see the [MCP section](/mcp/overview).

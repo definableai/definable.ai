@@ -1,0 +1,119 @@
+---
+title: Structured Output
+description: Get type-safe, validated responses from LLMs using Pydantic models.
+icon: code
+---
+
+Structured output lets you define a Pydantic model and have the LLM return data that conforms exactly to that schema. No more parsing free-text responses.
+
+## Basic Usage
+
+Define a Pydantic model and pass it as `response_format`:
+
+```python
+from pydantic import BaseModel
+from definable.models import OpenAIChat
+
+class MovieRecommendation(BaseModel):
+    title: str
+    year: int
+    genre: str
+    reason: str
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(
+    messages=[{"role": "user", "content": "Recommend a great sci-fi movie."}],
+    response_format=MovieRecommendation,
+)
+
+movie = response.parsed  # MovieRecommendation instance
+print(f"{movie.title} ({movie.year}) - {movie.genre}")
+print(f"Why: {movie.reason}")
+```
+
+The `response.parsed` field contains a fully validated Pydantic model instance. The raw JSON is still available in `response.content`.
+
+## Complex Schemas
+
+Structured output handles nested models, lists, enums, and optional fields:
+
+```python
+from typing import List, Optional
+from enum import Enum
+from pydantic import BaseModel, Field
+
+class Priority(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+class Task(BaseModel):
+    title: str = Field(description="Short task title")
+    description: str = Field(description="Detailed description")
+    priority: Priority
+    estimated_hours: float
+    subtasks: Optional[List[str]] = None
+
+class ProjectPlan(BaseModel):
+    project_name: str
+    tasks: List[Task]
+    total_estimated_hours: float
+
+response = model.invoke(
+    messages=[{"role": "user", "content": "Create a plan for building a REST API."}],
+    response_format=ProjectPlan,
+)
+
+plan = response.parsed
+for task in plan.tasks:
+    print(f"[{task.priority.value}] {task.title} ({task.estimated_hours}h)")
+```
+
+## Provider Support
+
+| Provider | Native JSON Schema | Prompt-Based Fallback |
+|----------|-------------------|----------------------|
+| OpenAI | Yes | -- |
+| DeepSeek | No | Yes |
+| Moonshot | No | Yes |
+| xAI | No | Yes |
+
+<Note>
+When a provider does not support native structured outputs, Definable automatically includes the JSON Schema in the system prompt and instructs the model to respond in the correct format.
+</Note>
+
+## Strict Mode
+
+OpenAI's strict mode ensures the output adheres exactly to the schema. It is enabled by default:
+
+```python
+model = OpenAIChat(id="gpt-4o", strict_output=True)  # default
+```
+
+Set `strict_output=False` if you encounter schema compatibility issues with strict mode.
+
+## Using with Agents
+
+Pass `output_schema` to an agent run to get structured output from the final response:
+
+```python
+from definable.agents import Agent
+
+agent = Agent(model=model, tools=[search_web])
+
+output = agent.run(
+    "Find the top 3 Python web frameworks and compare them.",
+    output_schema=FrameworkComparison,
+)
+print(output.content)  # Parsed FrameworkComparison
+```
+
+## Async
+
+```python
+response = await model.ainvoke(
+    messages=[{"role": "user", "content": "Recommend a sci-fi movie."}],
+    response_format=MovieRecommendation,
+)
+movie = response.parsed
+```

@@ -1,0 +1,98 @@
+---
+title: KnowledgeToolkit
+description: Give agents explicit tools to search and query a knowledge base.
+icon: book
+---
+
+The `KnowledgeToolkit` provides agents with tools to search a knowledge base on demand. Unlike the automatic `KnowledgeMiddleware` (which retrieves context before every model call), the toolkit lets the **agent decide** when to search.
+
+## When to Use
+
+| Approach | How It Works | Best For |
+|----------|-------------|----------|
+| `KnowledgeMiddleware` | Automatically retrieves context on every turn | Always-on RAG, simple Q&A |
+| `KnowledgeToolkit` | Agent calls `search_knowledge` when it decides to | Selective retrieval, multi-step reasoning |
+
+Use `KnowledgeToolkit` when:
+- The agent should decide whether a search is needed
+- Not every user message requires knowledge retrieval
+- The agent needs to search multiple times with different queries
+
+## Setup
+
+```python
+from definable.agents import Agent
+from definable.agents.toolkits import KnowledgeToolkit
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.models import OpenAIChat
+
+# Build a knowledge base
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+)
+knowledge.add("Definable supports OpenAI, DeepSeek, Moonshot, and xAI models.")
+knowledge.add("Agents can use tools, middleware, and knowledge bases.")
+knowledge.add("The @tool decorator converts functions into agent-callable tools.")
+
+# Create the toolkit
+toolkit = KnowledgeToolkit(knowledge=knowledge)
+
+# Use with an agent
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    toolkits=[toolkit],
+    instructions="You are a documentation assistant. Search the knowledge base when you need specific information.",
+)
+
+output = agent.run("What models does Definable support?")
+print(output.content)
+```
+
+## Provided Tools
+
+The toolkit exposes two tools to the agent:
+
+### search_knowledge
+
+Searches the knowledge base with a natural language query.
+
+```
+search_knowledge(query: str, top_k: int = 5) -> str
+```
+
+Returns the most relevant document chunks as formatted text.
+
+### get_document_count
+
+Returns the number of documents in the knowledge base.
+
+```
+get_document_count() -> str
+```
+
+Useful for the agent to understand the scope of available knowledge.
+
+## Combining with Other Tools
+
+The knowledge toolkit works alongside other tools:
+
+```python
+@tool
+def get_current_date() -> str:
+    """Get today's date."""
+    from datetime import date
+    return str(date.today())
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[get_current_date],
+    toolkits=[KnowledgeToolkit(knowledge=knowledge)],
+)
+```
+
+The agent can call `search_knowledge` to find information and `get_current_date` for context, combining results in its response.
+
+<Tip>
+For a fully automatic approach where the agent doesn't need to decide when to search, see [KnowledgeMiddleware](/knowledge/agent-integration) instead.
+</Tip>

@@ -1,0 +1,136 @@
+---
+title: Agent Configuration
+sidebarTitle: Configuration
+description: Fine-tune agent behavior with AgentConfig.
+icon: gear
+---
+
+`AgentConfig` is an immutable dataclass that controls every aspect of agent behavior. Pass it when creating an agent, or use the defaults.
+
+## Basic Configuration
+
+```python
+from definable.agents import Agent, AgentConfig
+from definable.models import OpenAIChat
+
+config = AgentConfig(
+    agent_name="Support Agent",
+    max_iterations=15,
+    max_retries=3,
+)
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a customer support agent.",
+    config=config,
+)
+```
+
+## Configuration Reference
+
+### Identity
+
+<ParamField path="agent_id" type="str">
+  Unique identifier for the agent. Auto-generated UUID if not set.
+</ParamField>
+
+<ParamField path="agent_name" type="str">
+  Human-readable name used in logs and traces.
+</ParamField>
+
+### Execution
+
+<ParamField path="max_iterations" type="int" default="10">
+  Maximum number of model-call-then-tool-execution loops before stopping. Prevents infinite loops when the model keeps calling tools.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Token limit per run. Stops execution if exceeded.
+</ParamField>
+
+<ParamField path="stream_timeout_seconds" type="float" default="300.0">
+  Timeout in seconds for streaming responses.
+</ParamField>
+
+### Reliability
+
+<ParamField path="retry_transient_errors" type="bool" default="true">
+  Automatically retry on transient network errors.
+</ParamField>
+
+<ParamField path="max_retries" type="int" default="3">
+  Maximum number of retry attempts for transient errors.
+</ParamField>
+
+<ParamField path="validate_tool_args" type="bool" default="true">
+  Validate tool arguments against their schema before execution.
+</ParamField>
+
+### State & Dependencies
+
+<ParamField path="session_state" type="Dict[str, Any]">
+  Default session state available to tools. Merged with per-run state.
+</ParamField>
+
+<ParamField path="dependencies" type="Dict[str, Any]">
+  Dependencies injected into tools that declare them (e.g., database connections, API clients).
+</ParamField>
+
+### Tracing
+
+<ParamField path="tracing" type="TracingConfig">
+  Tracing configuration. See [Tracing](/agents/tracing) for details.
+</ParamField>
+
+### Knowledge
+
+<ParamField path="knowledge" type="KnowledgeConfig">
+  RAG configuration for automatic knowledge retrieval. See [Agent Integration](/knowledge/agent-integration).
+</ParamField>
+
+### Compression
+
+<ParamField path="compression" type="CompressionConfig">
+  Tool result compression to reduce token usage on long tool outputs.
+</ParamField>
+
+## Immutable Updates
+
+`AgentConfig` is frozen after creation. Use `with_updates()` to create a modified copy:
+
+```python
+base_config = AgentConfig(
+    agent_name="Base Agent",
+    max_iterations=10,
+    max_retries=3,
+)
+
+# Create a variant with a different name and higher iteration limit
+custom_config = base_config.with_updates(
+    agent_name="Custom Agent",
+    max_iterations=20,
+)
+```
+
+The original `base_config` is unchanged. This pattern makes it safe to share configs across agents.
+
+## Compression Config
+
+Compress large tool results to save tokens:
+
+```python
+from definable.agents import AgentConfig, CompressionConfig
+
+config = AgentConfig(
+    compression=CompressionConfig(
+        enabled=True,
+        tool_results_limit=5000,   # Compress results over 5000 chars
+        token_limit=2000,          # Target compressed token count
+        instructions="Preserve key facts and data. Remove formatting.",
+    ),
+)
+```
+
+<Note>
+Compression uses a separate model call to summarize tool output. This adds a small amount of latency but can significantly reduce total token usage for tools that return large results.
+</Note>

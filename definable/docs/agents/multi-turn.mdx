@@ -1,0 +1,122 @@
+---
+title: Multi-Turn Conversations
+sidebarTitle: Multi-Turn
+description: Maintain conversation context across multiple agent interactions.
+icon: comments
+---
+
+Agents can maintain context across multiple turns by passing message history between runs. This enables natural, multi-step conversations.
+
+## Passing Message History
+
+The simplest approach is to feed the messages from one run into the next:
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a math tutor.",
+)
+
+# First turn
+output1 = agent.run("What is 15 * 23?")
+print(output1.content)  # "15 * 23 = 345"
+
+# Second turn — pass previous messages to maintain context
+output2 = agent.run(
+    "Now divide that by 5.",
+    messages=output1.messages,
+)
+print(output2.content)  # "345 / 5 = 69"
+```
+
+The agent sees the full conversation history and can reference earlier messages.
+
+## Session IDs
+
+Use `session_id` to logically group runs that belong to the same conversation. This is recorded in traces and makes it easy to correlate runs:
+
+```python
+session = "user-123-chat-abc"
+
+output1 = agent.run("Hello!", session_id=session)
+output2 = agent.run("Tell me more.", messages=output1.messages, session_id=session)
+```
+
+## Building a Conversation Loop
+
+A typical interactive conversation loop:
+
+```python
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a helpful assistant.",
+)
+
+messages = []
+while True:
+    user_input = input("You: ")
+    if user_input.lower() in ("quit", "exit"):
+        break
+
+    output = agent.run(user_input, messages=messages)
+    print(f"Agent: {output.content}")
+
+    # Carry forward the updated message history
+    messages = output.messages
+```
+
+## Async Conversation Loop
+
+```python
+messages = []
+
+async def chat(user_input: str) -> str:
+    global messages
+    output = await agent.arun(user_input, messages=messages)
+    messages = output.messages
+    return output.content
+```
+
+## Streaming Multi-Turn
+
+When streaming, collect the final `RunCompleted` event to get the messages for the next turn:
+
+```python
+messages = []
+
+for event in agent.run_stream("Hello!", messages=messages):
+    if event.event == "RunContent":
+        print(event.content, end="", flush=True)
+    elif event.event == "RunCompleted":
+        messages = event.output.messages
+
+print()
+
+# Next turn with full history
+for event in agent.run_stream("Tell me more.", messages=messages):
+    if event.event == "RunContent":
+        print(event.content, end="", flush=True)
+    elif event.event == "RunCompleted":
+        messages = event.output.messages
+```
+
+## Message Structure
+
+Each message in the history is a `Message` object with:
+
+| Field | Description |
+|-------|-------------|
+| `role` | `"system"`, `"user"`, `"assistant"`, or `"tool"` |
+| `content` | The text content of the message |
+| `tool_calls` | Tool calls made by the assistant |
+| `tool_call_id` | ID linking a tool result to its call |
+| `images`, `audio`, `videos`, `files` | Media attachments |
+| `reasoning_content` | Chain-of-thought reasoning (if applicable) |
+| `metrics` | Token usage for this specific message |
+
+<Note>
+Messages include system prompts, user inputs, assistant responses, and tool call results. The full history is sent to the model on each turn, so be mindful of token limits in very long conversations.
+</Note>

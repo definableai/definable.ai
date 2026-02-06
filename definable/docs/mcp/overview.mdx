@@ -1,0 +1,103 @@
+---
+title: MCP Overview
+sidebarTitle: Overview
+description: Connect to MCP servers and use their tools, resources, and prompts.
+icon: plug
+---
+
+The **Model Context Protocol (MCP)** is an open standard for connecting AI agents to external tools and data sources. Definable's MCP module lets you connect to any MCP-compatible server and use its capabilities inside your agents.
+
+## What MCP Provides
+
+MCP servers expose three types of capabilities:
+
+| Capability | Description | Example |
+|-----------|-------------|---------|
+| **Tools** | Functions the agent can call | File operations, database queries, API calls |
+| **Resources** | Data the agent can read | Files, configurations, live data feeds |
+| **Prompts** | Reusable prompt templates | Analysis templates, code review prompts |
+
+## Architecture
+
+```
+┌─────────────────────────────────┐
+│            Agent                │
+│  ┌───────────────────────────┐  │
+│  │       MCPToolkit          │  │
+│  │  ┌─────────────────────┐  │  │
+│  │  │     MCPClient       │  │  │
+│  │  └─────────────────────┘  │  │
+│  └───────────────────────────┘  │
+└────────────┬────────────────────┘
+             │ JSON-RPC
+     ┌───────┼───────┐
+     │       │       │
+  ┌──┴──┐ ┌─┴──┐ ┌──┴──┐
+  │stdio│ │SSE │ │HTTP │  Transports
+  └──┬──┘ └─┬──┘ └──┬──┘
+     │      │       │
+  ┌──┴──┐ ┌┴────┐ ┌┴────┐
+  │FS   │ │Git  │ │API  │  MCP Servers
+  │Srvr │ │Srvr │ │Srvr │
+  └─────┘ └─────┘ └─────┘
+```
+
+## Transport Types
+
+Definable supports all three MCP transport types:
+
+| Transport | Protocol | Best For |
+|-----------|----------|----------|
+| **stdio** | Subprocess stdin/stdout | Local CLI tools, npm packages |
+| **SSE** | HTTP + Server-Sent Events | Remote servers, legacy MCP |
+| **HTTP** | Streamable HTTP | Remote servers, modern MCP |
+
+## Quick Example
+
+Connect to a filesystem MCP server and use it in an agent:
+
+```python
+from definable.agents import Agent
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+from definable.models import OpenAIChat
+
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    ),
+])
+
+async with MCPToolkit(config=config) as toolkit:
+    agent = Agent(
+        model=OpenAIChat(id="gpt-4o"),
+        toolkits=[toolkit],
+    )
+    output = await agent.arun("List all files in /tmp")
+    print(output.content)
+```
+
+## Key Components
+
+<CardGroup cols={2}>
+  <Card title="Getting Started" icon="rocket" href="/mcp/getting-started">
+    Connect to your first MCP server step by step.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/mcp/configuration">
+    Configure servers, transports, timeouts, and tool filtering.
+  </Card>
+  <Card title="Resources" icon="folder-open" href="/mcp/resources">
+    Read data from MCP resource providers.
+  </Card>
+  <Card title="Prompts" icon="message" href="/mcp/prompts">
+    Use reusable prompt templates from MCP servers.
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/mcp/error-handling">
+    Handle connection failures, timeouts, and reconnection.
+  </Card>
+  <Card title="Mock Servers" icon="flask-vial" href="/mcp/mock-servers">
+    Test MCP integrations without real servers.
+  </Card>
+</CardGroup>

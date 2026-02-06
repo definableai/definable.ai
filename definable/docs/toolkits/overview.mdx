@@ -1,0 +1,118 @@
+---
+title: Toolkits Overview
+sidebarTitle: Overview
+description: Bundle related tools into reusable, self-contained packages.
+icon: toolbox
+---
+
+A **Toolkit** is a collection of related tools packaged together. Instead of managing individual tool functions, you group them into a class that can be shared across agents and projects.
+
+## Creating a Toolkit
+
+Subclass `Toolkit` and define tool methods:
+
+```python
+from definable.agents import Toolkit
+from definable.tools import tool
+
+class MathToolkit(Toolkit):
+    @tool
+    def add(self, a: float, b: float) -> float:
+        """Add two numbers."""
+        return a + b
+
+    @tool
+    def multiply(self, a: float, b: float) -> float:
+        """Multiply two numbers."""
+        return a * b
+
+    @tool
+    def divide(self, a: float, b: float) -> str:
+        """Divide two numbers."""
+        if b == 0:
+            return "Error: Division by zero"
+        return str(a / b)
+```
+
+Tools are discovered automatically — any method decorated with `@tool` is included.
+
+## Using a Toolkit
+
+Pass toolkit instances to an agent:
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    toolkits=[MathToolkit()],
+)
+
+output = agent.run("What is 15 * 23, then divide the result by 5?")
+print(output.content)
+```
+
+## Toolkit with Dependencies
+
+Pass shared dependencies that all tools in the toolkit can access:
+
+```python
+class DatabaseToolkit(Toolkit):
+    def __init__(self, connection_string: str):
+        self.db = Database(connection_string)
+        super().__init__()
+
+    @tool
+    def run_query(self, sql: str) -> str:
+        """Execute a SQL query."""
+        return str(self.db.execute(sql))
+
+    @tool
+    def list_tables(self) -> str:
+        """List all database tables."""
+        return str(self.db.get_tables())
+
+# Usage
+toolkit = DatabaseToolkit("postgresql://localhost/mydb")
+agent = Agent(model=model, toolkits=[toolkit])
+```
+
+## Combining Toolkits and Tools
+
+Agents can use both individual tools and toolkits together:
+
+```python
+@tool
+def get_current_time() -> str:
+    """Get the current time."""
+    from datetime import datetime
+    return datetime.now().isoformat()
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[get_current_time],
+    toolkits=[MathToolkit(), DatabaseToolkit(conn_str)],
+)
+```
+
+## Toolkit Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `tools` | `List[Function]` | All tool functions in the toolkit |
+| `name` | `str` | Toolkit name (defaults to the class name) |
+| `dependencies` | `dict` | Shared dependencies dictionary |
+
+## Built-in Toolkits
+
+Definable includes two built-in toolkits:
+
+<CardGroup cols={2}>
+  <Card title="KnowledgeToolkit" icon="book" href="/toolkits/knowledge-toolkit">
+    Give agents explicit tools to search a knowledge base on demand.
+  </Card>
+  <Card title="MCPToolkit" icon="plug" href="/toolkits/mcp-toolkit">
+    Expose tools from MCP servers to your agents.
+  </Card>
+</CardGroup>

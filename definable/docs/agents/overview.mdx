@@ -1,0 +1,122 @@
+---
+title: Agents Overview
+sidebarTitle: Overview
+description: Autonomous agents that combine LLMs with tools, knowledge, and middleware.
+icon: robot
+---
+
+An **Agent** wraps a model with tools, instructions, and configuration to create an autonomous system that can reason, take actions, and produce structured results.
+
+## How Agents Work
+
+The agent follows a loop:
+
+```
+User Input
+    ↓
+┌─────────────────────────────────┐
+│  1. Build messages              │
+│     (instructions + history     │
+│      + knowledge context)       │
+│                                 │
+│  2. Call the model with tools   │
+│                                 │
+│  3. Model returns response      │
+│     ├── Text? → Return to user  │
+│     └── Tool calls? ↓          │
+│                                 │
+│  4. Execute each tool call      │
+│                                 │
+│  5. Add results to messages     │
+│     └── Go to step 2           │
+└─────────────────────────────────┘
+    ↓
+Final Response
+```
+
+The loop continues until the model returns a text response with no tool calls, or the maximum iteration limit is reached.
+
+## Creating an Agent
+
+```python
+from definable.models import OpenAIChat
+from definable.agents import Agent
+from definable.tools import tool
+
+@tool
+def search_docs(query: str) -> str:
+    """Search the documentation for relevant information."""
+    return f"Found: Documentation about {query}."
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[search_docs],
+    instructions="You are a documentation assistant. Use the search tool to find answers.",
+)
+
+output = agent.run("How do I configure middleware?")
+print(output.content)
+```
+
+## Key Concepts
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/agents/configuration">
+    Control retries, iteration limits, tracing, knowledge, compression, and more through `AgentConfig`.
+  </Card>
+  <Card title="Running Agents" icon="play" href="/agents/running-agents">
+    Four execution modes: sync, async, sync streaming, and async streaming.
+  </Card>
+  <Card title="Multi-Turn" icon="comments" href="/agents/multi-turn">
+    Maintain conversation history across multiple interactions using session IDs and message lists.
+  </Card>
+  <Card title="Middleware" icon="layer-group" href="/agents/middleware">
+    Wrap agent execution with logging, retries, metrics, and custom logic.
+  </Card>
+  <Card title="Tracing" icon="chart-gantt" href="/agents/tracing">
+    Export structured events from every run for debugging and observability.
+  </Card>
+  <Card title="Testing" icon="flask-vial" href="/agents/testing">
+    Test agents without API calls using `MockModel` and `AgentTestCase`.
+  </Card>
+</CardGroup>
+
+## Agent Properties
+
+Once created, the agent exposes useful metadata:
+
+```python
+print(agent.agent_id)     # Unique identifier
+print(agent.agent_name)   # Human-readable name
+print(agent.tool_names)   # ['search_docs']
+```
+
+## Adding Middleware
+
+Chain middleware onto an agent with the fluent `.use()` method:
+
+```python
+from definable.agents import LoggingMiddleware, RetryMiddleware
+
+agent = (
+    Agent(model=model, tools=[search_docs])
+    .use(LoggingMiddleware(logger))
+    .use(RetryMiddleware(max_retries=3))
+)
+```
+
+## Context Manager
+
+Agents support context managers for proper resource cleanup, especially important when using toolkits with external connections:
+
+<CodeGroup>
+```python Sync
+with Agent(model=model, toolkits=[mcp_toolkit]) as agent:
+    output = agent.run("List files in the project.")
+```
+
+```python Async
+async with Agent(model=model, toolkits=[mcp_toolkit]) as agent:
+    output = await agent.arun("List files in the project.")
+```
+</CodeGroup>

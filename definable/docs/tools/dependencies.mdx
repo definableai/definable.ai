@@ -1,0 +1,146 @@
+---
+title: Tool Dependencies
+sidebarTitle: Dependencies
+description: Inject services, state, and context into tools.
+icon: puzzle-piece
+---
+
+Tools often need access to external services (databases, API clients) or runtime context (the current user, session state). Definable provides several injection mechanisms to keep tools clean and testable.
+
+## Dependency Injection
+
+Define dependencies on the agent config and receive them in any tool:
+
+```python
+from definable.agents import Agent, AgentConfig
+from definable.models import OpenAIChat
+from definable.tools import tool
+
+# Your service
+class Database:
+    def query(self, sql: str) -> str:
+        return f"Results for: {sql}"
+
+db = Database()
+
+@tool
+def run_query(sql: str, _dependencies: dict = None) -> str:
+    """Run a SQL query against the database."""
+    db = _dependencies["db"]
+    return db.query(sql)
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    tools=[run_query],
+    config=AgentConfig(dependencies={"db": db}),
+)
+```
+
+The `_dependencies` parameter is injected automatically and never sent to the model. The leading underscore signals it as an internal parameter.
+
+## Available Injections
+
+Definable recognizes these special parameter names:
+
+| Parameter | Type | What It Contains |
+|-----------|------|-----------------|
+| `_dependencies` | `dict` | Dependencies from `AgentConfig.dependencies` |
+| `_run_context` | `RunContext` | Full run context (run_id, session_id, metadata) |
+| `_session_state` | `dict` | Mutable session state for the current run |
+| `_agent` | `Agent` | Reference to the running agent |
+
+These parameters are:
+- Stripped from the JSON Schema (the model never sees them)
+- Injected at call time by the agent runtime
+- Optional — only include the ones you need
+
+## RunContext Access
+
+Access the full run context for tracing, correlation, or conditional logic:
+
+```python
+@tool
+def log_action(action: str, _run_context=None) -> str:
+    """Log an action with run metadata."""
+    print(f"[{_run_context.run_id}] Action: {action}")
+    print(f"  Session: {_run_context.session_id}")
+    return f"Logged: {action}"
+```
+
+## Session State
+
+Use session state to share mutable data between tools within a single run:
+
+```python
+@tool
+def add_to_cart(item: str, _session_state: dict = None) -> str:
+    """Add an item to the shopping cart."""
+    cart = _session_state.setdefault("cart", [])
+    cart.append(item)
+    return f"Added {item}. Cart: {cart}"
+
+@tool
+def get_cart(_session_state: dict = None) -> str:
+    """View the current shopping cart."""
+    cart = _session_state.get("cart", [])
+    return f"Cart contents: {cart}" if cart else "Cart is empty."
+```
+
+Initialize default session state in the config:
+
+```python
+config = AgentConfig(
+    session_state={"cart": [], "user_id": "u-123"},
+)
+```
+
+## Practical Example
+
+Combining dependencies and context for a production tool:
+
+```python
+from definable.tools import tool
+
+@tool
+def create_ticket(
+    title: str,
+    description: str,
+    priority: str = "medium",
+    _dependencies: dict = None,
+    _run_context=None,
+    _session_state: dict = None,
+) -> str:
+    """Create a support ticket."""
+    ticket_service = _dependencies["ticket_service"]
+    user_id = _session_state.get("user_id", "anonymous")
+
+    ticket = ticket_service.create(
+        title=title,
+        description=description,
+        priority=priority,
+        reporter=user_id,
+        trace_id=_run_context.run_id,
+    )
+    return f"Created ticket {ticket.id}: {ticket.title}"
+```
+
+## Testing with Dependencies
+
+Inject mock dependencies in tests:
+
+```python
+from unittest.mock import MagicMock
+from definable.agents import create_test_agent, AgentConfig
+
+mock_db = MagicMock()
+mock_db.query.return_value = "Mock results"
+
+agent = create_test_agent(
+    responses=["Here are your results."],
+    tools=[run_query],
+    config=AgentConfig(dependencies={"db": mock_db}),
+)
+
+output = agent.run("Show me all users.")
+mock_db.query.assert_called()
+```

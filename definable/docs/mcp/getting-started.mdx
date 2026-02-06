@@ -1,0 +1,132 @@
+---
+title: Getting Started with MCP
+sidebarTitle: Getting Started
+description: Connect to your first MCP server and call tools from your agent.
+icon: rocket
+---
+
+This guide walks you through connecting to an MCP server, discovering its tools, and using them in an agent.
+
+## Prerequisites
+
+- An MCP server to connect to (we'll use the filesystem server from npm)
+- Node.js installed (for `npx`)
+
+## Step 1: Define the Server
+
+Create a configuration for the MCP server:
+
+```python
+from definable.mcp import MCPConfig, MCPServerConfig
+
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    ),
+])
+```
+
+## Step 2: Create the Toolkit
+
+Wrap the configuration in an `MCPToolkit`:
+
+```python
+from definable.mcp import MCPToolkit
+
+toolkit = MCPToolkit(config=config)
+```
+
+## Step 3: Connect and Use
+
+Use the toolkit as a context manager to manage the server connection lifecycle:
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+async with toolkit:
+    # Inspect available tools
+    for t in toolkit.tools:
+        print(f"  {t.name}: {t.description}")
+
+    # Create an agent with MCP tools
+    agent = Agent(
+        model=OpenAIChat(id="gpt-4o"),
+        toolkits=[toolkit],
+        instructions="You can read and write files. Help the user with file operations.",
+    )
+
+    output = await agent.arun("Create a file called hello.txt with 'Hello, MCP!' in /tmp")
+    print(output.content)
+```
+
+## Complete Example
+
+```python
+import asyncio
+from definable.agents import Agent
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+from definable.models import OpenAIChat
+
+async def main():
+    config = MCPConfig(servers=[
+        MCPServerConfig(
+            name="filesystem",
+            transport="stdio",
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        ),
+    ])
+
+    async with MCPToolkit(config=config) as toolkit:
+        agent = Agent(
+            model=OpenAIChat(id="gpt-4o"),
+            toolkits=[toolkit],
+        )
+        output = await agent.arun("List the files in /tmp and tell me what's there.")
+        print(output.content)
+
+asyncio.run(main())
+```
+
+## Using SSE or HTTP Transports
+
+For remote servers, use SSE or HTTP:
+
+<CodeGroup>
+```python SSE
+MCPServerConfig(
+    name="remote",
+    transport="sse",
+    url="https://mcp-server.example.com/sse",
+)
+```
+
+```python HTTP
+MCPServerConfig(
+    name="remote",
+    transport="http",
+    url="https://mcp-server.example.com/mcp",
+)
+```
+</CodeGroup>
+
+## Sync Usage
+
+If you're not in an async context, use the sync wrappers:
+
+```python
+with MCPToolkit(config=config) as toolkit:
+    agent = Agent(model=OpenAIChat(id="gpt-4o"), toolkits=[toolkit])
+    output = agent.run("List files in /tmp")
+    print(output.content)
+```
+
+## Next Steps
+
+- [Configuration](/mcp/configuration) — Timeouts, headers, tool filtering
+- [Resources](/mcp/resources) — Read data from MCP servers
+- [Prompts](/mcp/prompts) — Use prompt templates

@@ -1,0 +1,159 @@
+---
+title: Tool Examples
+sidebarTitle: Tools
+description: Examples for defining tools with parameters, hooks, caching, and dependencies.
+icon: wrench
+---
+
+## 01 — Basic Tool
+
+Define a tool with the `@tool` decorator.
+
+```python
+from definable.tools.decorator import tool
+
+@tool
+def greet(name: str) -> str:
+    """Greet someone by name."""
+    return f"Hello, {name}!"
+
+# The tool auto-generates its JSON Schema from type hints
+print(greet.name)        # "greet"
+print(greet.description) # "Greet someone by name."
+print(greet.parameters)  # JSON Schema
+```
+
+```bash
+python definable/examples/tools/01_basic_tool.py
+```
+
+## 02 — Tool Parameters
+
+Use complex types, enums, defaults, and Pydantic models.
+
+```python
+from typing import List, Literal, Optional
+from definable.tools.decorator import tool
+
+@tool
+def search(
+    query: str,
+    max_results: int = 10,
+    category: Literal["all", "news", "images"] = "all",
+    tags: Optional[List[str]] = None,
+) -> str:
+    """Search with filters.
+
+    Args:
+        query: The search query.
+        max_results: Maximum results to return.
+        category: Category to search in.
+        tags: Optional tags to filter by.
+    """
+    return f"Searching '{query}' in {category} (max {max_results})"
+```
+
+```bash
+python definable/examples/tools/02_tool_parameters.py
+```
+
+## 03 — Async Tools
+
+Define async tool functions for I/O-bound operations.
+
+```python
+import httpx
+from definable.tools.decorator import tool
+
+@tool
+async def fetch_url(url: str) -> str:
+    """Fetch the contents of a URL."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        return response.text[:500]
+```
+
+```bash
+python definable/examples/tools/03_async_tools.py
+```
+
+## 04 — Tool Hooks
+
+Run logic before and after tool execution.
+
+```python
+from definable.tools.decorator import tool
+
+def log_before(tool_name, args):
+    print(f"  -> Calling {tool_name} with {args}")
+
+def log_after(tool_name, args, result):
+    print(f"  <- {tool_name} returned: {result[:50]}...")
+
+@tool(pre_hook=log_before, post_hook=log_after)
+def analyze(text: str) -> str:
+    """Analyze text sentiment."""
+    return f"Positive sentiment detected in: {text}"
+```
+
+```bash
+python definable/examples/tools/04_tool_hooks.py
+```
+
+## 05 — Tool Caching
+
+Cache results to avoid redundant computation.
+
+```python
+from definable.tools.decorator import tool
+
+@tool(cache_results=True, cache_ttl=300)
+def expensive_search(query: str) -> str:
+    """Search that takes a long time (cached for 5 minutes)."""
+    import time
+    time.sleep(2)  # Simulate slow operation
+    return f"Results for: {query}"
+
+# First call: 2 seconds
+result1 = expensive_search.entrypoint("test query")
+
+# Second call: instant (cached)
+result2 = expensive_search.entrypoint("test query")
+```
+
+```bash
+python definable/examples/tools/05_tool_caching.py
+```
+
+## 06 — Tool Dependencies
+
+Inject services and context into tools.
+
+```python
+from definable.agents import Agent, AgentConfig
+from definable.models.openai import OpenAIChat
+from definable.tools.decorator import tool
+
+class Database:
+    def query(self, sql: str) -> str:
+        return f"Query result: [{sql}]"
+
+@tool
+def run_query(sql: str, _dependencies: dict = None) -> str:
+    """Run a database query."""
+    db = _dependencies["db"]
+    return db.query(sql)
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    tools=[run_query],
+    config=AgentConfig(dependencies={"db": Database()}),
+)
+
+output = agent.run("Show me all users")
+print(output.content)
+```
+
+```bash
+python definable/examples/tools/06_tool_dependencies.py
+```

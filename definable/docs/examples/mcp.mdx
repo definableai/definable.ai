@@ -1,0 +1,223 @@
+---
+title: MCP Examples
+sidebarTitle: MCP
+description: Examples for connecting to MCP servers, reading resources, and using prompts.
+icon: plug
+---
+
+## 01 — Basic MCP
+
+Connect to an MCP server and discover its tools.
+
+```python
+import asyncio
+from definable.agents import Agent
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+from definable.models.openai import OpenAIChat
+
+async def main():
+    config = MCPConfig(servers=[
+        MCPServerConfig(
+            name="filesystem",
+            transport="stdio",
+            command="npx",
+            args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        ),
+    ])
+
+    async with MCPToolkit(config=config) as toolkit:
+        print("Available tools:")
+        for t in toolkit.tools:
+            print(f"  {t.name}: {t.description}")
+
+        agent = Agent(
+            model=OpenAIChat(id="gpt-4o"),
+            toolkits=[toolkit],
+        )
+        output = await agent.arun("List files in /tmp")
+        print(output.content)
+
+asyncio.run(main())
+```
+
+```bash
+python definable/examples/mcp/01_basic_mcp.py
+```
+
+## 02 — Multiple Servers
+
+Connect to several MCP servers simultaneously.
+
+```python
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    ),
+    MCPServerConfig(
+        name="api",
+        transport="http",
+        url="https://mcp.example.com/mcp",
+    ),
+])
+
+async with MCPToolkit(config=config) as toolkit:
+    # Tools from both servers are available
+    print(f"Total tools: {len(toolkit.tools)}")
+```
+
+```bash
+python definable/examples/mcp/02_multiple_servers.py
+```
+
+## 03 — Resources
+
+Read data exposed by MCP servers.
+
+```python
+from definable.mcp import MCPClient, MCPConfig, MCPServerConfig
+
+async def main():
+    client = MCPClient(config)
+    await client.connect()
+
+    # List all resources
+    resources = await client.list_all_resources()
+    for server, items in resources.items():
+        for r in items:
+            print(f"  {r.uri}: {r.name}")
+
+    # Read a resource
+    contents = await client.read_resource("filesystem", "file:///tmp/config.json")
+    print(contents[0].text)
+```
+
+```bash
+python definable/examples/mcp/03_resources.py
+```
+
+## 04 — Config File
+
+Load MCP configuration from a JSON file.
+
+```python
+from definable.mcp import MCPConfig
+
+# Load from file
+config = MCPConfig.from_file("mcp_config.json")
+
+# Save to file
+config.to_file("mcp_config_backup.json")
+```
+
+```bash
+python definable/examples/mcp/04_config_file.py
+```
+
+## 05 — Mock Server Basics
+
+Test MCP integrations with a mock server.
+
+```python
+# mock_server.py runs as a subprocess implementing the MCP protocol
+# The test connects to it via stdio transport and calls tools
+
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="mock",
+        transport="stdio",
+        command="python",
+        args=["mock_mcp_server.py"],
+    ),
+])
+
+async with MCPToolkit(config=config) as toolkit:
+    for t in toolkit.tools:
+        print(f"Mock tool: {t.name}")
+```
+
+```bash
+python definable/examples/mcp/05_mock_server_basics.py
+```
+
+## 06 — Prompts Provider
+
+Use prompt templates from MCP servers.
+
+```python
+from definable.mcp import MCPPromptProvider
+
+provider = MCPPromptProvider(client)
+
+# List available prompts
+prompts = await provider.list_prompts()
+for server, items in prompts.items():
+    for p in items:
+        print(f"  {p.name}: {p.description}")
+
+# Get a prompt with arguments
+text = await provider.get_text(
+    "my-server", "code_review",
+    arguments={"language": "python", "code": "def hello(): ..."},
+)
+print(text)
+```
+
+```bash
+python definable/examples/mcp/06_prompts_provider.py
+```
+
+## 07 — Error Handling
+
+Handle MCP connection failures, timeouts, and missing tools.
+
+```python
+from definable.mcp.errors import MCPConnectionError, MCPTimeoutError, MCPToolNotFoundError
+
+try:
+    async with MCPToolkit(config=config) as toolkit:
+        result = await client.call_tool("server", "tool", {"arg": "value"})
+except MCPConnectionError as e:
+    print(f"Connection failed: {e}")
+except MCPTimeoutError as e:
+    print(f"Timed out: {e}")
+except MCPToolNotFoundError as e:
+    print(f"Tool not found: {e}")
+```
+
+```bash
+python definable/examples/mcp/07_error_handling.py
+```
+
+## 08 — Mock Server with Agent
+
+Full integration test: mock MCP server + MockModel agent.
+
+```python
+from definable.agents import Agent, MockModel
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+
+async def test_agent_mcp():
+    config = MCPConfig(servers=[
+        MCPServerConfig(
+            name="mock",
+            transport="stdio",
+            command="python",
+            args=["mock_mcp_server.py"],
+        ),
+    ])
+
+    async with MCPToolkit(config=config) as toolkit:
+        agent = Agent(
+            model=MockModel(responses=["Done!"]),
+            toolkits=[toolkit],
+        )
+        output = await agent.arun("Use the mock tools")
+        assert output.content is not None
+```
+
+```bash
+python definable/examples/mcp/08_mock_server_agent.py
+```

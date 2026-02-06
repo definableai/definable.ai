@@ -1,0 +1,123 @@
+---
+title: OpenAI-Like Providers
+sidebarTitle: OpenAI-Like
+description: Connect to any provider that exposes an OpenAI-compatible API.
+icon: plug
+---
+
+The `OpenAILike` class lets you connect to any LLM provider that implements the OpenAI chat completions API. This includes self-hosted models (vLLM, Ollama, LiteLLM), cloud providers with OpenAI-compatible endpoints, and custom proxies.
+
+## Basic Usage
+
+```python
+from definable.models import OpenAILike
+
+model = OpenAILike(
+    id="my-model",
+    api_key="your-api-key",
+    base_url="https://your-provider.com/v1",
+)
+
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+## Parameters
+
+<ParamField path="id" type="str" required>
+  Model identifier as expected by the target provider.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  API key for authentication.
+</ParamField>
+
+<ParamField path="base_url" type="str" required>
+  The base URL of the OpenAI-compatible API endpoint.
+</ParamField>
+
+<ParamField path="name" type="str">
+  Human-readable name for this model instance.
+</ParamField>
+
+<ParamField path="provider" type="str">
+  Provider name for logging and metrics.
+</ParamField>
+
+<ParamField path="supports_native_structured_outputs" type="bool" default="false">
+  Whether the provider supports OpenAI-style structured outputs.
+</ParamField>
+
+## Examples
+
+### Ollama
+
+```python
+model = OpenAILike(
+    id="llama3.2",
+    base_url="http://localhost:11434/v1",
+    name="Ollama Llama",
+    provider="Ollama",
+)
+```
+
+### vLLM
+
+```python
+model = OpenAILike(
+    id="meta-llama/Llama-3-8b-chat-hf",
+    base_url="http://localhost:8000/v1",
+    name="vLLM Llama",
+    provider="vLLM",
+)
+```
+
+### LiteLLM Proxy
+
+```python
+model = OpenAILike(
+    id="gpt-4o",
+    api_key="your-litellm-key",
+    base_url="http://localhost:4000/v1",
+    name="LiteLLM Proxy",
+    provider="LiteLLM",
+)
+```
+
+### Azure OpenAI
+
+```python
+model = OpenAILike(
+    id="gpt-4o",
+    api_key="your-azure-key",
+    base_url="https://your-resource.openai.azure.com/openai/deployments/gpt-4o",
+    provider="Azure",
+)
+```
+
+## Streaming
+
+```python
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "Tell me a joke."}]
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+## Creating Custom Provider Classes
+
+For repeated use, subclass `OpenAILike`:
+
+```python
+from definable.models.openai.like import OpenAILike
+
+class MyProviderChat(OpenAILike):
+    id: str = "my-default-model"
+    name: str = "MyProvider"
+    provider: str = "MyProvider"
+    base_url: str = "https://api.myprovider.com/v1"
+    supports_native_structured_outputs: bool = True
+```
+
+This is exactly how `DeepSeekChat`, `MoonshotChat`, and `xAI` are implemented internally.

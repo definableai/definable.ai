@@ -69,7 +69,7 @@ class StdioTransport(BaseTransport):
 
     # Background reader task
     self._reader_task: Optional[asyncio.Task[None]] = None
-    self._shutdown_event = asyncio.Event()
+    self._shutdown_event: Optional[asyncio.Event] = None
 
   async def connect(self) -> None:
     """Start the subprocess and establish communication.
@@ -124,8 +124,8 @@ class StdioTransport(BaseTransport):
         original_error=e,
       )
 
-    # Start background reader
-    self._shutdown_event.clear()
+    # Start background reader (create Event in async context to bind to current loop)
+    self._shutdown_event = asyncio.Event()
     self._reader_task = asyncio.create_task(self._read_responses())
 
     self._connected = True
@@ -140,7 +140,8 @@ class StdioTransport(BaseTransport):
       return
 
     self._connected = False
-    self._shutdown_event.set()
+    if self._shutdown_event:
+      self._shutdown_event.set()
 
     # Cancel pending requests
     for future in self._pending_requests.values():
@@ -291,17 +292,17 @@ class StdioTransport(BaseTransport):
       return
 
     try:
-      while not self._shutdown_event.is_set():
+      while self._shutdown_event and not self._shutdown_event.is_set():
         # Read line from stdout
         try:
           line = await self._process.stdout.readline()
         except Exception as e:
-          if not self._shutdown_event.is_set():
+          if self._shutdown_event and not self._shutdown_event.is_set():
             log_error(f"MCP [{self.server_name}] Read error: {e}")
           break
 
         if not line:
-          if not self._shutdown_event.is_set():
+          if self._shutdown_event and not self._shutdown_event.is_set():
             log_warning(f"MCP [{self.server_name}] Server closed stdout")
           break
 
@@ -342,11 +343,11 @@ class StdioTransport(BaseTransport):
     except asyncio.CancelledError:
       pass
     except Exception as e:
-      if not self._shutdown_event.is_set():
+      if self._shutdown_event and not self._shutdown_event.is_set():
         log_error(f"MCP [{self.server_name}] Reader error: {e}")
 
     # Mark connection as closed
-    if self._connected and not self._shutdown_event.is_set():
+    if self._connected and (not self._shutdown_event or not self._shutdown_event.is_set()):
       self._connected = False
       # Fail all pending requests
       for future in self._pending_requests.values():

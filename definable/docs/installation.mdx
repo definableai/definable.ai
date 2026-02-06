@@ -1,0 +1,103 @@
+---
+title: Installation
+description: Install Definable and configure your environment.
+icon: download
+---
+
+## Requirements
+
+- Python **3.12** or higher
+- An API key from at least one supported LLM provider
+
+## Install
+
+<CodeGroup>
+```bash pip
+pip install definable-ai
+```
+
+```bash uv
+uv add definable-ai
+```
+
+```bash From source
+git clone https://github.com/definable-ai/definable.git
+cd definable
+pip install -e .
+```
+</CodeGroup>
+
+## Core Dependencies
+
+Definable installs these automatically:
+
+| Package | Purpose |
+|---------|---------|
+| `openai` | OpenAI API client (also used by OpenAI-compatible providers) |
+| `pydantic` | Data validation and structured outputs |
+| `httpx` | HTTP client for async requests |
+| `tiktoken` | Token counting |
+| `rich` | Formatted logging and output |
+| `docstring-parser` | Tool description extraction |
+
+## Optional Dependencies
+
+Some features require additional packages:
+
+| Feature | Package | Install |
+|---------|---------|---------|
+| PDF reading | `pypdf` | `pip install pypdf` |
+| URL reading | `beautifulsoup4` | `pip install beautifulsoup4` |
+| Voyage AI embeddings | `voyageai` | `pip install voyageai` |
+| Cohere reranking | `cohere` | `pip install cohere` |
+| PgVector database | `psycopg[binary]`, `pgvector` | `pip install psycopg[binary] pgvector` |
+
+## Environment Variables
+
+Set API keys as environment variables. Only the keys for providers you use are required.
+
+```bash
+# LLM Providers
+export OPENAI_API_KEY="sk-..."
+export DEEPSEEK_API_KEY="sk-..."
+export MOONSHOT_API_KEY="sk-..."
+export XAI_API_KEY="xai-..."
+
+# Embedding Providers
+export VOYAGE_API_KEY="pa-..."
+
+# Reranking Providers
+export COHERE_API_KEY="..."
+```
+
+<Tip>
+You can also pass API keys directly when creating model instances:
+
+```python
+model = OpenAIChat(id="gpt-4o", api_key="sk-...")
+```
+</Tip>
+
+## Verify Installation
+
+```python
+import definable
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+If you see a response, you are ready to go.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Build your first model call, agent, and RAG query.
+  </Card>
+  <Card title="Models" icon="microchip" href="/models/overview">
+    Explore all supported LLM providers.
+  </Card>
+</CardGroup>

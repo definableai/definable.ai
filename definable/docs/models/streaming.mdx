@@ -1,0 +1,100 @@
+---
+title: Streaming
+description: Stream model responses token-by-token for real-time output.
+icon: bars-staggered
+---
+
+Streaming lets your application display tokens as they are generated instead of waiting for the full response. This dramatically improves perceived latency for end users.
+
+## Basic Streaming
+
+<CodeGroup>
+```python Sync
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "Explain how DNS works."}]
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+```python Async
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+
+async for chunk in model.ainvoke_stream(
+    messages=[{"role": "user", "content": "Explain how DNS works."}]
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+</CodeGroup>
+
+Each chunk is a `ModelResponse` object. During streaming, most chunks contain a small piece of the content. The final chunk includes usage metrics.
+
+## Streaming with Tools
+
+When the model decides to call a tool during streaming, you'll receive chunks with `tool_calls` instead of `content`:
+
+```python
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "What's the weather?"}],
+    tools=[get_weather],
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+    if chunk.tool_calls:
+        print(f"\nTool call: {chunk.tool_calls}")
+```
+
+<Tip>
+When using agents, tool execution during streaming is handled automatically. You receive high-level events like `ToolCallStartedEvent` and `ToolCallCompletedEvent` instead of raw chunks. See [Running Agents](/agents/running-agents) for details.
+</Tip>
+
+## Streaming with Reasoning
+
+Models that support reasoning (like DeepSeek Reasoner or OpenAI o1) emit reasoning content before the final answer:
+
+```python
+from definable.models import DeepSeekChat
+
+model = DeepSeekChat(id="deepseek-reasoner")
+
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "What is 127 * 843?"}]
+):
+    if chunk.reasoning_content:
+        print(f"[thinking] {chunk.reasoning_content}", end="")
+    if chunk.content:
+        print(chunk.content, end="")
+```
+
+## Collecting the Full Response
+
+To stream output to the user while also capturing the complete response:
+
+```python
+full_content = []
+
+for chunk in model.invoke_stream(
+    messages=[{"role": "user", "content": "Write a poem."}]
+):
+    if chunk.content:
+        full_content.append(chunk.content)
+        print(chunk.content, end="", flush=True)
+
+complete_text = "".join(full_content)
+```
+
+## Streaming vs Non-Streaming
+
+| | `invoke()` / `ainvoke()` | `invoke_stream()` / `ainvoke_stream()` |
+|---|---|---|
+| **Latency** | Waits for full response | First token arrives immediately |
+| **Return type** | Single `ModelResponse` | Iterator of `ModelResponse` chunks |
+| **Usage metrics** | Available on response | Available on final chunk |
+| **Best for** | Background processing, short responses | User-facing output, long responses |

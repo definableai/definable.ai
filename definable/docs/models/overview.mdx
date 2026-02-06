@@ -1,0 +1,155 @@
+---
+title: Models Overview
+sidebarTitle: Overview
+description: Unified interface for calling LLMs across multiple providers.
+icon: microchip
+---
+
+Models are the foundation of Definable. The `Model` base class provides a consistent interface for invoking any supported LLM provider, whether synchronously, asynchronously, or via streaming.
+
+## Supported Providers
+
+| Provider | Class | Default Model | Docs |
+|----------|-------|---------------|------|
+| OpenAI | `OpenAIChat` | `gpt-4o` | [OpenAI](/models/openai) |
+| DeepSeek | `DeepSeekChat` | `deepseek-chat` | [DeepSeek](/models/deepseek) |
+| Moonshot | `MoonshotChat` | `kimi-k2-turbo-preview` | [Moonshot](/models/moonshot) |
+| xAI | `xAI` | `grok-beta` | [xAI](/models/xai) |
+| Custom | `OpenAILike` | -- | [OpenAI-Like](/models/openai-like) |
+
+## Basic Usage
+
+```python
+from definable.models import OpenAIChat
+
+model = OpenAIChat(id="gpt-4o")
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+## Common Parameters
+
+All model classes accept these parameters:
+
+<ParamField path="id" type="str" required>
+  The model identifier (e.g., `"gpt-4o"`, `"deepseek-chat"`).
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  API key for authentication. Defaults to the provider's environment variable.
+</ParamField>
+
+<ParamField path="base_url" type="str">
+  Override the API base URL. Useful for proxies or self-hosted endpoints.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature (0.0 to 2.0). Lower values are more deterministic.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum number of tokens to generate.
+</ParamField>
+
+<ParamField path="timeout" type="float">
+  Request timeout in seconds.
+</ParamField>
+
+<ParamField path="max_retries" type="int">
+  Maximum number of retries on transient failures.
+</ParamField>
+
+## Invocation Methods
+
+Every model supports four ways to call it:
+
+| Method | Sync/Async | Streaming | Returns |
+|--------|-----------|-----------|---------|
+| `invoke()` | Sync | No | `ModelResponse` |
+| `ainvoke()` | Async | No | `ModelResponse` |
+| `invoke_stream()` | Sync | Yes | `Iterator[ModelResponse]` |
+| `ainvoke_stream()` | Async | Yes | `AsyncIterator[ModelResponse]` |
+
+<CodeGroup>
+```python Sync
+response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+```python Async
+response = await model.ainvoke(messages=[{"role": "user", "content": "Hello!"}])
+print(response.content)
+```
+
+```python Streaming
+for chunk in model.invoke_stream(messages=[{"role": "user", "content": "Hello!"}]):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+```python Async Streaming
+async for chunk in model.ainvoke_stream(messages=[{"role": "user", "content": "Hello!"}]):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+</CodeGroup>
+
+## Retry Configuration
+
+All models support automatic retries with configurable backoff:
+
+```python
+model = OpenAIChat(
+    id="gpt-4o",
+    retries=3,
+    delay_between_retries=1,
+    exponential_backoff=True,
+)
+```
+
+<ParamField path="retries" type="int" default="0">
+  Number of retry attempts on failure.
+</ParamField>
+
+<ParamField path="delay_between_retries" type="int" default="1">
+  Base delay in seconds between retries.
+</ParamField>
+
+<ParamField path="exponential_backoff" type="bool" default="false">
+  Whether to use exponential backoff for retries.
+</ParamField>
+
+## Response Caching
+
+Cache model responses locally for development and testing:
+
+```python
+model = OpenAIChat(
+    id="gpt-4o",
+    cache_response=True,
+    cache_ttl=3600,
+    cache_dir=".cache/models",
+)
+```
+
+## Model Resolution from Strings
+
+You can resolve a model from a `"provider:model-id"` string:
+
+```python
+from definable.models.utils import get_model
+
+model = get_model("openai:gpt-4o")
+model = get_model("deepseek:deepseek-chat")
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="bars-staggered" href="/models/streaming">
+    Stream responses token-by-token.
+  </Card>
+  <Card title="Structured Output" icon="code" href="/models/structured-output">
+    Return Pydantic models from LLM calls.
+  </Card>
+</CardGroup>

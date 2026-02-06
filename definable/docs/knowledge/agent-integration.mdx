@@ -1,0 +1,155 @@
+---
+title: Agent Integration
+sidebarTitle: Agent Integration
+description: Connect knowledge bases to agents for automatic or on-demand retrieval.
+icon: robot
+---
+
+There are two ways to give an agent access to a knowledge base:
+
+| Approach | How It Works | When to Use |
+|----------|-------------|-------------|
+| **KnowledgeMiddleware** | Automatically retrieves context before every model call | Always-on RAG |
+| **KnowledgeToolkit** | Agent decides when to search | Selective, multi-step reasoning |
+
+## KnowledgeMiddleware (Automatic)
+
+The middleware automatically searches the knowledge base using the user's message and injects relevant context into the system prompt. The agent doesn't need to do anything special — the context is always there.
+
+```python
+from definable.agents import Agent, AgentConfig, KnowledgeMiddleware, KnowledgeConfig
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.models import OpenAIChat
+
+# Build knowledge base
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+)
+knowledge.add("Definable supports OpenAI, DeepSeek, Moonshot, and xAI.")
+knowledge.add("Agents combine models, tools, and knowledge.")
+
+# Configure and attach
+config = AgentConfig(
+    knowledge=KnowledgeConfig(
+        knowledge=knowledge,
+        top_k=5,
+        rerank=True,
+    ),
+)
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    config=config,
+    instructions="Answer questions using the provided context.",
+)
+
+output = agent.run("What models does Definable support?")
+print(output.content)
+```
+
+### KnowledgeConfig Parameters
+
+<ParamField path="knowledge" type="Knowledge" required>
+  The knowledge base instance to query.
+</ParamField>
+
+<ParamField path="top_k" type="int" default="10">
+  Number of documents to retrieve.
+</ParamField>
+
+<ParamField path="rerank" type="bool" default="true">
+  Whether to apply reranking to search results.
+</ParamField>
+
+<ParamField path="context_format" type="str">
+  Template for formatting retrieved documents in the prompt.
+</ParamField>
+
+<ParamField path="context_position" type="str" default="system">
+  Where to inject context: `"system"` (in the system prompt) or `"before_user"` (before the user message).
+</ParamField>
+
+<ParamField path="query_from" type="str" default="last_user">
+  Which message to use as the search query. `"last_user"` uses the latest user message.
+</ParamField>
+
+## KnowledgeToolkit (On-Demand)
+
+With the toolkit approach, the agent has a `search_knowledge` tool and decides when to use it:
+
+```python
+from definable.agents import Agent
+from definable.agents.toolkits import KnowledgeToolkit
+from definable.models import OpenAIChat
+
+toolkit = KnowledgeToolkit(knowledge=knowledge)
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    toolkits=[toolkit],
+    instructions="Search the knowledge base when you need specific information.",
+)
+
+output = agent.run("What models does Definable support?")
+```
+
+See [KnowledgeToolkit](/toolkits/knowledge-toolkit) for full details.
+
+## Choosing Between Middleware and Toolkit
+
+<CardGroup cols={2}>
+  <Card title="Use Middleware when...">
+    - Every question needs knowledge context
+    - You want zero-configuration retrieval
+    - The knowledge base is focused on a single domain
+    - You want the simplest setup
+  </Card>
+  <Card title="Use Toolkit when...">
+    - Not every question needs retrieval
+    - The agent should reason about when to search
+    - The agent needs to search with different queries
+    - You want the agent to explain its search process
+  </Card>
+</CardGroup>
+
+## Full Example
+
+A complete RAG agent with middleware, reranking, and tracing:
+
+```python
+from definable.agents import Agent, AgentConfig, TracingConfig, JSONLExporter, KnowledgeConfig
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.knowledge.rerankers import CohereReranker
+from definable.models import OpenAIChat
+
+# Build knowledge base
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+    reranker=CohereReranker(top_n=5),
+)
+
+# Add documents
+knowledge.add("/path/to/docs/")
+knowledge.add("https://example.com/faq")
+
+# Create agent
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a support agent. Answer using the provided context. If the context doesn't contain the answer, say so.",
+    config=AgentConfig(
+        knowledge=KnowledgeConfig(
+            knowledge=knowledge,
+            top_k=10,
+            rerank=True,
+        ),
+        tracing=TracingConfig(
+            exporters=[JSONLExporter("./traces")],
+        ),
+    ),
+)
+
+output = agent.run("How do I reset my password?")
+print(output.content)
+```

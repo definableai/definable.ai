@@ -1,0 +1,74 @@
+---
+title: Introduction
+description: A production-grade Python framework for building AI agents with models, tools, knowledge, and MCP support.
+---
+
+## What is Definable?
+
+Definable is a Python framework for building AI-powered applications. It provides a unified interface across multiple LLM providers, a powerful agent runtime with tool execution, a complete RAG pipeline for knowledge retrieval, and first-class MCP (Model Context Protocol) support.
+
+<CardGroup cols={2}>
+  <Card title="Models" icon="microchip" href="/models/overview">
+    Unified interface for OpenAI, DeepSeek, Moonshot, xAI, and any OpenAI-compatible provider. Supports streaming, structured output, vision, and audio.
+  </Card>
+  <Card title="Agents" icon="robot" href="/agents/overview">
+    Autonomous agents with tool calling, middleware, tracing, multi-turn conversations, and streaming. Built for production with retries, compression, and testing utilities.
+  </Card>
+  <Card title="Tools" icon="wrench" href="/tools/overview">
+    Define tools with a simple decorator. Supports type-safe parameters, pre/post hooks, result caching, dependency injection, and async execution.
+  </Card>
+  <Card title="Knowledge" icon="book" href="/knowledge/overview">
+    Full RAG pipeline with document readers, text chunkers, embedding providers, rerankers, and vector databases. Plug into agents automatically or on-demand.
+  </Card>
+  <Card title="MCP" icon="plug" href="/mcp/overview">
+    Connect to MCP servers over stdio, SSE, or HTTP transports. Discover and call tools, read resources, and use prompts from any MCP-compatible server.
+  </Card>
+  <Card title="Toolkits" icon="toolbox" href="/toolkits/overview">
+    Bundle related tools into reusable toolkits. Built-in toolkits for knowledge search and MCP server integration.
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+Definable is organized into composable layers that work together:
+
+```
+┌─────────────────────────────────────────────────┐
+│                    Agent                        │
+│  ┌───────────┐  ┌──────────┐  ┌─────────────┐  │
+│  │ Middleware │  │  Tracing  │  │   Config    │  │
+│  └───────────┘  └──────────┘  └─────────────┘  │
+├─────────────────────────────────────────────────┤
+│              Model (LLM Provider)               │
+│  OpenAI │ DeepSeek │ Moonshot │ xAI │ Custom   │
+├─────────────────────────────────────────────────┤
+│  Tools & Toolkits  │  Knowledge (RAG)  │  MCP  │
+│  @tool decorator    │  Readers/Chunkers │ stdio │
+│  Hooks & caching    │  Embedders/VecDBs │ SSE   │
+│  Dependencies       │  Rerankers        │ HTTP  │
+└─────────────────────────────────────────────────┘
+```
+
+## Key Features
+
+- **Multi-provider**: Switch between OpenAI, DeepSeek, Moonshot, xAI, or any OpenAI-compatible API with one line.
+- **Sync and async**: Every API has both synchronous and asynchronous variants.
+- **Streaming**: Stream responses token-by-token with rich event types for tool calls, reasoning, and content.
+- **Structured output**: Return Pydantic models directly from LLM calls with JSON Schema validation.
+- **Middleware**: Compose logging, retry, metrics, and custom middleware around agent execution.
+- **Full RAG pipeline**: Ingest documents from text, PDF, or URLs; chunk, embed, store, and retrieve with reranking.
+- **MCP support**: Connect to any MCP server and use its tools, resources, and prompts inside your agents.
+- **Testing**: Mock models, test agents without API calls, and assert on tool execution.
+- **Cost tracking**: Automatic token counting and cost calculation across providers.
+- **Type-safe**: Built on Pydantic with full type annotations and mypy support.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Get up and running in under 5 minutes.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Detailed installation and configuration guide.
+  </Card>
+</CardGroup>

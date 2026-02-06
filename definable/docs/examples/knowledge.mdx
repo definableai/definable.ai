@@ -1,0 +1,195 @@
+---
+title: Knowledge Examples
+sidebarTitle: Knowledge
+description: Examples for building RAG pipelines with documents, embedders, and vector databases.
+icon: book
+---
+
+## 01 — Basic RAG
+
+Set up a knowledge base, add content, and search.
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+)
+
+# Add text content
+knowledge.add("Python is a programming language created by Guido van Rossum in 1991.")
+knowledge.add("JavaScript was created by Brendan Eich at Netscape in 1995.")
+knowledge.add("Rust is a systems programming language focused on safety and performance.")
+
+# Search
+results = knowledge.search("Who created Python?", top_k=2)
+for doc in results:
+    print(doc.content)
+```
+
+```bash
+python definable/examples/knowledge/01_basic_rag.py
+```
+
+## 02 — Document Management
+
+Add, remove, and manage documents in a knowledge base.
+
+```python
+from definable.knowledge import Knowledge, Document, InMemoryVectorDB, OpenAIEmbedder
+
+knowledge = Knowledge(vector_db=InMemoryVectorDB(), embedder=OpenAIEmbedder())
+
+# Add and track IDs
+ids = knowledge.add("First document")
+print(f"Added: {ids}")
+print(f"Count: {len(knowledge)}")
+
+# Remove
+knowledge.remove(ids)
+print(f"After removal: {len(knowledge)}")
+
+# Clear all
+knowledge.clear()
+```
+
+```bash
+python definable/examples/knowledge/02_document_management.py
+```
+
+## 03 — Chunking Strategies
+
+Compare TextChunker and RecursiveChunker on the same content.
+
+```python
+from definable.knowledge import Document
+from definable.knowledge.chunkers import TextChunker, RecursiveChunker
+
+long_text = "..." # A long document
+
+doc = Document(content=long_text)
+
+# TextChunker — splits on paragraphs
+text_chunks = TextChunker(chunk_size=200, separator="\n\n").chunk(doc)
+print(f"TextChunker: {len(text_chunks)} chunks")
+
+# RecursiveChunker — multi-level splitting
+recursive_chunks = RecursiveChunker(chunk_size=200).chunk(doc)
+print(f"RecursiveChunker: {len(recursive_chunks)} chunks")
+```
+
+```bash
+python definable/examples/knowledge/03_chunking_strategies.py
+```
+
+## 04 — Custom Embedder
+
+Use different embedding providers.
+
+```python
+from definable.knowledge import OpenAIEmbedder, VoyageAIEmbedder
+
+# OpenAI
+openai_embedder = OpenAIEmbedder(id="text-embedding-3-small")
+embedding = openai_embedder.get_embedding("Hello, world!")
+print(f"OpenAI dimensions: {len(embedding)}")
+
+# Voyage AI
+voyage_embedder = VoyageAIEmbedder(id="voyage-2")
+embedding = voyage_embedder.get_embedding("Hello, world!")
+print(f"Voyage dimensions: {len(embedding)}")
+```
+
+```bash
+python definable/examples/knowledge/04_custom_embedder.py
+```
+
+<Note>
+Requires `VOYAGE_API_KEY` for the Voyage AI embedder.
+</Note>
+
+## 05 — Vector Databases
+
+Compare InMemoryVectorDB and PgVectorDB.
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+
+# In-memory (development)
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(dimensions=1536),
+    embedder=OpenAIEmbedder(),
+)
+
+# PgVector (production)
+# from definable.knowledge import PgVectorDB
+# knowledge = Knowledge(
+#     vector_db=PgVectorDB(connection_string="postgresql://..."),
+#     embedder=OpenAIEmbedder(),
+# )
+```
+
+```bash
+python definable/examples/knowledge/05_vector_databases.py
+```
+
+## 06 — Agent with Knowledge
+
+Connect a knowledge base to an agent using `KnowledgeConfig`.
+
+```python
+from definable.agents import Agent, AgentConfig, KnowledgeConfig
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.models.openai import OpenAIChat
+
+kb = Knowledge(vector_db=InMemoryVectorDB(), embedder=OpenAIEmbedder())
+kb.add("Employees get 20 days PTO per year.")
+kb.add("The engineering team uses Python and TypeScript.")
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    instructions="You are an HR assistant. Answer from the provided context.",
+    config=AgentConfig(
+        knowledge=KnowledgeConfig(knowledge=kb, top_k=3),
+    ),
+)
+
+output = agent.run("How many vacation days do I get?")
+print(output.content)
+```
+
+```bash
+python definable/examples/knowledge/06_agent_with_knowledge.py
+```
+
+## 07 — Reranking
+
+Improve search results with Cohere reranking.
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.knowledge.rerankers import CohereReranker
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+    reranker=CohereReranker(model="rerank-multilingual-v3.0", top_n=3),
+)
+
+knowledge.add("Python is great for data science.")
+knowledge.add("Python was created by Guido van Rossum.")
+knowledge.add("Java is used in enterprise software.")
+
+results = knowledge.search("Who created Python?", rerank=True)
+for doc in results:
+    print(f"[{doc.reranking_score:.3f}] {doc.content}")
+```
+
+```bash
+python definable/examples/knowledge/07_reranking.py
+```
+
+<Note>
+Requires `COHERE_API_KEY` for reranking.
+</Note>

@@ -1,0 +1,159 @@
+---
+title: Knowledge Overview
+sidebarTitle: Overview
+description: Build RAG pipelines to give your agents access to custom data.
+icon: book
+---
+
+The Knowledge module provides a complete **Retrieval-Augmented Generation (RAG)** pipeline. Ingest documents from any source, chunk them into manageable pieces, generate embeddings, store them in a vector database, and retrieve the most relevant context at query time.
+
+## The RAG Pipeline
+
+```
+┌──────────┐    ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  Source   │ →  │ Reader  │ →  │ Chunker  │ →  │ Embedder │ →  │ VectorDB │
+│ (file,   │    │ (PDF,   │    │ (text,   │    │ (OpenAI, │    │ (memory, │
+│  URL,    │    │  text,  │    │  recur-  │    │  Voyage) │    │  pgvec)  │
+│  string) │    │  URL)   │    │  sive)   │    │          │    │          │
+└──────────┘    └─────────┘    └──────────┘    └──────────┘    └──────────┘
+
+                         Ingestion (one-time)
+═══════════════════════════════════════════════════════════════════════════
+
+                          Retrieval (per query)
+
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  Query   │ →  │ Embedder │ →  │ VectorDB │ →  │ Reranker │ →  Results
+│          │    │          │    │ (search) │    │ (Cohere) │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘
+```
+
+## Quick Start
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+
+# Create a knowledge base
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+)
+
+# Add content
+knowledge.add("Python is a programming language created by Guido van Rossum.")
+knowledge.add("JavaScript is the language of the web.")
+
+# Search
+results = knowledge.search("Who created Python?")
+for doc in results:
+    print(f"[{doc.reranking_score or 'n/a'}] {doc.content}")
+```
+
+## Adding Documents
+
+The `add()` method accepts strings, file paths, or URLs. The appropriate reader is selected automatically:
+
+```python
+# Plain text
+knowledge.add("Definable is an AI agent framework.")
+
+# From a text file
+knowledge.add("/path/to/document.txt")
+
+# From a PDF
+knowledge.add("/path/to/report.pdf")
+
+# From a URL
+knowledge.add("https://example.com/article")
+```
+
+## Searching
+
+```python
+results = knowledge.search(
+    query="What is Definable?",
+    top_k=5,         # Number of results
+    rerank=True,     # Apply reranking (if reranker is configured)
+)
+```
+
+Returns a list of `Document` objects sorted by relevance.
+
+## Async Support
+
+Every method has an async variant:
+
+```python
+await knowledge.aadd("New content to index.")
+results = await knowledge.asearch("Search query")
+```
+
+## Components
+
+Each step in the pipeline is pluggable:
+
+<CardGroup cols={2}>
+  <Card title="Documents" icon="file-lines" href="/knowledge/documents">
+    The core data unit — text content with metadata and embeddings.
+  </Card>
+  <Card title="Readers" icon="file-import" href="/knowledge/readers">
+    Read text, PDF, and web content into documents.
+  </Card>
+  <Card title="Chunkers" icon="scissors" href="/knowledge/chunkers">
+    Split large documents into smaller, overlapping chunks.
+  </Card>
+  <Card title="Embedders" icon="vector-square" href="/knowledge/embedders">
+    Generate vector embeddings with OpenAI or Voyage AI.
+  </Card>
+  <Card title="Rerankers" icon="ranking-star" href="/knowledge/rerankers">
+    Rerank search results for higher relevance with Cohere.
+  </Card>
+  <Card title="Vector Databases" icon="database" href="/knowledge/vector-databases">
+    Store and search embeddings in memory or PostgreSQL.
+  </Card>
+  <Card title="Agent Integration" icon="robot" href="/knowledge/agent-integration">
+    Connect knowledge to agents via middleware or toolkits.
+  </Card>
+</CardGroup>
+
+## Knowledge Parameters
+
+<ParamField path="vector_db" type="VectorDB">
+  Vector database for storing and searching embeddings. Defaults to `InMemoryVectorDB`.
+</ParamField>
+
+<ParamField path="embedder" type="Embedder">
+  Embedding provider for converting text to vectors.
+</ParamField>
+
+<ParamField path="reranker" type="Reranker">
+  Optional reranker for improving search result relevance.
+</ParamField>
+
+<ParamField path="chunker" type="Chunker">
+  Text chunker for splitting documents. Defaults to `RecursiveChunker`.
+</ParamField>
+
+<ParamField path="readers" type="List[Reader]">
+  Document readers. Defaults include `TextReader`, `PDFReader`, `URLReader`.
+</ParamField>
+
+<ParamField path="auto_detect_reader" type="bool" default="true">
+  Automatically detect the correct reader based on the source.
+</ParamField>
+
+## Managing Documents
+
+```python
+# Add and get document IDs
+doc_ids = knowledge.add("Some content")
+
+# Remove specific documents
+knowledge.remove(doc_ids)
+
+# Clear everything
+knowledge.clear()
+
+# Count documents
+print(len(knowledge))
+```

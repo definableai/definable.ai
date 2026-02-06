@@ -1,0 +1,145 @@
+---
+title: Embedders
+description: Convert text into vector embeddings for similarity search.
+icon: vector-square
+---
+
+Embedders convert text into high-dimensional vectors. Similar texts produce similar vectors, which enables semantic search in a vector database.
+
+## OpenAIEmbedder
+
+Uses OpenAI's embedding models. The most common choice.
+
+```python
+from definable.knowledge import OpenAIEmbedder
+
+embedder = OpenAIEmbedder(
+    id="text-embedding-3-small",
+    dimensions=1536,
+)
+```
+
+<ParamField path="id" type="str" default="text-embedding-3-small">
+  OpenAI embedding model. Options include `text-embedding-3-small`, `text-embedding-3-large`, and `text-embedding-ada-002`.
+</ParamField>
+
+<ParamField path="dimensions" type="int">
+  Output vector dimensions. Defaults to the model's native dimensions. `text-embedding-3-small` supports up to 1536.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  OpenAI API key. Defaults to the `OPENAI_API_KEY` environment variable.
+</ParamField>
+
+### Model Comparison
+
+| Model | Dimensions | Performance | Cost |
+|-------|-----------|-------------|------|
+| `text-embedding-3-large` | 3072 | Highest | Higher |
+| `text-embedding-3-small` | 1536 | Good | Low |
+| `text-embedding-ada-002` | 1536 | Good | Low |
+
+## VoyageAIEmbedder
+
+Uses Voyage AI's embedding models, which excel at domain-specific and multilingual content.
+
+```python
+from definable.knowledge import VoyageAIEmbedder
+
+embedder = VoyageAIEmbedder(
+    id="voyage-2",
+    dimensions=1024,
+)
+```
+
+<ParamField path="id" type="str" default="voyage-2">
+  Voyage AI model. Options include `voyage-2`, `voyage-large-2`, and others.
+</ParamField>
+
+<ParamField path="dimensions" type="int" default="1024">
+  Output vector dimensions.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  Voyage AI API key. Defaults to the `VOYAGE_API_KEY` environment variable.
+</ParamField>
+
+<Note>
+Requires the `voyageai` package. Install with `pip install voyageai`.
+</Note>
+
+## Using Embedders
+
+### With Knowledge
+
+Pass an embedder when creating a knowledge base:
+
+```python
+from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+)
+```
+
+### Standalone
+
+Generate embeddings directly:
+
+<CodeGroup>
+```python Sync
+embedding = embedder.get_embedding("Hello, world!")
+print(len(embedding))  # 1536
+```
+
+```python Async
+embedding = await embedder.async_get_embedding("Hello, world!")
+```
+
+```python With usage stats
+embedding, usage = embedder.get_embedding_and_usage("Hello, world!")
+print(f"Tokens used: {usage}")
+```
+</CodeGroup>
+
+### Batch Embedding
+
+Embed multiple texts efficiently in a single API call:
+
+```python
+texts = ["First document", "Second document", "Third document"]
+embeddings, usages = await embedder.async_get_embeddings_batch_and_usage(texts)
+```
+
+## Creating a Custom Embedder
+
+Subclass `Embedder` and implement the embedding methods:
+
+```python
+from definable.knowledge.embedders import Embedder
+
+class LocalEmbedder(Embedder):
+    dimensions: int = 384
+
+    def get_embedding(self, text: str) -> list[float]:
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        return model.encode(text).tolist()
+
+    async def async_get_embedding(self, text: str) -> list[float]:
+        return self.get_embedding(text)
+```
+
+### Embedder Interface
+
+| Method | Description |
+|--------|-------------|
+| `get_embedding(text) -> List[float]` | Get embedding synchronously |
+| `async_get_embedding(text) -> List[float]` | Get embedding asynchronously |
+| `get_embedding_and_usage(text)` | Get embedding with usage stats |
+| `async_get_embedding_and_usage(text)` | Async variant with usage stats |
+
+<Warning>
+Make sure the `dimensions` on your embedder matches the `dimensions` on your vector database. Mismatched dimensions will cause errors during search.
+</Warning>

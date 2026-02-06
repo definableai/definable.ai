@@ -1,0 +1,167 @@
+---
+title: Tool Parameters
+sidebarTitle: Parameters
+description: Define tool parameters with type hints and descriptions.
+icon: list
+---
+
+Definable generates a JSON Schema for each tool from its Python type hints. The model uses this schema to understand what arguments to pass.
+
+## Type Hints
+
+Standard Python type hints are supported:
+
+```python
+from typing import List, Optional
+from definable.tools import tool
+
+@tool
+def search(
+    query: str,
+    max_results: int = 10,
+    include_archived: bool = False,
+) -> List[str]:
+    """Search for documents matching the query.
+
+    Args:
+        query: The search query string.
+        max_results: Maximum number of results to return.
+        include_archived: Whether to include archived documents.
+    """
+    return [f"Result for '{query}'"]
+```
+
+This generates the following JSON Schema for the model:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "The search query string."
+    },
+    "max_results": {
+      "type": "integer",
+      "description": "Maximum number of results to return.",
+      "default": 10
+    },
+    "include_archived": {
+      "type": "boolean",
+      "description": "Whether to include archived documents.",
+      "default": false
+    }
+  },
+  "required": ["query"]
+}
+```
+
+## Supported Types
+
+| Python Type | JSON Schema Type |
+|-------------|-----------------|
+| `str` | `string` |
+| `int` | `integer` |
+| `float` | `number` |
+| `bool` | `boolean` |
+| `list` / `List[T]` | `array` |
+| `dict` / `Dict[str, T]` | `object` |
+| `Optional[T]` | `T` (not required) |
+| `Literal["a", "b"]` | `string` with `enum` |
+| `Enum` | `string` with `enum` |
+
+## Descriptions from Docstrings
+
+Parameter descriptions are extracted from your docstring. Both Google and NumPy styles are supported:
+
+<CodeGroup>
+```python Google style
+@tool
+def analyze(text: str, language: str = "en") -> dict:
+    """Analyze text for sentiment.
+
+    Args:
+        text: The text to analyze.
+        language: ISO language code for the text.
+    """
+```
+
+```python NumPy style
+@tool
+def analyze(text: str, language: str = "en") -> dict:
+    """Analyze text for sentiment.
+
+    Parameters
+    ----------
+    text : str
+        The text to analyze.
+    language : str
+        ISO language code for the text.
+    """
+```
+</CodeGroup>
+
+## Pydantic Models as Parameters
+
+For complex inputs, use Pydantic models:
+
+```python
+from pydantic import BaseModel, Field
+from definable.tools import tool
+
+class SearchFilter(BaseModel):
+    category: str = Field(description="Document category to filter by")
+    date_from: Optional[str] = Field(None, description="Start date (YYYY-MM-DD)")
+    date_to: Optional[str] = Field(None, description="End date (YYYY-MM-DD)")
+
+@tool
+def search(query: str, filters: SearchFilter) -> str:
+    """Search documents with filters."""
+    return f"Searching '{query}' in {filters.category}"
+```
+
+## Enum Parameters
+
+Use `Literal` or `Enum` to restrict values:
+
+<CodeGroup>
+```python Literal
+from typing import Literal
+
+@tool
+def set_priority(task_id: str, priority: Literal["low", "medium", "high"]) -> str:
+    """Set the priority of a task."""
+    return f"Set {task_id} to {priority}"
+```
+
+```python Enum
+from enum import Enum
+
+class Priority(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
+
+@tool
+def set_priority(task_id: str, priority: Priority) -> str:
+    """Set the priority of a task."""
+    return f"Set {task_id} to {priority.value}"
+```
+</CodeGroup>
+
+## Default Values
+
+Parameters with default values are optional in the schema:
+
+```python
+@tool
+def fetch_data(url: str, timeout: int = 30, retries: int = 3) -> str:
+    """Fetch data from a URL."""
+    return f"Fetched from {url}"
+```
+
+Only `url` is required. The model can omit `timeout` and `retries`.
+
+## Validation
+
+When `validate_tool_args=True` in `AgentConfig` (the default), arguments are validated against the schema before execution. Invalid arguments result in an error message sent back to the model, which can then correct its call.

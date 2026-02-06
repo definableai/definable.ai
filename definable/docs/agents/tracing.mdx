@@ -1,0 +1,160 @@
+---
+title: Tracing
+description: Export structured events from agent runs for debugging and observability.
+icon: chart-gantt
+---
+
+Tracing captures every significant event during an agent run — model calls, tool executions, errors — and exports them to one or more backends. This gives you full visibility into what your agent did and why.
+
+## Enabling Tracing
+
+Configure tracing through `AgentConfig`:
+
+```python
+from definable.agents import Agent, AgentConfig, TracingConfig, JSONLExporter
+from definable.models import OpenAIChat
+
+config = AgentConfig(
+    tracing=TracingConfig(
+        enabled=True,
+        exporters=[JSONLExporter("./traces")],
+    ),
+)
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    config=config,
+)
+
+output = agent.run("Hello!")
+# Trace written to ./traces/{session_id}.jsonl
+```
+
+## TracingConfig
+
+<ParamField path="enabled" type="bool" default="true">
+  Enable or disable tracing.
+</ParamField>
+
+<ParamField path="exporters" type="List[TraceExporter]">
+  List of exporter instances that receive trace events.
+</ParamField>
+
+<ParamField path="event_filter" type="Callable">
+  Optional function to filter which events are exported. Return `True` to include, `False` to skip.
+</ParamField>
+
+<ParamField path="batch_size" type="int" default="1">
+  Number of events to batch before flushing to exporters.
+</ParamField>
+
+<ParamField path="flush_interval_ms" type="int" default="5000">
+  Maximum time in milliseconds between flushes.
+</ParamField>
+
+## JSONLExporter
+
+The built-in exporter writes one JSON object per line to a file, organized by session ID:
+
+```python
+from definable.agents import JSONLExporter
+
+exporter = JSONLExporter(
+    trace_dir="./traces",
+    flush_each=True,          # Flush after every event
+    mirror_stdout=False,      # Also print events to stdout
+)
+```
+
+Each file is named `{session_id}.jsonl`. Events include timestamps, run IDs, and full event data.
+
+### Reading Trace Files
+
+```python
+from definable.agents.tracing import read_trace_file, read_trace_events
+
+# Read raw lines
+lines = read_trace_file("./traces/abc-123.jsonl")
+
+# Read as parsed event dicts
+events = read_trace_events("./traces/abc-123.jsonl")
+for event in events:
+    print(f"{event['event']} at {event['timestamp']}")
+```
+
+## Event Filtering
+
+Skip noisy events to keep traces focused:
+
+```python
+config = AgentConfig(
+    tracing=TracingConfig(
+        exporters=[JSONLExporter("./traces")],
+        event_filter=lambda e: e.event != "RunContent",  # Skip streaming chunks
+    ),
+)
+```
+
+## Traced Events
+
+| Event | When It Fires |
+|-------|---------------|
+| `RunStarted` | Agent begins a run |
+| `RunContent` | A content chunk is generated (streaming) |
+| `RunContentCompleted` | Content generation is finished |
+| `ToolCallStarted` | A tool call begins executing |
+| `ToolCallCompleted` | A tool call finishes |
+| `ToolCallError` | A tool call fails |
+| `ReasoningStep` | A reasoning step is produced |
+| `RunCompleted` | The run finishes successfully |
+| `RunError` | The run fails with an error |
+
+## Custom Exporters
+
+Implement the `TraceExporter` protocol to send events to any backend:
+
+```python
+from definable.agents.tracing import TraceExporter
+
+class DatadogExporter:
+    """Send trace events to Datadog."""
+
+    async def export(self, events):
+        for event in events:
+            await send_to_datadog(event.to_dict())
+
+    async def flush(self):
+        pass
+
+    async def shutdown(self):
+        pass
+```
+
+Use it alongside other exporters:
+
+```python
+config = AgentConfig(
+    tracing=TracingConfig(
+        exporters=[
+            JSONLExporter("./traces"),
+            DatadogExporter(),
+        ],
+    ),
+)
+```
+
+## NoOpExporter
+
+Use `NoOpExporter` to discard all events. Useful in tests where you want tracing enabled but don't need output:
+
+```python
+from definable.agents.tracing import NoOpExporter
+
+config = AgentConfig(
+    tracing=TracingConfig(exporters=[NoOpExporter()]),
+)
+```
+
+<Note>
+Tracing failures never break agent execution. If an exporter raises an exception, the error is suppressed and the agent continues normally.
+</Note>
