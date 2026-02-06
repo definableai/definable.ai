@@ -10,11 +10,12 @@ Middleware lets you wrap agent execution with reusable logic such as logging, re
 
 Middleware wraps the agent's core execution. Each middleware receives a `RunContext` and a `next_handler` function, and decides what to do before and after calling `next_handler`:
 
-```
-Request → RetryMiddleware → LoggingMiddleware → Agent Core → Response
-                                                     ↓
-Response ← RetryMiddleware ← LoggingMiddleware ← Agent Core
-```
+````mermaid
+flowchart LR
+  Request --> RetryMW["RetryMiddleware"] --> LoggingMW["LoggingMiddleware"] --> AgentCore["Agent Core"] --> Response
+````
+
+The response travels back through the same chain in reverse order.
 
 The last middleware added is the outermost wrapper.
 

@@ -9,24 +9,27 @@ The Knowledge module provides a complete **Retrieval-Augmented Generation (RAG)*
 
 ## The RAG Pipeline
 
-```
-┌──────────┐    ┌─────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│  Source   │ →  │ Reader  │ →  │ Chunker  │ →  │ Embedder │ →  │ VectorDB │
-│ (file,   │    │ (PDF,   │    │ (text,   │    │ (OpenAI, │    │ (memory, │
-│  URL,    │    │  text,  │    │  recur-  │    │  Voyage) │    │  pgvec)  │
-│  string) │    │  URL)   │    │  sive)   │    │          │    │          │
-└──────────┘    └─────────┘    └──────────┘    └──────────┘    └──────────┘
+**Ingestion (one-time)**
 
-                         Ingestion (one-time)
-═══════════════════════════════════════════════════════════════════════════
+````mermaid
+flowchart LR
+  Source --> Reader --> Chunker --> Embedder --> VectorDB
+````
 
-                          Retrieval (per query)
+| Step | Options |
+|------|---------|
+| Source | file, URL, string |
+| Reader | PDF, text, URL |
+| Chunker | text, recursive |
+| Embedder | OpenAI, Voyage |
+| VectorDB | memory, pgvector |
 
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│  Query   │ →  │ Embedder │ →  │ VectorDB │ →  │ Reranker │ →  Results
-│          │    │          │    │ (search) │    │ (Cohere) │
-└──────────┘    └──────────┘    └──────────┘    └──────────┘
-```
+**Retrieval (per query)**
+
+````mermaid
+flowchart LR
+  Query --> Embedder --> VectorDB --> Reranker --> Results
+````
 
 ## Quick Start
 

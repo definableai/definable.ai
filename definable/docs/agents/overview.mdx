@@ -11,28 +11,17 @@ An **Agent** wraps a model with tools, instructions, and configuration to create
 
 The agent follows a loop:
 
-```
-User Input
-    ↓
-┌─────────────────────────────────┐
-│  1. Build messages              │
-│     (instructions + history     │
-│      + knowledge context)       │
-│                                 │
-│  2. Call the model with tools   │
-│                                 │
-│  3. Model returns response      │
-│     ├── Text? → Return to user  │
-│     └── Tool calls? ↓          │
-│                                 │
-│  4. Execute each tool call      │
-│                                 │
-│  5. Add results to messages     │
-│     └── Go to step 2           │
-└─────────────────────────────────┘
-    ↓
-Final Response
-```
+````mermaid
+flowchart TD
+  UserInput["User Input"] --> BuildMsgs["1. Build messages"]
+  BuildMsgs --> CallModel["2. Call model with tools"]
+  CallModel --> ModelResp["3. Model returns response"]
+  ModelResp --> Decision{Text or Tool calls?}
+  Decision -->|Text| FinalResp["Final Response"]
+  Decision -->|Tool calls| ExecTools["4. Execute each tool call"]
+  ExecTools --> AddResults["5. Add results to messages"]
+  AddResults --> CallModel
+````
 
 The loop continues until the model returns a text response with no tool calls, or the maximum iteration limit is reached.
 

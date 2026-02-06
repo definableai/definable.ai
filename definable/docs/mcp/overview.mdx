@@ -19,28 +19,16 @@ MCP servers expose three types of capabilities:
 
 ## Architecture
 
-```
-┌─────────────────────────────────┐
-│            Agent                │
-│  ┌───────────────────────────┐  │
-│  │       MCPToolkit          │  │
-│  │  ┌─────────────────────┐  │  │
-│  │  │     MCPClient       │  │  │
-│  │  └─────────────────────┘  │  │
-│  └───────────────────────────┘  │
-└────────────┬────────────────────┘
-             │ JSON-RPC
-     ┌───────┼───────┐
-     │       │       │
-  ┌──┴──┐ ┌─┴──┐ ┌──┴──┐
-  │stdio│ │SSE │ │HTTP │  Transports
-  └──┬──┘ └─┬──┘ └──┬──┘
-     │      │       │
-  ┌──┴──┐ ┌┴────┐ ┌┴────┐
-  │FS   │ │Git  │ │API  │  MCP Servers
-  │Srvr │ │Srvr │ │Srvr │
-  └─────┘ └─────┘ └─────┘
-```
+````mermaid
+flowchart TD
+  Agent --> MCPToolkit --> MCPClient
+  MCPClient -->|JSON-RPC| stdio
+  MCPClient -->|JSON-RPC| SSE
+  MCPClient -->|JSON-RPC| HTTP
+  stdio --> FSSrvr["FS Server"]
+  SSE --> GitSrvr["Git Server"]
+  HTTP --> APISrvr["API Server"]
+````
 
 ## Transport Types
 

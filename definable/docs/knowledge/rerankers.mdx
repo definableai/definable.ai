@@ -8,13 +8,10 @@ Rerankers take the initial results from vector search and re-score them using a 
 
 ## How Reranking Works
 
-```
-Vector Search (fast, approximate)
-    → Top 20 candidates
-
-Reranker (slower, precise)
-    → Top 5 most relevant results
-```
+````mermaid
+flowchart LR
+  VectorSearch["Vector Search"] -->|Top 20 candidates| Reranker -->|Top 5 results| FinalResults["Most Relevant Results"]
+````
 
 The vector database finds candidates quickly using embedding similarity. The reranker then reads each candidate alongside the query and produces a more accurate relevance score.
 

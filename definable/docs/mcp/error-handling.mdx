@@ -11,16 +11,26 @@ MCP interactions involve network communication, subprocess management, and proto
 
 All MCP errors inherit from `MCPError`:
 
-```
-MCPError
-├── MCPConnectionError     — Failed to connect to server
-├── MCPTimeoutError        — Request or connection timed out
-├── MCPProtocolError       — Invalid JSON-RPC or protocol violation
-├── MCPToolNotFoundError   — Requested tool doesn't exist
-├── MCPServerNotFoundError — Server name not in configuration
-├── MCPResourceNotFoundError — Resource URI not found
-└── MCPPromptNotFoundError — Prompt name not found
-```
+````mermaid
+flowchart TD
+  MCPError --> MCPConnectionError
+  MCPError --> MCPTimeoutError
+  MCPError --> MCPProtocolError
+  MCPError --> MCPToolNotFoundError
+  MCPError --> MCPServerNotFoundError
+  MCPError --> MCPResourceNotFoundError
+  MCPError --> MCPPromptNotFoundError
+````
+
+| Exception | Reason |
+|-----------|--------|
+| `MCPConnectionError` | Failed to connect to server |
+| `MCPTimeoutError` | Request or connection timed out |
+| `MCPProtocolError` | Invalid JSON-RPC or protocol violation |
+| `MCPToolNotFoundError` | Requested tool does not exist |
+| `MCPServerNotFoundError` | Server name not in configuration |
+| `MCPResourceNotFoundError` | Resource URI not found |
+| `MCPPromptNotFoundError` | Prompt name not found |
 
 ## Handling Connection Errors
 

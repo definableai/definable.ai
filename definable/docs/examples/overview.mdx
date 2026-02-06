@@ -52,59 +52,61 @@ Only the keys for examples you want to run are needed.
 
 ## Directory Structure
 
-```
-examples/
-├── models/                         # LLM model invocation
-│   ├── 01_basic_invoke.py          # Sync invocation
-│   ├── 02_async_invoke.py          # Async invocation
-│   ├── 03_streaming.py             # Streaming responses
-│   ├── 04_structured_output.py     # Pydantic response models
-│   ├── 05_multi_provider.py        # OpenAI, DeepSeek, Moonshot, xAI
-│   └── 06_vision_and_audio.py      # Multimodal inputs
-│
-├── agents/                         # Agent framework
-│   ├── 01_simple_agent.py          # Basic agent setup
-│   ├── 02_agent_with_tools.py      # Agent using @tool decorator
-│   ├── 03_agent_with_toolkit.py    # Custom Toolkit class
-│   ├── 04_multi_turn.py            # Conversation sessions
-│   ├── 05_streaming_agent.py       # run_stream() usage
-│   └── 06_async_agent.py           # arun() and arun_stream()
-│
-├── tools/                          # Tool definitions
-│   ├── 01_basic_tool.py            # Simple @tool decorator
-│   ├── 02_tool_parameters.py       # Complex parameter types
-│   ├── 03_async_tools.py           # Async tool functions
-│   ├── 04_tool_hooks.py            # pre_hook and post_hook
-│   ├── 05_tool_caching.py          # cache_results and cache_ttl
-│   └── 06_tool_dependencies.py     # Injected dependencies
-│
-├── toolkits/                       # Toolkit classes
-│   ├── 01_custom_toolkit.py        # Building a Toolkit class
-│   ├── 02_toolkit_dependencies.py  # Shared dependencies
-│   └── 03_knowledge_toolkit.py     # KnowledgeToolkit usage
-│
-├── knowledge/                      # RAG and knowledge bases
-│   ├── 01_basic_rag.py             # Simple RAG setup
-│   ├── 02_document_management.py   # Adding/removing documents
-│   ├── 03_chunking_strategies.py   # TextChunker vs RecursiveChunker
-│   ├── 04_custom_embedder.py       # OpenAI and VoyageAI embedders
-│   ├── 05_vector_databases.py      # InMemory vs PgVector
-│   ├── 06_agent_with_knowledge.py  # KnowledgeConfig integration
-│   └── 07_reranking.py             # CohereReranker usage
-│
-├── mcp/                            # Model Context Protocol
-│   ├── 01_basic_mcp.py             # Connect to an MCP server
-│   ├── 02_multiple_servers.py      # Multiple simultaneous servers
-│   ├── 03_resources.py             # Read MCP resources
-│   ├── 04_config_file.py           # Load config from JSON
-│   ├── 05_mock_server_basics.py    # Test with mock servers
-│   ├── 06_prompts_provider.py      # Use MCP prompt templates
-│   ├── 07_error_handling.py        # Handle MCP errors
-│   └── 08_mock_server_agent.py     # Full agent + mock MCP test
-│
-└── advanced/                       # Advanced features
-    ├── 01_middleware.py             # Custom middleware
-    ├── 02_tracing.py               # JSONLExporter for debugging
-    ├── 03_error_handling.py        # Retry logic and exceptions
-    └── 04_cost_tracking.py         # Metrics and pricing
-```
+<Tree>
+  <Tree.Folder name="examples" defaultOpen>
+    <Tree.Folder name="models" defaultOpen>
+      <Tree.File name="01_basic_invoke.py" />
+      <Tree.File name="02_async_invoke.py" />
+      <Tree.File name="03_streaming.py" />
+      <Tree.File name="04_structured_output.py" />
+      <Tree.File name="05_multi_provider.py" />
+      <Tree.File name="06_vision_and_audio.py" />
+    </Tree.Folder>
+    <Tree.Folder name="agents" defaultOpen>
+      <Tree.File name="01_simple_agent.py" />
+      <Tree.File name="02_agent_with_tools.py" />
+      <Tree.File name="03_agent_with_toolkit.py" />
+      <Tree.File name="04_multi_turn.py" />
+      <Tree.File name="05_streaming_agent.py" />
+      <Tree.File name="06_async_agent.py" />
+    </Tree.Folder>
+    <Tree.Folder name="tools" defaultOpen>
+      <Tree.File name="01_basic_tool.py" />
+      <Tree.File name="02_tool_parameters.py" />
+      <Tree.File name="03_async_tools.py" />
+      <Tree.File name="04_tool_hooks.py" />
+      <Tree.File name="05_tool_caching.py" />
+      <Tree.File name="06_tool_dependencies.py" />
+    </Tree.Folder>
+    <Tree.Folder name="toolkits" defaultOpen>
+      <Tree.File name="01_custom_toolkit.py" />
+      <Tree.File name="02_toolkit_dependencies.py" />
+      <Tree.File name="03_knowledge_toolkit.py" />
+    </Tree.Folder>
+    <Tree.Folder name="knowledge" defaultOpen>
+      <Tree.File name="01_basic_rag.py" />
+      <Tree.File name="02_document_management.py" />
+      <Tree.File name="03_chunking_strategies.py" />
+      <Tree.File name="04_custom_embedder.py" />
+      <Tree.File name="05_vector_databases.py" />
+      <Tree.File name="06_agent_with_knowledge.py" />
+      <Tree.File name="07_reranking.py" />
+    </Tree.Folder>
+    <Tree.Folder name="mcp" defaultOpen>
+      <Tree.File name="01_basic_mcp.py" />
+      <Tree.File name="02_multiple_servers.py" />
+      <Tree.File name="03_resources.py" />
+      <Tree.File name="04_config_file.py" />
+      <Tree.File name="05_mock_server_basics.py" />
+      <Tree.File name="06_prompts_provider.py" />
+      <Tree.File name="07_error_handling.py" />
+      <Tree.File name="08_mock_server_agent.py" />
+    </Tree.Folder>
+    <Tree.Folder name="advanced" defaultOpen>
+      <Tree.File name="01_middleware.py" />
+      <Tree.File name="02_tracing.py" />
+      <Tree.File name="03_error_handling.py" />
+      <Tree.File name="04_cost_tracking.py" />
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
