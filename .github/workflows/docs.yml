@@ -1,0 +1,19 @@
+name: Docs
+
+on:
+  pull_request:
+    paths:
+      - "definable/docs/**"
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Mintlify CLI
+        run: npm i -g mintlify
+      - name: Check broken links
+        run: mintlify broken-links --dir definable/docs

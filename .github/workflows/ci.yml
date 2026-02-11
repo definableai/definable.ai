@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[readers]"
+      - name: Ruff check
+        run: ruff check definable/
+      - name: Ruff format check
+        run: ruff format --check definable/
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[readers,serve,cron,jwt,discord]"
+      - name: Mypy
+        run: mypy definable/definable/ definable/tests_e2e/ --strict-equality --pretty --show-error-codes --config-file=mypy.ini
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -e ".[readers,serve,discord]"
+          pip install pytest pytest-asyncio
+      - name: Run tests
+        run: |
+          pytest definable/tests_e2e/ \
+            -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral" \
+            -v --tb=short
