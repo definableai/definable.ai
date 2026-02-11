@@ -1,7 +1,6 @@
 """Pinecone-backed memory store."""
 
 import asyncio
-import json
 import os
 import time
 from typing import Any, List, Optional
@@ -41,9 +40,7 @@ class PineconeMemoryStore:
     try:
       from pinecone import Pinecone
     except ImportError as e:
-      raise ImportError(
-        "pinecone is required for PineconeMemoryStore. Install it with: pip install definable-ai[pinecone-memory]"
-      ) from e
+      raise ImportError("pinecone is required for PineconeMemoryStore. Install it with: pip install definable-ai[pinecone-memory]") from e
 
     if not self._api_key:
       raise ValueError("Pinecone API key is required. Set api_key or PINECONE_API_KEY environment variable.")
@@ -215,7 +212,7 @@ class PineconeMemoryStore:
     if episode.last_accessed_at == 0.0:
       episode.last_accessed_at = now
 
-    vector = episode.embedding if episode.embedding else self._zero_vector()
+    vector = episode.embedding or self._zero_vector()
     metadata = self._episode_to_metadata(episode)
 
     await asyncio.to_thread(
@@ -342,7 +339,7 @@ class PineconeMemoryStore:
     if atom.last_accessed_at == 0.0:
       atom.last_accessed_at = now
 
-    vector = atom.embedding if atom.embedding else self._zero_vector()
+    vector = atom.embedding or self._zero_vector()
     metadata = self._atom_to_metadata(atom)
 
     await asyncio.to_thread(

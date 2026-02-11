@@ -29,6 +29,7 @@ With Hooks:
 """
 
 from definable.interfaces.base import BaseInterface
+from definable.interfaces.serve import serve
 from definable.interfaces.config import InterfaceConfig
 from definable.interfaces.errors import (
   InterfaceAuthenticationError,
@@ -52,17 +53,45 @@ def __getattr__(name: str):
     from definable.interfaces.telegram.config import TelegramConfig
 
     return TelegramConfig
+  if name == "DiscordInterface":
+    from definable.interfaces.discord.interface import DiscordInterface
+
+    return DiscordInterface
+  if name == "DiscordConfig":
+    from definable.interfaces.discord.config import DiscordConfig
+
+    return DiscordConfig
+  if name == "SignalInterface":
+    from definable.interfaces.signal.interface import SignalInterface
+
+    return SignalInterface
+  if name == "SignalConfig":
+    from definable.interfaces.signal.config import SignalConfig
+
+    return SignalConfig
+  if name in ("IdentityResolver", "SQLiteIdentityResolver", "PlatformIdentity"):
+    from definable.interfaces import identity as _identity_mod
+
+    return getattr(_identity_mod, name)
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # Define lazy-loaded types for static analysis
 TelegramInterface: type
 TelegramConfig: type
+DiscordInterface: type
+DiscordConfig: type
+SignalInterface: type
+SignalConfig: type
+IdentityResolver: type
+SQLiteIdentityResolver: type
+PlatformIdentity: type
 
 __all__ = [
   # Core
   "BaseInterface",
   "InterfaceConfig",
+  "serve",
   "InterfaceMessage",
   "InterfaceResponse",
   "InterfaceSession",
@@ -80,4 +109,12 @@ __all__ = [
   # Platform implementations (lazy-loaded)
   "TelegramInterface",
   "TelegramConfig",
+  "DiscordInterface",
+  "DiscordConfig",
+  "SignalInterface",
+  "SignalConfig",
+  # Identity resolution (lazy-loaded)
+  "IdentityResolver",
+  "SQLiteIdentityResolver",
+  "PlatformIdentity",
 ]

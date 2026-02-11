@@ -144,9 +144,7 @@ class TestAgentConfigWithUpdates:
 
   def test_with_updates_preserves_compression(self):
     """with_updates preserves compression config."""
-    original = AgentConfig(
-      compression=CompressionConfig(enabled=True, tool_results_limit=3)
-    )
+    original = AgentConfig(compression=CompressionConfig(enabled=True, tool_results_limit=3))
     updated = original.with_updates(max_retries=5)
 
     assert updated.compression is not None
@@ -156,9 +154,7 @@ class TestAgentConfigWithUpdates:
 
   def test_with_updates_replaces_compression(self):
     """with_updates can replace compression config."""
-    original = AgentConfig(
-      compression=CompressionConfig(enabled=True, tool_results_limit=3)
-    )
+    original = AgentConfig(compression=CompressionConfig(enabled=True, tool_results_limit=3))
     new_compression = CompressionConfig(enabled=True, tool_results_limit=10)
     updated = original.with_updates(compression=new_compression)
 

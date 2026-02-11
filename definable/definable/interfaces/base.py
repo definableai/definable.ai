@@ -2,15 +2,18 @@
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
-from definable.agents.agent import Agent
 from definable.interfaces.config import InterfaceConfig
 from definable.interfaces.hooks import InterfaceHook
 from definable.interfaces.message import InterfaceMessage, InterfaceResponse
 from definable.interfaces.session import InterfaceSession, SessionManager
 from definable.run.agent import RunOutput
-from definable.utils.log import log_error, log_info
+from definable.utils.log import log_error, log_info, log_warning
+
+if TYPE_CHECKING:
+  from definable.agents.agent import Agent
+  from definable.interfaces.identity import IdentityResolver
 
 
 class BaseInterface(ABC):
@@ -28,6 +31,7 @@ class BaseInterface(ABC):
     config: Interface configuration.
     session_manager: Optional session manager (created automatically if not provided).
     hooks: Optional list of hooks to register.
+    identity_resolver: Optional resolver for mapping platform user IDs to canonical user IDs.
 
   Example:
     class MyPlatformInterface(BaseInterface):
@@ -40,17 +44,20 @@ class BaseInterface(ABC):
   def __init__(
     self,
     *,
-    agent: Agent,
+    agent: Optional["Agent"] = None,
     config: InterfaceConfig,
     session_manager: Optional[SessionManager] = None,
     hooks: Optional[List[InterfaceHook]] = None,
+    identity_resolver: Optional["IdentityResolver"] = None,
   ) -> None:
-    self.agent = agent
+    self.agent: Optional["Agent"] = agent
     self.config = config
     self.session_manager = session_manager or SessionManager(
       session_ttl_seconds=config.session_ttl_seconds,
     )
     self._hooks: List[InterfaceHook] = list(hooks or [])
+    self._identity_resolver: Optional["IdentityResolver"] = identity_resolver
+    self._identity_resolver_initialized = False
     self._running = False
     self._request_semaphore: Optional[asyncio.Semaphore] = None
 
@@ -68,12 +75,31 @@ class BaseInterface(ABC):
     self._hooks.append(hook)
     return self
 
+  def bind(self, agent: "Agent") -> "BaseInterface":
+    """Bind this interface to an agent.
+
+    Args:
+      agent: The Agent instance to bind.
+
+    Returns:
+      Self for method chaining.
+
+    Raises:
+      RuntimeError: If the interface is already running.
+    """
+    if self._running:
+      raise RuntimeError("Cannot bind agent while interface is running")
+    self.agent = agent
+    return self
+
   # --- Lifecycle ---
 
   async def start(self) -> None:
     """Start the interface (begin receiving messages)."""
     if self._running:
       return
+    if self.agent is None:
+      raise ValueError("Interface has no agent bound. Call bind(agent) or pass agent= to constructor.")
     self._request_semaphore = asyncio.Semaphore(self.config.max_concurrent_requests)
     self._running = True
     log_info(f"[{self.config.platform}] Interface starting")
@@ -91,6 +117,8 @@ class BaseInterface(ABC):
 
   async def serve_forever(self) -> None:
     """Block until the interface is stopped (e.g. via signal or stop())."""
+    if self.agent is None:
+      raise ValueError("Interface has no agent bound. Call bind(agent) or pass agent= to constructor.")
     if not self._running:
       await self.start()
     try:
@@ -221,6 +249,29 @@ class BaseInterface(ABC):
     except Exception as e:
       await self._handle_error(e, message, raw_message)
 
+  async def _safe_resolve_identity(self, platform: str, platform_user_id: str) -> Optional[str]:
+    """Resolve a platform user ID to a canonical user ID, returning None on failure.
+
+    Initializes the resolver on first call. Any exceptions are logged
+    as warnings and None is returned (non-fatal).
+
+    Args:
+      platform: Platform name (e.g. "telegram").
+      platform_user_id: User ID on the platform.
+
+    Returns:
+      Canonical user ID, or None if unresolved or on error.
+    """
+    assert self._identity_resolver is not None
+    try:
+      if not self._identity_resolver_initialized:
+        await self._identity_resolver.initialize()
+        self._identity_resolver_initialized = True
+      return await self._identity_resolver.resolve(platform, platform_user_id)
+    except Exception as e:
+      log_warning(f"[{self.config.platform}] Identity resolution failed for {platform}:{platform_user_id}: {e}")
+      return None
+
   async def _run_agent(self, message: InterfaceMessage, session: InterfaceSession) -> RunOutput:
     """Run the agent with the given message and session context.
 
@@ -231,10 +282,18 @@ class BaseInterface(ABC):
     Returns:
       RunOutput from the agent.
     """
+    user_id = message.platform_user_id
+    if self._identity_resolver is not None:
+      resolved = await self._safe_resolve_identity(message.platform, message.platform_user_id)
+      if resolved is not None:
+        user_id = resolved
+
+    assert self.agent is not None
     return await self.agent.arun(
       instruction=message.text or "",
       messages=session.messages,
       session_id=session.session_id,
+      user_id=user_id,
       images=message.images,
       audio=message.audio,
       videos=message.videos,

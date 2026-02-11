@@ -53,9 +53,7 @@ class PostgresMemoryStore:
     try:
       import asyncpg
     except ImportError as e:
-      raise ImportError(
-        "asyncpg is required for PostgresMemoryStore. Install it with: pip install definable-ai[postgres-memory]"
-      ) from e
+      raise ImportError("asyncpg is required for PostgresMemoryStore. Install it with: pip install definable-ai[postgres-memory]") from e
 
     if not self._db_url:
       raise ValueError("PostgreSQL connection URL is required. Set db_url or MEMORY_POSTGRES_URL environment variable.")
@@ -624,7 +622,7 @@ class PostgresMemoryStore:
       role=row["role"],
       content=row["content"],
       embedding=_pgvector_to_embedding(row["embedding"]),
-      topics=row["topics"] if row["topics"] else [],
+      topics=row["topics"] or [],
       sentiment=row["sentiment"] or 0.0,
       token_count=row["token_count"] or 0,
       compression_stage=row["compression_stage"] or 0,
@@ -644,9 +642,9 @@ class PostgresMemoryStore:
       embedding=_pgvector_to_embedding(row["embedding"]),
       confidence=row["confidence"] or 1.0,
       reinforcement_count=row["reinforcement_count"] or 0,
-      topics=row["topics"] if row["topics"] else [],
+      topics=row["topics"] or [],
       token_count=row["token_count"] or 0,
-      source_episode_ids=row["source_episode_ids"] if row["source_episode_ids"] else [],
+      source_episode_ids=row["source_episode_ids"] or [],
       created_at=row["created_at"] or 0.0,
       last_accessed_at=row["last_accessed_at"] or 0.0,
       last_reinforced_at=row["last_reinforced_at"] or 0.0,

@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiosqlite>=0.20.0",
     "docstring-parser>=0.17.0",
     "httpx>=0.28.1",
     "mypy>=1.19.1",
@@ -16,6 +17,27 @@ dependencies = [
     "tiktoken>=0.12.0",
     "voyageai>=0.3.7",
 ]
+
+[project.optional-dependencies]
+discord = ["discord.py>=2.3.0"]
+signal = []  # signal-cli-rest-api is external; no pip dependency needed
+interfaces = ["discord.py>=2.3.0"]  # convenience: all interface deps
+readers = ["pypdf>=4.0.0", "python-docx>=1.0.0", "python-pptx>=1.0.0", "openpyxl>=3.1.0", "odfpy>=1.4.0", "striprtf>=0.0.26"]
+serve = ["fastapi>=0.115.0", "uvicorn[standard]>=0.34.0"]
+cron = ["croniter>=2.0.0"]
+runtime = ["fastapi>=0.115.0", "uvicorn[standard]>=0.34.0", "croniter>=2.0.0"]
+jwt = ["pyjwt>=2.8.0"]
+postgres-memory = ["asyncpg>=0.29.0"]
+redis-memory = ["redis>=5.0.0"]
+qdrant-memory = ["qdrant-client>=1.9.0"]
+chroma-memory = ["chromadb>=0.5.0"]
+mongodb-memory = ["motor>=3.3.0"]
+pinecone-memory = ["pinecone>=5.0.0"]
+mistral-ocr = ["mistralai>=1.0.0"]
+mistral-ocr-images = ["mistralai>=1.0.0", "Pillow>=10.0.0"]
+
+[tool.setuptools.packages.find]
+where = ["definable"]
 
 [tool.ruff]
 # Extend the ruff.toml file in the same directory

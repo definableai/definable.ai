@@ -374,6 +374,8 @@ class File(BaseModel):
       "application/x-javascript",
       "application/json",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "text/javascript",
       "application/x-python",
       "text/x-python",
@@ -384,6 +386,13 @@ class File(BaseModel):
       "text/csv",
       "text/xml",
       "text/rtf",
+      "image/png",
+      "image/jpeg",
+      "image/avif",
+      "image/tiff",
+      "image/bmp",
+      "image/heic",
+      "image/webp",
     ]
 
   @classmethod

@@ -1,5 +1,6 @@
 """Tests for QdrantMemoryStore."""
 
+import contextlib
 import os
 import time
 
@@ -21,10 +22,8 @@ async def qdrant_store():
   yield store
   # Cleanup: delete test collections
   for suffix in ["episodes", "atoms", "procedures", "transitions"]:
-    try:
+    with contextlib.suppress(Exception):
       await store._client.delete_collection(f"test_memory_{suffix}")
-    except Exception:
-      pass
   await store.close()
 
 
@@ -512,10 +511,8 @@ class TestQdrantMemoryStoreContextManager:
         cleanup_store = QdrantMemoryStore(url=url, port=port, prefix="test_ctx", vector_size=3)
         await cleanup_store.initialize()
         for suffix in ["episodes", "atoms", "procedures", "transitions"]:
-          try:
+          with contextlib.suppress(Exception):
             await cleanup_store._client.delete_collection(f"test_ctx_{suffix}")
-          except Exception:
-            pass
         await cleanup_store.close()
       except Exception:
         pass

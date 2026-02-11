@@ -14,7 +14,7 @@ Requirements:
 import asyncio
 import os
 
-from definable.agents import Agent,AgentConfig
+from definable.agents import Agent
 from definable.memory import CognitiveMemory, SQLiteMemoryStore
 from definable.models.openai import OpenAIChat
 

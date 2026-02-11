@@ -1,6 +1,7 @@
 """Tests for PineconeMemoryStore."""
 
 import asyncio
+import contextlib
 import os
 import time
 
@@ -28,10 +29,8 @@ async def pinecone_store():
   yield store
   # Cleanup: delete all vectors in test namespaces
   for ns in ["episodes", "atoms", "procedures", "transitions"]:
-    try:
+    with contextlib.suppress(Exception):
       await asyncio.to_thread(store._index.delete, delete_all=True, namespace=ns)
-    except Exception:
-      pass
   await store.close()
 
 

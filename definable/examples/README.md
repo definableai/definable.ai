@@ -66,6 +66,16 @@ examples/
 │   ├── 06_agent_with_knowledge.py # KnowledgeConfig integration
 │   └── 07_reranking.py        # CohereReranker usage
 │
+├── memory/                    # Cognitive memory
+│   ├── 01_basic_memory.py     # Agent with persistent memory
+│   ├── 02_store_protocol.py   # MemoryStore protocol walkthrough (no deps)
+│   └── 03_store_backends.py   # Smoke-test all store backends
+│
+├── runtime/                   # Agent-centric runtime
+│   ├── 01_webhook_basic.py    # Webhook trigger + agent.serve()
+│   ├── 02_cron_basic.py       # Cron trigger + agent.serve()
+│   └── 03_unified.py         # Interface + webhook + cron + auth + hooks
+│
 └── advanced/                  # Advanced features
     ├── 01_middleware.py       # Custom middleware
     ├── 02_tracing.py          # JSONLExporter for debugging

@@ -2,10 +2,12 @@
 
 import asyncio
 import contextlib
+import dataclasses
 from typing import (
   TYPE_CHECKING,
   Any,
   AsyncIterator,
+  Callable,
   Dict,
   Iterator,
   List,
@@ -24,6 +26,14 @@ from definable.models.message import Message
 from definable.models.metrics import Metrics
 from definable.models.response import ToolExecution
 from definable.run.agent import (
+  FileReadCompletedEvent,
+  FileReadStartedEvent,
+  KnowledgeRetrievalCompletedEvent,
+  KnowledgeRetrievalStartedEvent,
+  MemoryRecallCompletedEvent,
+  MemoryRecallStartedEvent,
+  MemoryUpdateCompletedEvent,
+  MemoryUpdateStartedEvent,
   RunCompletedEvent,
   RunContentEvent,
   RunErrorEvent,
@@ -41,6 +51,7 @@ from pydantic import BaseModel
 
 if TYPE_CHECKING:
   from definable.compression import CompressionManager
+  from definable.interfaces.base import BaseInterface
   from definable.models.base import Model
 
 
@@ -89,6 +100,9 @@ class Agent:
     tools: Optional[List[Function]] = None,
     toolkits: Optional[List[Toolkit]] = None,
     instructions: Optional[str] = None,
+    memory: Optional[Any] = None,
+    readers: Optional[Any] = None,
+    name: Optional[str] = None,
     # Optional advanced configuration
     config: Optional[AgentConfig] = None,
   ):
@@ -100,6 +114,13 @@ class Agent:
         tools: List of tools (Function objects) available to the agent.
         toolkits: List of toolkits providing additional tools.
         instructions: System instructions for the agent.
+        memory: Optional CognitiveMemory instance for persistent memory.
+        readers: File reader configuration. Accepts:
+            - None: no file reading (default)
+            - True: auto-create FileReaderRegistry with all available readers
+            - FileReaderRegistry: custom registry with user-selected readers
+            - FileReader: single reader, wrapped in a registry
+        name: Optional human-readable name for the agent. Overrides config.agent_name.
         config: Optional advanced configuration settings.
     """
     # Direct attributes
@@ -107,22 +128,25 @@ class Agent:
     self.tools = tools or []
     self.toolkits = toolkits or []
     self.instructions = instructions
+    self.memory = memory
+    self.readers = self._init_readers(readers)
 
     # Optional config for advanced settings
     self.config = config or AgentConfig()
+    if name is not None:
+      self.config = dataclasses.replace(self.config, agent_name=name)
 
     # Internal state
     self._tools_dict: Dict[str, Function] = self._flatten_tools()
     self._trace_writer: Optional[TraceWriter] = self._init_tracing()
     self._compression_manager: Optional["CompressionManager"] = self._init_compression()
     self._middleware: List[Middleware] = []
+    self._interfaces: List["BaseInterface"] = []
+    self._triggers: List[Any] = []
+    self._before_hooks: List[Callable] = []
+    self._after_hooks: List[Callable] = []
+    self._auth: Optional[Any] = None
     self._started = False
-
-    # Auto-register knowledge middleware if configured
-    if self.config.knowledge and self.config.knowledge.enabled:
-      from definable.agents.middleware import KnowledgeMiddleware
-
-      self._middleware.insert(0, KnowledgeMiddleware(self.config.knowledge))
 
   # --- Properties ---
 
@@ -176,6 +200,9 @@ class Agent:
 
   async def _ashutdown(self) -> None:
     """Async cleanup."""
+    if self.memory:
+      with contextlib.suppress(Exception):
+        await self.memory.close()
     self._shutdown()
 
   # --- Middleware Support ---
@@ -199,6 +226,96 @@ class Agent:
     self._middleware.append(middleware)
     return self
 
+  # --- Agent-Level Hooks ---
+
+  def before_request(self, fn: Optional[Callable] = None) -> Callable:
+    """Register a hook that fires before every ``arun()`` call.
+
+    Supports both ``@agent.before_request`` (no parens) and
+    ``@agent.before_request()`` (with parens).  The hook receives a
+    :class:`RunContext` and is always non-fatal (errors are logged).
+
+    Example::
+
+      @agent.before_request
+      async def log_request(context):
+          print(f"Run {context.run_id} starting")
+    """
+    if fn is not None:
+      # Used as @agent.before_request (no parens)
+      self._before_hooks.append(fn)
+      return fn
+
+    # Used as @agent.before_request() (with parens)
+    def decorator(func: Callable) -> Callable:
+      self._before_hooks.append(func)
+      return func
+
+    return decorator
+
+  def after_response(self, fn: Optional[Callable] = None) -> Callable:
+    """Register a hook that fires after every ``arun()`` call.
+
+    Supports both ``@agent.after_response`` (no parens) and
+    ``@agent.after_response()`` (with parens).  The hook receives a
+    :class:`RunOutput` and is always non-fatal (errors are logged).
+
+    Example::
+
+      @agent.after_response
+      async def log_response(output):
+          print(f"Run {output.run_id} completed: {output.content[:50]}")
+    """
+    if fn is not None:
+      self._after_hooks.append(fn)
+      return fn
+
+    def decorator(func: Callable) -> Callable:
+      self._after_hooks.append(func)
+      return func
+
+    return decorator
+
+  async def _fire_before_hooks(self, context: RunContext) -> None:
+    """Call all before_request hooks (non-fatal)."""
+    import inspect
+
+    for hook in self._before_hooks:
+      try:
+        result = hook(context)
+        if inspect.isawaitable(result):
+          await result
+      except Exception as e:
+        from definable.utils.log import log_error
+
+        log_error(f"before_request hook {hook.__name__} failed: {e}")
+
+  async def _fire_after_hooks(self, output: RunOutput) -> None:
+    """Call all after_response hooks (non-fatal)."""
+    import inspect
+
+    for hook in self._after_hooks:
+      try:
+        result = hook(output)
+        if inspect.isawaitable(result):
+          await result
+      except Exception as e:
+        from definable.utils.log import log_error
+
+        log_error(f"after_response hook {hook.__name__} failed: {e}")
+
+  # --- Auth ---
+
+  @property
+  def auth(self) -> Optional[Any]:
+    """Get the auth provider."""
+    return self._auth
+
+  @auth.setter
+  def auth(self, provider: Any) -> None:
+    """Set the auth provider."""
+    self._auth = provider
+
   # --- Run Methods ---
 
   def run(
@@ -208,6 +325,7 @@ class Agent:
     messages: Optional[List[Message]] = None,
     session_id: Optional[str] = None,
     run_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     images: Optional[List[Image]] = None,
     videos: Optional[List[Video]] = None,
     audio: Optional[List[Audio]] = None,
@@ -222,6 +340,7 @@ class Agent:
         messages: Optional conversation history for multi-turn.
         session_id: Session identifier (auto-generated if not provided).
         run_id: Run identifier (auto-generated if not provided).
+        user_id: User identifier for memory scoping and multi-user support.
         images: Images to include with the instruction.
         videos: Videos to include with the instruction.
         audio: Audio to include with the instruction.
@@ -248,6 +367,7 @@ class Agent:
             messages=messages,
             session_id=session_id,
             run_id=run_id,
+            user_id=user_id,
             images=images,
             videos=videos,
             audio=audio,
@@ -268,6 +388,7 @@ class Agent:
             messages=messages,
             session_id=session_id,
             run_id=run_id,
+            user_id=user_id,
             images=images,
             videos=videos,
             audio=audio,
@@ -302,6 +423,7 @@ class Agent:
     messages: Optional[List[Message]] = None,
     session_id: Optional[str] = None,
     run_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     images: Optional[List[Image]] = None,
     videos: Optional[List[Video]] = None,
     audio: Optional[List[Audio]] = None,
@@ -316,6 +438,7 @@ class Agent:
         messages: Optional conversation history for multi-turn.
         session_id: Session identifier (auto-generated if not provided).
         run_id: Run identifier (auto-generated if not provided).
+        user_id: User identifier for memory scoping and multi-user support.
         images: Images to include with the instruction.
         videos: Videos to include with the instruction.
         audio: Audio to include with the instruction.
@@ -336,11 +459,25 @@ class Agent:
     context = RunContext(
       run_id=run_id,
       session_id=session_id,
+      user_id=user_id,
       dependencies=self.config.dependencies,
       session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
       metadata={"_messages": all_messages},
     )
+
+    # Fire before_request hooks
+    await self._fire_before_hooks(context)
+
+    # File reading (before knowledge retrieval — extracted content may inform the query)
+    await self._readers_extract(context, new_messages)
+
+    # Knowledge retrieval (before execution)
+    await self._knowledge_retrieve(context)
+
+    # Memory recall (before execution)
+    if self.memory:
+      await self._memory_recall(context, new_messages)
 
     run_input = RunInput(
       input_content=instruction,
@@ -365,7 +502,16 @@ class Agent:
       handler = wrapped_handler
 
     # Execute
-    return await handler(context)
+    result = await handler(context)
+
+    # Memory store (after execution, fire-and-forget)
+    if self.memory:
+      self._memory_store(new_messages, context)
+
+    # Fire after_response hooks
+    await self._fire_after_hooks(result)
+
+    return result
 
   def run_stream(
     self,
@@ -374,6 +520,7 @@ class Agent:
     messages: Optional[List[Message]] = None,
     session_id: Optional[str] = None,
     run_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     images: Optional[List[Image]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
   ) -> Iterator[RunOutputEvent]:
@@ -385,6 +532,7 @@ class Agent:
         messages: Optional conversation history.
         session_id: Session identifier.
         run_id: Run identifier.
+        user_id: User identifier for memory scoping and multi-user support.
         images: Images to include.
         output_schema: Optional structured output schema.
 
@@ -447,6 +595,7 @@ class Agent:
             messages=messages,
             session_id=session_id,
             run_id=run_id,
+            user_id=user_id,
             images=images,
             output_schema=output_schema,
           ):
@@ -536,6 +685,7 @@ class Agent:
     messages: Optional[List[Message]] = None,
     session_id: Optional[str] = None,
     run_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     images: Optional[List[Image]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
   ) -> AsyncIterator[RunOutputEvent]:
@@ -547,6 +697,7 @@ class Agent:
         messages: Optional conversation history.
         session_id: Session identifier.
         run_id: Run identifier.
+        user_id: User identifier for memory scoping and multi-user support.
         images: Images to include.
         output_schema: Optional structured output schema.
 
@@ -564,23 +715,25 @@ class Agent:
     context = RunContext(
       run_id=run_id,
       session_id=session_id,
+      user_id=user_id,
       dependencies=self.config.dependencies,
       session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
       metadata={"_messages": all_messages},
     )
 
-    # Run knowledge middleware if configured (streaming doesn't use middleware chain)
-    if self.config.knowledge and self.config.knowledge.enabled:
-      from definable.agents.middleware import KnowledgeMiddleware
+    # File reading — yield events
+    for evt in await self._readers_extract(context, new_messages):
+      yield evt
 
-      km = KnowledgeMiddleware(self.config.knowledge)
+    # Knowledge retrieval — yield events
+    for evt in await self._knowledge_retrieve(context):
+      yield evt
 
-      # Create a dummy next_handler since we just need the retrieval side effect
-      async def _dummy_handler(ctx: "RunContext") -> "RunOutput":
-        return RunOutput(run_id=ctx.run_id, session_id=ctx.session_id, status=RunStatus.completed)
-
-      await km(context, _dummy_handler)
+    # Memory recall — yield events
+    if self.memory:
+      for evt in await self._memory_recall(context, new_messages):
+        yield evt
 
     # Prepare tools
     tools = self._prepare_tools_for_run(context)
@@ -617,8 +770,29 @@ class Agent:
           else:
             system_content = context.knowledge_context
 
+      # Append memory context if available
+      if context.memory_context:
+        if system_content:
+          system_content = f"{system_content}\n\n{context.memory_context}"
+        else:
+          system_content = context.memory_context
+
       if system_content:
         invoke_messages.insert(0, Message(role="system", content=system_content))
+
+      # Inject extracted file content into the last user message
+      if context.readers_context:
+        for i in range(len(invoke_messages) - 1, -1, -1):
+          if invoke_messages[i].role == "user":
+            original_content = invoke_messages[i].content or ""
+            invoke_messages[i] = Message(
+              role="user",
+              content=f"{context.readers_context}\n\n{original_content}",
+              images=invoke_messages[i].images,
+              videos=invoke_messages[i].videos,
+              audio=invoke_messages[i].audio,
+            )
+            break
 
       # Convert tools to dicts for the model API (OpenAI format)
       tools_dicts = [{"type": "function", "function": t.to_dict()} for t in tools.values()] if tools else None
@@ -765,6 +939,11 @@ class Agent:
       self._emit(completed_event)
       yield completed_event
 
+      # Memory store (after streaming, fire-and-forget) — yield started event
+      if self.memory:
+        for evt in self._memory_store(new_messages, context):
+          yield evt
+
     except Exception as e:
       error_event = RunErrorEvent(
         run_id=context.run_id,
@@ -818,6 +997,300 @@ class Agent:
 
     return existing
 
+  # --- Knowledge & Memory Helpers ---
+
+  async def _knowledge_retrieve(self, context: RunContext) -> List[RunOutputEvent]:
+    """Retrieve knowledge documents, emit events, inject into context."""
+    if not (self.config.knowledge and self.config.knowledge.enabled):
+      return []
+
+    messages = context.metadata.get("_messages") if context.metadata else None
+    if not messages:
+      return []
+
+    from definable.agents.middleware import KnowledgeMiddleware
+
+    km = KnowledgeMiddleware(self.config.knowledge)
+    query = km._extract_query(messages)
+    if not query:
+      return []
+
+    import time
+
+    events: List[RunOutputEvent] = []
+    started = KnowledgeRetrievalStartedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      query=query,
+    )
+    self._emit(started)
+    events.append(started)
+
+    start_time = time.perf_counter()
+    try:
+      documents = await self.config.knowledge.knowledge.asearch(
+        query=query,
+        top_k=self.config.knowledge.top_k,
+        rerank=self.config.knowledge.rerank,
+      )
+    except Exception:
+      elapsed = (time.perf_counter() - start_time) * 1000
+      completed = KnowledgeRetrievalCompletedEvent(
+        run_id=context.run_id,
+        session_id=context.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        query=query,
+        documents_found=0,
+        documents_used=0,
+        duration_ms=elapsed,
+      )
+      self._emit(completed)
+      events.append(completed)
+      return events
+
+    documents_found = len(documents)
+
+    # Filter by min_score
+    if self.config.knowledge.min_score is not None:
+      documents = [d for d in documents if d.reranking_score is not None and d.reranking_score >= self.config.knowledge.min_score]
+
+    if documents:
+      context_text = km._format_context(documents)
+      context.knowledge_context = context_text
+      context.knowledge_documents = documents
+      if context.metadata is None:
+        context.metadata = {}
+      context.metadata["_knowledge_position"] = self.config.knowledge.context_position
+
+    elapsed = (time.perf_counter() - start_time) * 1000
+    completed = KnowledgeRetrievalCompletedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      query=query,
+      documents_found=documents_found,
+      documents_used=len(documents),
+      duration_ms=elapsed,
+    )
+    self._emit(completed)
+    events.append(completed)
+    return events
+
+  async def _memory_recall(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
+    """Recall relevant memories, emit events, inject into context."""
+    assert self.memory is not None
+    import time
+
+    # Extract the last user message as the query
+    query = None
+    for msg in reversed(new_messages):
+      if msg.role == "user" and msg.content:
+        query = msg.content if isinstance(msg.content, str) else str(msg.content)
+        break
+    if not query:
+      return []
+
+    events: List[RunOutputEvent] = []
+    started = MemoryRecallStartedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      query=query,
+    )
+    self._emit(started)
+    events.append(started)
+
+    start_time = time.perf_counter()
+    payload = await self.memory.recall(
+      query,
+      user_id=context.user_id,
+      session_id=context.session_id,
+    )
+
+    elapsed = (time.perf_counter() - start_time) * 1000
+
+    if payload and payload.context:
+      context.memory_context = payload.context
+
+    completed = MemoryRecallCompletedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      query=query,
+      tokens_used=payload.tokens_used if payload else 0,
+      chunks_included=payload.chunks_included if payload else 0,
+      chunks_available=payload.chunks_available if payload else 0,
+      duration_ms=elapsed,
+    )
+    self._emit(completed)
+    events.append(completed)
+    return events
+
+  def _memory_store(self, new_messages: List[Message], context: RunContext) -> List[RunOutputEvent]:
+    """Fire-and-forget store of conversation messages, emit events."""
+    assert self.memory is not None
+    import time
+
+    events: List[RunOutputEvent] = []
+    message_count = len(new_messages)
+
+    started = MemoryUpdateStartedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      message_count=message_count,
+    )
+    self._emit(started)
+    events.append(started)
+
+    try:
+      loop = asyncio.get_running_loop()
+      memory = self.memory
+
+      async def _store_and_emit() -> None:
+        start_time = time.perf_counter()
+        try:
+          await memory.store_messages(
+            new_messages,
+            user_id=context.user_id,
+            session_id=context.session_id,
+          )
+        finally:
+          elapsed = (time.perf_counter() - start_time) * 1000
+          completed = MemoryUpdateCompletedEvent(
+            run_id=context.run_id,
+            session_id=context.session_id,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+            message_count=message_count,
+            duration_ms=elapsed,
+          )
+          self._emit(completed)
+
+      loop.create_task(_store_and_emit())
+    except RuntimeError:
+      pass  # No running loop — skip memory storage
+
+    return events
+
+  # --- Readers Helpers ---
+
+  @staticmethod
+  def _init_readers(readers: Optional[Any]) -> Optional[Any]:
+    """Resolve the readers= parameter into a BaseReader or None.
+
+    Accepts:
+      - None/False → None
+      - True → BaseReader() with all defaults
+      - BaseReader instance → use as-is
+      - BaseParser instance → wrap in BaseReader with custom ParserRegistry
+      - ProviderReader instance (e.g., MistralReader) → use as-is
+      - Legacy FileReaderRegistry → use as-is (it's now BaseReader)
+    """
+    if readers is None or readers is False:
+      return None
+    if readers is True:
+      from definable.readers import BaseReader
+
+      return BaseReader()
+    # Check if it's a BaseParser (single parser → wrap in BaseReader)
+    from definable.readers.parsers.base_parser import BaseParser
+
+    if isinstance(readers, BaseParser):
+      from definable.readers import BaseReader
+      from definable.readers.registry import ParserRegistry
+
+      registry = ParserRegistry(include_defaults=False)
+      registry.register(readers)
+      return BaseReader(registry=registry)
+    # Assume it's already a BaseReader / ProviderReader — use as-is
+    return readers
+
+  async def _readers_extract(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
+    """Extract text from files in new_messages, inject into context."""
+    if not self.readers:
+      return []
+
+    # Collect files from all new messages
+    files: List[File] = []
+    for msg in new_messages:
+      if msg.files:
+        files.extend(msg.files)
+    if not files:
+      return []
+
+    import time
+
+    events: List[RunOutputEvent] = []
+    started = FileReadStartedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      file_count=len(files),
+    )
+    self._emit(started)
+    events.append(started)
+
+    start_time = time.perf_counter()
+    try:
+      results = await self.readers.aread_all(files)
+    except Exception:
+      from definable.utils.log import log_warning
+
+      log_warning("File reading failed", exc_info=True)
+      elapsed = (time.perf_counter() - start_time) * 1000
+      completed = FileReadCompletedEvent(
+        run_id=context.run_id,
+        session_id=context.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        file_count=len(files),
+        files_read=0,
+        files_failed=len(files),
+        duration_ms=elapsed,
+      )
+      self._emit(completed)
+      events.append(completed)
+      return events
+
+    # Format successful results into context block
+    file_blocks: List[str] = []
+    files_read = 0
+    files_failed = 0
+    for result in results:
+      if result.error:
+        files_failed += 1
+      elif result.content:
+        files_read += 1
+        mime_attr = f' type="{result.mime_type}"' if result.mime_type else ""
+        file_blocks.append(f'<file name="{result.filename}"{mime_attr}>\n{result.content}\n</file>')
+
+    if file_blocks:
+      context.readers_context = "<file_contents>\n" + "\n".join(file_blocks) + "\n</file_contents>"
+
+    elapsed = (time.perf_counter() - start_time) * 1000
+    completed = FileReadCompletedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      file_count=len(files),
+      files_read=files_read,
+      files_failed=files_failed,
+      duration_ms=elapsed,
+    )
+    self._emit(completed)
+    events.append(completed)
+    return events
+
   # --- Internal Methods ---
 
   async def _execute_run(
@@ -858,8 +1331,29 @@ class Agent:
           else:
             system_content = context.knowledge_context
 
+      # Append memory context if available
+      if context.memory_context:
+        if system_content:
+          system_content = f"{system_content}\n\n{context.memory_context}"
+        else:
+          system_content = context.memory_context
+
       if system_content:
         invoke_messages.insert(0, Message(role="system", content=system_content))
+
+      # Inject extracted file content into the last user message
+      if context.readers_context:
+        for i in range(len(invoke_messages) - 1, -1, -1):
+          if invoke_messages[i].role == "user":
+            original_content = invoke_messages[i].content or ""
+            invoke_messages[i] = Message(
+              role="user",
+              content=f"{context.readers_context}\n\n{original_content}",
+              images=invoke_messages[i].images,
+              videos=invoke_messages[i].videos,
+              audio=invoke_messages[i].audio,
+            )
+            break
 
       # Convert tools to dicts for the model API (OpenAI format)
       tools_dicts = [{"type": "function", "function": t.to_dict()} for t in tools.values()] if tools else None
@@ -1118,6 +1612,172 @@ class Agent:
       with contextlib.suppress(Exception):
         # Tracing should never break the main flow
         self._trace_writer.write(event)
+
+  # --- Triggers ---
+
+  @property
+  def triggers(self) -> List[Any]:
+    """Registered triggers (read-only copy)."""
+    return list(self._triggers)
+
+  def on(self, trigger: Any) -> Callable:
+    """Register a trigger handler.
+
+    Can be used as a decorator::
+
+      @agent.on(Webhook("/github"))
+      async def handle_github(event):
+          ...
+
+    Args:
+      trigger: A BaseTrigger instance (Webhook, Cron, EventTrigger).
+
+    Returns:
+      Decorator that registers the handler and returns the original function.
+    """
+
+    def decorator(fn: Callable) -> Callable:
+      trigger.handler = fn
+      trigger.agent = self
+      self._triggers.append(trigger)
+      return fn
+
+    return decorator
+
+  def emit(self, event_name: str, data: Optional[Any] = None) -> None:
+    """Fire all EventTriggers matching *event_name* (fire-and-forget).
+
+    Args:
+      event_name: Name of the event to fire.
+      data: Optional data dict to include in the TriggerEvent body.
+    """
+    from definable.triggers.base import TriggerEvent
+    from definable.triggers.event import EventTrigger
+    from definable.triggers.executor import TriggerExecutor
+
+    matching = [t for t in self._triggers if isinstance(t, EventTrigger) and t.event_name == event_name]
+    if not matching:
+      return
+
+    event = TriggerEvent(
+      body=data if isinstance(data, dict) else {"data": data} if data is not None else None,
+      source=f"event({event_name})",
+    )
+    executor = TriggerExecutor(self)
+
+    try:
+      loop = asyncio.get_running_loop()
+      for trigger in matching:
+        loop.create_task(executor.execute(trigger, event))
+    except RuntimeError:
+      pass  # No running loop — skip
+
+  # --- Interfaces ---
+
+  def add_interface(self, interface: "BaseInterface") -> "Agent":
+    """Register an interface with this agent.
+
+    Binds the interface to this agent and stores it for use with serve().
+
+    Args:
+      interface: BaseInterface instance to register.
+
+    Returns:
+      Self for method chaining.
+    """
+    interface.bind(self)
+    self._interfaces.append(interface)
+    return self
+
+  async def aserve(
+    self,
+    *interfaces: "BaseInterface",
+    name: Optional[str] = None,
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    enable_server: Optional[bool] = None,
+    dev: bool = False,
+  ) -> None:
+    """Async entry point: start the full agent runtime.
+
+    Starts registered interfaces, webhook/cron triggers, and an HTTP
+    server in a single event loop.  Use :meth:`serve` for the sync
+    version.
+
+    Args:
+      *interfaces: Additional interfaces to run (merged with registered ones).
+      name: Optional prefix for log messages (defaults to agent_name).
+      host: Host to bind the HTTP server to.
+      port: Port for the HTTP server.
+      enable_server: Force-enable/disable the HTTP server.  When *None*
+        (default), the server starts if any Webhook triggers exist.
+      dev: Enable development mode with Swagger docs and info-level logging.
+    """
+    from definable.runtime.runner import AgentRuntime
+
+    # Merge passed interfaces with registered ones
+    all_interfaces = list(self._interfaces)
+    for iface in interfaces:
+      if iface.agent is None:
+        iface.bind(self)
+      if iface not in all_interfaces:
+        all_interfaces.append(iface)
+
+    runtime = AgentRuntime(
+      agent=self,
+      interfaces=all_interfaces or None,
+      host=host,
+      port=port,
+      enable_server=enable_server,
+      name=name,
+      dev=dev,
+    )
+    await runtime.start()
+
+  def serve(
+    self,
+    *interfaces: "BaseInterface",
+    name: Optional[str] = None,
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    enable_server: Optional[bool] = None,
+    dev: bool = False,
+  ) -> None:
+    """Sync entry point: start the full agent runtime.
+
+    Blocking call that starts interfaces, triggers, and an HTTP server.
+    Equivalent to ``asyncio.run(agent.aserve(...))``.
+
+    When ``dev=True``, enables hot-reload mode: the parent process
+    watches for ``.py`` file changes and automatically restarts the
+    server.  Swagger docs are available at ``/docs``.
+
+    Args:
+      *interfaces: Additional interfaces to run (merged with registered ones).
+      name: Optional prefix for log messages (defaults to agent_name).
+      host: Host to bind the HTTP server to.
+      port: Port for the HTTP server.
+      enable_server: Force-enable/disable the HTTP server.  When *None*
+        (default), the server starts if any Webhook triggers exist.
+      dev: Enable development mode with hot reload and Swagger docs.
+    """
+    if dev:
+      from definable.runtime._dev import is_dev_child, run_dev_mode
+
+      if not is_dev_child():
+        run_dev_mode()
+        return
+
+    asyncio.run(
+      self.aserve(
+        *interfaces,
+        name=name,
+        host=host,
+        port=port,
+        enable_server=enable_server,
+        dev=dev,
+      )
+    )
 
   def __repr__(self) -> str:
     return f"Agent(model={self.model.id!r}, tools={len(self._tools_dict)}, name={self.agent_name!r})"

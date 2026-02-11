@@ -1,6 +1,7 @@
 """ChromaDB-backed memory store."""
 
 import asyncio
+import contextlib
 import json
 import time
 from typing import Any, List, Optional
@@ -104,7 +105,7 @@ class ChromaMemoryStore:
 
   def _metadata_to_episode(
     self,
-    id: str,
+    id: str,  # noqa: A002
     document: Optional[str],
     metadata: dict,
     embedding: Optional[List[float]],
@@ -151,7 +152,7 @@ class ChromaMemoryStore:
 
   def _metadata_to_atom(
     self,
-    id: str,
+    id: str,  # noqa: A002
     document: Optional[str],
     metadata: dict,
     embedding: Optional[List[float]],
@@ -195,7 +196,7 @@ class ChromaMemoryStore:
 
   def _metadata_to_procedure(
     self,
-    id: str,
+    id: str,  # noqa: A002
     document: Optional[str],
     metadata: dict,
   ) -> Procedure:
@@ -819,19 +820,14 @@ class ChromaMemoryStore:
   async def delete_user_data(self, user_id: str) -> None:
     await self._ensure_initialized()
     for collection in (self._episodes, self._atoms, self._procedures, self._transitions):
-      # ChromaDB delete with where filter
-      try:
+      # ChromaDB delete with where filter — collection might be empty or no matching records
+      with contextlib.suppress(Exception):
         await asyncio.to_thread(collection.delete, where={"user_id": user_id})
-      except Exception:
-        # Collection might be empty or no matching records — that's fine
-        pass
 
   async def delete_session_data(self, session_id: str) -> None:
     await self._ensure_initialized()
-    try:
+    with contextlib.suppress(Exception):
       await asyncio.to_thread(self._episodes.delete, where={"session_id": session_id})
-    except Exception:
-      pass
 
   # --- Context manager ---
 

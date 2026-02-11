@@ -1,5 +1,7 @@
 """E2E tests for Knowledge middleware and toolkit integration."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from definable.agents.config import KnowledgeConfig
@@ -7,6 +9,11 @@ from definable.agents.testing import AgentTestCase
 from definable.knowledge import Knowledge
 from definable.knowledge.document import Document
 from definable.knowledge.vector_dbs.memory import InMemoryVectorDB
+from definable.run.agent import (
+  KnowledgeRetrievalCompletedEvent,
+  KnowledgeRetrievalStartedEvent,
+  run_output_event_from_dict,
+)
 
 
 @pytest.mark.e2e
@@ -168,3 +175,152 @@ class TestKnowledgeE2E(AgentTestCase):
 
     await vector_db.adelete(ids=["d1"])
     assert vector_db.count() == 0
+
+
+@pytest.mark.e2e
+class TestKnowledgeEvents(AgentTestCase):
+  """Tests for knowledge retrieval event emission."""
+
+  def test_knowledge_event_serialization_roundtrip(self):
+    """KnowledgeRetrievalStarted/Completed events serialize and deserialize correctly."""
+    started = KnowledgeRetrievalStartedEvent(
+      run_id="r1",
+      session_id="s1",
+      agent_id="a1",
+      agent_name="test",
+      query="test query",
+    )
+    d = started.to_dict()
+    assert d["event"] == "KnowledgeRetrievalStarted"
+    assert d["query"] == "test query"
+    reconstructed = run_output_event_from_dict(d)
+    assert isinstance(reconstructed, KnowledgeRetrievalStartedEvent)
+    assert reconstructed.query == "test query"
+
+    completed = KnowledgeRetrievalCompletedEvent(
+      run_id="r1",
+      session_id="s1",
+      agent_id="a1",
+      agent_name="test",
+      query="test query",
+      documents_found=5,
+      documents_used=3,
+      duration_ms=42.5,
+    )
+    d = completed.to_dict()
+    assert d["event"] == "KnowledgeRetrievalCompleted"
+    assert d["documents_found"] == 5
+    assert d["documents_used"] == 3
+    assert d["duration_ms"] == 42.5
+    reconstructed = run_output_event_from_dict(d)
+    assert isinstance(reconstructed, KnowledgeRetrievalCompletedEvent)
+    assert reconstructed.documents_found == 5
+    assert reconstructed.documents_used == 3
+
+  @pytest.mark.asyncio
+  async def test_knowledge_events_emitted_on_arun(self, mock_model, in_memory_knowledge):
+    """Agent.arun() emits KnowledgeRetrievalStarted/Completed events."""
+    # Mock asearch to return docs without requiring an embedder
+    mock_docs = [
+      Document(id="d1", content="Python info", reranking_score=0.9),
+      Document(id="d2", content="ML info", reranking_score=0.8),
+    ]
+    with patch.object(in_memory_knowledge, "asearch", new_callable=AsyncMock, return_value=mock_docs):
+      agent = self.create_agent(
+        model=mock_model,
+        config_kwargs={
+          "knowledge": KnowledgeConfig(
+            knowledge=in_memory_knowledge,
+            top_k=2,
+            enabled=True,
+          )
+        },
+      )
+
+      # Collect events via trace writer mock
+      emitted_events = []
+      original_emit = agent._emit
+
+      def capture_emit(event):
+        emitted_events.append(event)
+        original_emit(event)
+
+      agent._emit = capture_emit
+
+      await agent.arun("Tell me about Python")
+
+    event_types = [type(e).__name__ for e in emitted_events]
+    assert "KnowledgeRetrievalStartedEvent" in event_types
+    assert "KnowledgeRetrievalCompletedEvent" in event_types
+
+    # Verify started event
+    started = next(e for e in emitted_events if isinstance(e, KnowledgeRetrievalStartedEvent))
+    assert started.query == "Tell me about Python"
+
+    # Verify completed event
+    completed = next(e for e in emitted_events if isinstance(e, KnowledgeRetrievalCompletedEvent))
+    assert completed.query == "Tell me about Python"
+    assert completed.documents_found == 2
+    assert completed.documents_used == 2
+    assert completed.duration_ms is not None
+    assert completed.duration_ms >= 0
+
+  @pytest.mark.asyncio
+  async def test_knowledge_events_emitted_on_stream(self, mock_model, in_memory_knowledge):
+    """Agent.arun_stream() yields KnowledgeRetrievalStarted/Completed events."""
+    mock_docs = [
+      Document(id="d1", content="Python info", reranking_score=0.9),
+    ]
+    with patch.object(in_memory_knowledge, "asearch", new_callable=AsyncMock, return_value=mock_docs):
+      agent = self.create_agent(
+        model=mock_model,
+        config_kwargs={
+          "knowledge": KnowledgeConfig(
+            knowledge=in_memory_knowledge,
+            top_k=2,
+            enabled=True,
+          )
+        },
+      )
+
+      events = []
+      async for evt in agent.arun_stream("Tell me about Python"):
+        events.append(evt)
+
+    event_types = [type(e).__name__ for e in events]
+    assert "KnowledgeRetrievalStartedEvent" in event_types
+    assert "KnowledgeRetrievalCompletedEvent" in event_types
+
+    # Verify ordering: knowledge events before run started
+    kr_started_idx = event_types.index("KnowledgeRetrievalStartedEvent")
+    kr_completed_idx = event_types.index("KnowledgeRetrievalCompletedEvent")
+    run_started_idx = event_types.index("RunStartedEvent")
+    assert kr_started_idx < kr_completed_idx < run_started_idx
+
+  @pytest.mark.asyncio
+  async def test_knowledge_events_not_emitted_when_disabled(self, mock_model, in_memory_knowledge):
+    """No knowledge events emitted when knowledge is disabled."""
+    agent = self.create_agent(
+      model=mock_model,
+      config_kwargs={
+        "knowledge": KnowledgeConfig(
+          knowledge=in_memory_knowledge,
+          enabled=False,
+        )
+      },
+    )
+
+    emitted_events = []
+    original_emit = agent._emit
+
+    def capture_emit(event):
+      emitted_events.append(event)
+      original_emit(event)
+
+    agent._emit = capture_emit
+
+    await agent.arun("Tell me about Python")
+
+    event_types = [type(e).__name__ for e in emitted_events]
+    assert "KnowledgeRetrievalStartedEvent" not in event_types
+    assert "KnowledgeRetrievalCompletedEvent" not in event_types

@@ -142,8 +142,17 @@ class RunEvent(str, Enum):
   reasoning_content_delta = "ReasoningContentDelta"
   reasoning_completed = "ReasoningCompleted"
 
+  knowledge_retrieval_started = "KnowledgeRetrievalStarted"
+  knowledge_retrieval_completed = "KnowledgeRetrievalCompleted"
+
+  memory_recall_started = "MemoryRecallStarted"
+  memory_recall_completed = "MemoryRecallCompleted"
+
   memory_update_started = "MemoryUpdateStarted"
   memory_update_completed = "MemoryUpdateCompleted"
+
+  file_read_started = "FileReadStarted"
+  file_read_completed = "FileReadCompleted"
 
   session_summary_started = "SessionSummaryStarted"
   session_summary_completed = "SessionSummaryCompleted"
@@ -325,11 +334,14 @@ class PostHookCompletedEvent(BaseAgentRunEvent):
 @dataclass
 class MemoryUpdateStartedEvent(BaseAgentRunEvent):
   event: str = RunEvent.memory_update_started.value
+  message_count: int = 0
 
 
 @dataclass
 class MemoryUpdateCompletedEvent(BaseAgentRunEvent):
   event: str = RunEvent.memory_update_completed.value
+  message_count: int = 0
+  duration_ms: Optional[float] = None
 
 
 @dataclass
@@ -369,6 +381,52 @@ class ReasoningCompletedEvent(BaseAgentRunEvent):
   event: str = RunEvent.reasoning_completed.value
   content: Optional[Any] = None
   content_type: str = "str"
+
+
+@dataclass
+class KnowledgeRetrievalStartedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.knowledge_retrieval_started.value
+  query: Optional[str] = None
+
+
+@dataclass
+class KnowledgeRetrievalCompletedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.knowledge_retrieval_completed.value
+  query: Optional[str] = None
+  documents_found: int = 0
+  documents_used: int = 0
+  duration_ms: Optional[float] = None
+
+
+@dataclass
+class MemoryRecallStartedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.memory_recall_started.value
+  query: Optional[str] = None
+
+
+@dataclass
+class MemoryRecallCompletedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.memory_recall_completed.value
+  query: Optional[str] = None
+  tokens_used: int = 0
+  chunks_included: int = 0
+  chunks_available: int = 0
+  duration_ms: Optional[float] = None
+
+
+@dataclass
+class FileReadStartedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.file_read_started.value
+  file_count: int = 0
+
+
+@dataclass
+class FileReadCompletedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.file_read_completed.value
+  file_count: int = 0
+  files_read: int = 0
+  files_failed: int = 0
+  duration_ms: Optional[float] = None
 
 
 @dataclass
@@ -442,8 +500,14 @@ RunOutputEvent = Union[
   ReasoningStepEvent,
   ReasoningContentDeltaEvent,
   ReasoningCompletedEvent,
+  KnowledgeRetrievalStartedEvent,
+  KnowledgeRetrievalCompletedEvent,
+  MemoryRecallStartedEvent,
+  MemoryRecallCompletedEvent,
   MemoryUpdateStartedEvent,
   MemoryUpdateCompletedEvent,
+  FileReadStartedEvent,
+  FileReadCompletedEvent,
   SessionSummaryStartedEvent,
   SessionSummaryCompletedEvent,
   ToolCallStartedEvent,
@@ -475,8 +539,14 @@ RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.reasoning_step.value: ReasoningStepEvent,
   RunEvent.reasoning_content_delta.value: ReasoningContentDeltaEvent,
   RunEvent.reasoning_completed.value: ReasoningCompletedEvent,
+  RunEvent.knowledge_retrieval_started.value: KnowledgeRetrievalStartedEvent,
+  RunEvent.knowledge_retrieval_completed.value: KnowledgeRetrievalCompletedEvent,
+  RunEvent.memory_recall_started.value: MemoryRecallStartedEvent,
+  RunEvent.memory_recall_completed.value: MemoryRecallCompletedEvent,
   RunEvent.memory_update_started.value: MemoryUpdateStartedEvent,
   RunEvent.memory_update_completed.value: MemoryUpdateCompletedEvent,
+  RunEvent.file_read_started.value: FileReadStartedEvent,
+  RunEvent.file_read_completed.value: FileReadCompletedEvent,
   RunEvent.session_summary_started.value: SessionSummaryStartedEvent,
   RunEvent.session_summary_completed.value: SessionSummaryCompletedEvent,
   RunEvent.tool_call_started.value: ToolCallStartedEvent,

@@ -91,6 +91,27 @@ class KnowledgeConfig:
 
 
 @dataclass
+class ReadersConfig:
+  """Configuration for file readers integration with agents.
+
+  Controls how files attached to messages are pre-processed into text
+  before reaching the LLM.
+
+  Attributes:
+    enabled: Whether file reading is enabled.
+    registry: Optional FileReaderRegistry instance. If None, a default
+      registry with all available built-in readers is created.
+    max_total_content_length: Maximum total characters across all files.
+    context_format: Format for the injected context ("xml" or "markdown").
+  """
+
+  enabled: bool = True
+  registry: Optional[Any] = None
+  max_total_content_length: Optional[int] = None
+  context_format: Literal["xml", "markdown"] = "xml"
+
+
+@dataclass
 class TracingConfig:
   """Configuration for the tracing system."""
 
@@ -142,6 +163,9 @@ class AgentConfig:
   # Compression configuration for tool results
   compression: Optional[CompressionConfig] = field(default=None, hash=False)
 
+  # File readers configuration
+  readers: Optional[ReadersConfig] = field(default=None, hash=False)
+
   # Context defaults
   session_state: Optional[Dict[str, Any]] = field(default=None, hash=False)
   dependencies: Optional[Dict[str, Any]] = field(default=None, hash=False)
@@ -174,7 +198,7 @@ class AgentConfig:
         New AgentConfig instance with updated values.
     """
     # Fields that cannot be serialized with asdict
-    non_serializable = ("tracing", "session_state", "dependencies", "knowledge", "compression")
+    non_serializable = ("tracing", "session_state", "dependencies", "knowledge", "compression", "readers")
     current = {k: v for k, v in asdict(self).items() if k not in non_serializable}
     # Handle non-serializable fields separately
     current["tracing"] = self.tracing
@@ -182,6 +206,7 @@ class AgentConfig:
     current["dependencies"] = self.dependencies
     current["knowledge"] = self.knowledge
     current["compression"] = self.compression
+    current["readers"] = self.readers
     current.update(kwargs)
     return AgentConfig(**current)
 

@@ -89,7 +89,7 @@ With Middleware:
 """
 
 from definable.agents.agent import Agent
-from definable.agents.config import AgentConfig, CompressionConfig, KnowledgeConfig, TracingConfig
+from definable.agents.config import AgentConfig, CompressionConfig, KnowledgeConfig, ReadersConfig, TracingConfig
 from definable.agents.middleware import (
   KnowledgeMiddleware,
   LoggingMiddleware,
@@ -114,11 +114,21 @@ def __getattr__(name: str):
     from definable.mcp.toolkit import MCPToolkit
 
     return MCPToolkit
+  if name == "CognitiveMemory":
+    from definable.memory import CognitiveMemory
+
+    return CognitiveMemory
+  if name == "FileReaderRegistry":
+    from definable.readers import BaseReader
+
+    return BaseReader
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Define MCPToolkit for static analysis (actual import is lazy)
+# Define for static analysis (actual imports are lazy)
 MCPToolkit: type
+CognitiveMemory: type
+FileReaderRegistry: type
 
 __all__ = [
   # Core
@@ -127,9 +137,12 @@ __all__ = [
   "TracingConfig",
   "KnowledgeConfig",
   "CompressionConfig",
+  "ReadersConfig",
+  "FileReaderRegistry",
   "Toolkit",
   "KnowledgeToolkit",
   "MCPToolkit",
+  "CognitiveMemory",
   # Middleware
   "Middleware",
   "LoggingMiddleware",

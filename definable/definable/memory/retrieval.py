@@ -91,7 +91,7 @@ async def recall_memories(
 
   seen_ids: set = set()
   for result in results:
-    if isinstance(result, Exception):
+    if isinstance(result, BaseException):
       log_debug(f"Memory retrieval path failed: {result}", log_level=2)
       continue
     for item in result:

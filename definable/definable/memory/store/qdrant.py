@@ -1,5 +1,6 @@
 """Qdrant-backed memory store."""
 
+import contextlib
 import json
 import time
 from typing import Any, List, Optional
@@ -104,15 +105,13 @@ class QdrantMemoryStore:
     }
 
     for field_name, schema_type in index_fields.items():
-      try:
+      # Index may already exist or field may not be relevant to this collection
+      with contextlib.suppress(Exception):
         await self._client.create_payload_index(
           collection_name=collection_name,
           field_name=field_name,
           field_schema=schema_type,
         )
-      except Exception:
-        # Index may already exist or field may not be relevant to this collection
-        pass
 
   async def close(self) -> None:
     if self._client:
@@ -247,7 +246,7 @@ class QdrantMemoryStore:
     if episode.last_accessed_at == 0.0:
       episode.last_accessed_at = now
 
-    vector = episode.embedding if episode.embedding else self._zero_vector()
+    vector = episode.embedding or self._zero_vector()
     payload = self._episode_to_payload(episode)
 
     await self._client.upsert(
@@ -357,7 +356,7 @@ class QdrantMemoryStore:
     if atom.last_accessed_at == 0.0:
       atom.last_accessed_at = now
 
-    vector = atom.embedding if atom.embedding else self._zero_vector()
+    vector = atom.embedding or self._zero_vector()
     payload = self._atom_to_payload(atom)
 
     await self._client.upsert(
@@ -752,9 +751,7 @@ class QdrantMemoryStore:
     await self._ensure_initialized()
     models = self._models
 
-    user_filter = models.Filter(
-      must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))]
-    )
+    user_filter = models.Filter(must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=user_id))])
 
     for collection in (
       self._episodes_collection,
@@ -771,9 +768,7 @@ class QdrantMemoryStore:
     await self._ensure_initialized()
     models = self._models
 
-    session_filter = models.Filter(
-      must=[models.FieldCondition(key="session_id", match=models.MatchValue(value=session_id))]
-    )
+    session_filter = models.Filter(must=[models.FieldCondition(key="session_id", match=models.MatchValue(value=session_id))])
 
     await self._client.delete(
       collection_name=self._episodes_collection,
