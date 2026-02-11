@@ -146,6 +146,16 @@ for event in agent.run_stream("Solve this math problem"):
 | `ReasoningStep` | `content` | One reasoning step |
 | `ReasoningContentDelta` | `delta` | Reasoning text chunk |
 | `ReasoningCompleted` | | Reasoning finished |
+| `KnowledgeRetrievalStarted` | `query` | Knowledge retrieval began |
+| `KnowledgeRetrievalCompleted` | `query`, `documents_found`, `documents_used`, `duration_ms` | Knowledge retrieval finished |
+| `MemoryRecallStarted` | `query` | Memory recall began |
+| `MemoryRecallCompleted` | `query`, `tokens_used`, `chunks_included`, `chunks_available`, `duration_ms` | Memory recall finished |
+| `MemoryUpdateStarted` | `message_count` | Memory storage began |
+| `MemoryUpdateCompleted` | `message_count`, `duration_ms` | Memory storage finished |
+| `FileReadStarted` | `file_count` | File reading began |
+| `FileReadCompleted` | `file_count`, `files_read`, `files_failed`, `duration_ms` | File reading finished |
+| `SessionSummaryStarted` | | Session summary began |
+| `SessionSummaryCompleted` | | Session summary finished |
 | `RunPaused` | `requirements` | Waiting for user action |
 | `RunContinued` | | Resumed after pause |
 | `RunCompleted` | `output` | Run finished (includes full `RunOutput`) |

@@ -39,18 +39,38 @@ Definable installs these automatically:
 | `tiktoken` | Token counting |
 | `rich` | Formatted logging and output |
 | `docstring-parser` | Tool description extraction |
+| `aiosqlite` | SQLite async driver for memory and identity resolution |
 
 ## Optional Dependencies
 
 Some features require additional packages:
 
-| Feature | Package | Install |
-|---------|---------|---------|
-| PDF reading | `pypdf` | `pip install pypdf` |
+| Feature | Package(s) | Install |
+|---------|------------|---------|
+| PDF reading (knowledge) | `pypdf` | `pip install pypdf` |
 | URL reading | `beautifulsoup4` | `pip install beautifulsoup4` |
 | Voyage AI embeddings | `voyageai` | `pip install voyageai` |
 | Cohere reranking | `cohere` | `pip install cohere` |
 | PgVector database | `psycopg[binary]`, `pgvector` | `pip install psycopg[binary] pgvector` |
+| Discord interface | `discord.py>=2.3.0` | `pip install 'definable-ai[discord]'` |
+| All interfaces | `discord.py>=2.3.0` | `pip install 'definable-ai[interfaces]'` |
+| File readers (PDF, DOCX, PPTX, XLSX, ODS, RTF) | `pypdf`, `python-docx`, `python-pptx`, `openpyxl`, `odfpy`, `striprtf` | `pip install 'definable-ai[readers]'` |
+| PostgreSQL memory | `asyncpg>=0.29.0` | `pip install 'definable-ai[postgres-memory]'` |
+| Redis memory | `redis>=5.0.0` | `pip install 'definable-ai[redis-memory]'` |
+| Qdrant memory | `qdrant-client>=1.9.0` | `pip install 'definable-ai[qdrant-memory]'` |
+| Chroma memory | `chromadb>=0.5.0` | `pip install 'definable-ai[chroma-memory]'` |
+| MongoDB memory | `motor>=3.3.0` | `pip install 'definable-ai[mongodb-memory]'` |
+| Pinecone memory | `pinecone>=5.0.0` | `pip install 'definable-ai[pinecone-memory]'` |
+| Mistral OCR | `mistralai>=1.0.0` | `pip install 'definable-ai[mistral-ocr]'` |
+| HTTP server | `fastapi`, `uvicorn` | `pip install 'definable-ai[serve]'` |
+| Cron scheduling | `croniter` | `pip install 'definable-ai[cron]'` |
+| JWT authentication | `pyjwt` | `pip install 'definable-ai[jwt]'` |
+| Dev mode (hot-reload) | `watchfiles` | `pip install watchfiles` |
+| Full runtime | All of the above | `pip install 'definable-ai[runtime]'` |
+
+<Note>
+The Signal interface has no pip dependency — it uses an external `signal-cli-rest-api` Docker container. See the [Signal interface docs](/interfaces/signal) for setup instructions.
+</Note>
 
 ## Environment Variables
 

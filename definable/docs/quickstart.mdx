@@ -80,6 +80,31 @@ for doc in results:
     print(doc.content)
 ```
 
+## Your First Memory-Enabled Agent
+
+Give an agent persistent memory that works across conversations:
+
+```python
+from definable.agents import Agent
+from definable.memory import CognitiveMemory, SQLiteMemoryStore
+from definable.models import OpenAIChat
+
+memory = CognitiveMemory(store=SQLiteMemoryStore(db_path="./memory.db"))
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a helpful assistant with persistent memory.",
+    memory=memory,
+)
+
+# The agent remembers this across conversations
+output = agent.run("My name is Alice and I work at Acme Corp.", user_id="alice")
+
+# Later — the agent recalls the information
+output = agent.run("Where do I work?", user_id="alice")
+print(output.content)  # "You work at Acme Corp."
+```
+
 ## Stream Responses
 
 Get tokens as they are generated:
@@ -108,5 +133,11 @@ for chunk in model.invoke_stream(messages=[{"role": "user", "content": "Tell me 
   </Card>
   <Card title="Knowledge" icon="book" href="/knowledge/overview">
     Build complete RAG pipelines with readers, chunkers, and vector databases.
+  </Card>
+  <Card title="Memory" icon="brain" href="/memory/overview">
+    Persistent multi-tier memory with recall, distillation, and multiple backends.
+  </Card>
+  <Card title="Interfaces" icon="message-bot" href="/interfaces/overview">
+    Deploy agents to Telegram, Discord, and Signal.
   </Card>
 </CardGroup>

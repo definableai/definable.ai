@@ -1,0 +1,115 @@
+---
+title: Interface Examples
+sidebarTitle: Interfaces
+description: Examples for Discord, Signal, and multi-interface deployments.
+icon: comments
+---
+
+## 01 — Discord Bot
+
+A Discord bot with memory that remembers conversations per user.
+
+```python
+import asyncio
+
+from definable.agents import Agent
+from definable.interfaces import DiscordInterface, DiscordConfig
+from definable.memory import CognitiveMemory, SQLiteMemoryStore
+from definable.models import OpenAIChat
+
+memory = CognitiveMemory(store=SQLiteMemoryStore(db_path="./discord_memory.db"))
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful Discord bot with persistent memory.",
+  memory=memory,
+)
+
+discord = DiscordInterface(
+  agent=agent,
+  config=DiscordConfig(bot_token="your-discord-bot-token"),
+)
+
+asyncio.run(discord.serve_forever())
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/01_discord_bot.py">
+  `definable/examples/interfaces/01_discord_bot.py`
+</Card>
+
+## 02 — Signal Bot
+
+A Signal bot with auto-managed Docker container. Definable handles starting and stopping the `signal-cli-rest-api` container.
+
+```python
+import asyncio
+
+from definable.agents import Agent
+from definable.interfaces import SignalInterface, SignalConfig
+from definable.models import OpenAIChat
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful Signal bot.",
+)
+
+signal = SignalInterface(
+  agent=agent,
+  config=SignalConfig(
+    phone_number="+15551234567",
+    manage_container=True,
+    docker_data_dir="./signal-data",
+  ),
+)
+
+asyncio.run(signal.serve_forever())
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/02_signal_bot.py">
+  `definable/examples/interfaces/02_signal_bot.py`
+</Card>
+
+## 03 — Multi-Interface with Identity Resolution
+
+Run Telegram and Discord simultaneously with a shared identity resolver, so the same user is recognized across platforms.
+
+```python
+import asyncio
+
+from definable.agents import Agent
+from definable.interfaces import (
+    TelegramInterface,
+    TelegramConfig,
+    DiscordInterface,
+    DiscordConfig,
+    SQLiteIdentityResolver,
+    serve,
+)
+from definable.memory import CognitiveMemory, SQLiteMemoryStore
+from definable.models import OpenAIChat
+
+memory = CognitiveMemory(store=SQLiteMemoryStore(db_path="./multi_memory.db"))
+resolver = SQLiteIdentityResolver(db_path="./identity.db")
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful multi-platform bot.",
+  memory=memory,
+)
+
+telegram = TelegramInterface(
+  agent=agent,
+  config=TelegramConfig(bot_token="telegram-token"),
+)
+
+discord = DiscordInterface(
+  agent=agent,
+  config=DiscordConfig(bot_token="discord-token"),
+)
+
+asyncio.run(serve(telegram, discord, name="my-bot", identity_resolver=resolver))
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/03_multi_interface.py">
+  `definable/examples/interfaces/03_multi_interface.py`
+</Card>

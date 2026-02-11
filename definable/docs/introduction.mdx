@@ -27,7 +27,13 @@ Definable is a Python framework for building AI-powered applications. It provide
     Bundle related tools into reusable toolkits. Built-in toolkits for knowledge search and MCP server integration.
   </Card>
   <Card title="Interfaces" icon="message-bot" href="/interfaces/overview">
-    Connect agents to messaging platforms like Telegram. Automatic session management, hooks, media support, and concurrent request handling.
+    Connect agents to messaging platforms like Telegram, Discord, and Signal. Automatic session management, hooks, identity resolution, and multi-interface serving.
+  </Card>
+  <Card title="Memory" icon="brain" href="/memory/overview">
+    Persistent multi-tier memory with automatic recall, distillation, and cross-session context. Supports SQLite, PostgreSQL, Redis, Qdrant, Chroma, Pinecone, and MongoDB backends.
+  </Card>
+  <Card title="Readers" icon="file-lines" href="/readers/overview">
+    Extract text from files (PDF, DOCX, XLSX, audio) and inject into agent context automatically before LLM processing.
   </Card>
 </CardGroup>
 
@@ -38,23 +44,24 @@ Definable is organized into composable layers that work together:
 ````mermaid
 flowchart TD
   subgraph agentLayer [Agent]
-    Middleware
-    Tracing
-    Config
+    direction LR
+    Middleware --- Tracing --- Config
   end
   subgraph modelLayer ["Model (LLM Provider)"]
-    OpenAI
-    DeepSeek
-    Moonshot
-    xAI
-    Custom
+    direction LR
+    OpenAI --- DeepSeek --- Moonshot --- xAI --- Custom
   end
   subgraph capLayer [Capabilities]
-    ToolsToolkits["Tools & Toolkits"]
-    KnowledgeRAG["Knowledge (RAG)"]
-    MCP
+    direction LR
+    ToolsToolkits["Tools & Toolkits"] --- KnowledgeRAG["Knowledge (RAG)"] --- MCPNode["MCP"] --- MemoryNode["Memory"] --- ReadersNode["Readers"]
   end
-  agentLayer --> modelLayer --> capLayer
+  subgraph intLayer [Interfaces]
+    direction LR
+    Telegram --- Discord --- Signal --- CustomInt["Custom"]
+  end
+  agentLayer --> modelLayer
+  agentLayer --> capLayer
+  agentLayer --> intLayer
 ````
 
 ## Key Features
@@ -68,7 +75,9 @@ flowchart TD
 - **MCP support**: Connect to any MCP server and use its tools, resources, and prompts inside your agents.
 - **Testing**: Mock models, test agents without API calls, and assert on tool execution.
 - **Cost tracking**: Automatic token counting and cost calculation across providers.
-- **Interfaces**: Deploy agents to Telegram (and more) with automatic sessions, hooks, and media handling.
+- **Interfaces**: Deploy agents to Telegram, Discord, and Signal with sessions, hooks, identity resolution, and multi-interface serving.
+- **Memory**: Persistent multi-tier cognitive memory with automatic recall, distillation, and 8 storage backends.
+- **File readers**: Extract text from PDF, DOCX, XLSX, and audio files attached to agent messages.
 - **Type-safe**: Built on Pydantic with full type annotations and mypy support.
 
 ## Next Steps

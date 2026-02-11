@@ -1,0 +1,134 @@
+---
+title: Signal
+description: Connect your agent to Signal Messenger.
+icon: message
+---
+
+The Signal interface lets your agent respond to messages on Signal, the privacy-focused messenger. It communicates through [signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api), a Docker container that bridges Signal's protocol.
+
+## Setup
+
+Signal requires a `signal-cli-rest-api` container running alongside your application. You can either let Definable manage the container or run it yourself.
+
+### Option 1: Auto-Managed Docker
+
+Definable starts and stops the container automatically:
+
+```python
+config = SignalConfig(
+  phone_number="+15551234567",
+  manage_container=True,
+  docker_data_dir="./signal-data",  # Persists registration across restarts
+)
+```
+
+### Option 2: Bring Your Own Container
+
+Run the container yourself and point Definable at it:
+
+```bash
+docker run -d --name signal-api \
+  -p 8080:8080 \
+  -v ./signal-data:/home/.local/share/signal-cli \
+  -e MODE=native \
+  bbernhard/signal-cli-rest-api:latest
+```
+
+Then register and verify your phone number following the [signal-cli-rest-api docs](https://github.com/bbernhard/signal-cli-rest-api).
+
+## Installation
+
+No additional pip dependencies are needed — Signal communication happens over HTTP to the Docker container:
+
+```bash
+pip install definable-ai
+```
+
+## Quick Example
+
+```python
+import asyncio
+
+from definable.agents import Agent
+from definable.interfaces import SignalInterface, SignalConfig
+from definable.models import OpenAIChat
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful Signal bot.",
+)
+
+signal = SignalInterface(
+  agent=agent,
+  config=SignalConfig(
+    phone_number="+15551234567",
+    api_base_url="http://localhost:8080",
+  ),
+)
+
+asyncio.run(signal.serve_forever())
+```
+
+## SignalConfig
+
+<ParamField path="phone_number" type="str" required>
+  The registered Signal phone number (e.g., `"+15551234567"`).
+</ParamField>
+
+<ParamField path="api_base_url" type="str" default="http://localhost:8080">
+  URL of the signal-cli-rest-api server.
+</ParamField>
+
+<ParamField path="allowed_phone_numbers" type="list[str]" default="None">
+  Restrict to specific phone numbers. When `None`, responds to everyone.
+</ParamField>
+
+<ParamField path="allowed_group_ids" type="list[str]" default="None">
+  Restrict to specific Signal group IDs. When `None`, responds in all groups.
+</ParamField>
+
+<ParamField path="polling_interval" type="float" default={1.0}>
+  How often to poll for new messages (seconds).
+</ParamField>
+
+<ParamField path="trust_all_keys" type="bool" default={true}>
+  Automatically trust all safety number changes.
+</ParamField>
+
+### Docker Management
+
+<ParamField path="manage_container" type="bool" default={false}>
+  When `True`, Definable starts/stops the Docker container automatically.
+</ParamField>
+
+<ParamField path="docker_image" type="str" default="bbernhard/signal-cli-rest-api:latest">
+  Docker image to use.
+</ParamField>
+
+<ParamField path="docker_container_name" type="str" default="definable-signal-api">
+  Name for the Docker container.
+</ParamField>
+
+<ParamField path="docker_host_port" type="int" default={8080}>
+  Host port to map to the container.
+</ParamField>
+
+<ParamField path="docker_data_dir" type="str" default="">
+  Directory to mount for persistent data. When empty, uses a temporary directory.
+</ParamField>
+
+<ParamField path="docker_startup_timeout" type="float" default={30.0}>
+  How long to wait for the container to start (seconds).
+</ParamField>
+
+<ParamField path="docker_mode" type="str" default="native">
+  signal-cli mode. Use `"native"` for most setups.
+</ParamField>
+
+## Features
+
+- **Group and direct messages** — responds in both Signal groups and 1:1 conversations
+- **Attachments** — receives files sent by users
+- **Quote/reply context** — includes quoted messages for context
+- **Auto message splitting** — long responses are split to fit Signal's limits
+- **Access control** — restrict by phone number or group ID

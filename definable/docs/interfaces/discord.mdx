@@ -1,0 +1,125 @@
+---
+title: Discord
+description: Connect your agent to Discord as a bot.
+icon: discord
+---
+
+The Discord interface lets your agent respond to messages in Discord servers and direct messages.
+
+## Setup
+
+1. **Create a bot** at the [Discord Developer Portal](https://discord.com/developers/applications)
+2. **Enable the MESSAGE_CONTENT intent** under Bot → Privileged Gateway Intents
+3. **Copy the bot token** from the Bot settings page
+4. **Invite the bot** to your server using the OAuth2 URL Generator (select `bot` scope with `Send Messages` and `Read Message History` permissions)
+
+## Installation
+
+```bash
+pip install 'definable-ai[discord]'
+```
+
+## Quick Example
+
+```python
+import asyncio
+
+from definable.agents import Agent
+from definable.interfaces import DiscordInterface, DiscordConfig
+from definable.models import OpenAIChat
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful Discord bot.",
+)
+
+discord = DiscordInterface(
+  agent=agent,
+  config=DiscordConfig(bot_token="your-bot-token"),
+)
+
+asyncio.run(discord.serve_forever())
+```
+
+## DiscordConfig
+
+<ParamField path="bot_token" type="str" required>
+  Discord bot token from the Developer Portal.
+</ParamField>
+
+<ParamField path="intents_message_content" type="bool" default={true}>
+  Enable the MESSAGE_CONTENT privileged intent. Required to read message text.
+</ParamField>
+
+<ParamField path="allowed_guild_ids" type="list[int]" default="None">
+  Restrict the bot to specific server (guild) IDs. When `None`, responds in all servers.
+</ParamField>
+
+<ParamField path="allowed_channel_ids" type="list[int]" default="None">
+  Restrict the bot to specific channel IDs. When `None`, responds in all channels.
+</ParamField>
+
+<ParamField path="respond_to_bots" type="bool" default={false}>
+  Whether to respond to messages from other bots.
+</ParamField>
+
+<ParamField path="command_prefix" type="str" default="None">
+  When set, the bot only responds to messages starting with this prefix (e.g., `"!"`).
+</ParamField>
+
+<ParamField path="connect_timeout" type="float" default={30.0}>
+  Timeout in seconds for the initial connection to Discord.
+</ParamField>
+
+<ParamField path="max_message_length" type="int" default={2000}>
+  Maximum message length. Discord's limit is 2000 characters. Longer responses are automatically split into multiple messages.
+</ParamField>
+
+## Features
+
+- **Guild and DM support** — responds in server channels and direct messages
+- **Attachments** — receives text, image, and audio files from users
+- **Reply context** — includes the replied-to message for context
+- **Auto message splitting** — long responses are split at sentence boundaries
+- **Typing indicator** — shows "typing..." while the agent processes
+
+## Access Control
+
+Restrict which servers and channels the bot responds in:
+
+```python
+config = DiscordConfig(
+  bot_token="your-bot-token",
+  allowed_guild_ids=[123456789, 987654321],   # Only these servers
+  allowed_channel_ids=[111111111, 222222222],  # Only these channels
+)
+```
+
+## Agent with Tools and Memory
+
+```python
+from definable.agents import Agent
+from definable.interfaces import DiscordInterface, DiscordConfig
+from definable.memory import CognitiveMemory, SQLiteMemoryStore
+from definable.models import OpenAIChat
+from definable.tools import tool
+
+@tool
+def search_docs(query: str) -> str:
+    """Search the documentation."""
+    return f"Found results for: {query}"
+
+memory = CognitiveMemory(store=SQLiteMemoryStore(db_path="./discord_memory.db"))
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a documentation assistant.",
+  tools=[search_docs],
+  memory=memory,
+)
+
+discord = DiscordInterface(
+  agent=agent,
+  config=DiscordConfig(bot_token="your-bot-token"),
+)
+```

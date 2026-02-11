@@ -45,6 +45,18 @@ Only the keys for examples you want to run are needed.
   <Card title="Knowledge" icon="book" href="/examples/knowledge">
     Basic RAG, document management, chunking, embedders, vector databases, reranking.
   </Card>
+  <Card title="Memory" icon="brain" href="/examples/memory">
+    Basic memory, store protocol walkthrough, and backend smoke tests.
+  </Card>
+  <Card title="Interfaces" icon="comments" href="/examples/interfaces">
+    Discord bot, Signal bot, and multi-interface with identity resolution.
+  </Card>
+  <Card title="Readers" icon="file-lines" href="/examples/readers">
+    Basic readers, custom parsers, standalone usage, and provider overrides.
+  </Card>
+  <Card title="Runtime" icon="server" href="/agents/runtime">
+    Webhooks, cron jobs, event triggers, lifecycle hooks, and unified serving.
+  </Card>
   <Card title="MCP" icon="plug" href="/examples/mcp">
     Basic MCP, multiple servers, resources, config files, mock servers, prompts, error handling.
   </Card>
@@ -92,6 +104,22 @@ Only the keys for examples you want to run are needed.
       <Tree.File name="06_agent_with_knowledge.py" />
       <Tree.File name="07_reranking.py" />
     </Tree.Folder>
+    <Tree.Folder name="memory" defaultOpen>
+      <Tree.File name="01_basic_memory.py" />
+      <Tree.File name="02_store_protocol.py" />
+      <Tree.File name="03_store_backends.py" />
+    </Tree.Folder>
+    <Tree.Folder name="interfaces" defaultOpen>
+      <Tree.File name="01_discord_bot.py" />
+      <Tree.File name="02_signal_bot.py" />
+      <Tree.File name="03_multi_interface.py" />
+    </Tree.Folder>
+    <Tree.Folder name="readers" defaultOpen>
+      <Tree.File name="01_basic_readers.py" />
+      <Tree.File name="02_custom_reader.py" />
+      <Tree.File name="03_standalone_usage.py" />
+      <Tree.File name="04_provider_override.py" />
+    </Tree.Folder>
     <Tree.Folder name="mcp" defaultOpen>
       <Tree.File name="01_basic_mcp.py" />
       <Tree.File name="02_multiple_servers.py" />
@@ -101,6 +129,11 @@ Only the keys for examples you want to run are needed.
       <Tree.File name="06_prompts_provider.py" />
       <Tree.File name="07_error_handling.py" />
       <Tree.File name="08_mock_server_agent.py" />
+    </Tree.Folder>
+    <Tree.Folder name="runtime" defaultOpen>
+      <Tree.File name="01_webhook_basic.py" />
+      <Tree.File name="02_cron_basic.py" />
+      <Tree.File name="03_unified.py" />
     </Tree.Folder>
     <Tree.Folder name="advanced" defaultOpen>
       <Tree.File name="01_middleware.py" />

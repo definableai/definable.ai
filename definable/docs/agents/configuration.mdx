@@ -94,6 +94,12 @@ agent = Agent(
   Tool result compression to reduce token usage on long tool outputs.
 </ParamField>
 
+### Readers
+
+<ParamField path="readers" type="ReadersConfig">
+  File reader configuration for processing attached files. See [File Readers](/readers/overview).
+</ParamField>
+
 ## Immutable Updates
 
 `AgentConfig` is frozen after creation. Use `with_updates()` to create a modified copy:
@@ -134,3 +140,36 @@ config = AgentConfig(
 <Note>
 Compression uses a separate model call to summarize tool output. This adds a small amount of latency but can significantly reduce total token usage for tools that return large results.
 </Note>
+
+## Readers Config
+
+Configure file reader behavior for processing attached files:
+
+```python
+from definable.agents import AgentConfig, ReadersConfig
+
+config = AgentConfig(
+    readers=ReadersConfig(
+        enabled=True,
+        registry=None,                     # None = auto-create with built-in readers
+        max_total_content_length=None,     # Limit total injected content (None = unlimited)
+        context_format="xml",              # "xml" or "markdown"
+    ),
+)
+```
+
+<ParamField path="readers.enabled" type="bool" default="true">
+  Enable or disable file reading.
+</ParamField>
+
+<ParamField path="readers.registry" type="BaseReader">
+  Custom reader instance. When `None`, a default `BaseReader` with all available built-in parsers is created.
+</ParamField>
+
+<ParamField path="readers.max_total_content_length" type="int">
+  Maximum total character length of all extracted file content. When `None`, no limit is applied.
+</ParamField>
+
+<ParamField path="readers.context_format" type="str" default="xml">
+  Format for injecting file content into the prompt. `"xml"` wraps content in XML tags, `"markdown"` uses code blocks.
+</ParamField>

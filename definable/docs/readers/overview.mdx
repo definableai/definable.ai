@@ -1,0 +1,343 @@
+---
+title: File Readers
+sidebarTitle: Overview
+description: Extract text and multimodal content from files (PDF, DOCX, PPTX, XLSX, images, audio) and inject into agent context automatically.
+icon: file-lines
+---
+
+File readers extract content from files attached to agent messages before they are sent to the model. This lets agents process PDFs, Word documents, presentations, spreadsheets, images, and audio files without manual preprocessing.
+
+<Note>
+**File readers** (`definable.readers`) extract content from files attached to agent messages for LLM processing. They are distinct from **Knowledge readers** (`definable.knowledge.readers`), which convert raw sources into `Document` objects for the [RAG pipeline](/knowledge/readers).
+</Note>
+
+## Quick Example
+
+```python
+from definable.agents import Agent
+from definable.media import File
+from definable.models import OpenAIChat
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful assistant. Analyze any files the user provides.",
+  readers=True,  # Auto-creates a registry with all available parsers
+)
+
+file = File(
+  content=b"Q3 Revenue: $2.5M\nQ3 Expenses: $1.8M\nQ3 Net Income: $700K",
+  filename="financials.txt",
+  mime_type="text/plain",
+)
+
+output = agent.run("Summarize the key financial metrics.", files=[file])
+print(output.content)
+```
+
+## Architecture
+
+The readers module uses a layered design:
+
+- **Parsers** — stateless format converters: `bytes → List[ContentBlock]`. Never do I/O.
+- **ParserRegistry** — priority-based mapping from format to parser.
+- **BaseReader** — orchestrator: `File → bytes → detect format → parse → ReaderOutput`.
+- **Providers** — AI-backed readers (e.g., MistralReader) that handle their own API I/O.
+
+## Built-in Parsers
+
+| Parser | Formats | Dependency |
+|--------|---------|------------|
+| `TextParser` | `.txt`, `.md`, `.csv`, `.json`, `.py`, `.js`, +40 more | None |
+| `PDFParser` | `.pdf` | `pypdf>=4.0.0` |
+| `DocxParser` | `.docx` | `python-docx>=1.0.0` |
+| `PptxParser` | `.pptx` | `python-pptx>=1.0.0` |
+| `XlsxParser` | `.xlsx` | `openpyxl>=3.1.0` |
+| `OdsParser` | `.ods` | `odfpy>=1.4.0` |
+| `RtfParser` | `.rtf` | `striprtf>=0.0.26` |
+| `HTMLParser` | `.html`, `.htm` | None |
+| `ImageParser` | `.png`, `.jpg`, `.gif`, `.bmp`, `.tiff`, `.webp`, `.svg`, +more | None |
+| `AudioParser` | `.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.webm` | None |
+
+Install all parser dependencies at once:
+
+```bash
+pip install 'definable-ai[readers]'
+```
+
+<Tip>
+Parsers with missing optional dependencies are silently skipped. Install only what you need.
+</Tip>
+
+## ContentBlock
+
+Content extraction produces `ContentBlock` objects — the multimodal output unit:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content_type` | `str` | `"text"`, `"image"`, `"table"`, `"audio"`, or `"raw"` |
+| `content` | `str \| bytes` | Extracted content |
+| `mime_type` | `str \| None` | MIME type of the content |
+| `metadata` | `dict` | Parser-specific metadata |
+| `page_number` | `int \| None` | Page number (for paginated formats) |
+
+**Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `as_text()` | String representation of the content |
+| `as_message_content()` | OpenAI-format content part for message construction |
+
+## ReaderOutput
+
+Every file read returns a `ReaderOutput`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `filename` | `str` | Name of the file |
+| `blocks` | `List[ContentBlock]` | Extracted content blocks |
+| `mime_type` | `str \| None` | Detected MIME type |
+| `page_count` | `int \| None` | Number of pages (PDF, DOCX, PPTX) |
+| `word_count` | `int \| None` | Word count of extracted text |
+| `truncated` | `bool` | Whether content was truncated |
+| `error` | `str \| None` | Error message if reading failed |
+| `metadata` | `dict` | Additional metadata |
+
+**Methods:**
+
+| Method | Description |
+|--------|-------------|
+| `as_text(separator="\n\n")` | Concatenated text from all blocks |
+| `as_messages()` | OpenAI-format message content list |
+| `content` | Property — backwards-compatible alias for `as_text()` |
+
+## BaseReader
+
+The main orchestrator that resolves files to parsed content:
+
+```python
+from definable.readers import BaseReader
+
+reader = BaseReader()
+result = reader.read(file)
+print(result.content)
+```
+
+### Constructor
+
+<ParamField path="config" type="ReaderConfig">
+  Reader configuration (file size limits, encoding, timeout).
+</ParamField>
+
+<ParamField path="registry" type="ParserRegistry">
+  Custom parser registry. When `None`, a default registry with all available parsers is created.
+</ParamField>
+
+### Methods
+
+| Method | Description |
+|--------|-------------|
+| `register(parser, priority=100)` | Register a parser (returns self for chaining) |
+| `get_parser(file)` | Get the parser that handles a file, or `None` |
+| `read(file)` | Read a file synchronously |
+| `aread(file)` | Read a file asynchronously |
+| `aread_all(files)` | Read multiple files concurrently |
+
+## Agent Integration
+
+Three ways to enable file readers on an agent:
+
+```python
+# 1. Auto-registry with all available parsers
+agent = Agent(model=model, readers=True)
+
+# 2. Custom reader instance
+from definable.readers import BaseReader
+reader = BaseReader(config=ReaderConfig(max_file_size=10_000_000))
+agent = Agent(model=model, readers=reader)
+
+# 3. Single parser (auto-wrapped in BaseReader)
+from definable.readers.parsers.base_parser import BaseParser
+agent = Agent(model=model, readers=SomeParser())
+```
+
+When the agent receives files via `run(..., files=[...])`, it automatically extracts content from each file and injects it into the prompt before calling the model.
+
+## ReaderConfig
+
+Configure reader behavior:
+
+```python
+from definable.readers import ReaderConfig
+
+config = ReaderConfig(
+  max_file_size=None,          # Max file size in bytes (None = unlimited)
+  max_content_length=None,     # Max extracted content length (None = unlimited)
+  encoding="utf-8",            # Text encoding
+  timeout=30.0,                # Read timeout in seconds
+)
+```
+
+## Creating a Custom Parser
+
+Subclass `BaseParser` and implement three methods:
+
+```python
+from typing import List, Set
+from definable.readers.parsers.base_parser import BaseParser
+from definable.readers.models import ContentBlock, ReaderConfig
+
+class MarkdownParser(BaseParser):
+  def supported_mime_types(self) -> List[str]:
+    return ["text/markdown"]
+
+  def supported_extensions(self) -> Set[str]:
+    return {".md"}
+
+  def parse(
+    self,
+    data: bytes,
+    *,
+    mime_type: str | None = None,
+    config: ReaderConfig | None = None,
+  ) -> List[ContentBlock]:
+    text = data.decode(config.encoding if config else "utf-8")
+    return [ContentBlock(content_type="text", content=text)]
+```
+
+Register it with a reader:
+
+```python
+from definable.readers import BaseReader
+from definable.readers.registry import ParserRegistry
+
+registry = ParserRegistry()
+registry.register(MarkdownParser(), priority=200)  # Higher priority wins
+reader = BaseReader(registry=registry)
+```
+
+## MistralReader
+
+AI-backed OCR provider using the Mistral OCR API. Handles PDFs, DOCX, PPTX, and images with high-quality extraction.
+
+```python
+from definable.readers.providers.mistral import MistralReader
+
+reader = MistralReader(api_key="your-key")
+agent = Agent(model=model, readers=reader)
+```
+
+<ParamField path="api_key" type="str">
+  Mistral API key. Falls back to `MISTRAL_API_KEY` env var.
+</ParamField>
+
+<ParamField path="model" type="str" default="mistral-ocr-latest">
+  OCR model to use.
+</ParamField>
+
+<ParamField path="include_image_base64" type="bool" default="false">
+  Include base64-encoded images in output blocks.
+</ParamField>
+
+<ParamField path="local_fallback" type="bool" default="true">
+  Fall back to local parsers for formats Mistral doesn't support.
+</ParamField>
+
+Native formats: `.pdf`, `.docx`, `.pptx`, `.png`, `.jpg`, `.jpeg`, `.avif`
+
+<Note>
+Requires `mistralai`: `pip install 'definable-ai[mistral-ocr]'`
+</Note>
+
+## Parser Options
+
+### PDFParser
+
+```python
+from definable.readers.parsers.pdf import PDFParser
+parser = PDFParser(page_separator="\n\n")
+```
+
+### DocxParser
+
+```python
+from definable.readers.parsers.docx import DocxParser
+parser = DocxParser(include_tables=True)
+```
+
+### XlsxParser
+
+```python
+from definable.readers.parsers.xlsx import XlsxParser
+parser = XlsxParser(max_rows=1000)
+```
+
+### OdsParser
+
+```python
+from definable.readers.parsers.ods import OdsParser
+parser = OdsParser(max_rows=1000)
+```
+
+## ParserRegistry
+
+The registry maps formats to parsers with priority-based dispatch:
+
+```python
+from definable.readers.registry import ParserRegistry
+
+registry = ParserRegistry(include_defaults=True)  # Registers all available parsers
+registry.register(MyParser(), priority=200)        # Higher priority wins
+
+parser = registry.get_parser(mime_type="application/pdf")
+```
+
+Built-in parsers are registered at priority `0`. User-registered parsers default to priority `100`. Higher priority wins when multiple parsers handle the same format.
+
+## ReadersConfig
+
+Configure the readers integration on the agent via `AgentConfig`:
+
+```python
+from definable.agents import Agent, AgentConfig, ReadersConfig
+
+agent = Agent(
+  model=model,
+  config=AgentConfig(
+    readers=ReadersConfig(
+      enabled=True,
+      registry=None,                     # Auto-create if None
+      max_total_content_length=None,     # Limit total injected content
+      context_format="xml",              # "xml" or "markdown"
+    ),
+  ),
+)
+```
+
+## Standalone Usage
+
+Use `BaseReader` without an agent for file processing pipelines:
+
+```python
+from definable.media import File
+from definable.readers import BaseReader
+
+reader = BaseReader()
+
+files = [
+  File(content=b"Hello, world!", filename="greeting.txt", mime_type="text/plain"),
+  File(content=b'{"name": "Alice"}', filename="user.json", mime_type="application/json"),
+]
+
+for file in files:
+  result = reader.read(file)
+  print(f"{result.filename}: {result.content[:100]}")
+```
+
+## Stream Events
+
+When using streaming, file reads emit events:
+
+| Event | Key Fields | Description |
+|-------|-----------|-------------|
+| `FileReadStarted` | `file_count` | File reading began |
+| `FileReadCompleted` | `file_count`, `files_read`, `files_failed`, `duration_ms` | File reading finished |

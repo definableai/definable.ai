@@ -77,6 +77,10 @@ All four methods accept the same parameters:
   Unique identifier for this run. Auto-generated if not provided.
 </ParamField>
 
+<ParamField path="user_id" type="str">
+  User identifier for memory scoping. When set, memory recall and storage are scoped to this user.
+</ParamField>
+
 <ParamField path="images" type="List[Image]">
   Images to include with the user message.
 </ParamField>
@@ -90,7 +94,7 @@ All four methods accept the same parameters:
 </ParamField>
 
 <ParamField path="files" type="List[File]">
-  Files to include with the user message.
+  Files to include with the user message. When [readers](/readers/overview) are enabled, file content is automatically extracted and injected into the prompt.
 </ParamField>
 
 <ParamField path="output_schema" type="Type[BaseModel]">
@@ -140,9 +144,51 @@ Streaming runs yield `RunOutputEvent` objects. Key event types:
 | `ToolCallCompleted` | A tool call finished successfully |
 | `ToolCallError` | A tool call failed |
 | `ReasoningStep` | A reasoning step from a thinking model |
+| `KnowledgeRetrievalStarted` | Knowledge retrieval began |
+| `KnowledgeRetrievalCompleted` | Knowledge retrieval finished |
+| `MemoryRecallStarted` | Memory recall began |
+| `MemoryRecallCompleted` | Memory recall finished |
+| `MemoryUpdateStarted` | Memory storage began |
+| `MemoryUpdateCompleted` | Memory storage finished |
+| `FileReadStarted` | File reading began |
+| `FileReadCompleted` | File reading finished |
 | `RunCompleted` | The entire run is finished (includes final `RunOutput`) |
 | `RunError` | The run failed with an error |
 
 <Tip>
 The `RunCompleted` event contains the full `RunOutput` object in `event.output`, giving you access to aggregated metrics and the complete message history even when streaming.
 </Tip>
+
+## Deploying with serve()
+
+Use `agent.serve()` to start the full agent runtime — messaging interfaces, HTTP endpoints, webhooks, and cron jobs in a single call:
+
+```python
+agent.serve(telegram_interface, discord_interface, port=8000)
+```
+
+<ParamField path="*interfaces" type="BaseInterface">
+  Interface instances (Telegram, Discord, Signal) to run concurrently.
+</ParamField>
+
+<ParamField path="host" type="str" default="0.0.0.0">
+  HTTP server bind address.
+</ParamField>
+
+<ParamField path="port" type="int" default="8000">
+  HTTP server port.
+</ParamField>
+
+<ParamField path="enable_server" type="bool" default="None">
+  Force HTTP server on/off. Auto-detects from registered webhooks when `None`.
+</ParamField>
+
+<ParamField path="dev" type="bool" default="false">
+  Enable hot-reload dev mode.
+</ParamField>
+
+`agent.serve()` is a blocking sync call. Use `agent.aserve()` for async contexts.
+
+When webhooks or cron triggers are registered via `@agent.on(...)`, they run alongside interfaces automatically. Set `agent.auth` to protect HTTP endpoints with API key or JWT authentication.
+
+See [Agent Runtime](/agents/runtime) for full details on webhooks, cron, event triggers, lifecycle hooks, and the HTTP server.

@@ -1,0 +1,170 @@
+---
+title: Reader Examples
+sidebarTitle: Readers
+description: Examples for file readers, custom readers, and standalone usage.
+icon: file-lines
+---
+
+## 01 — Basic Readers
+
+The simplest way to use file readers: set `readers=True` on the agent and pass files with `run()`.
+
+```python
+from definable.agents import Agent
+from definable.media import File
+from definable.models import OpenAIChat
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o-mini"),
+  instructions="You are a helpful assistant. Analyze any files the user provides.",
+  readers=True,
+)
+
+file = File(
+  content=b"Q3 Revenue: $2.5M\nQ3 Expenses: $1.8M\nQ3 Net Income: $700K\nGrowth: 15% YoY",
+  filename="financials.txt",
+  mime_type="text/plain",
+)
+
+output = agent.run("Summarize the key financial metrics from this file.", files=[file])
+print(output.content)
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/readers/01_basic_readers.py">
+  `definable/examples/readers/01_basic_readers.py`
+</Card>
+
+## 02 — Custom Parser
+
+Build a custom `BaseParser` for a specific file format. Register it with a `ParserRegistry` and it takes priority over built-in parsers for the same formats.
+
+```python
+from typing import List, Set
+
+from definable.media import File
+from definable.readers.base import BaseReader
+from definable.readers.models import ContentBlock, ReaderConfig
+from definable.readers.parsers.base_parser import BaseParser
+from definable.readers.registry import ParserRegistry
+
+class MarkdownParser(BaseParser):
+  """Custom parser that adds markdown-specific metadata."""
+
+  def supported_mime_types(self) -> List[str]:
+    return ["text/markdown"]
+
+  def supported_extensions(self) -> Set[str]:
+    return {".md"}
+
+  def parse(self, data: bytes, *, mime_type: str | None = None, config: ReaderConfig | None = None) -> List[ContentBlock]:
+    encoding = config.encoding if config else "utf-8"
+    text = data.decode(encoding, errors="replace")
+    headings = [line for line in text.split("\n") if line.startswith("#")]
+    return [
+      ContentBlock(
+        content_type="text",
+        content=text,
+        mime_type="text/markdown",
+        metadata={"heading_count": len(headings)},
+      )
+    ]
+
+# Register — higher priority wins over defaults
+registry = ParserRegistry()
+registry.register(MarkdownParser(), priority=200)
+reader = BaseReader(registry=registry)
+
+md_file = File(
+  content=b"# Title\n\nSome content.\n\n## Section\n\nMore content.",
+  filename="readme.md",
+  mime_type="text/markdown",
+)
+result = reader.read(md_file)
+print(f"Content: {result.content[:100]}")
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/readers/02_custom_reader.py">
+  `definable/examples/readers/02_custom_reader.py`
+</Card>
+
+## 03 — Standalone Usage
+
+Use `BaseReader` without an agent for file processing pipelines.
+
+```python
+from definable.media import File
+from definable.readers import BaseReader
+
+reader = BaseReader()
+
+files = [
+  File(content=b"Hello, world!", filename="greeting.txt", mime_type="text/plain"),
+  File(content=b'{"name": "Alice", "age": 30}', filename="user.json", mime_type="application/json"),
+  File(
+    content=b"name,score\nAlice,95\nBob,87\nCharlie,92",
+    filename="scores.csv",
+    mime_type="text/csv",
+  ),
+]
+
+for file in files:
+  result = reader.read(file)
+  print(f"{result.filename}: {result.content[:100]}")
+
+# Check which parser handles a file
+parser = reader.get_parser(files[0])
+print(f"Parser for .txt: {type(parser).__name__}")
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/readers/03_standalone_usage.py">
+  `definable/examples/readers/03_standalone_usage.py`
+</Card>
+
+## 04 — Provider Override
+
+Replace the default PDF parser with a custom cloud-based parser. Shows the priority system where higher-priority registrations override built-in defaults.
+
+```python
+from typing import List, Set
+
+from definable.agents import Agent
+from definable.agents.testing import MockModel
+from definable.media import File
+from definable.readers.base import BaseReader
+from definable.readers.models import ContentBlock, ReaderConfig
+from definable.readers.parsers.base_parser import BaseParser
+from definable.readers.registry import ParserRegistry
+
+class CloudPDFParser(BaseParser):
+  """Simulated cloud-based PDF parser."""
+
+  def supported_mime_types(self) -> List[str]:
+    return ["application/pdf"]
+
+  def supported_extensions(self) -> Set[str]:
+    return {".pdf"}
+
+  def parse(self, data: bytes, *, mime_type: str | None = None, config: ReaderConfig | None = None) -> List[ContentBlock]:
+    return [ContentBlock(content_type="text", content="[CloudPDF] Extracted text with high-quality OCR")]
+
+# Default reader
+default_reader = BaseReader()
+pdf_file = File(content=b"%PDF", filename="report.pdf", mime_type="application/pdf")
+parser = default_reader.get_parser(pdf_file)
+print(f"Default PDF parser: {type(parser).__name__}")
+
+# Override with cloud provider
+registry = ParserRegistry()
+registry.register(CloudPDFParser(), priority=200)
+custom_reader = BaseReader(registry=registry)
+parser = custom_reader.get_parser(pdf_file)
+print(f"Custom PDF parser: {type(parser).__name__}")
+
+# Use with Agent
+agent = Agent(model=MockModel(responses=["Analyzed."]), readers=custom_reader)
+output = agent.run("Analyze this PDF.", files=[pdf_file])
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/readers/04_provider_override.py">
+  `definable/examples/readers/04_provider_override.py`
+</Card>

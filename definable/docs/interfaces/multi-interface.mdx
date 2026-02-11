@@ -1,0 +1,109 @@
+---
+title: Multi-Interface Serving
+sidebarTitle: Multi-Interface
+description: Run multiple interfaces concurrently with automatic restart and graceful shutdown.
+icon: server
+---
+
+The `serve()` function runs multiple interfaces at the same time, with automatic restart on failure and graceful shutdown on Ctrl+C.
+
+## Quick Example
+
+```python
+import asyncio
+
+from definable.agents import Agent
+from definable.interfaces import (
+    TelegramInterface,
+    TelegramConfig,
+    DiscordInterface,
+    DiscordConfig,
+    serve,
+)
+from definable.models import OpenAIChat
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful multi-platform bot.",
+)
+
+telegram = TelegramInterface(
+  agent=agent,
+  config=TelegramConfig(bot_token="telegram-token"),
+)
+
+discord = DiscordInterface(
+  agent=agent,
+  config=DiscordConfig(bot_token="discord-token"),
+)
+
+asyncio.run(serve(telegram, discord, name="my-bot"))
+```
+
+## serve() Function
+
+```python
+async def serve(
+    *interfaces: BaseInterface,
+    name: str | None = None,
+    identity_resolver: IdentityResolver | None = None,
+) -> None
+```
+
+<ParamField path="*interfaces" type="BaseInterface" required>
+  One or more interface instances to run concurrently.
+</ParamField>
+
+<ParamField path="name" type="str" default="None">
+  Display name for logging. When `None`, uses a generated name.
+</ParamField>
+
+<ParamField path="identity_resolver" type="IdentityResolver" default="None">
+  Shared identity resolver propagated to all interfaces. See [Identity Resolution](/interfaces/identity).
+</ParamField>
+
+## Behavior
+
+- **Concurrent execution** — each interface runs as an independent asyncio task
+- **Automatic restart** — if an interface crashes, it restarts with exponential backoff (1s → 2s → 4s → ... → 60s max)
+- **Stability threshold** — if an interface runs for 60+ seconds without crashing, the backoff resets to 1s
+- **Graceful shutdown** — Ctrl+C sends a stop signal to all interfaces and waits for clean shutdown
+
+## Agent.serve()
+
+`Agent.serve()` creates an `AgentRuntime` that runs interfaces alongside webhooks, cron triggers, and an HTTP server:
+
+```python
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful bot.",
+)
+
+agent.serve(telegram, discord, port=8000)
+```
+
+`agent.serve()` is a blocking sync call. Use `agent.aserve()` for async contexts.
+
+<Tip>
+For the full runtime documentation including webhooks, cron jobs, event triggers, authentication, and dev mode, see [Agent Runtime](/agents/runtime).
+</Tip>
+
+## With Identity Resolution
+
+For cross-platform memory continuity, pass a shared identity resolver:
+
+```python
+from definable.interfaces import SQLiteIdentityResolver, serve
+
+resolver = SQLiteIdentityResolver(db_path="./identity.db")
+
+await serve(
+    telegram,
+    discord,
+    signal,
+    name="my-bot",
+    identity_resolver=resolver,
+)
+```
+
+This ensures that a user linked across platforms shares a single memory store and conversation history.

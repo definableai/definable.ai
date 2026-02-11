@@ -6,6 +6,10 @@ icon: file-import
 
 Readers convert raw sources (files, URLs, strings) into `Document` objects that can be chunked, embedded, and stored. Definable includes readers for plain text, PDF, and web content.
 
+<Note>
+These are **Knowledge readers** (`definable.knowledge.readers`) for the RAG document ingestion pipeline. If you need to extract text from files attached to agent messages (PDF, DOCX, XLSX, audio) before LLM processing, see [File Readers](/readers/overview) instead.
+</Note>
+
 ## Auto-Detection
 
 By default, `Knowledge` detects the correct reader from the source:

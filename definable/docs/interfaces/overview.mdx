@@ -5,7 +5,7 @@ description: Connect agents to messaging platforms with automatic sessions, hook
 icon: message-bot
 ---
 
-An **Interface** connects a Definable agent to an external messaging platform — Telegram, Slack, Discord, or any custom channel. It handles the full lifecycle: receiving messages, managing sessions, running the agent, and sending responses back.
+An **Interface** connects a Definable agent to an external messaging platform — Telegram, Discord, Signal, or any custom channel. It handles the full lifecycle: receiving messages, managing sessions, resolving user identity, running the agent, and sending responses back.
 
 ## How It Works
 
@@ -15,13 +15,14 @@ Every incoming message flows through a structured pipeline:
 flowchart TD
   PlatformMsg["Platform Message"] --> Convert["1. Convert to InterfaceMessage"]
   Convert --> OnReceived["2. on_message_received hooks"]
-  OnReceived --> GetSession["3. Get or create session"]
-  GetSession --> OnBefore["4. on_before_respond hooks"]
-  OnBefore --> RunAgent["5. Run agent"]
-  RunAgent --> BuildResp["6. Build InterfaceResponse"]
-  BuildResp --> OnAfter["7. on_after_respond hooks"]
-  OnAfter --> SendResp["8. Send response to platform"]
-  SendResp --> UpdateSession["9. Update session history"]
+  OnReceived --> ResolveId["3. Resolve identity"]
+  ResolveId --> GetSession["4. Get or create session"]
+  GetSession --> OnBefore["5. on_before_respond hooks"]
+  OnBefore --> RunAgent["6. Run agent"]
+  RunAgent --> BuildResp["7. Build InterfaceResponse"]
+  BuildResp --> OnAfter["8. on_after_respond hooks"]
+  OnAfter --> SendResp["9. Send response to platform"]
+  SendResp --> UpdateSession["10. Update session history"]
 ````
 
 Concurrency is controlled by a semaphore — multiple messages can be processed in parallel up to `max_concurrent_requests`. Errors at any step trigger `on_error` hooks and send a configurable error message to the user.
@@ -96,6 +97,10 @@ All interfaces accept these parameters:
   List of hooks to attach. Can also be added later with `.add_hook()`.
 </ParamField>
 
+<ParamField path="identity_resolver" type="IdentityResolver">
+  Cross-platform identity resolver. Maps platform user IDs to canonical user IDs for shared memory. See [Identity Resolution](/interfaces/identity).
+</ParamField>
+
 ## InterfaceConfig
 
 Base configuration shared by all interfaces:
@@ -142,6 +147,18 @@ interface = (
   </Card>
   <Card title="Telegram" icon="paper-plane" href="/interfaces/telegram">
     Deploy to Telegram with polling or webhooks, media support, and access control.
+  </Card>
+  <Card title="Discord" icon="discord" href="/interfaces/discord">
+    Deploy to Discord with guild/DM support, attachments, and access control.
+  </Card>
+  <Card title="Signal" icon="message" href="/interfaces/signal">
+    Deploy to Signal with auto-managed Docker or bring-your-own container.
+  </Card>
+  <Card title="Identity" icon="fingerprint" href="/interfaces/identity">
+    Map users across platforms to a single canonical identity for shared memory.
+  </Card>
+  <Card title="Multi-Interface" icon="server" href="/interfaces/multi-interface">
+    Run multiple interfaces concurrently with automatic restart and graceful shutdown.
   </Card>
   <Card title="Custom Interfaces" icon="code" href="/interfaces/custom-interfaces">
     Build your own interface for any messaging platform.

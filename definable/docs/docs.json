@@ -45,7 +45,9 @@
               "agents/multi-turn",
               "agents/middleware",
               "agents/tracing",
-              "agents/testing"
+              "agents/testing",
+              "agents/runtime",
+              "agents/auth"
             ]
           },
           {
@@ -74,7 +76,25 @@
               "interfaces/sessions",
               "interfaces/hooks",
               "interfaces/telegram",
+              "interfaces/discord",
+              "interfaces/signal",
+              "interfaces/identity",
+              "interfaces/multi-interface",
               "interfaces/custom-interfaces"
+            ]
+          },
+          {
+            "group": "Memory",
+            "pages": [
+              "memory/overview",
+              "memory/stores",
+              "memory/agent-integration"
+            ]
+          },
+          {
+            "group": "Readers",
+            "pages": [
+              "readers/overview"
             ]
           },
           {
@@ -124,6 +144,9 @@
               "examples/agents",
               "examples/tools",
               "examples/knowledge",
+              "examples/memory",
+              "examples/interfaces",
+              "examples/readers",
               "examples/mcp"
             ]
           }

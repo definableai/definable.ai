@@ -13,13 +13,17 @@ The agent follows a loop:
 
 ````mermaid
 flowchart TD
-  UserInput["User Input"] --> BuildMsgs["1. Build messages"]
-  BuildMsgs --> CallModel["2. Call model with tools"]
-  CallModel --> ModelResp["3. Model returns response"]
+  UserInput["User Input"] --> ReadFiles["1. Read attached files"]
+  ReadFiles --> RetrieveKnowledge["2. Retrieve knowledge"]
+  RetrieveKnowledge --> RecallMemory["3. Recall memory"]
+  RecallMemory --> BuildMsgs["4. Build messages"]
+  BuildMsgs --> CallModel["5. Call model with tools"]
+  CallModel --> ModelResp["6. Model returns response"]
   ModelResp --> Decision{Text or Tool calls?}
-  Decision -->|Text| FinalResp["Final Response"]
-  Decision -->|Tool calls| ExecTools["4. Execute each tool call"]
-  ExecTools --> AddResults["5. Add results to messages"]
+  Decision -->|Text| StoreMemory["Store memory"]
+  StoreMemory --> FinalResp["Final Response"]
+  Decision -->|Tool calls| ExecTools["7. Execute each tool call"]
+  ExecTools --> AddResults["8. Add results to messages"]
   AddResults --> CallModel
 ````
 
@@ -41,6 +45,9 @@ agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
     tools=[search_docs],
     instructions="You are a documentation assistant. Use the search tool to find answers.",
+    # memory=memory,    # Optional: persistent memory (see Memory docs)
+    # readers=True,     # Optional: file reader support (see Readers docs)
+    # name="my-agent",  # Optional: display name for logging
 )
 
 output = agent.run("How do I configure middleware?")
@@ -68,6 +75,18 @@ print(output.content)
   <Card title="Testing" icon="flask-vial" href="/agents/testing">
     Test agents without API calls using `MockModel` and `AgentTestCase`.
   </Card>
+  <Card title="Memory" icon="brain" href="/memory/overview">
+    Persistent multi-tier memory with automatic recall, distillation, and cross-session context.
+  </Card>
+  <Card title="Readers" icon="file-lines" href="/readers/overview">
+    Extract text from PDF, DOCX, XLSX, and audio files attached to agent messages.
+  </Card>
+  <Card title="Runtime" icon="server" href="/agents/runtime">
+    Deploy with HTTP endpoints, webhooks, cron jobs, and messaging interfaces via agent.serve().
+  </Card>
+  <Card title="Authentication" icon="lock" href="/agents/auth">
+    Secure HTTP endpoints with API key or JWT authentication.
+  </Card>
 </CardGroup>
 
 ## Agent Properties
@@ -93,6 +112,22 @@ agent = (
     .use(RetryMiddleware(max_retries=3))
 )
 ```
+
+## Deploying with serve()
+
+Use `agent.serve()` to start the full agent runtime — messaging interfaces, HTTP endpoints, webhooks, and cron jobs:
+
+```python
+from definable.triggers import Webhook
+
+@agent.on(Webhook("/webhook"))
+async def handle(event):
+  return f"Process: {event.body}"
+
+agent.serve(telegram_interface, port=8000)
+```
+
+See [Agent Runtime](/agents/runtime) for the full runtime documentation including webhooks, cron scheduling, and dev mode. See [Multi-Interface Serving](/interfaces/multi-interface) for interface-specific details.
 
 ## Context Manager
 

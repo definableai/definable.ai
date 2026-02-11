@@ -1,0 +1,129 @@
+---
+title: Authentication
+sidebarTitle: Authentication
+description: Secure your agent's HTTP endpoints with API keys or JWT tokens.
+icon: lock
+---
+
+When using `agent.serve()`, you can protect HTTP endpoints with authentication. Set `agent.auth` to an auth provider and all requests to `/run` and webhook endpoints require valid credentials.
+
+## API Key Authentication
+
+```python
+from definable.auth import APIKeyAuth
+
+agent.auth = APIKeyAuth(keys={"sk-my-secret-key"})
+agent.serve(port=8000)
+```
+
+Clients send the key via the `X-API-Key` header or the `Authorization: Bearer <key>` header:
+
+```bash
+# X-API-Key header
+curl -X POST http://localhost:8000/run \
+  -H "X-API-Key: sk-my-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Hello"}'
+
+# Or Authorization header
+curl -X POST http://localhost:8000/run \
+  -H "Authorization: Bearer sk-my-secret-key" \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Hello"}'
+```
+
+<ParamField path="keys" type="str | Set[str]" required>
+  A single API key or a set of allowed keys.
+</ParamField>
+
+<ParamField path="header" type="str" default="X-API-Key">
+  HTTP header name to read the key from. Falls back to the `Authorization` header if the primary header is empty.
+</ParamField>
+
+User ID is derived from the key hash: `apikey_<sha256[:12]>`.
+
+## JWT Authentication
+
+```python
+from definable.auth import JWTAuth
+
+agent.auth = JWTAuth(secret="your-secret-key")
+agent.serve(port=8000)
+```
+
+Clients send a Bearer token in the `Authorization` header:
+
+```bash
+curl -X POST http://localhost:8000/run \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Hello"}'
+```
+
+<ParamField path="secret" type="str" required>
+  Secret key or public key for token validation.
+</ParamField>
+
+<ParamField path="algorithm" type="str" default="HS256">
+  JWT algorithm.
+</ParamField>
+
+<ParamField path="audience" type="str">
+  Expected audience claim.
+</ParamField>
+
+<ParamField path="issuer" type="str">
+  Expected issuer claim.
+</ParamField>
+
+User ID is extracted from token claims, checking `sub`, then `user_id`, then `id`. Remaining claims are available in `AuthContext.metadata`.
+
+<Note>
+Requires `pyjwt`: `pip install pyjwt` or `pip install 'definable-ai[jwt]'`
+</Note>
+
+## Per-Webhook Auth Override
+
+Individual webhooks can override the agent-level auth:
+
+```python
+@agent.on(Webhook("/public-hook", auth=False))    # No auth required
+async def public(event): ...
+
+@agent.on(Webhook("/private-hook"))                # Uses agent.auth
+async def private(event): ...
+```
+
+## AuthContext
+
+When authentication succeeds, the provider returns an `AuthContext`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `user_id` | `str` | Canonical user identifier |
+| `metadata` | `Dict[str, Any]` | Extra claims or info from the provider |
+
+## Custom Auth Provider
+
+Implement the `AuthProvider` protocol to create your own auth backend:
+
+```python
+from definable.auth import AuthProvider, AuthContext
+
+class MyAuth:
+  async def authenticate(self, request) -> AuthContext | None:
+    token = request.headers.get("X-Custom-Token")
+    if verify(token):
+      return AuthContext(user_id="user-123", metadata={"role": "admin"})
+    return None
+
+agent.auth = MyAuth()
+```
+
+The `authenticate` method can be sync or async. Return `AuthContext` on success, `None` on failure (returns 401).
+
+## Auth Bypass
+
+- `/health` is always public
+- Webhooks with `auth=False` bypass authentication
+- In dev mode, `/docs`, `/redoc`, and `/openapi.json` are also public

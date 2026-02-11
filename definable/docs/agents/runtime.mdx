@@ -1,0 +1,249 @@
+---
+title: Agent Runtime
+sidebarTitle: Runtime
+description: Deploy agents with HTTP endpoints, webhooks, cron jobs, and messaging interfaces.
+icon: server
+---
+
+`agent.serve()` starts a runtime that runs messaging interfaces, an HTTP server, and scheduled tasks concurrently. One line to start everything.
+
+## Quick Start
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+from definable.triggers import Webhook
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  instructions="You are a helpful assistant.",
+)
+
+@agent.on(Webhook("/webhook"))
+async def handle(event):
+  return f"Process this: {event.body}"
+
+agent.serve(port=8000)
+```
+
+```bash
+curl -X POST http://localhost:8000/webhook \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!"}'
+```
+
+## serve() / aserve()
+
+`agent.serve()` is a blocking sync call. Use `agent.aserve()` in async contexts.
+
+```python
+# Sync (blocking)
+agent.serve(port=8000)
+
+# Async
+await agent.aserve(port=8000)
+```
+
+<ParamField path="*interfaces" type="BaseInterface">
+  Interface instances (Telegram, Discord, Signal) to run concurrently.
+</ParamField>
+
+<ParamField path="name" type="str" default="None">
+  Display name for logs. Defaults to the agent's name.
+</ParamField>
+
+<ParamField path="host" type="str" default="0.0.0.0">
+  HTTP server bind address.
+</ParamField>
+
+<ParamField path="port" type="int" default="8000">
+  HTTP server port.
+</ParamField>
+
+<ParamField path="enable_server" type="bool" default="None">
+  Force the HTTP server on or off. When `None`, the server starts automatically if webhooks are registered.
+</ParamField>
+
+<ParamField path="dev" type="bool" default="false">
+  Enable hot-reload dev mode. Watches `.py` files and auto-restarts on changes. Requires `watchfiles`.
+</ParamField>
+
+## Webhooks
+
+Register HTTP webhook handlers with the `Webhook` trigger:
+
+```python
+from definable.triggers import Webhook
+
+@agent.on(Webhook("/github"))
+async def handle_github(event):
+  return f"Summarize this GitHub event: {event.body}"
+```
+
+When any webhook is registered, the HTTP server starts automatically.
+
+### Webhook Parameters
+
+<ParamField path="path" type="str" required>
+  URL path for the webhook (e.g., `"/github"`).
+</ParamField>
+
+<ParamField path="method" type="str" default="POST">
+  HTTP method to listen on.
+</ParamField>
+
+<ParamField path="auth" type="Any" default="None">
+  Per-webhook auth override. `None` inherits from `agent.auth`. `False` disables auth for this endpoint.
+</ParamField>
+
+### Handler Return Values
+
+The return value from a webhook handler controls what happens next:
+
+| Return | Behavior |
+|--------|----------|
+| `str` | Runs the agent with the string as input |
+| `dict` | Runs the agent with the dict as keyword arguments |
+| `None` | No-op (acknowledge without running the agent) |
+
+### TriggerEvent
+
+Every trigger handler receives a `TriggerEvent`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `body` | `dict \| None` | Parsed JSON body (webhooks) or event data |
+| `headers` | `dict \| None` | HTTP headers (webhooks only) |
+| `source` | `str` | Trigger identifier (e.g., `"POST /github"`) |
+| `timestamp` | `float` | Unix timestamp of the event |
+| `raw` | `Any` | Raw request object |
+
+## Cron Jobs
+
+Schedule tasks with standard cron expressions:
+
+```python
+from definable.triggers import Cron
+
+@agent.on(Cron("0 9 * * *"))  # Every day at 9am UTC
+async def morning_briefing(event):
+  return "Give me today's summary."
+
+agent.serve(enable_server=False)  # Cron only, no HTTP server
+```
+
+<ParamField path="schedule" type="str" required>
+  Standard cron expression (e.g., `"0 9 * * *"`).
+</ParamField>
+
+<ParamField path="timezone" type="str" default="UTC">
+  Timezone for the schedule.
+</ParamField>
+
+<Note>
+Requires `croniter`: `pip install croniter` or `pip install 'definable-ai[cron]'`
+</Note>
+
+## Event Triggers
+
+Fire triggers programmatically from anywhere in your code:
+
+```python
+from definable.triggers import EventTrigger
+
+@agent.on(EventTrigger("user_signup"))
+async def on_signup(event):
+  return f"Write a welcome message for {event.body['name']}."
+
+# Fire from anywhere
+agent.emit("user_signup", {"name": "Alice"})
+```
+
+Events are fire-and-forget — `emit()` does not block or return a result.
+
+## Lifecycle Hooks
+
+Run logic before every agent run or after every response:
+
+```python
+@agent.before_request
+async def log_start(context):
+  print(f"Run {context.run_id} starting")
+
+@agent.after_response
+async def log_end(output):
+  print(f"Run completed: {output.content[:50]}")
+```
+
+- Hooks are always non-fatal — errors are logged but never raised
+- Both sync and async functions are supported
+- Both `@agent.before_request` and `@agent.before_request()` syntax work
+- `before_request` receives a `RunContext`, `after_response` receives a `RunOutput`
+
+## HTTP Server
+
+The built-in server is powered by FastAPI and provides these endpoints:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/run` | Invoke the agent with `{input, session_id, user_id}` |
+| `GET` | `/health` | Health check (always public) |
+| `*` | Webhook paths | Auto-registered from `Webhook` triggers |
+
+When `agent.auth` is set, all endpoints except `/health` require authentication. See [Authentication](/agents/auth) for details.
+
+<Note>
+Requires `fastapi` and `uvicorn`: `pip install fastapi uvicorn` or `pip install 'definable-ai[serve]'`
+</Note>
+
+## Dev Mode
+
+Enable hot-reload for development:
+
+```python
+agent.serve(dev=True)
+```
+
+- Watches `.py` file changes and auto-restarts the process
+- Swagger docs available at `/docs`
+- Requires `watchfiles`: `pip install watchfiles`
+
+## With Interfaces
+
+Combine messaging interfaces, webhooks, cron, auth, and hooks in a single `serve()` call:
+
+```python
+from definable.auth import APIKeyAuth
+from definable.triggers import Webhook, Cron, EventTrigger
+
+agent.auth = APIKeyAuth(keys={"my-api-key"})
+
+@agent.on(Webhook("/github", auth=False))  # Public endpoint
+async def handle_github(event):
+  repo = event.body.get("repository", {}).get("name", "unknown") if event.body else "unknown"
+  return f"Summarize this GitHub event for repo {repo}"
+
+@agent.on(Cron("0 */6 * * *"))
+async def periodic_check(event):
+  return "Give me a one-sentence status update."
+
+@agent.before_request
+async def log_before(context):
+  print(f"  -> Starting run {context.run_id[:8]}...")
+
+@agent.after_response
+async def log_after(output):
+  print(f"  <- Run done: {(output.content or '')[:60]}")
+
+agent.serve(telegram_interface, port=8000)
+```
+
+## How It Works
+
+`AgentRuntime` orchestrates up to three concurrent tasks:
+
+1. **HTTP server** — FastAPI app serving `/run`, `/health`, and webhook routes
+2. **Interface supervisor** — runs messaging interfaces (Telegram, Discord, etc.) with exponential backoff auto-restart (1s → 60s)
+3. **Cron scheduler** — tracks next-fire times and dispatches cron handlers
+
+Graceful shutdown on `SIGINT`/`SIGTERM` cancels all tasks and waits for clean exit.
