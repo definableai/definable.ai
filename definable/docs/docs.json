@@ -3,9 +3,25 @@
   "theme": "mint",
   "name": "Definable AI",
   "colors": {
-    "primary": "#4F46E5",
-    "light": "#818CF8",
-    "dark": "#3730A3"
+    "primary": "#FA8112",
+    "light": "#FA8112",
+    "dark": "#FA8112"
+  },
+  "background": {
+    "color": {
+      "light": "#FAF3E1",
+      "dark": "#222222"
+    }
+  },
+  "font": {
+    "headings": {
+      "family": "Inter",
+      "weight": 700
+    },
+    "body": {
+      "family": "Inter",
+      "weight": 400
+    }
   },
   "favicon": "/favicon.svg",
   "navigation": {
