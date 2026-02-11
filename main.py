@@ -1,5 +1,5 @@
 def main():
-    print("Hello from definable-ai!")
+    print("Hello from definable!")
 
 
 if __name__ == "__main__":

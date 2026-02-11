@@ -56,7 +56,7 @@ def run_dev_mode(watch_dir: str | None = None) -> None:
   try:
     from watchfiles import PythonFilter, run_process
   except ImportError as e:
-    raise ImportError("watchfiles is required for dev mode. Install it with: pip install 'definable-ai[serve]'") from e
+    raise ImportError("watchfiles is required for dev mode. Install it with: pip install 'definable[serve]'") from e
 
   script = os.path.abspath(sys.argv[0])
   if not os.path.isfile(script):

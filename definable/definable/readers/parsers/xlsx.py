@@ -17,7 +17,7 @@ def _import_openpyxl():
     return openpyxl
   except ImportError as e:
     raise ImportError(
-      "XlsxParser requires the 'openpyxl' package. Install it with: pip install 'openpyxl>=3.1.0' or: pip install 'definable-ai[readers]'"
+      "XlsxParser requires the 'openpyxl' package. Install it with: pip install 'openpyxl>=3.1.0' or: pip install 'definable[readers]'"
     ) from e
 
 

@@ -141,7 +141,7 @@ agent.serve(enable_server=False)  # Cron only, no HTTP server
 </ParamField>
 
 <Note>
-Requires `croniter`: `pip install croniter` or `pip install 'definable-ai[cron]'`
+Requires `croniter`: `pip install croniter` or `pip install 'definable[cron]'`
 </Note>
 
 ## Event Triggers
@@ -193,7 +193,7 @@ The built-in server is powered by FastAPI and provides these endpoints:
 When `agent.auth` is set, all endpoints except `/health` require authentication. See [Authentication](/agents/auth) for details.
 
 <Note>
-Requires `fastapi` and `uvicorn`: `pip install fastapi uvicorn` or `pip install 'definable-ai[serve]'`
+Requires `fastapi` and `uvicorn`: `pip install fastapi uvicorn` or `pip install 'definable[serve]'`
 </Note>
 
 ## Dev Mode

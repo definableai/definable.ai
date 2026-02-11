@@ -17,7 +17,7 @@ def _import_pptx():
     return Presentation
   except ImportError as e:
     raise ImportError(
-      "PptxParser requires the 'python-pptx' package. Install it with: pip install 'python-pptx>=1.0.0' or: pip install 'definable-ai[readers]'"
+      "PptxParser requires the 'python-pptx' package. Install it with: pip install 'python-pptx>=1.0.0' or: pip install 'definable[readers]'"
     ) from e
 
 

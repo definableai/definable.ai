@@ -17,7 +17,7 @@ def _import_pypdf():
     return pypdf
   except ImportError as e:
     raise ImportError(
-      "PDFParser requires the 'pypdf' package. Install it with: pip install 'pypdf>=4.0.0' or: pip install 'definable-ai[readers]'"
+      "PDFParser requires the 'pypdf' package. Install it with: pip install 'pypdf>=4.0.0' or: pip install 'definable[readers]'"
     ) from e
 
 

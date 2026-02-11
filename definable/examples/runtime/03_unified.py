@@ -3,7 +3,7 @@
 Demonstrates the full agent-centric runtime with all features combined.
 
 Prerequisites:
-  pip install 'definable-ai[runtime]'
+  pip install 'definable[runtime]'
   export OPENAI_API_KEY=sk-...
   export TELEGRAM_BOT_TOKEN=...  # Optional, for Telegram interface
 

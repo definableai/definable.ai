@@ -53,7 +53,7 @@ class PostgresMemoryStore:
     try:
       import asyncpg
     except ImportError as e:
-      raise ImportError("asyncpg is required for PostgresMemoryStore. Install it with: pip install definable-ai[postgres-memory]") from e
+      raise ImportError("asyncpg is required for PostgresMemoryStore. Install it with: pip install definable[postgres-memory]") from e
 
     if not self._db_url:
       raise ValueError("PostgreSQL connection URL is required. Set db_url or MEMORY_POSTGRES_URL environment variable.")

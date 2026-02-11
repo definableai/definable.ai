@@ -17,7 +17,7 @@ def _import_odf():
     return opendocument, table, text
   except ImportError as e:
     raise ImportError(
-      "OdsParser requires the 'odfpy' package. Install it with: pip install 'odfpy>=1.4.0' or: pip install 'definable-ai[readers]'"
+      "OdsParser requires the 'odfpy' package. Install it with: pip install 'odfpy>=1.4.0' or: pip install 'definable[readers]'"
     ) from e
 
 

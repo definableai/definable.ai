@@ -41,7 +41,7 @@ class ChromaMemoryStore:
     try:
       import chromadb
     except ImportError as e:
-      raise ImportError("chromadb is required for ChromaMemoryStore. Install it with: pip install definable-ai[chroma-memory]") from e
+      raise ImportError("chromadb is required for ChromaMemoryStore. Install it with: pip install definable[chroma-memory]") from e
 
     if self._persist_directory is not None:
       self._client = await asyncio.to_thread(chromadb.PersistentClient, path=self._persist_directory)

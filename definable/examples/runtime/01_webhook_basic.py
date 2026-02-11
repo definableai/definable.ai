@@ -4,7 +4,7 @@ Starts an HTTP server with a webhook endpoint that feeds incoming
 requests to the agent.
 
 Prerequisites:
-  pip install 'definable-ai[serve]'
+  pip install 'definable[serve]'
   export OPENAI_API_KEY=sk-...
 
 Usage:

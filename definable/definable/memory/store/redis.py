@@ -35,7 +35,7 @@ class RedisMemoryStore:
     try:
       import redis.asyncio as aioredis
     except ImportError as e:
-      raise ImportError("redis is required for RedisMemoryStore. Install it with: pip install definable-ai[redis-memory]") from e
+      raise ImportError("redis is required for RedisMemoryStore. Install it with: pip install definable[redis-memory]") from e
 
     self._client = aioredis.from_url(self.redis_url, db=self.db, decode_responses=True)
     # Probe for RediSearch

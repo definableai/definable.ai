@@ -50,7 +50,7 @@ class JWTAuth:
     try:
       import jwt
     except ImportError as e:
-      raise ImportError("pyjwt is required for JWTAuth. Install it with: pip install 'definable-ai[jwt]'") from e
+      raise ImportError("pyjwt is required for JWTAuth. Install it with: pip install 'definable[jwt]'") from e
 
     auth_header = getattr(request, "headers", {}).get("authorization", "")
     if not auth_header.lower().startswith("bearer "):

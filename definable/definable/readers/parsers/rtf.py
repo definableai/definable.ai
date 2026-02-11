@@ -16,7 +16,7 @@ def _import_striprtf():
     return rtf_to_text
   except ImportError as e:
     raise ImportError(
-      "RtfParser requires the 'striprtf' package. Install it with: pip install 'striprtf>=0.0.26' or: pip install 'definable-ai[readers]'"
+      "RtfParser requires the 'striprtf' package. Install it with: pip install 'striprtf>=0.0.26' or: pip install 'definable[readers]'"
     ) from e
 
 

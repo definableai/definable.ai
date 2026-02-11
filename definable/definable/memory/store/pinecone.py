@@ -40,7 +40,7 @@ class PineconeMemoryStore:
     try:
       from pinecone import Pinecone
     except ImportError as e:
-      raise ImportError("pinecone is required for PineconeMemoryStore. Install it with: pip install definable-ai[pinecone-memory]") from e
+      raise ImportError("pinecone is required for PineconeMemoryStore. Install it with: pip install definable[pinecone-memory]") from e
 
     if not self._api_key:
       raise ValueError("Pinecone API key is required. Set api_key or PINECONE_API_KEY environment variable.")

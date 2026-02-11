@@ -3,7 +3,7 @@
 Runs a scheduled task every minute using a cron expression.
 
 Prerequisites:
-  pip install 'definable-ai[cron]'
+  pip install 'definable[cron]'
   export OPENAI_API_KEY=sk-...
 
 Usage:

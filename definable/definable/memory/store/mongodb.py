@@ -41,7 +41,7 @@ class MongoMemoryStore:
     try:
       import motor.motor_asyncio as motor
     except ImportError as e:
-      raise ImportError("motor is required for MongoMemoryStore. Install it with: pip install definable-ai[mongodb-memory]") from e
+      raise ImportError("motor is required for MongoMemoryStore. Install it with: pip install definable[mongodb-memory]") from e
 
     self._client = motor.AsyncIOMotorClient(self._connection_string)
     self._db = self._client[self._database_name]

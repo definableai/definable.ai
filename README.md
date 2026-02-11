@@ -2,8 +2,8 @@
 
 Build LLM agents that work in production.
 
-[![PyPI](https://img.shields.io/pypi/v/definable-ai)](https://pypi.org/project/definable-ai/)
-[![Python](https://img.shields.io/pypi/pyversions/definable-ai)](https://pypi.org/project/definable-ai/)
+[![PyPI](https://img.shields.io/pypi/v/definable)](https://pypi.org/project/definable-ai/)
+[![Python](https://img.shields.io/pypi/pyversions/definable)](https://pypi.org/project/definable-ai/)
 [![License](https://img.shields.io/github/license/definable-ai/definable)](https://github.com/definable-ai/definable/blob/main/LICENSE)
 
 A Python framework for building agent applications with tools, RAG, persistent memory, file readers, messaging platform integrations, and the Model Context Protocol. Switch providers without rewriting agent code.
@@ -13,7 +13,7 @@ A Python framework for building agent applications with tools, RAG, persistent m
 ## Install
 
 ```bash
-pip install definable-ai
+pip install definable
 ```
 
 ## Quick Start
@@ -209,19 +209,19 @@ Any OpenAI-compatible API works with `OpenAIChat(base_url=..., api_key=...)`.
 Install only what you need:
 
 ```bash
-pip install definable-ai[readers]          # PDF, DOCX, PPTX, XLSX, ODS, RTF parsers
-pip install definable-ai[serve]            # FastAPI + Uvicorn for agent.serve()
-pip install definable-ai[cron]             # Cron trigger support
-pip install definable-ai[jwt]              # JWT authentication
-pip install definable-ai[runtime]          # serve + cron combined
-pip install definable-ai[discord]          # Discord interface
-pip install definable-ai[postgres-memory]  # PostgreSQL memory store
-pip install definable-ai[redis-memory]     # Redis memory store
-pip install definable-ai[qdrant-memory]    # Qdrant memory store
-pip install definable-ai[chroma-memory]    # Chroma memory store
-pip install definable-ai[mongodb-memory]   # MongoDB memory store
-pip install definable-ai[pinecone-memory]  # Pinecone memory store
-pip install definable-ai[mistral-ocr]      # Mistral AI document parsing
+pip install definable[readers]          # PDF, DOCX, PPTX, XLSX, ODS, RTF parsers
+pip install definable[serve]            # FastAPI + Uvicorn for agent.serve()
+pip install definable[cron]             # Cron trigger support
+pip install definable[jwt]              # JWT authentication
+pip install definable[runtime]          # serve + cron combined
+pip install definable[discord]          # Discord interface
+pip install definable[postgres-memory]  # PostgreSQL memory store
+pip install definable[redis-memory]     # Redis memory store
+pip install definable[qdrant-memory]    # Qdrant memory store
+pip install definable[chroma-memory]    # Chroma memory store
+pip install definable[mongodb-memory]   # MongoDB memory store
+pip install definable[pinecone-memory]  # Pinecone memory store
+pip install definable[mistral-ocr]      # Mistral AI document parsing
 ```
 
 ## Documentation

@@ -46,7 +46,7 @@ class AgentServer:
       from fastapi import FastAPI, Request
       from fastapi.responses import JSONResponse
     except ImportError as e:
-      raise ImportError("fastapi is required for the agent server. Install it with: pip install 'definable-ai[serve]'") from e
+      raise ImportError("fastapi is required for the agent server. Install it with: pip install 'definable[serve]'") from e
 
     # Make Request available in module globals for annotation resolution.
     globals()["Request"] = Request

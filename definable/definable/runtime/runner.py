@@ -113,7 +113,7 @@ class AgentRuntime:
     try:
       import uvicorn
     except ImportError as e:
-      raise ImportError("uvicorn is required for the agent server. Install it with: pip install 'definable-ai[serve]'") from e
+      raise ImportError("uvicorn is required for the agent server. Install it with: pip install 'definable[serve]'") from e
 
     from definable.runtime.server import AgentServer
 

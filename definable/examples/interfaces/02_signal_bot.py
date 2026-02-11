@@ -3,7 +3,7 @@
 Prerequisites:
   1. Register/link your phone number with signal-cli-rest-api
   2. Install the package:
-        pip install definable-ai[signal]
+        pip install definable[signal]
 
 Usage:
   export SIGNAL_PHONE_NUMBER="+1234567890"

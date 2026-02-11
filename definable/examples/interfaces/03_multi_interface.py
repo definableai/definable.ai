@@ -9,7 +9,7 @@ It also demonstrates cross-platform identity resolution using
 and Discord shares a single unified memory.
 
 Prerequisites:
-  pip install 'definable-ai[telegram,discord]'
+  pip install 'definable[telegram,discord]'
 
 Usage:
   export OPENAI_API_KEY="your-openai-key"

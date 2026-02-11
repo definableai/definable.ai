@@ -5,7 +5,7 @@ Prerequisites:
   2. Enable the MESSAGE_CONTENT privileged intent in Bot settings
   3. Invite the bot to your server with the "Send Messages" and "Read Messages" permissions
   4. Install the discord.py dependency:
-       pip install 'definable-ai[discord]'
+       pip install 'definable[discord]'
 
 Usage:
   export DISCORD_BOT_TOKEN="your-bot-token"

@@ -17,7 +17,7 @@ def _import_docx():
     return docx
   except ImportError as e:
     raise ImportError(
-      "DocxParser requires the 'python-docx' package. Install it with: pip install 'python-docx>=1.0.0' or: pip install 'definable-ai[readers]'"
+      "DocxParser requires the 'python-docx' package. Install it with: pip install 'python-docx>=1.0.0' or: pip install 'definable[readers]'"
     ) from e
 
 

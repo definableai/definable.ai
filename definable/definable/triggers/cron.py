@@ -28,7 +28,7 @@ class Cron(BaseTrigger):
     try:
       from croniter import croniter  # type: ignore[import-untyped]
     except ImportError as e:
-      raise ImportError("croniter is required for Cron triggers. Install it with: pip install 'definable-ai[cron]'") from e
+      raise ImportError("croniter is required for Cron triggers. Install it with: pip install 'definable[cron]'") from e
 
     if not croniter.is_valid(schedule):
       raise ValueError(f"Invalid cron expression: {schedule!r}")

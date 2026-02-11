@@ -51,7 +51,7 @@ class DiscordInterface(BaseInterface):
       import discord
     except ImportError:
       raise InterfaceConnectionError(
-        "discord.py is required for DiscordInterface. Install it with: pip install 'definable-ai[discord]'",
+        "discord.py is required for DiscordInterface. Install it with: pip install 'definable[discord]'",
         platform="discord",
       )
 

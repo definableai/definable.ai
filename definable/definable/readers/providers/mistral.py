@@ -48,7 +48,7 @@ def _import_mistralai():
     return mistralai
   except ImportError as e:
     raise ImportError(
-      "MistralReader requires the 'mistralai' package. Install it with: pip install 'mistralai>=1.0.0' or: pip install 'definable-ai[mistral-ocr]'"
+      "MistralReader requires the 'mistralai' package. Install it with: pip install 'mistralai>=1.0.0' or: pip install 'definable[mistral-ocr]'"
     ) from e
 
 

@@ -56,7 +56,7 @@ class QdrantMemoryStore:
     try:
       from qdrant_client import AsyncQdrantClient, models  # noqa: F401
     except ImportError as e:
-      raise ImportError("qdrant-client is required for QdrantMemoryStore. Install it with: pip install definable-ai[qdrant-memory]") from e
+      raise ImportError("qdrant-client is required for QdrantMemoryStore. Install it with: pip install definable[qdrant-memory]") from e
 
     self._client = AsyncQdrantClient(url=self._url, port=self._port, api_key=self._api_key)
     self._models = models
