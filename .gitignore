@@ -175,6 +175,8 @@ alembic.ini
 # misc
 junk/
 traces/
+*.db
+definable_runs.db
 
 # For pgAdmin
 *pgadmin*

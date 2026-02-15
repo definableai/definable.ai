@@ -11,21 +11,21 @@ An **Agent** wraps a model with tools, instructions, and configuration to create
 
 The agent follows a loop:
 
-````mermaid
+```mermaid
 flowchart TD
-  UserInput["User Input"] --> ReadFiles["1. Read attached files"]
-  ReadFiles --> RetrieveKnowledge["2. Retrieve knowledge"]
-  RetrieveKnowledge --> RecallMemory["3. Recall memory"]
-  RecallMemory --> BuildMsgs["4. Build messages"]
-  BuildMsgs --> CallModel["5. Call model with tools"]
-  CallModel --> ModelResp["6. Model returns response"]
+  UserInput["User Input"] --> ReadFiles["Read attached files"]
+  ReadFiles --> RetrieveKnowledge["Retrieve knowledge"]
+  RetrieveKnowledge --> RecallMemory["Recall memory"]
+  RecallMemory --> BuildMsgs["Build messages"]
+  BuildMsgs --> CallModel["Call model with tools"]
+  CallModel --> ModelResp["Model returns response"]
   ModelResp --> Decision{Text or Tool calls?}
   Decision -->|Text| StoreMemory["Store memory"]
   StoreMemory --> FinalResp["Final Response"]
-  Decision -->|Tool calls| ExecTools["7. Execute each tool call"]
-  ExecTools --> AddResults["8. Add results to messages"]
+  Decision -->|Tool calls| ExecTools["Execute each tool call"]
+  ExecTools --> AddResults["Add results to messages"]
   AddResults --> CallModel
-````
+```
 
 The loop continues until the model returns a text response with no tool calls, or the maximum iteration limit is reached.
 

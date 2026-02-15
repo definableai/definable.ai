@@ -114,7 +114,7 @@ class SimpleReranker(Reranker):
 
 | Scenario | Recommendation |
 |----------|---------------|
-| Small knowledge base (<100 docs) | Optional — vector search is usually sufficient |
+| Small knowledge base (fewer than 100 docs) | Optional — vector search is usually sufficient |
 | Large knowledge base | Recommended — significantly improves precision |
 | Multilingual content | Use `rerank-multilingual-v3.0` |
 | English only | Use `rerank-english-v3.0` for best performance |
