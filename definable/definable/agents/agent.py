@@ -20,6 +20,7 @@ from uuid import uuid4
 from definable.agents.config import AgentConfig
 from definable.agents.middleware import Middleware
 from definable.agents.toolkit import Toolkit
+from definable.skills.base import Skill
 from definable.agents.tracing.base import TraceWriter
 from definable.media import Audio, File, Image, Video
 from definable.models.message import Message
@@ -50,9 +51,12 @@ from definable.utils.tools import get_function_call_for_tool_call
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
+  from pathlib import Path
+
   from definable.compression import CompressionManager
   from definable.interfaces.base import BaseInterface
   from definable.models.base import Model
+  from definable.replay import Replay, ReplayComparison
 
 
 class Agent:
@@ -99,6 +103,7 @@ class Agent:
     model: "Model",
     tools: Optional[List[Function]] = None,
     toolkits: Optional[List[Toolkit]] = None,
+    skills: Optional[List[Skill]] = None,
     instructions: Optional[str] = None,
     memory: Optional[Any] = None,
     readers: Optional[Any] = None,
@@ -113,6 +118,11 @@ class Agent:
         model: Model instance to use for generation (required).
         tools: List of tools (Function objects) available to the agent.
         toolkits: List of toolkits providing additional tools.
+        skills: List of skills providing tools + domain expertise.
+            Each skill contributes tools (merged into the tool set) and
+            instructions (merged into the system prompt). Skills are
+            the highest-level abstraction — use them to give your agent
+            domain expertise alongside capabilities.
         instructions: System instructions for the agent.
         memory: Optional CognitiveMemory instance for persistent memory.
         readers: File reader configuration. Accepts:
@@ -127,6 +137,7 @@ class Agent:
     self.model = model
     self.tools = tools or []
     self.toolkits = toolkits or []
+    self.skills = skills or []
     self.instructions = instructions
     self.memory = memory
     self.readers = self._init_readers(readers)
@@ -135,6 +146,9 @@ class Agent:
     self.config = config or AgentConfig()
     if name is not None:
       self.config = dataclasses.replace(self.config, agent_name=name)
+
+    # Initialize skills (call setup, validate)
+    self._init_skills()
 
     # Internal state
     self._tools_dict: Dict[str, Function] = self._flatten_tools()
@@ -194,6 +208,10 @@ class Agent:
 
   def _shutdown(self) -> None:
     """Cleanup resources."""
+    # Teardown skills
+    for skill in self.skills:
+      with contextlib.suppress(Exception):
+        skill.teardown()
     if self._trace_writer:
       self._trace_writer.shutdown()
     self._started = False
@@ -760,8 +778,17 @@ class Agent:
       # Build messages list with system message prepended if instructions exist
       invoke_messages = all_messages.copy()
 
-      # Build system message with optional knowledge context
+      # Build system message: agent instructions + skill instructions + knowledge + memory
       system_content = self.instructions or ""
+
+      # Append skill instructions (domain expertise from attached skills)
+      skill_instructions = self._build_skill_instructions()
+      if skill_instructions:
+        if system_content:
+          system_content = f"{system_content}\n\n{skill_instructions}"
+        else:
+          system_content = skill_instructions
+
       if context.knowledge_context:
         position = (context.metadata or {}).get("_knowledge_position", "system")
         if position == "system":
@@ -1320,8 +1347,17 @@ class Agent:
       # Build messages list with system message prepended if instructions exist
       invoke_messages = messages.copy()
 
-      # Build system message with optional knowledge context
+      # Build system message: agent instructions + skill instructions + knowledge + memory
       system_content = self.instructions or ""
+
+      # Append skill instructions (domain expertise from attached skills)
+      skill_instructions = self._build_skill_instructions()
+      if skill_instructions:
+        if system_content:
+          system_content = f"{system_content}\n\n{skill_instructions}"
+        else:
+          system_content = skill_instructions
+
       if context.knowledge_context:
         position = (context.metadata or {}).get("_knowledge_position", "system")
         if position == "system":
@@ -1504,15 +1540,71 @@ class Agent:
       )
       raise
 
+  def _init_skills(self) -> None:
+    """Initialize skills: call setup(), validate names."""
+    seen_names: Dict[str, Skill] = {}
+    for skill in self.skills:
+      # Warn on duplicate skill names (last one wins for tools)
+      if skill.name in seen_names:
+        from definable.utils.log import log_warning
+
+        log_warning(
+          f"Duplicate skill name '{skill.name}' — tools from the later "
+          f"skill will override earlier ones."
+        )
+      seen_names[skill.name] = skill
+
+      # Call setup() for one-time initialization (non-fatal)
+      try:
+        skill.setup()
+        skill._initialized = True
+      except Exception as e:
+        from definable.utils.log import log_error
+
+        log_error(f"Skill '{skill.name}' setup() failed: {e}")
+
+  def _build_skill_instructions(self) -> str:
+    """Collect instructions from all skills into a merged block.
+
+    Returns:
+      A single string with all skill instructions separated by
+      blank lines, or empty string if no skills provide instructions.
+    """
+    parts: List[str] = []
+    for skill in self.skills:
+      try:
+        text = skill.get_instructions()
+      except Exception:
+        text = ""
+      if text and text.strip():
+        parts.append(text.strip())
+    return "\n\n".join(parts)
+
   def _flatten_tools(self) -> Dict[str, Function]:
     """
-    Flatten tools from toolkits and direct tools into a single dict.
+    Flatten tools from skills, toolkits, and direct tools into a single dict.
 
-    Toolkit tools are processed first, then direct tools (which can override).
+    Processing order (later entries override earlier ones):
+      1. Skill tools (lowest priority)
+      2. Toolkit tools
+      3. Direct tools (highest priority — explicit always wins)
     """
     result: Dict[str, Function] = {}
 
-    # Process toolkits first
+    # 1. Process skill tools first (lowest priority)
+    for skill in self.skills:
+      try:
+        skill_tools = skill.tools
+      except Exception:
+        skill_tools = []
+      for fn in skill_tools:
+        # Merge skill dependencies into the tool
+        if skill.dependencies:
+          existing_deps = getattr(fn, "_dependencies", None) or {}
+          fn._dependencies = {**existing_deps, **skill.dependencies}
+        result[fn.name] = fn
+
+    # 2. Process toolkits (can override skill tools)
     for toolkit in self.toolkits:
       for fn in toolkit.tools:
         # Merge toolkit dependencies with tool's existing dependencies
@@ -1521,7 +1613,7 @@ class Agent:
           fn._dependencies = {**existing_deps, **toolkit.dependencies}
         result[fn.name] = fn
 
-    # Process direct tools (can override toolkit tools)
+    # 3. Process direct tools (highest priority — can override anything)
     for fn in self.tools:
       result[fn.name] = fn
 
@@ -1779,5 +1871,199 @@ class Agent:
       )
     )
 
+  # --- Replay & Compare ---
+
+  def replay(
+    self,
+    *,
+    run_output: Optional[RunOutput] = None,
+    trace_file: Optional[Union[str, "Path"]] = None,
+    run_id: Optional[str] = None,
+    events: Optional[List[BaseRunOutputEvent]] = None,
+    model: Optional["Model"] = None,
+    instructions: Optional[str] = None,
+    tools: Optional[List[Function]] = None,
+  ) -> Union["Replay", RunOutput]:
+    """Load a past run for inspection, or re-execute with overrides.
+
+    Provide exactly one source: run_output, trace_file, run_id, or events.
+    If override args (model, instructions, tools) are also given, the
+    original input is re-executed live and a RunOutput is returned.
+
+    Args:
+      run_output: A RunOutput from a previous agent.run() call.
+      trace_file: Path to a JSONL trace file.
+      run_id: Run ID to find in the agent's configured trace directory.
+      events: Pre-loaded list of trace events.
+      model: Override model for re-execution.
+      instructions: Override instructions for re-execution.
+      tools: Override tools for re-execution.
+
+    Returns:
+      Replay for inspection, or RunOutput if re-executing.
+    """
+    try:
+      loop = asyncio.get_running_loop()
+    except RuntimeError:
+      loop = None
+
+    if loop and loop.is_running():
+      import concurrent.futures
+
+      with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(
+          asyncio.run,
+          self.areplay(
+            run_output=run_output,
+            trace_file=trace_file,
+            run_id=run_id,
+            events=events,
+            model=model,
+            instructions=instructions,
+            tools=tools,
+          ),
+        )
+        return future.result()
+    else:
+      new_loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(new_loop)
+      try:
+        return new_loop.run_until_complete(
+          self.areplay(
+            run_output=run_output,
+            trace_file=trace_file,
+            run_id=run_id,
+            events=events,
+            model=model,
+            instructions=instructions,
+            tools=tools,
+          )
+        )
+      finally:
+        try:
+          pending = asyncio.all_tasks(new_loop)
+          for task in pending:
+            task.cancel()
+          if pending:
+            new_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+          new_loop.run_until_complete(new_loop.shutdown_asyncgens())
+          if hasattr(new_loop, "shutdown_default_executor"):
+            new_loop.run_until_complete(new_loop.shutdown_default_executor())
+        except Exception:
+          pass
+        finally:
+          new_loop.close()
+
+  async def areplay(
+    self,
+    *,
+    run_output: Optional[RunOutput] = None,
+    trace_file: Optional[Union[str, "Path"]] = None,
+    run_id: Optional[str] = None,
+    events: Optional[List[BaseRunOutputEvent]] = None,
+    model: Optional["Model"] = None,
+    instructions: Optional[str] = None,
+    tools: Optional[List[Function]] = None,
+  ) -> Union["Replay", RunOutput]:
+    """Async version of replay(). See replay() for documentation."""
+    from pathlib import Path as _Path
+
+    from definable.replay import Replay
+
+    # Build Replay from the provided source
+    replay: Optional[Replay] = None
+
+    if run_output is not None:
+      replay = Replay.from_run_output(run_output)
+    elif events is not None:
+      replay = Replay.from_events(events, run_id=run_id)
+    elif trace_file is not None:
+      replay = Replay.from_trace_file(_Path(trace_file), run_id=run_id)
+    elif run_id is not None:
+      # Auto-discover trace file from configured trace dir
+      replay = self._replay_from_trace_dir(run_id)
+    else:
+      raise ValueError("Provide one of: run_output, trace_file, run_id, or events")
+
+    # If no overrides, return the Replay for inspection
+    has_overrides = model is not None or instructions is not None or tools is not None
+    if not has_overrides:
+      return replay
+
+    # Re-execute: extract original input and run with overrides
+    original_input = replay.input
+    if original_input is None:
+      raise ValueError("Cannot re-execute: original run input not available in the replay source")
+
+    # Create a new agent with overrides applied
+    re_agent = Agent(
+      model=model or self.model,
+      tools=tools if tools is not None else self.tools,
+      toolkits=self.toolkits,
+      skills=self.skills,
+      instructions=instructions if instructions is not None else self.instructions,
+      config=self.config,
+    )
+
+    input_content = original_input.input_content
+
+    return await re_agent.arun(
+      input_content,
+      images=list(original_input.images) if original_input.images else None,
+      videos=list(original_input.videos) if original_input.videos else None,
+      audio=list(original_input.audios) if original_input.audios else None,
+      files=list(original_input.files) if original_input.files else None,
+    )
+
+  def _replay_from_trace_dir(self, run_id: str) -> "Replay":
+    """Find a run_id in the agent's configured trace directory."""
+    from definable.replay import Replay
+
+    if not (self.config.tracing and self.config.tracing.exporters):
+      raise ValueError("No tracing configured on this agent; cannot auto-discover trace files. Provide trace_file= instead.")
+
+    from definable.agents.tracing.jsonl import JSONLExporter
+
+    for exporter in self.config.tracing.exporters:
+      if isinstance(exporter, JSONLExporter):
+        trace_dir = exporter.trace_dir
+        # Scan JSONL files for the run_id
+        for jsonl_path in sorted(trace_dir.glob("*.jsonl")):
+          # Quick check: scan file text for run_id before full parse
+          try:
+            text = jsonl_path.read_text(encoding="utf-8")
+          except OSError:
+            continue
+          if run_id not in text:
+            continue
+          # Full parse
+          replay = Replay.from_trace_file(jsonl_path, run_id=run_id)
+          if replay.run_id == run_id:
+            return replay
+
+    raise ValueError(f"Run ID {run_id!r} not found in any trace file")
+
+  def compare(
+    self,
+    a: Union["Replay", RunOutput],
+    b: Union["Replay", RunOutput],
+  ) -> "ReplayComparison":
+    """Compare two runs side-by-side.
+
+    Args:
+      a: First run (Replay or RunOutput).
+      b: Second run (Replay or RunOutput).
+
+    Returns:
+      ReplayComparison with diffs for content, cost, tokens, and tool calls.
+    """
+    from definable.replay.compare import compare_runs
+
+    return compare_runs(a, b)
+
   def __repr__(self) -> str:
-    return f"Agent(model={self.model.id!r}, tools={len(self._tools_dict)}, name={self.agent_name!r})"
+    parts = [f"model={self.model.id!r}", f"tools={len(self._tools_dict)}"]
+    if self.skills:
+      parts.append(f"skills={len(self.skills)}")
+    parts.append(f"name={self.agent_name!r}")
+    return f"Agent({', '.join(parts)})"

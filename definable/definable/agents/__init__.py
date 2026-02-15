@@ -21,6 +21,31 @@ Multi-turn Conversations:
     output1 = agent.run("What is 2+2?")
     output2 = agent.run("And 3+3?", messages=output1.messages)
 
+With Skills:
+    from definable.agents import Agent
+    from definable.skills import Calculator, WebSearch, DateTime
+
+    agent = Agent(
+        model=model,
+        skills=[Calculator(), WebSearch(), DateTime()],
+        instructions="You are a helpful assistant.",
+    )
+
+    output = agent.run("What's 18% tip on a $127.43 bill?")
+
+Custom Skills:
+    from definable.skills import Skill
+    from definable.tools import tool
+
+    class CustomerSupport(Skill):
+        name = "customer_support"
+        instructions = "You are a support specialist. Always greet warmly."
+
+        def __init__(self, db_url: str):
+            super().__init__(dependencies={"db_url": db_url})
+
+    agent = Agent(model=model, skills=[CustomerSupport(db_url="...")])
+
 With Toolkits:
     from definable.agents import Toolkit
 
@@ -122,6 +147,14 @@ def __getattr__(name: str):
     from definable.readers import BaseReader
 
     return BaseReader
+  if name == "Replay":
+    from definable.replay import Replay
+
+    return Replay
+  if name == "ReplayComparison":
+    from definable.replay import ReplayComparison
+
+    return ReplayComparison
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -129,6 +162,8 @@ def __getattr__(name: str):
 MCPToolkit: type
 CognitiveMemory: type
 FileReaderRegistry: type
+Replay: type
+ReplayComparison: type
 
 __all__ = [
   # Core
@@ -143,6 +178,8 @@ __all__ = [
   "KnowledgeToolkit",
   "MCPToolkit",
   "CognitiveMemory",
+  "Replay",
+  "ReplayComparison",
   # Middleware
   "Middleware",
   "LoggingMiddleware",
