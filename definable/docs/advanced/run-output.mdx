@@ -21,8 +21,9 @@ output = agent.run("Summarize this document.")
 |-------|------|-------------|
 | `content` | `str` | The agent's final text response |
 | `content_type` | `str` | Content type (`"text"`, `"json"`) |
-| `reasoning_content` | `str` | Chain-of-thought reasoning (if applicable) |
-| `reasoning_steps` | `list` | Individual reasoning steps |
+| `reasoning_content` | `str` | XML-formatted reasoning for observability (from [thinking layer](/agents/thinking) or model-native reasoning) |
+| `reasoning_steps` | `List[ReasoningStep]` | Structured reasoning steps from the [thinking layer](/agents/thinking) |
+| `reasoning_messages` | `List[Message]` | The full thinking conversation (system prompt + model response) |
 
 ### Identity
 
@@ -118,13 +119,19 @@ for event in agent.run_stream("Check the weather"):
 
 ### Reasoning Events
 
+When [thinking](/agents/thinking) is enabled (`Agent(thinking=True)`), the agent emits reasoning events before the main response:
+
 ```python
 for event in agent.run_stream("Solve this math problem"):
     match event.event:
-        case "ReasoningStep":
-            print(f"[thinking] {event.content}")
+        case "ReasoningStarted":
+            print("[thinking...]")
         case "ReasoningContentDelta":
-            print(event.delta, end="")
+            print(event.reasoning_content, end="")
+        case "ReasoningStep":
+            print(f"\n[step] {event.reasoning_content}")
+        case "ReasoningCompleted":
+            print("\n[done thinking]")
 ```
 
 ## Complete Event Reference
@@ -142,10 +149,10 @@ for event in agent.run_stream("Solve this math problem"):
 | `PreHookCompleted` | `tool_name` | Pre-hook finished |
 | `PostHookStarted` | `tool_name` | Post-hook began |
 | `PostHookCompleted` | `tool_name` | Post-hook finished |
-| `ReasoningStarted` | | Reasoning began |
-| `ReasoningStep` | `content` | One reasoning step |
-| `ReasoningContentDelta` | `delta` | Reasoning text chunk |
-| `ReasoningCompleted` | | Reasoning finished |
+| `ReasoningStarted` | | [Thinking](/agents/thinking) phase began |
+| `ReasoningContentDelta` | `reasoning_content` | Thinking phase text chunk (for streaming) |
+| `ReasoningStep` | `reasoning_content` | One parsed reasoning step |
+| `ReasoningCompleted` | | Thinking phase finished |
 | `KnowledgeRetrievalStarted` | `query` | Knowledge retrieval began |
 | `KnowledgeRetrievalCompleted` | `query`, `documents_found`, `documents_used`, `duration_ms` | Knowledge retrieval finished |
 | `MemoryRecallStarted` | `query` | Memory recall began |

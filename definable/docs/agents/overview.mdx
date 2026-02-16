@@ -16,7 +16,10 @@ flowchart TD
   UserInput["User Input"] --> ReadFiles["Read attached files"]
   ReadFiles --> RetrieveKnowledge["Retrieve knowledge"]
   RetrieveKnowledge --> RecallMemory["Recall memory"]
-  RecallMemory --> BuildMsgs["Build messages"]
+  RecallMemory --> ThinkingPhase{"Thinking enabled?"}
+  ThinkingPhase -->|Yes| Think["Thinking phase (analyze + plan)"]
+  Think --> BuildMsgs["Build messages"]
+  ThinkingPhase -->|No| BuildMsgs
   BuildMsgs --> CallModel["Call model with tools"]
   CallModel --> ModelResp["Model returns response"]
   ModelResp --> Decision{Text or Tool calls?}
@@ -59,6 +62,9 @@ print(output.content)
 <CardGroup cols={2}>
   <Card title="Configuration" icon="gear" href="/agents/configuration">
     Control retries, iteration limits, tracing, knowledge, compression, and more through `AgentConfig`.
+  </Card>
+  <Card title="Thinking" icon="lightbulb" href="/agents/thinking">
+    Add a context-aware reasoning phase before responses. The agent plans its approach with tool awareness before executing.
   </Card>
   <Card title="Running Agents" icon="play" href="/agents/running-agents">
     Four execution modes: sync, async, sync streaming, and async streaming.

@@ -67,6 +67,35 @@ model = MockModel(
 )
 ```
 
+### Testing the Thinking Layer
+
+Simulate the [thinking phase](/agents/thinking) with `structured_responses`. When the agent calls the model with a structured output format (for thinking), it consumes from `structured_responses`; normal calls consume from `responses`:
+
+```python
+import json
+
+thinking_json = json.dumps({
+    "analysis": "The user wants a comparison of two approaches.",
+    "approach": "Outline key tradeoffs for each approach.",
+    "tool_plan": None,
+})
+
+model = MockModel(
+    responses=["Here is the comparison..."],       # Main model call
+    structured_responses=[thinking_json],           # Thinking phase call
+)
+
+agent = Agent(
+    model=model,
+    thinking=True,
+    config=AgentConfig(tracing=TracingConfig(enabled=False)),
+)
+
+output = agent.run("Compare X vs Y")
+assert model.call_count == 2          # Thinking + main
+assert output.reasoning_steps is not None
+```
+
 ### Inspecting Calls
 
 `MockModel` tracks every call for assertions:

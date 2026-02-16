@@ -20,7 +20,6 @@ from uuid import uuid4
 from definable.agents.config import AgentConfig
 from definable.agents.middleware import Middleware
 from definable.agents.toolkit import Toolkit
-from definable.skills.base import Skill
 from definable.agents.tracing.base import TraceWriter
 from definable.media import Audio, File, Image, Video
 from definable.models.message import Message
@@ -35,6 +34,10 @@ from definable.run.agent import (
   MemoryRecallStartedEvent,
   MemoryUpdateCompletedEvent,
   MemoryUpdateStartedEvent,
+  ReasoningCompletedEvent,
+  ReasoningContentDeltaEvent,
+  ReasoningStartedEvent,
+  ReasoningStepEvent,
   RunCompletedEvent,
   RunContentEvent,
   RunErrorEvent,
@@ -46,6 +49,7 @@ from definable.run.agent import (
   ToolCallStartedEvent,
 )
 from definable.run.base import BaseRunOutputEvent, RunContext, RunStatus
+from definable.skills.base import Skill
 from definable.tools.function import Function
 from definable.utils.tools import get_function_call_for_tool_call
 from pydantic import BaseModel
@@ -53,9 +57,11 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
   from pathlib import Path
 
+  from definable.agents.config import ThinkingConfig
   from definable.compression import CompressionManager
   from definable.interfaces.base import BaseInterface
   from definable.models.base import Model
+  from definable.reasoning.step import ReasoningStep, ThinkingOutput
   from definable.replay import Replay, ReplayComparison
 
 
@@ -109,7 +115,9 @@ class Agent:
     memory: Optional[Any] = None,
     readers: Optional[Any] = None,
     guardrails: Optional[Any] = None,
+    thinking: Union[bool, "ThinkingConfig", None] = None,
     name: Optional[str] = None,
+    session_id: Optional[str] = None,
     # Optional advanced configuration
     config: Optional[AgentConfig] = None,
   ):
@@ -138,7 +146,12 @@ class Agent:
             - True: auto-create FileReaderRegistry with all available readers
             - FileReaderRegistry: custom registry with user-selected readers
             - FileReader: single reader, wrapped in a registry
+        thinking: Enable agent-level thinking/reasoning before the main execution.
+            Accepts True (default config), ThinkingConfig (custom), or None (disabled).
         name: Optional human-readable name for the agent. Overrides config.agent_name.
+        session_id: Optional session ID for multi-turn memory. Generated once
+            at init if not provided. All runs reuse it by default; callers
+            can still override per-call.
         config: Optional advanced configuration settings.
     """
     # Direct attributes
@@ -150,6 +163,16 @@ class Agent:
     self.memory = memory
     self.readers = self._init_readers(readers)
     self.guardrails = guardrails
+
+    # Thinking layer
+    from definable.agents.config import ThinkingConfig
+
+    if thinking is True:
+      self._thinking: Optional[ThinkingConfig] = ThinkingConfig()
+    elif isinstance(thinking, ThinkingConfig):
+      self._thinking = thinking
+    else:
+      self._thinking = None
 
     # Optional config for advanced settings
     self.config = config or AgentConfig()
@@ -180,6 +203,8 @@ class Agent:
     self._after_hooks: List[Callable] = []
     self._auth: Optional[Any] = None
     self._started = False
+    self._pending_memory_tasks: list[asyncio.Task] = []
+    self.session_id = session_id or str(uuid4())
 
   # --- Properties ---
 
@@ -237,6 +262,7 @@ class Agent:
 
   async def _ashutdown(self) -> None:
     """Async cleanup."""
+    await self._drain_memory_tasks()
     if self.memory:
       with contextlib.suppress(Exception):
         await self.memory.close()
@@ -486,7 +512,7 @@ class Agent:
         RunOutput with response, metrics, tool executions, and messages.
     """
     run_id = run_id or str(uuid4())
-    session_id = session_id or str(uuid4())
+    session_id = session_id or self.session_id
 
     # Normalize instruction to messages
     new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
@@ -555,8 +581,10 @@ class Agent:
         result = output_block
 
     # Memory store (after execution, fire-and-forget)
+    # Include both user message(s) and assistant response for full conversational context
     if self.memory:
-      self._memory_store(new_messages, context)
+      store_messages = (new_messages + [Message(role="assistant", content=result.content)]) if result.content else new_messages
+      self._memory_store(store_messages, context)
 
     # Fire after_response hooks
     await self._fire_after_hooks(result)
@@ -755,7 +783,7 @@ class Agent:
         RunOutputEvent instances as the run progresses.
     """
     run_id = run_id or str(uuid4())
-    session_id = session_id or str(uuid4())
+    session_id = session_id or self.session_id
 
     # Normalize instruction to messages
     new_messages = self._normalize_instruction(instruction, images)
@@ -826,7 +854,7 @@ class Agent:
       # Build messages list with system message prepended if instructions exist
       invoke_messages = all_messages.copy()
 
-      # Build system message: agent instructions + skill instructions + knowledge + memory
+      # Build system message: instructions → skills → thinking → knowledge → memory
       system_content = self.instructions or ""
 
       # Append skill instructions (domain expertise from attached skills)
@@ -837,6 +865,94 @@ class Agent:
         else:
           system_content = skill_instructions
 
+      # Thinking phase (streaming with content deltas, BEFORE knowledge/memory)
+      if self._thinking and self._thinking.enabled:
+        import json
+
+        from definable.reasoning.step import ReasoningStep, ThinkingOutput, thinking_output_to_reasoning_steps
+        from definable.utils.log import log_warning
+
+        assert self._thinking is not None
+        thinking_model = self._thinking.model or self.model
+
+        # Use custom instructions if set, otherwise build context-aware prompt
+        if self._thinking.instructions:
+          thinking_prompt = self._thinking.instructions
+        else:
+          thinking_prompt = self._build_thinking_prompt(context, tools)
+
+        # Emit ReasoningStarted
+        _rs_evt = ReasoningStartedEvent(
+          run_id=context.run_id, session_id=context.session_id,
+          agent_id=self.agent_id, agent_name=self.agent_name,
+        )
+        self._emit(_rs_evt)
+        yield _rs_evt
+
+        # Build thinking messages (system + user/assistant only)
+        thinking_messages: list[Message] = [Message(role="system", content=thinking_prompt)]
+        for msg in all_messages:
+          if msg.role in ("user", "assistant"):
+            thinking_messages.append(msg)
+
+        # Stream thinking response
+        accumulated_reasoning = ""
+        thinking_assistant_msg = Message(role="assistant")
+
+        async for chunk in thinking_model.ainvoke_stream(
+          messages=thinking_messages,
+          assistant_message=thinking_assistant_msg,
+          response_format=ThinkingOutput,
+        ):
+          if hasattr(chunk, "content") and chunk.content:
+            accumulated_reasoning += chunk.content
+            _delta_evt = ReasoningContentDeltaEvent(
+              run_id=context.run_id, session_id=context.session_id,
+              agent_id=self.agent_id, agent_name=self.agent_name,
+              reasoning_content=chunk.content,
+            )
+            self._emit(_delta_evt)
+            yield _delta_evt
+
+        # Parse accumulated content into ThinkingOutput + legacy ReasoningStep objects
+        _thinking_output: Optional[ThinkingOutput] = None
+        _reasoning_steps: list[ReasoningStep] = []
+        if accumulated_reasoning:
+          try:
+            parsed = json.loads(accumulated_reasoning) if isinstance(accumulated_reasoning, str) else accumulated_reasoning
+            if isinstance(parsed, dict):
+              _thinking_output = ThinkingOutput(**parsed)
+              _reasoning_steps = thinking_output_to_reasoning_steps(_thinking_output)
+          except Exception as e:
+            log_warning(f"Failed to parse thinking response: {e}")
+            _thinking_output = ThinkingOutput(analysis="Could not parse", approach="Respond directly")
+            _reasoning_steps = thinking_output_to_reasoning_steps(_thinking_output)
+
+        # Emit ReasoningStepEvent for each parsed step
+        for step in _reasoning_steps:
+          _step_evt = ReasoningStepEvent(
+            run_id=context.run_id, session_id=context.session_id,
+            agent_id=self.agent_id, agent_name=self.agent_name,
+            reasoning_content=step.reasoning or "",
+          )
+          self._emit(_step_evt)
+          yield _step_evt
+
+        # Emit ReasoningCompleted
+        _rc_evt = ReasoningCompletedEvent(
+          run_id=context.run_id, session_id=context.session_id,
+          agent_id=self.agent_id, agent_name=self.agent_name,
+        )
+        self._emit(_rc_evt)
+        yield _rc_evt
+
+        # Inject compact thinking plan into system prompt
+        if _thinking_output:
+          injection = self._format_thinking_injection(_thinking_output)
+          if injection:
+            system_content = f"{system_content}\n\n{injection}" if system_content else injection
+
+      # Append knowledge context (AFTER plan — plan guides how model uses it)
       if context.knowledge_context:
         position = (context.metadata or {}).get("_knowledge_position", "system")
         if position == "system":
@@ -845,7 +961,7 @@ class Agent:
           else:
             system_content = context.knowledge_context
 
-      # Append memory context if available
+      # Append memory context (AFTER plan)
       if context.memory_context:
         if system_content:
           system_content = f"{system_content}\n\n{context.memory_context}"
@@ -1059,8 +1175,10 @@ class Agent:
       yield completed_event
 
       # Memory store (after streaming, fire-and-forget) — yield started event
+      # Include both user message(s) and assistant response for full conversational context
       if self.memory:
-        for evt in self._memory_store(new_messages, context):
+        store_messages = (new_messages + [Message(role="assistant", content=final_content)]) if final_content else new_messages
+        for evt in self._memory_store(store_messages, context):
           yield evt
 
     except Exception as e:
@@ -1199,9 +1317,20 @@ class Agent:
     events.append(completed)
     return events
 
+  async def _drain_memory_tasks(self) -> None:
+    """Await all pending memory background tasks (with timeout)."""
+    if not self._pending_memory_tasks:
+      return
+    done, _ = await asyncio.wait(self._pending_memory_tasks, timeout=30.0)
+    for task in done:
+      with contextlib.suppress(Exception):
+        task.result()
+    self._pending_memory_tasks = [t for t in self._pending_memory_tasks if not t.done()]
+
   async def _memory_recall(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
     """Recall relevant memories, emit events, inject into context."""
     assert self.memory is not None
+    await self._drain_memory_tasks()
     import time
 
     # Extract the last user message as the query
@@ -1293,7 +1422,9 @@ class Agent:
           )
           self._emit(completed)
 
-      loop.create_task(_store_and_emit())
+      task = loop.create_task(_store_and_emit())
+      self._pending_memory_tasks.append(task)
+      task.add_done_callback(lambda t: self._pending_memory_tasks.remove(t) if t in self._pending_memory_tasks else None)
     except RuntimeError:
       pass  # No running loop — skip memory storage
 
@@ -1622,6 +1753,171 @@ class Agent:
 
     return None
 
+  # --- Thinking Layer ---
+
+  _DEFAULT_THINKING_PROMPT = (
+    "Analyze the user's request. Determine what they need, "
+    "your approach, and which tools (if any) to use."
+  )
+
+  def _build_thinking_prompt(
+    self,
+    context: RunContext,
+    tools: Dict[str, Function],
+  ) -> str:
+    """Build a context-aware thinking prompt with tool catalog, agent role, and context flags."""
+    parts = [self._DEFAULT_THINKING_PROMPT]
+
+    # Agent role (first 500 chars)
+    if self.instructions:
+      truncated = self.instructions[:500]
+      if len(self.instructions) > 500:
+        truncated += "..."
+      parts.append(f"\nYour role: {truncated}")
+
+    # Tool catalog (name + one-line description)
+    if tools:
+      tool_lines = []
+      for name, fn in tools.items():
+        desc = (fn.description or "").split("\n")[0][:100]
+        tool_lines.append(f"- {name}: {desc}" if desc else f"- {name}")
+      parts.append("\nAvailable tools:\n" + "\n".join(tool_lines))
+
+    # Context availability flags (NOT the full content)
+    flags = []
+    if context.knowledge_context:
+      flags.append("knowledge base context is available")
+    if context.memory_context:
+      flags.append("conversation memory is available")
+    if flags:
+      parts.append(f"\nContext: {'; '.join(flags)}.")
+
+    return "\n".join(parts)
+
+  @staticmethod
+  def _format_thinking_injection(output: "ThinkingOutput") -> str:
+    """Format ThinkingOutput into a compact system prompt injection."""
+    parts = [f"<analysis>{output.approach}"]
+    if output.tool_plan:
+      parts.append(f" Tools: {', '.join(output.tool_plan)}.")
+    parts.append("</analysis>")
+    return "".join(parts)
+
+  async def _execute_thinking(
+    self,
+    context: RunContext,
+    invoke_messages: List[Message],
+    tools: Dict[str, Function],
+  ) -> "tuple[Optional[ThinkingOutput], list[ReasoningStep], list[Message]]":
+    """Execute thinking phase: analyze query and produce reasoning steps.
+
+    Returns:
+      Tuple of (thinking_output, reasoning_steps, reasoning_messages)
+    """
+    import json
+
+    from definable.reasoning.step import ThinkingOutput, thinking_output_to_reasoning_steps
+    from definable.utils.log import log_warning
+
+    assert self._thinking is not None
+
+    thinking_model = self._thinking.model or self.model
+
+    # Use custom instructions if set, otherwise build context-aware prompt
+    if self._thinking.instructions:
+      thinking_prompt = self._thinking.instructions
+    else:
+      thinking_prompt = self._build_thinking_prompt(context, tools)
+
+    # Emit ReasoningStarted
+    self._emit(ReasoningStartedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+    ))
+
+    # Build thinking messages: system prompt + user/assistant messages (no tools)
+    thinking_messages: list[Message] = [Message(role="system", content=thinking_prompt)]
+    for msg in invoke_messages:
+      if msg.role in ("user", "assistant"):
+        thinking_messages.append(msg)
+
+    # Call model with structured output (ThinkingOutput schema)
+    assistant_msg = Message(role="assistant")
+    response = await thinking_model.ainvoke(
+      messages=thinking_messages,
+      assistant_message=assistant_msg,
+      response_format=ThinkingOutput,
+    )
+
+    # Parse ThinkingOutput from structured response
+    from definable.reasoning.step import ReasoningStep
+
+    thinking_output: Optional[ThinkingOutput] = None
+    reasoning_steps: list[ReasoningStep] = []
+    if response.content:
+      try:
+        parsed = json.loads(response.content) if isinstance(response.content, str) else response.content
+        if isinstance(parsed, dict):
+          thinking_output = ThinkingOutput(**parsed)
+          reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
+      except Exception as e:
+        log_warning(f"Failed to parse thinking response: {e}")
+        # Graceful fallback
+        thinking_output = ThinkingOutput(analysis="Could not parse", approach="Respond directly")
+        reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
+
+    # Emit ReasoningStep for each step
+    for step in reasoning_steps:
+      self._emit(ReasoningStepEvent(
+        run_id=context.run_id,
+        session_id=context.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        reasoning_content=step.reasoning or "",
+      ))
+
+    # Build reasoning messages list for RunOutput
+    reasoning_agent_messages = thinking_messages + [
+      Message(
+        role="assistant",
+        content=response.content,
+        metrics=response.response_usage,
+      )
+    ]
+
+    # Emit ReasoningCompleted
+    self._emit(ReasoningCompletedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+    ))
+
+    return thinking_output, reasoning_steps, reasoning_agent_messages
+
+  @staticmethod
+  def _format_reasoning_context(steps: "list[ReasoningStep]") -> str:
+    """Format reasoning steps into XML context for system prompt injection."""
+    if not steps:
+      return ""
+
+    lines = ["<reasoning>"]
+    for i, step in enumerate(steps, 1):
+      lines.append(f'  <step number="{i}">')
+      if step.title:
+        lines.append(f"    <title>{step.title}</title>")
+      if step.reasoning:
+        lines.append(f"    <reasoning>{step.reasoning}</reasoning>")
+      if step.action:
+        lines.append(f"    <action>{step.action}</action>")
+      if step.confidence is not None:
+        lines.append(f"    <confidence>{step.confidence}</confidence>")
+      lines.append("  </step>")
+    lines.append("</reasoning>")
+    return "\n".join(lines)
+
   # --- Internal Methods ---
 
   async def _execute_run(
@@ -1651,7 +1947,7 @@ class Agent:
       # Build messages list with system message prepended if instructions exist
       invoke_messages = messages.copy()
 
-      # Build system message: agent instructions + skill instructions + knowledge + memory
+      # Build system message: instructions → skills → thinking → knowledge → memory
       system_content = self.instructions or ""
 
       # Append skill instructions (domain expertise from attached skills)
@@ -1662,16 +1958,29 @@ class Agent:
         else:
           system_content = skill_instructions
 
+      # Thinking phase (BEFORE knowledge/memory — compact plan guides how to use them)
+      thinking_output: Optional["ThinkingOutput"] = None
+      reasoning_steps: Optional[list] = None
+      reasoning_agent_messages: Optional[list] = None
+      if self._thinking and self._thinking.enabled:
+        thinking_output, reasoning_steps, reasoning_agent_messages = await self._execute_thinking(
+          context, invoke_messages, tools,
+        )
+        if thinking_output:
+          injection = self._format_thinking_injection(thinking_output)
+          if injection:
+            system_content = f"{system_content}\n\n{injection}" if system_content else injection
+
+      # Append knowledge context (AFTER plan — plan guides how model uses it)
       if context.knowledge_context:
         position = (context.metadata or {}).get("_knowledge_position", "system")
         if position == "system":
-          # Append knowledge context to system message
           if system_content:
             system_content = f"{system_content}\n\n{context.knowledge_context}"
           else:
             system_content = context.knowledge_context
 
-      # Append memory context if available
+      # Append memory context (AFTER plan)
       if context.memory_context:
         if system_content:
           system_content = f"{system_content}\n\n{context.memory_context}"
@@ -1838,7 +2147,12 @@ class Agent:
         model_provider=self.model.provider,
         status=RunStatus.completed,
         session_state=context.session_state,
-        reasoning_content=final_response.reasoning_content if final_response else None,
+        reasoning_steps=reasoning_steps or None,
+        reasoning_messages=reasoning_agent_messages or None,
+        reasoning_content=(
+          self._format_reasoning_context(reasoning_steps) if reasoning_steps
+          else (final_response.reasoning_content if final_response else None)
+        ),
         citations=final_response.citations if final_response else None,
         images=final_response.images if final_response else None,
         videos=final_response.videos if final_response else None,

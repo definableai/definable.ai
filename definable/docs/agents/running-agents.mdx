@@ -143,7 +143,10 @@ Streaming runs yield `RunOutputEvent` objects. Key event types:
 | `ToolCallStarted` | A tool call is about to execute |
 | `ToolCallCompleted` | A tool call finished successfully |
 | `ToolCallError` | A tool call failed |
-| `ReasoningStep` | A reasoning step from a thinking model |
+| `ReasoningStarted` | The [thinking](/agents/thinking) phase began |
+| `ReasoningContentDelta` | A chunk of thinking content (for streaming) |
+| `ReasoningStep` | A reasoning step from the thinking phase |
+| `ReasoningCompleted` | The thinking phase finished |
 | `KnowledgeRetrievalStarted` | Knowledge retrieval began |
 | `KnowledgeRetrievalCompleted` | Knowledge retrieval finished |
 | `MemoryRecallStarted` | Memory recall began |

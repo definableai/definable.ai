@@ -100,6 +100,28 @@ agent = Agent(
   File reader configuration for processing attached files. See [File Readers](/readers/overview).
 </ParamField>
 
+## Thinking
+
+The thinking layer is configured directly on the `Agent` constructor (not in `AgentConfig`):
+
+```python
+from definable.agents import Agent, ThinkingConfig
+
+# Simple enable
+agent = Agent(model=model, thinking=True)
+
+# Custom configuration
+agent = Agent(
+    model=model,
+    thinking=ThinkingConfig(
+        model=thinking_model,           # Optional separate model
+        instructions="Custom prompt",    # Optional custom prompt
+    ),
+)
+```
+
+See [Thinking](/agents/thinking) for full documentation.
+
 ## Immutable Updates
 
 `AgentConfig` is frozen after creation. Use `with_updates()` to create a modified copy:

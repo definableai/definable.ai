@@ -73,6 +73,7 @@
                 "icon": "layer-group",
                 "expanded": false,
                 "pages": [
+                  "agents/thinking",
                   "agents/multi-turn",
                   "agents/middleware",
                   "agents/tracing"

@@ -1,0 +1,219 @@
+---
+title: Thinking
+sidebarTitle: Thinking
+description: Add a reasoning phase before the main response to improve quality on complex tasks.
+icon: lightbulb
+---
+
+The thinking layer adds an explicit reasoning phase before the agent produces its final response. The agent first analyzes the user's request, plans its approach, and identifies which tools to use — then executes with that plan guiding the response.
+
+## Quick Start
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a research assistant.",
+    thinking=True,
+)
+
+output = agent.run("Compare microservices vs monolith architectures.")
+print(output.content)
+```
+
+With `thinking=True`, the agent makes two model calls:
+
+1. **Thinking call** — analyzes the request and produces a compact plan
+2. **Main call** — generates the response guided by the plan
+
+## How It Works
+
+When thinking is enabled, the agent:
+
+1. Builds a **context-aware thinking prompt** that includes:
+   - A summary of the agent's instructions (first 500 characters)
+   - A catalog of available tools (name + one-line description)
+   - Flags for whether knowledge base or memory context is available
+2. Calls the model with this prompt and a compact structured output schema (`ThinkingOutput`)
+3. Injects a brief `<analysis>` tag (~20-50 tokens) into the system prompt **before** knowledge and memory context
+4. Runs the main model call with the plan guiding how it uses available context
+
+The thinking plan is positioned **before** knowledge and memory in the system prompt, so it frames how the model uses retrieval content rather than competing with it.
+
+### System Prompt Order
+
+```
+Agent instructions
+  → Skill instructions
+    → <analysis>Plan from thinking phase</analysis>
+      → Knowledge context (RAG results)
+        → Memory context (conversation history)
+```
+
+## Configuration
+
+### Default (Recommended)
+
+```python
+agent = Agent(
+    model=model,
+    thinking=True,  # Uses agent's model, builds context-aware prompt
+)
+```
+
+### Custom Model
+
+Use a separate (potentially cheaper or faster) model for the thinking phase:
+
+```python
+from definable.agents import ThinkingConfig
+from definable.models import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    thinking=ThinkingConfig(
+        model=OpenAIChat(id="gpt-4o-mini"),  # Cheaper model for thinking
+    ),
+)
+```
+
+### Custom Instructions
+
+Override the context-aware prompt with a fully custom thinking prompt:
+
+```python
+agent = Agent(
+    model=model,
+    thinking=ThinkingConfig(
+        instructions="Focus on identifying edge cases and potential failures in the user's approach.",
+    ),
+)
+```
+
+<Warning>
+Custom instructions bypass the context-aware prompt building entirely. The thinking model will not receive tool names, agent instructions, or context availability flags.
+</Warning>
+
+### Disable
+
+```python
+agent = Agent(
+    model=model,
+    thinking=ThinkingConfig(enabled=False),  # Explicitly disabled
+)
+```
+
+## ThinkingConfig Reference
+
+<ParamField path="enabled" type="bool" default="true">
+  Whether thinking is active. Always `True` when instantiated directly.
+</ParamField>
+
+<ParamField path="model" type="Model">
+  Model to use for the thinking phase. If `None`, uses the agent's model.
+</ParamField>
+
+<ParamField path="instructions" type="str">
+  Custom thinking prompt. If `None`, uses the context-aware prompt builder which includes tool catalog, agent instructions summary, and context availability flags.
+</ParamField>
+
+## Output
+
+The thinking phase populates three fields on `RunOutput`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reasoning_steps` | `List[ReasoningStep]` | Structured reasoning steps (mapped from the thinking output) |
+| `reasoning_content` | `str` | XML-formatted reasoning for observability/debugging |
+| `reasoning_messages` | `List[Message]` | The full thinking conversation (system prompt + model response) |
+
+```python
+output = agent.run("Plan a database migration.")
+
+if output.reasoning_steps:
+    for step in output.reasoning_steps:
+        print(f"[{step.title}] {step.reasoning}")
+
+# Access the raw thinking conversation
+if output.reasoning_messages:
+    print(output.reasoning_messages[-1].content)  # Model's structured response
+```
+
+## Streaming
+
+The thinking phase streams in real time. Events are emitted in this order:
+
+```
+ReasoningStartedEvent
+  → ReasoningContentDeltaEvent (N chunks)
+    → ReasoningStepEvent (1-2 steps)
+      → ReasoningCompletedEvent
+        → RunStartedEvent
+          → RunContentEvent (main response)
+            → RunCompletedEvent
+```
+
+```python
+async for event in agent.arun_stream("Complex question"):
+    match event.event:
+        case "ReasoningContentDelta":
+            print(event.reasoning_content, end="")  # Stream thinking tokens
+        case "ReasoningStep":
+            print(f"\n[step] {event.reasoning_content}")
+        case "ReasoningCompleted":
+            print("\n--- Thinking complete ---\n")
+        case "RunContent":
+            print(event.content, end="")  # Stream main response
+```
+
+## Context-Aware Thinking vs Model-Native Reasoning
+
+Definable supports two types of reasoning that can coexist:
+
+| | Agent Thinking Layer | Model-Native Reasoning |
+|---|---|---|
+| **Trigger** | `Agent(thinking=True)` | Model capability (e.g., DeepSeek Reasoner, OpenAI o1) |
+| **Control** | Full — custom prompt, model, instructions | None — model decides internally |
+| **Tool awareness** | Yes — sees tool catalog | No — reasons without tool knowledge |
+| **Output fields** | `reasoning_steps`, `reasoning_messages` | `reasoning_content` (via `ModelResponse`) |
+| **Cost** | Extra model call | Built into model pricing |
+| **Best for** | Complex tool-using agents | Math/logic reasoning tasks |
+
+Both can be active simultaneously. The thinking layer populates `reasoning_steps` and `reasoning_messages`, while model-native reasoning populates `reasoning_content`.
+
+## Testing
+
+Use `MockModel` with `structured_responses` to test the thinking phase without API calls:
+
+```python
+import json
+from definable.agents import Agent, AgentConfig, ThinkingConfig, TracingConfig
+from definable.agents.testing import MockModel
+
+thinking_json = json.dumps({
+    "analysis": "The user wants to compare two architectures.",
+    "approach": "Outline tradeoffs for scalability, complexity, and team structure.",
+    "tool_plan": None,
+})
+
+model = MockModel(
+    responses=["Here is the comparison..."],       # Main response
+    structured_responses=[thinking_json],           # Thinking response
+)
+
+agent = Agent(
+    model=model,
+    thinking=True,
+    config=AgentConfig(tracing=TracingConfig(enabled=False)),
+)
+
+output = agent.run("Compare microservices vs monoliths")
+assert model.call_count == 2  # Thinking + main
+assert output.reasoning_steps is not None
+```
+
+<Tip>
+When `tool_plan` is provided in the thinking output, the reasoning steps include a "Tool Plan" step listing the planned tool sequence. This is useful for testing that the thinking phase correctly identifies which tools to use.
+</Tip>
