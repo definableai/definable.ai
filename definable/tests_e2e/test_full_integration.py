@@ -141,6 +141,9 @@ class TestFullAgent:
     assert output.content is not None
     assert any(w in output.content.lower() for w in ["revenue", "quarter", "q1", "$"])
 
+    # Drain pending memory tasks before checking store
+    await agent._drain_memory_tasks()
+
     # Verify memory stored the conversation
     episodes = await memory_store.get_episodes(user_id="test-user")
     assert len(episodes) >= 1

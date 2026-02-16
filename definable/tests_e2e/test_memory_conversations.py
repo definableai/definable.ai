@@ -268,6 +268,9 @@ class TestMemoryAgentIntegration:
     )
     assert output1.content is not None
 
+    # Drain pending memory tasks before checking store
+    await agent._drain_memory_tasks()
+
     # Verify episodes were stored
     episodes = await store.get_episodes(user_id="test-user")
     assert len(episodes) >= 1
@@ -292,6 +295,9 @@ class TestMemoryAgentIntegration:
       "Remember: my API key is sk-secret-123.",
       user_id="gdpr-user",
     )
+
+    # Drain pending memory tasks before checking store
+    await agent._drain_memory_tasks()
 
     # Verify data exists
     episodes = await store.get_episodes(user_id="gdpr-user")

@@ -74,6 +74,7 @@ class CognitiveMemory:
     self.distillation_model = distillation_model
     self.config = config or MemoryConfig()
     self._initialized = False
+    self._pending_tasks: list[asyncio.Task] = []
 
   async def _ensure_initialized(self) -> None:
     if not self._initialized:
@@ -228,6 +229,12 @@ class CognitiveMemory:
   async def close(self) -> None:
     """Close the memory store."""
     if self._initialized:
+      if self._pending_tasks:
+        done, _ = await asyncio.wait(self._pending_tasks, timeout=10.0)
+        for task in done:
+          with contextlib.suppress(Exception):
+            task.result()
+        self._pending_tasks.clear()
       await self.store.close()
       self._initialized = False
 
@@ -235,7 +242,9 @@ class CognitiveMemory:
     """Schedule a non-blocking distillation run."""
     try:
       loop = asyncio.get_running_loop()
-      loop.create_task(self._safe_distillation(user_id=user_id))
+      task = loop.create_task(self._safe_distillation(user_id=user_id))
+      self._pending_tasks.append(task)
+      task.add_done_callback(lambda t: self._pending_tasks.remove(t) if t in self._pending_tasks else None)
     except RuntimeError:
       pass  # No running loop — skip background distillation
 
