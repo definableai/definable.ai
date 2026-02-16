@@ -31,25 +31,35 @@
         "groups": [
           {
             "group": "Getting Started",
-            "pages": [
-              "introduction",
-              "quickstart",
-              "installation"
-            ]
+            "pages": ["introduction", "quickstart", "installation"]
           },
           {
             "group": "Models",
             "pages": [
               "models/overview",
-              "models/openai",
-              "models/deepseek",
-              "models/moonshot",
-              "models/xai",
-              "models/openai-like",
-              "models/streaming",
-              "models/structured-output",
-              "models/vision-and-audio",
-              "models/metrics-and-pricing"
+              {
+                "group": "Providers",
+                "icon": "server",
+                "expanded": false,
+                "pages": [
+                  "models/openai",
+                  "models/deepseek",
+                  "models/moonshot",
+                  "models/xai",
+                  "models/openai-like"
+                ]
+              },
+              {
+                "group": "Advanced",
+                "icon": "gear",
+                "expanded": false,
+                "pages": [
+                  "models/streaming",
+                  "models/structured-output",
+                  "models/vision-and-audio",
+                  "models/metrics-and-pricing"
+                ]
+              }
             ]
           },
           {
@@ -58,12 +68,26 @@
               "agents/overview",
               "agents/configuration",
               "agents/running-agents",
-              "agents/multi-turn",
-              "agents/middleware",
-              "agents/tracing",
-              "agents/testing",
-              "agents/runtime",
-              "agents/auth"
+              {
+                "group": "Capabilities",
+                "icon": "layer-group",
+                "expanded": false,
+                "pages": [
+                  "agents/multi-turn",
+                  "agents/middleware",
+                  "agents/tracing"
+                ]
+              },
+              {
+                "group": "Advanced",
+                "icon": "gear",
+                "expanded": false,
+                "pages": [
+                  "agents/testing",
+                  "agents/runtime",
+                  "agents/auth"
+                ]
+              }
             ]
           },
           {
@@ -71,73 +95,116 @@
             "pages": [
               "tools/overview",
               "tools/parameters",
-              "tools/hooks",
-              "tools/caching",
-              "tools/dependencies",
-              "tools/async-tools"
-            ]
-          },
-          {
-            "group": "Toolkits",
-            "pages": [
-              "toolkits/overview",
-              "toolkits/knowledge-toolkit",
-              "toolkits/mcp-toolkit"
+              {
+                "group": "Toolkits",
+                "icon": "toolbox",
+                "expanded": false,
+                "pages": [
+                  "toolkits/overview",
+                  "toolkits/knowledge-toolkit",
+                  "toolkits/mcp-toolkit"
+                ]
+              },
+              {
+                "group": "Advanced",
+                "icon": "gear",
+                "expanded": false,
+                "pages": [
+                  "tools/hooks",
+                  "tools/caching",
+                  "tools/dependencies",
+                  "tools/async-tools"
+                ]
+              }
             ]
           },
           {
             "group": "Interfaces",
             "pages": [
               "interfaces/overview",
-              "interfaces/sessions",
-              "interfaces/hooks",
-              "interfaces/telegram",
-              "interfaces/discord",
-              "interfaces/signal",
-              "interfaces/identity",
-              "interfaces/multi-interface",
-              "interfaces/custom-interfaces"
+              {
+                "group": "Platforms",
+                "icon": "comments",
+                "expanded": false,
+                "pages": [
+                  "interfaces/telegram",
+                  "interfaces/discord",
+                  "interfaces/signal",
+                  "interfaces/custom-interfaces"
+                ]
+              },
+              {
+                "group": "Advanced",
+                "icon": "gear",
+                "expanded": false,
+                "pages": [
+                  "interfaces/sessions",
+                  "interfaces/hooks",
+                  "interfaces/identity",
+                  "interfaces/multi-interface"
+                ]
+              }
             ]
           },
           {
             "group": "Memory",
             "pages": [
               "memory/overview",
-              "memory/stores",
-              "memory/agent-integration"
+              {
+                "group": "Stores",
+                "icon": "database",
+                "expanded": false,
+                "pages": ["memory/stores"]
+              },
+              {
+                "group": "Advanced",
+                "icon": "gear",
+                "expanded": false,
+                "pages": ["memory/agent-integration"]
+              }
             ]
           },
           {
             "group": "Skills",
             "pages": [
               "skills/overview",
-              "skills/built-in",
-              "skills/registry"
-            ]
-          },
-          {
-            "group": "Readers",
-            "pages": [
-              "readers/overview"
+              {
+                "group": "Built-in Skills",
+                "icon": "puzzle-piece",
+                "expanded": false,
+                "pages": ["skills/built-in"]
+              },
+              {
+                "group": "Advanced",
+                "icon": "gear",
+                "expanded": false,
+                "pages": ["skills/registry"]
+              }
             ]
           },
           {
             "group": "Guardrails",
-            "pages": [
-              "guardrails/overview"
-            ]
+            "pages": ["guardrails/overview"]
           },
           {
             "group": "Knowledge",
             "pages": [
               "knowledge/overview",
               "knowledge/documents",
-              "knowledge/readers",
-              "knowledge/chunkers",
-              "knowledge/embedders",
-              "knowledge/rerankers",
-              "knowledge/vector-databases",
-              "knowledge/agent-integration"
+              "knowledge/agent-integration",
+              {
+                "group": "Pipeline",
+                "icon": "diagram-project",
+                "expanded": false,
+                "pages": [
+                  "readers/overview",
+                  "knowledge/readers",
+                  "knowledge/chunkers",
+                  "knowledge/embedders",
+                  "knowledge/rerankers",
+                  "knowledge/vector-databases"
+                ]
+              }
             ]
           },
           {
@@ -145,18 +212,30 @@
             "pages": [
               "mcp/overview",
               "mcp/getting-started",
-              "mcp/configuration",
-              "mcp/resources",
-              "mcp/prompts",
-              "mcp/error-handling",
-              "mcp/mock-servers"
+              {
+                "group": "Features",
+                "icon": "plug",
+                "expanded": false,
+                "pages": [
+                  "mcp/configuration",
+                  "mcp/resources",
+                  "mcp/prompts"
+                ]
+              },
+              {
+                "group": "Advanced",
+                "icon": "gear",
+                "expanded": false,
+                "pages": [
+                  "mcp/error-handling",
+                  "mcp/mock-servers"
+                ]
+              }
             ]
           },
           {
             "group": "Replay",
-            "pages": [
-              "replay/overview"
-            ]
+            "pages": ["replay/overview"]
           },
           {
             "group": "Advanced",
