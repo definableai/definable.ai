@@ -36,6 +36,7 @@ class MockModel:
     tool_calls: Optional[List[Dict[str, Any]]] = None,
     side_effect: Optional[Callable] = None,
     reasoning_content: Optional[str] = None,
+    structured_responses: Optional[List[str]] = None,
   ):
     """
     Initialize the mock model.
@@ -45,13 +46,17 @@ class MockModel:
         tool_calls: List of tool call dicts to simulate.
         side_effect: Custom function to generate responses.
         reasoning_content: Optional reasoning content to include.
+        structured_responses: Canned JSON string responses for calls with response_format.
+            Used when the agent requests structured output (e.g., thinking layer).
     """
     self.responses = responses or ["Mock response"]
     self.tool_calls = tool_calls or []
     self.side_effect = side_effect
     self.reasoning_content = reasoning_content
+    self.structured_responses = structured_responses or []
 
     self._call_count = 0
+    self._structured_call_count = 0
     self._call_history: List[Dict[str, Any]] = []
 
     # Model identity
@@ -92,12 +97,29 @@ class MockModel:
     if self.side_effect:
       return self.side_effect(messages, tools, **kwargs)
 
+    # Check if this is a structured output request with canned structured responses
+    response_format = kwargs.get("response_format") or output_schema
+    if response_format is not None and self.structured_responses:
+      response = MagicMock()
+      response.content = self.structured_responses[min(self._structured_call_count, len(self.structured_responses) - 1)]
+      response.tool_executions = []
+      response.tool_calls = []
+      response.response_usage = Metrics()
+      response.reasoning_content = None
+      response.citations = None
+      response.images = None
+      response.videos = None
+      response.audios = None
+      self._structured_call_count += 1
+      self._call_count += 1
+      return response
+
     # Build mock response
     response = MagicMock()
     response.content = self.responses[min(self._call_count, len(self.responses) - 1)]
     response.tool_executions = []
     response.tool_calls = []
-    response.metrics = Metrics()
+    response.response_usage = Metrics()
     response.reasoning_content = self.reasoning_content
     response.citations = None
     response.images = None
@@ -134,18 +156,27 @@ class MockModel:
     Args:
         messages: Input messages.
         tools: Available tools.
-        **kwargs: Additional arguments.
+        **kwargs: Additional arguments (response_format, assistant_message, etc.).
 
     Yields:
         MagicMock chunks with content.
     """
-    content = self.responses[min(self._call_count, len(self.responses) - 1)]
+    # Check for structured output request
+    response_format = kwargs.get("response_format")
+    if response_format is not None and self.structured_responses:
+      content = self.structured_responses[min(self._structured_call_count, len(self.structured_responses) - 1)]
+      self._structured_call_count += 1
+    else:
+      content = self.responses[min(self._call_count, len(self.responses) - 1)]
+
     self._call_count += 1
 
-    # Yield content in chunks
+    # Yield content in chunks (character-level)
     for char in content:
       chunk = MagicMock()
       chunk.content = char
+      chunk.tool_calls = None
+      chunk.response_usage = None
       yield chunk
 
   @property

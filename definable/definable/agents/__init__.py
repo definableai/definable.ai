@@ -114,7 +114,7 @@ With Middleware:
 """
 
 from definable.agents.agent import Agent
-from definable.agents.config import AgentConfig, CompressionConfig, KnowledgeConfig, ReadersConfig, TracingConfig
+from definable.agents.config import AgentConfig, CompressionConfig, KnowledgeConfig, ReadersConfig, ThinkingConfig, TracingConfig
 from definable.agents.middleware import (
   KnowledgeMiddleware,
   LoggingMiddleware,
@@ -131,6 +131,15 @@ from definable.agents.tracing import (
   TraceExporter,
   TraceWriter,
 )
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from definable.guardrails import GuardrailResult, Guardrails
+  from definable.mcp.toolkit import MCPToolkit
+  from definable.memory import CognitiveMemory
+  from definable.readers import BaseReader as FileReaderRegistry
+  from definable.replay import Replay, ReplayComparison
 
 
 # Lazy import to avoid circular dependency
@@ -166,15 +175,6 @@ def __getattr__(name: str):
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-# Define for static analysis (actual imports are lazy)
-MCPToolkit: type
-CognitiveMemory: type
-FileReaderRegistry: type
-Replay: type
-ReplayComparison: type
-Guardrails: type
-GuardrailResult: type
-
 __all__ = [
   # Core
   "Agent",
@@ -182,6 +182,7 @@ __all__ = [
   "TracingConfig",
   "KnowledgeConfig",
   "CompressionConfig",
+  "ThinkingConfig",
   "ReadersConfig",
   "FileReaderRegistry",
   "Toolkit",

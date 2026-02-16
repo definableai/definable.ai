@@ -11,6 +11,24 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class ThinkingConfig:
+  """Configuration for the agent's thinking layer.
+
+  When enabled, the agent performs a separate reasoning step before
+  producing the final answer, improving response quality for complex queries.
+
+  Attributes:
+    enabled: Whether thinking is active (always True when instantiated directly).
+    model: Model to use for thinking. If None, uses the agent's model.
+    instructions: Custom thinking prompt. If None, uses the default.
+  """
+
+  enabled: bool = True
+  model: Optional["Model"] = None
+  instructions: Optional[str] = None
+
+
+@dataclass
 class CompressionConfig:
   """
   Configuration for tool result compression in agents.
