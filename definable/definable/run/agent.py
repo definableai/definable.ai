@@ -1,7 +1,7 @@
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from time import time
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
 
 from definable.media import Audio, File, Image, Video
 from definable.models.message import Citations, Message
@@ -14,7 +14,8 @@ from definable.utils.log import logger
 from definable.utils.media import reconstruct_audio_list, reconstruct_files, reconstruct_images, reconstruct_response_audio, reconstruct_videos
 from pydantic import BaseModel
 
-# TYPE_CHECKING imports removed - SessionSummary not used in this fork
+if TYPE_CHECKING:
+  from definable.guardrails.events import GuardrailBlockedEvent, GuardrailCheckedEvent
 
 
 @dataclass
@@ -162,6 +163,9 @@ class RunEvent(str, Enum):
 
   output_model_response_started = "OutputModelResponseStarted"
   output_model_response_completed = "OutputModelResponseCompleted"
+
+  guardrail_checked = "GuardrailChecked"
+  guardrail_blocked = "GuardrailBlocked"
 
   custom_event = "CustomEvent"
 
@@ -518,6 +522,8 @@ RunOutputEvent = Union[
   OutputModelResponseStartedEvent,
   OutputModelResponseCompletedEvent,
   CustomEvent,
+  "GuardrailCheckedEvent",
+  "GuardrailBlockedEvent",
 ]
 
 # Map event string to dataclass
@@ -557,12 +563,27 @@ RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.output_model_response_started.value: OutputModelResponseStartedEvent,
   RunEvent.output_model_response_completed.value: OutputModelResponseCompletedEvent,
   RunEvent.custom_event.value: CustomEvent,
+  # Guardrail events are registered lazily to avoid circular imports.
+  # See _ensure_guardrail_events_registered() below.
 }
+
+
+def _ensure_guardrail_events_registered() -> None:
+  """Lazily register guardrail event types the first time they're needed."""
+  if RunEvent.guardrail_checked.value not in RUN_EVENT_TYPE_REGISTRY:
+    from definable.guardrails.events import GuardrailBlockedEvent, GuardrailCheckedEvent
+
+    RUN_EVENT_TYPE_REGISTRY[RunEvent.guardrail_checked.value] = GuardrailCheckedEvent
+    RUN_EVENT_TYPE_REGISTRY[RunEvent.guardrail_blocked.value] = GuardrailBlockedEvent
 
 
 def run_output_event_from_dict(data: dict) -> BaseRunOutputEvent:
   event_type = data.get("event", "")
   cls = RUN_EVENT_TYPE_REGISTRY.get(event_type)
+  if not cls:
+    # Try lazy registration for guardrail events
+    _ensure_guardrail_events_registered()
+    cls = RUN_EVENT_TYPE_REGISTRY.get(event_type)
   if not cls:
     raise ValueError(f"Unknown event type: {event_type}")
   return cls.from_dict(data)  # type: ignore

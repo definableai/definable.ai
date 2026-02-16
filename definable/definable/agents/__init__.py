@@ -155,6 +155,14 @@ def __getattr__(name: str):
     from definable.replay import ReplayComparison
 
     return ReplayComparison
+  if name == "Guardrails":
+    from definable.guardrails import Guardrails
+
+    return Guardrails
+  if name == "GuardrailResult":
+    from definable.guardrails import GuardrailResult
+
+    return GuardrailResult
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -164,6 +172,8 @@ CognitiveMemory: type
 FileReaderRegistry: type
 Replay: type
 ReplayComparison: type
+Guardrails: type
+GuardrailResult: type
 
 __all__ = [
   # Core
@@ -180,6 +190,8 @@ __all__ = [
   "CognitiveMemory",
   "Replay",
   "ReplayComparison",
+  "Guardrails",
+  "GuardrailResult",
   # Middleware
   "Middleware",
   "LoggingMiddleware",

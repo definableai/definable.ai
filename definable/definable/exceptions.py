@@ -121,6 +121,7 @@ class CheckTrigger(Enum):
 
   PROMPT_INJECTION = "prompt_injection"
   PII_DETECTED = "pii_detected"
+  GUARDRAIL_BLOCKED = "guardrail_blocked"
 
 
 class InputCheckError(Exception):

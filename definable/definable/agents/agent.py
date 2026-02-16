@@ -104,9 +104,11 @@ class Agent:
     tools: Optional[List[Function]] = None,
     toolkits: Optional[List[Toolkit]] = None,
     skills: Optional[List[Skill]] = None,
+    skill_registry: Optional[Any] = None,
     instructions: Optional[str] = None,
     memory: Optional[Any] = None,
     readers: Optional[Any] = None,
+    guardrails: Optional[Any] = None,
     name: Optional[str] = None,
     # Optional advanced configuration
     config: Optional[AgentConfig] = None,
@@ -123,6 +125,12 @@ class Agent:
             instructions (merged into the system prompt). Skills are
             the highest-level abstraction — use them to give your agent
             domain expertise alongside capabilities.
+        skill_registry: Optional SkillRegistry for markdown-based skills.
+            Auto-selects eager mode (all skills injected) when the
+            registry has 15 or fewer skills, or lazy mode (catalog +
+            read_skill tool) for larger registries. Override by calling
+            ``registry.as_eager()`` or ``registry.as_lazy()`` directly
+            and passing the result to ``skills=``.
         instructions: System instructions for the agent.
         memory: Optional CognitiveMemory instance for persistent memory.
         readers: File reader configuration. Accepts:
@@ -141,11 +149,22 @@ class Agent:
     self.instructions = instructions
     self.memory = memory
     self.readers = self._init_readers(readers)
+    self.guardrails = guardrails
 
     # Optional config for advanced settings
     self.config = config or AgentConfig()
     if name is not None:
       self.config = dataclasses.replace(self.config, agent_name=name)
+
+    # Convert skill_registry to skills (eager/lazy based on size)
+    if skill_registry is not None:
+      from definable.skills.registry import SkillRegistry
+
+      if isinstance(skill_registry, SkillRegistry):
+        if len(skill_registry) <= 15:
+          self.skills.extend(skill_registry.as_eager())
+        else:
+          self.skills.append(skill_registry.as_lazy())
 
     # Initialize skills (call setup, validate)
     self._init_skills()
@@ -497,6 +516,13 @@ class Agent:
     if self.memory:
       await self._memory_recall(context, new_messages)
 
+    # Input guardrails (after memory recall, before execution)
+    if self.guardrails and self.guardrails.input:
+      input_block = await self._run_input_guardrails(context, new_messages)
+      if input_block is not None:
+        await self._fire_after_hooks(input_block)
+        return input_block
+
     run_input = RunInput(
       input_content=instruction,
       images=images,
@@ -521,6 +547,12 @@ class Agent:
 
     # Execute
     result = await handler(context)
+
+    # Output guardrails (after execution, before memory store)
+    if self.guardrails and self.guardrails.output and result.content:
+      output_block = await self._run_output_guardrails(context, result)
+      if output_block is not None:
+        result = output_block
 
     # Memory store (after execution, fire-and-forget)
     if self.memory:
@@ -753,6 +785,22 @@ class Agent:
       for evt in await self._memory_recall(context, new_messages):
         yield evt
 
+    # Input guardrails (streaming)
+    if self.guardrails and self.guardrails.input:
+      input_block = await self._run_input_guardrails(context, new_messages)
+      if input_block is not None:
+        blocked_event = RunCompletedEvent(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          content=input_block.content,
+          metadata={"status": "blocked"},
+        )
+        self._emit(blocked_event)
+        yield blocked_event
+        return
+
     # Prepare tools
     tools = self._prepare_tools_for_run(context)
 
@@ -918,6 +966,33 @@ class Agent:
           self._emit(tool_started_event)
           yield tool_started_event
 
+          # Tool guardrails (streaming)
+          if self.guardrails and self.guardrails.tool:
+            tool_block_reason = await self._run_tool_guardrails(context, tool_execution)
+            if tool_block_reason is not None:
+              tool_execution.result = f"Blocked by guardrail: {tool_block_reason}"
+              tool_execution.tool_call_error = True
+              all_tool_executions.append(tool_execution)
+              tool_completed_event = ToolCallCompletedEvent(
+                run_id=context.run_id,
+                session_id=context.session_id,
+                agent_id=self.agent_id,
+                agent_name=self.agent_name,
+                tool=tool_execution,
+                content=tool_execution.result,
+              )
+              self._emit(tool_completed_event)
+              yield tool_completed_event
+              invoke_messages.append(
+                Message(
+                  role="tool",
+                  content=tool_execution.result,
+                  tool_call_id=tool_call.get("id"),
+                  name=tool_call.get("function", {}).get("name"),
+                )
+              )
+              continue
+
           # Execute the tool
           if function_call:
             result = await function_call.aexecute()
@@ -954,7 +1029,23 @@ class Agent:
 
         # Loop continues - next iteration will stream model's response to tool results
 
-      # Final completed event
+      # Output guardrails (streaming — modify final_content before completed event)
+      _completed_metadata: Optional[Dict[str, Any]] = None
+      if self.guardrails and self.guardrails.output and final_content:
+        _temp_output = RunOutput(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          content=final_content,
+        )
+        output_block = await self._run_output_guardrails(context, _temp_output)
+        if output_block is not None:
+          final_content = output_block.content or final_content
+        else:
+          # _run_output_guardrails may have modified _temp_output.content in-place for "modify"
+          final_content = _temp_output.content or final_content
+        if _temp_output.metadata and _temp_output.metadata.get("guardrail_modified"):
+          _completed_metadata = {"guardrail_modified": True}
+
       completed_event = RunCompletedEvent(
         run_id=context.run_id,
         session_id=context.session_id,
@@ -962,6 +1053,7 @@ class Agent:
         agent_name=self.agent_name,
         content=final_content,
         metrics=total_metrics,
+        metadata=_completed_metadata,
       )
       self._emit(completed_event)
       yield completed_event
@@ -1318,6 +1410,218 @@ class Agent:
     events.append(completed)
     return events
 
+  # --- Guardrail Helpers ---
+
+  def _extract_input_text(self, new_messages: List[Message]) -> str:
+    """Extract text content from the new user messages for guardrail checking."""
+    parts: List[str] = []
+    for msg in new_messages:
+      if msg.role == "user" and msg.content:
+        parts.append(msg.content if isinstance(msg.content, str) else str(msg.content))
+    return "\n".join(parts)
+
+  async def _run_input_guardrails(self, context: RunContext, new_messages: List[Message]) -> Optional[RunOutput]:
+    """Run input guardrails. Returns RunOutput if blocked, None if allowed."""
+    assert self.guardrails is not None
+
+    from definable.guardrails.events import GuardrailBlockedEvent, GuardrailCheckedEvent
+
+    text = self._extract_input_text(new_messages)
+    if not text:
+      return None
+
+    results = await self.guardrails.run_input_checks(text, context)
+
+    for result in results:
+      gname = (result.metadata or {}).get("guardrail_name", "unknown")
+      duration = (result.metadata or {}).get("duration_ms")
+
+      self._emit(
+        GuardrailCheckedEvent(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          guardrail_name=gname,
+          guardrail_type="input",
+          action=result.action,
+          message=result.message,
+          duration_ms=duration,
+        )
+      )
+
+      if result.action == "block":
+        self._emit(
+          GuardrailBlockedEvent(
+            run_id=context.run_id,
+            session_id=context.session_id,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+            guardrail_name=gname,
+            guardrail_type="input",
+            reason=result.message or "Blocked by input guardrail",
+          )
+        )
+
+        reason = result.message or "Blocked by input guardrail"
+        if self.guardrails.on_block == "raise":
+          from definable.exceptions import CheckTrigger, InputCheckError
+
+          raise InputCheckError(reason, check_trigger=CheckTrigger.GUARDRAIL_BLOCKED)
+
+        return RunOutput(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          content=reason,
+          status=RunStatus.blocked,
+        )
+
+      if result.action == "modify" and result.modified_text is not None:
+        # Replace the last user message content
+        for i in range(len(new_messages) - 1, -1, -1):
+          if new_messages[i].role == "user":
+            new_messages[i] = Message(
+              role="user",
+              content=result.modified_text,
+              images=new_messages[i].images,
+              videos=new_messages[i].videos,
+              audio=new_messages[i].audio,
+              files=new_messages[i].files,
+            )
+            break
+        # Also update all_messages in context metadata
+        all_messages = context.metadata.get("_messages") if context.metadata else None
+        if all_messages:
+          for i in range(len(all_messages) - 1, -1, -1):
+            if all_messages[i].role == "user":
+              all_messages[i] = Message(
+                role="user",
+                content=result.modified_text,
+                images=all_messages[i].images,
+                videos=all_messages[i].videos,
+                audio=all_messages[i].audio,
+                files=all_messages[i].files,
+              )
+              break
+
+    return None
+
+  async def _run_output_guardrails(self, context: RunContext, result: RunOutput) -> Optional[RunOutput]:
+    """Run output guardrails. Returns modified RunOutput if blocked/modified, None if allowed."""
+    assert self.guardrails is not None
+
+    from definable.guardrails.events import GuardrailBlockedEvent, GuardrailCheckedEvent
+
+    text = result.content if isinstance(result.content, str) else str(result.content or "")
+    if not text:
+      return None
+
+    results = await self.guardrails.run_output_checks(text, context)
+
+    for gr in results:
+      gname = (gr.metadata or {}).get("guardrail_name", "unknown")
+      duration = (gr.metadata or {}).get("duration_ms")
+
+      self._emit(
+        GuardrailCheckedEvent(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          guardrail_name=gname,
+          guardrail_type="output",
+          action=gr.action,
+          message=gr.message,
+          duration_ms=duration,
+        )
+      )
+
+      if gr.action == "block":
+        self._emit(
+          GuardrailBlockedEvent(
+            run_id=context.run_id,
+            session_id=context.session_id,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+            guardrail_name=gname,
+            guardrail_type="output",
+            reason=gr.message or "Blocked by output guardrail",
+          )
+        )
+
+        reason = gr.message or "Blocked by output guardrail"
+        if self.guardrails.on_block == "raise":
+          from definable.exceptions import CheckTrigger, OutputCheckError
+
+          raise OutputCheckError(reason, check_trigger=CheckTrigger.GUARDRAIL_BLOCKED)
+
+        return RunOutput(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          content=reason,
+          status=RunStatus.blocked,
+          messages=result.messages,
+          metrics=result.metrics,
+        )
+
+      if gr.action == "modify" and gr.modified_text is not None:
+        result.content = gr.modified_text
+        if result.metadata is None:
+          result.metadata = {}
+        result.metadata["guardrail_modified"] = True
+
+    return None
+
+  async def _run_tool_guardrails(self, context: RunContext, tool_execution: ToolExecution) -> Optional[str]:
+    """Run tool guardrails. Returns block reason string if blocked, None if allowed."""
+    assert self.guardrails is not None
+
+    from definable.guardrails.events import GuardrailBlockedEvent, GuardrailCheckedEvent
+
+    tool_name = tool_execution.tool_name or ""
+    tool_args = tool_execution.tool_args or {}
+
+    results = await self.guardrails.run_tool_checks(tool_name, tool_args, context)
+
+    for gr in results:
+      gname = (gr.metadata or {}).get("guardrail_name", "unknown")
+      duration = (gr.metadata or {}).get("duration_ms")
+
+      self._emit(
+        GuardrailCheckedEvent(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          guardrail_name=gname,
+          guardrail_type="tool",
+          action=gr.action,
+          message=gr.message,
+          duration_ms=duration,
+        )
+      )
+
+      if gr.action == "block":
+        reason = gr.message or f"Tool '{tool_name}' blocked by guardrail"
+        self._emit(
+          GuardrailBlockedEvent(
+            run_id=context.run_id,
+            session_id=context.session_id,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+            guardrail_name=gname,
+            guardrail_type="tool",
+            reason=reason,
+          )
+        )
+        return reason
+
+    return None
+
   # --- Internal Methods ---
 
   async def _execute_run(
@@ -1454,6 +1758,33 @@ class Agent:
             )
           )
 
+          # Tool guardrails
+          if self.guardrails and self.guardrails.tool:
+            tool_block_reason = await self._run_tool_guardrails(context, tool_execution)
+            if tool_block_reason is not None:
+              tool_execution.result = f"Blocked by guardrail: {tool_block_reason}"
+              tool_execution.tool_call_error = True
+              all_tool_executions.append(tool_execution)
+              self._emit(
+                ToolCallCompletedEvent(
+                  run_id=context.run_id,
+                  session_id=context.session_id,
+                  agent_id=self.agent_id,
+                  agent_name=self.agent_name,
+                  tool=tool_execution,
+                  content=tool_execution.result,
+                )
+              )
+              invoke_messages.append(
+                Message(
+                  role="tool",
+                  content=tool_execution.result,
+                  tool_call_id=tool_call.get("id"),
+                  name=tool_call.get("function", {}).get("name"),
+                )
+              )
+              continue
+
           # Execute the tool
           if function_call:
             result = await function_call.aexecute()
@@ -1548,10 +1879,7 @@ class Agent:
       if skill.name in seen_names:
         from definable.utils.log import log_warning
 
-        log_warning(
-          f"Duplicate skill name '{skill.name}' — tools from the later "
-          f"skill will override earlier ones."
-        )
+        log_warning(f"Duplicate skill name '{skill.name}' — tools from the later skill will override earlier ones.")
       seen_names[skill.name] = skill
 
       # Call setup() for one-time initialization (non-fatal)
