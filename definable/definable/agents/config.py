@@ -7,6 +7,7 @@ if TYPE_CHECKING:
   from definable.agents.tracing.base import TraceExporter
   from definable.knowledge import Knowledge
   from definable.models.base import Model
+  from definable.research.config import DeepResearchConfig
   from definable.run.base import BaseRunOutputEvent
 
 
@@ -181,6 +182,9 @@ class AgentConfig:
   # Compression configuration for tool results
   compression: Optional[CompressionConfig] = field(default=None, hash=False)
 
+  # Deep research configuration
+  deep_research: Optional["DeepResearchConfig"] = field(default=None, hash=False)
+
   # File readers configuration
   readers: Optional[ReadersConfig] = field(default=None, hash=False)
 
@@ -216,7 +220,7 @@ class AgentConfig:
         New AgentConfig instance with updated values.
     """
     # Fields that cannot be serialized with asdict
-    non_serializable = ("tracing", "session_state", "dependencies", "knowledge", "compression", "readers")
+    non_serializable = ("tracing", "session_state", "dependencies", "knowledge", "compression", "deep_research", "readers")
     current = {k: v for k, v in asdict(self).items() if k not in non_serializable}
     # Handle non-serializable fields separately
     current["tracing"] = self.tracing
@@ -224,6 +228,7 @@ class AgentConfig:
     current["dependencies"] = self.dependencies
     current["knowledge"] = self.knowledge
     current["compression"] = self.compression
+    current["deep_research"] = self.deep_research
     current["readers"] = self.readers
     current.update(kwargs)
     return AgentConfig(**current)

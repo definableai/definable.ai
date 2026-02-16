@@ -115,6 +115,7 @@ With Middleware:
 
 from definable.agents.agent import Agent
 from definable.agents.config import AgentConfig, CompressionConfig, KnowledgeConfig, ReadersConfig, ThinkingConfig, TracingConfig
+from definable.research.config import DeepResearchConfig
 from definable.agents.middleware import (
   KnowledgeMiddleware,
   LoggingMiddleware,
@@ -184,6 +185,7 @@ __all__ = [
   "CompressionConfig",
   "ThinkingConfig",
   "ReadersConfig",
+  "DeepResearchConfig",
   "FileReaderRegistry",
   "Toolkit",
   "KnowledgeToolkit",

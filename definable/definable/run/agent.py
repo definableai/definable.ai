@@ -164,6 +164,10 @@ class RunEvent(str, Enum):
   output_model_response_started = "OutputModelResponseStarted"
   output_model_response_completed = "OutputModelResponseCompleted"
 
+  deep_research_started = "DeepResearchStarted"
+  deep_research_progress = "DeepResearchProgress"
+  deep_research_completed = "DeepResearchCompleted"
+
   guardrail_checked = "GuardrailChecked"
   guardrail_blocked = "GuardrailBlocked"
 
@@ -434,6 +438,35 @@ class FileReadCompletedEvent(BaseAgentRunEvent):
 
 
 @dataclass
+class DeepResearchStartedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.deep_research_started.value
+  query: Optional[str] = None
+  depth: Optional[str] = None
+
+
+@dataclass
+class DeepResearchProgressEvent(BaseAgentRunEvent):
+  event: str = RunEvent.deep_research_progress.value
+  wave: int = 0
+  sources_read: int = 0
+  facts_extracted: int = 0
+  gaps_remaining: int = 0
+  message: str = ""
+
+
+@dataclass
+class DeepResearchCompletedEvent(BaseAgentRunEvent):
+  event: str = RunEvent.deep_research_completed.value
+  query: Optional[str] = None
+  sources_used: int = 0
+  facts_extracted: int = 0
+  contradictions_found: int = 0
+  waves_executed: int = 0
+  duration_ms: Optional[float] = None
+  compression_ratio: float = 0.0
+
+
+@dataclass
 class ToolCallStartedEvent(BaseAgentRunEvent):
   event: str = RunEvent.tool_call_started.value
   tool: Optional[ToolExecution] = None
@@ -512,6 +545,9 @@ RunOutputEvent = Union[
   MemoryUpdateCompletedEvent,
   FileReadStartedEvent,
   FileReadCompletedEvent,
+  DeepResearchStartedEvent,
+  DeepResearchProgressEvent,
+  DeepResearchCompletedEvent,
   SessionSummaryStartedEvent,
   SessionSummaryCompletedEvent,
   ToolCallStartedEvent,
@@ -553,6 +589,9 @@ RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.memory_update_completed.value: MemoryUpdateCompletedEvent,
   RunEvent.file_read_started.value: FileReadStartedEvent,
   RunEvent.file_read_completed.value: FileReadCompletedEvent,
+  RunEvent.deep_research_started.value: DeepResearchStartedEvent,
+  RunEvent.deep_research_progress.value: DeepResearchProgressEvent,
+  RunEvent.deep_research_completed.value: DeepResearchCompletedEvent,
   RunEvent.session_summary_started.value: SessionSummaryStartedEvent,
   RunEvent.session_summary_completed.value: SessionSummaryCompletedEvent,
   RunEvent.tool_call_started.value: ToolCallStartedEvent,

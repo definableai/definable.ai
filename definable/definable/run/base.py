@@ -36,6 +36,10 @@ class RunContext:
   # Memory retrieval results (populated by CognitiveMemory)
   memory_context: Optional[str] = None  # Formatted memory payload for injection
 
+  # Deep research results (populated by research pipeline)
+  research_context: Optional[str] = None  # Formatted research for system prompt injection
+  research_result: Optional[Any] = None  # Full ResearchResult (for inspection)
+
   # File reader results (populated by readers module)
   readers_context: Optional[str] = None  # Extracted file content for injection
 

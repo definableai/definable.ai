@@ -47,6 +47,7 @@ pinecone-memory = ["pinecone>=5.0.0"]
 mem0-memory = ["mem0ai>=0.1.0"]
 mistral-ocr = ["mistralai>=1.0.0"]
 mistral-ocr-images = ["mistralai>=1.0.0", "Pillow>=10.0.0"]
+research = ["duckduckgo-search>=6.0.0", "curl-cffi>=0.7.0"]
 
 [tool.setuptools.package-data]
 definable = ["skills/library/*.md"]

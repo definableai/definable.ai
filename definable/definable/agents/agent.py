@@ -28,6 +28,8 @@ from definable.models.message import Message
 from definable.models.metrics import Metrics
 from definable.models.response import ToolExecution
 from definable.run.agent import (
+  DeepResearchCompletedEvent,
+  DeepResearchStartedEvent,
   FileReadCompletedEvent,
   FileReadStartedEvent,
   KnowledgeRetrievalCompletedEvent,
@@ -65,6 +67,8 @@ if TYPE_CHECKING:
   from definable.models.base import Model
   from definable.reasoning.step import ReasoningStep, ThinkingOutput
   from definable.replay import Replay, ReplayComparison
+  from definable.research.config import DeepResearchConfig
+  from definable.research.engine import DeepResearch
 
 
 @runtime_checkable
@@ -136,6 +140,7 @@ class Agent:
     readers: Optional[Any] = None,
     guardrails: Optional[Any] = None,
     thinking: Union[bool, "ThinkingConfig", None] = None,
+    deep_research: Union[bool, "DeepResearchConfig", "DeepResearch", None] = None,
     name: Optional[str] = None,
     session_id: Optional[str] = None,
     # Optional advanced configuration
@@ -194,6 +199,23 @@ class Agent:
     else:
       self._thinking = None
 
+    # Deep research layer
+    from definable.research.config import DeepResearchConfig as _DRConfig
+    from definable.research.engine import DeepResearch as _DREngine
+
+    if isinstance(deep_research, _DREngine):
+      self._deep_research_config: Optional[_DRConfig] = None
+      self._prebuilt_researcher: Optional[_DREngine] = deep_research
+    elif deep_research is True:
+      self._deep_research_config = _DRConfig()
+      self._prebuilt_researcher = None
+    elif isinstance(deep_research, _DRConfig):
+      self._deep_research_config = deep_research
+      self._prebuilt_researcher = None
+    else:
+      self._deep_research_config = None
+      self._prebuilt_researcher = None
+
     # Optional config for advanced settings
     self.config = config or AgentConfig()
     if name is not None:
@@ -227,6 +249,13 @@ class Agent:
     self._agent_owned_toolkits: list[Any] = []
     self._toolkit_init_lock: asyncio.Lock = asyncio.Lock()
     self.session_id = session_id or str(uuid4())
+
+    # Deep research engine (prebuilt instance or lazy init from config)
+    dr_config = self._deep_research_config or (self.config.deep_research if self.config else None)
+    self._researcher: Optional["DeepResearch"] = (
+      self._prebuilt_researcher
+      or (self._init_deep_research(dr_config) if dr_config else None)
+    )
 
   # --- Properties ---
 
@@ -590,6 +619,9 @@ class Agent:
     # Knowledge retrieval (before execution)
     await self._knowledge_retrieve(context)
 
+    # Deep research (after knowledge, before memory)
+    await self._deep_research(context)
+
     # Memory recall (before execution)
     if self.memory:
       await self._memory_recall(context, new_messages)
@@ -863,6 +895,10 @@ class Agent:
     for evt in await self._knowledge_retrieve(context):
       yield evt
 
+    # Deep research — yield events
+    for evt in await self._deep_research(context):
+      yield evt
+
     # Memory recall — yield events
     if self.memory:
       for evt in await self._memory_recall(context, new_messages):
@@ -1015,6 +1051,13 @@ class Agent:
             system_content = f"{system_content}\n\n{context.knowledge_context}"
           else:
             system_content = context.knowledge_context
+
+      # Append research context (AFTER knowledge)
+      if context.research_context:
+        if system_content:
+          system_content = f"{system_content}\n\n{context.research_context}"
+        else:
+          system_content = context.research_context
 
       # Append memory context (AFTER plan)
       if context.memory_context:
@@ -1367,6 +1410,169 @@ class Agent:
       documents_found=documents_found,
       documents_used=len(documents),
       duration_ms=elapsed,
+    )
+    self._emit(completed)
+    events.append(completed)
+    return events
+
+  def _init_deep_research(self, config: "DeepResearchConfig") -> Optional["DeepResearch"]:
+    """Initialize the deep research engine if configured.
+
+    Non-fatal: returns None with a warning if search capability cannot be found.
+    """
+    from definable.utils.log import log_debug, log_warning
+
+    if not config or not config.enabled:
+      return None
+
+    try:
+      from definable.research.engine import DeepResearch
+      from definable.research.search import create_search_provider
+
+      # Try explicit search_fn or provider first
+      if config.search_fn is not None or config.search_provider != "duckduckgo":
+        provider = create_search_provider(
+          provider=config.search_provider,
+          config=config.search_provider_config,
+          search_fn=config.search_fn,
+        )
+      else:
+        # Try auto-discovering from WebSearch skill
+        provider = self._discover_search_provider()
+        if provider is None:
+          # Fall back to DuckDuckGo
+          provider = create_search_provider("duckduckgo")
+
+      compression_model = config.compression_model or self.model
+      log_debug("Deep research engine initialized")
+      return DeepResearch(
+        model=self.model,
+        search_provider=provider,
+        compression_model=compression_model,
+        config=config,
+      )
+    except Exception as e:
+      log_warning(f"Failed to initialize deep research: {e}")
+      return None
+
+  def _discover_search_provider(self) -> Optional[Any]:
+    """Try to auto-discover a search provider from WebSearch skill."""
+    from definable.utils.log import log_debug
+
+    for skill in self.skills:
+      # Check for WebSearch skill with its _search_fn
+      skill_cls_name = type(skill).__name__
+      if skill_cls_name == "WebSearch" and hasattr(skill, "_search_fn"):
+        from definable.research.search import CallableSearchProvider
+        from definable.research.search.base import SearchResult
+
+        raw_fn = skill._search_fn
+
+        async def _wrapped(query: str, max_results: int = 10) -> list:
+          import asyncio
+
+          text = await asyncio.to_thread(raw_fn, query, max_results)
+          # WebSearch._search_fn returns formatted string, not SearchResult list.
+          # Parse it back into SearchResult objects.
+          results = []
+          for block in text.split("\n\n---\n\n"):
+            lines = block.strip().split("\n", 2)
+            if len(lines) >= 2:
+              title = lines[0].strip("*").strip()
+              url = lines[1].strip()
+              snippet = lines[2] if len(lines) > 2 else ""
+              results.append(SearchResult(title=title, url=url, snippet=snippet))
+          return results
+
+        log_debug("Auto-discovered search provider from WebSearch skill")
+        return CallableSearchProvider(_wrapped)  # type: ignore[return-value]
+
+    return None
+
+  async def _deep_research(self, context: RunContext) -> List[RunOutputEvent]:
+    """Execute deep research pipeline, emit events, inject context."""
+    if not self._researcher:
+      return []
+
+    config = (
+      self._deep_research_config
+      or (self.config.deep_research if self.config else None)
+      or (self._researcher._config if self._researcher else None)
+    )
+    if not config or not config.enabled:
+      return []
+
+    # Extract query from last user message
+    messages = context.metadata.get("_messages") if context.metadata else None
+    if not messages:
+      return []
+
+    query = None
+    for msg in reversed(messages):
+      if hasattr(msg, "role") and msg.role == "user" and msg.content:
+        query = msg.content if isinstance(msg.content, str) else str(msg.content)
+        break
+    if not query:
+      return []
+
+    # Auto trigger: ask model if research is needed
+    if config.trigger == "auto":
+      try:
+        needs = await self._researcher.needs_research(query)
+        if not needs:
+          return []
+      except Exception:
+        pass  # Default to running research on failure
+
+    import time
+
+    events: List[RunOutputEvent] = []
+    started = DeepResearchStartedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      query=query,
+      depth=config.depth,
+    )
+    self._emit(started)
+    events.append(started)
+
+    start_time = time.perf_counter()
+    try:
+      result = await self._researcher.arun(query)
+      context.research_context = result.context
+      context.research_result = result
+    except Exception as e:
+      from definable.utils.log import log_warning
+
+      log_warning(f"Deep research failed: {e}")
+      elapsed = (time.perf_counter() - start_time) * 1000
+      completed = DeepResearchCompletedEvent(
+        run_id=context.run_id,
+        session_id=context.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        query=query,
+        duration_ms=elapsed,
+      )
+      self._emit(completed)
+      events.append(completed)
+      return events
+
+    elapsed = (time.perf_counter() - start_time) * 1000
+    completed = DeepResearchCompletedEvent(
+      run_id=context.run_id,
+      session_id=context.session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      query=query,
+      sources_used=result.metrics.total_sources_read,
+      facts_extracted=result.metrics.unique_facts,
+      contradictions_found=result.metrics.contradictions_found,
+      waves_executed=result.metrics.waves_executed,
+      duration_ms=elapsed,
+      compression_ratio=result.metrics.compression_ratio_avg,
     )
     self._emit(completed)
     events.append(completed)
@@ -2034,6 +2240,13 @@ class Agent:
             system_content = f"{system_content}\n\n{context.knowledge_context}"
           else:
             system_content = context.knowledge_context
+
+      # Append research context (AFTER knowledge)
+      if context.research_context:
+        if system_content:
+          system_content = f"{system_content}\n\n{context.research_context}"
+        else:
+          system_content = context.research_context
 
       # Append memory context (AFTER plan)
       if context.memory_context:
