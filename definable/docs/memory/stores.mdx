@@ -19,6 +19,7 @@ A `MemoryStore` is the storage backend for `CognitiveMemory`. Definable provides
 | `QdrantMemoryStore` | `definable.memory` | `qdrant-client` | Vector-native at scale |
 | `PineconeMemoryStore` | `definable.memory` | `pinecone` | Managed vector DB |
 | `MongoMemoryStore` | `definable.memory` | `motor` | Document-oriented |
+| `Mem0MemoryStore` | `definable.memory` | `mem0ai` | Hosted Mem0 API |
 
 ## Installation
 
@@ -31,6 +32,7 @@ pip install 'definable[qdrant-memory]'      # qdrant-client
 pip install 'definable[chroma-memory]'      # chromadb
 pip install 'definable[mongodb-memory]'     # motor
 pip install 'definable[pinecone-memory]'    # pinecone
+pip install 'definable[mem0-memory]'       # mem0ai
 ```
 
 ## Backend Examples
@@ -159,6 +161,37 @@ memory = CognitiveMemory(store=store)
 </ParamField>
 <ParamField path="vector_size" type="int" default={1536}>
   Dimension of embedding vectors.
+</ParamField>
+
+### Mem0MemoryStore
+
+Hosted Mem0 API — no infrastructure to maintain. Uses `infer=False` for verbatim storage.
+
+<Note>
+  Mem0 does not accept raw embedding vectors. `search_episodes_by_embedding()` and
+  `search_atoms_by_embedding()` return empty lists. The retrieval pipeline handles this gracefully.
+</Note>
+
+```python
+from definable.memory import CognitiveMemory
+from definable.memory.store.mem0 import Mem0MemoryStore
+
+store = Mem0MemoryStore(
+  api_key="your-mem0-api-key",
+  org_id=None,
+  project_id=None,
+)
+memory = CognitiveMemory(store=store)
+```
+
+<ParamField path="api_key" type="str" default="">
+  Mem0 API key. Falls back to `MEM0_API_KEY` environment variable.
+</ParamField>
+<ParamField path="org_id" type="str" default="None">
+  Mem0 organization ID.
+</ParamField>
+<ParamField path="project_id" type="str" default="None">
+  Mem0 project ID.
 </ParamField>
 
 ### InMemoryStore

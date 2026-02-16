@@ -11,6 +11,7 @@ Environment variables for optional backends:
     MEMORY_MONGODB_URL    — e.g. mongodb://localhost:27017
     MEMORY_QDRANT_URL     — e.g. http://localhost:6333
     PINECONE_API_KEY      — Pinecone API key
+    MEM0_API_KEY          — Mem0 API key
 
 Usage:
     python definable/examples/memory/03_store_backends.py
@@ -163,6 +164,16 @@ def _build_backends() -> List[Tuple[str, Any]]:
         "PineconeMemoryStore",
         PineconeMemoryStore(api_key=pinecone_key, index_name="example-memory", vector_size=3),
       ))
+    except ImportError:
+      pass
+
+  # 9. Mem0MemoryStore
+  mem0_key = os.environ.get("MEM0_API_KEY")
+  if mem0_key:
+    try:
+      from definable.memory import Mem0MemoryStore
+
+      backends.append(("Mem0MemoryStore", Mem0MemoryStore(api_key=mem0_key)))
     except ImportError:
       pass
 

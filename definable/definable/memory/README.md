@@ -13,6 +13,7 @@ pip install 'definable[qdrant-memory]'     # Qdrant
 pip install 'definable[chroma-memory]'     # Chroma
 pip install 'definable[mongodb-memory]'    # MongoDB (motor)
 pip install 'definable[pinecone-memory]'   # Pinecone
+pip install 'definable[mem0-memory]'      # Mem0
 ```
 
 ## Quick Start
@@ -62,7 +63,8 @@ memory/
     ├── qdrant.py      # QdrantMemoryStore
     ├── chroma.py      # ChromaMemoryStore
     ├── mongodb.py     # MongoMemoryStore
-    └── pinecone.py    # PineconeMemoryStore
+    ├── pinecone.py    # PineconeMemoryStore
+    └── mem0.py        # Mem0MemoryStore
 ```
 
 ## API Reference
@@ -150,6 +152,7 @@ All backends implement the `MemoryStore` protocol with methods for episodes, ato
 | `ChromaMemoryStore` | `(persist_directory=, collection_prefix=)` | Sync client wrapped in asyncio.to_thread |
 | `MongoMemoryStore` | `(connection_string=, database=)` | motor; Python-side vector search |
 | `PineconeMemoryStore` | `(api_key=, index_name=, vector_size=)` | Managed service; v5 SDK |
+| `Mem0MemoryStore` | `(api_key=, org_id=, project_id=)` | Hosted Mem0 API; no raw embedding search |
 
 ## Usage with Agent
 
