@@ -9,13 +9,11 @@ dependencies = [
     "docstring-parser>=0.17.0",
     "httpx>=0.28.1",
     "mypy>=1.19.1",
-    "openai>=2.15.0",
-    "packaging>=26.0",
+    "packaging>=23.0",
     "pydantic>=2.12.5",
     "rich>=14.2.0",
     "ruff>=0.15.0",
     "tiktoken>=0.12.0",
-    "voyageai>=0.3.7",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +33,9 @@ mongodb-memory = ["motor>=3.3.0"]
 pinecone-memory = ["pinecone>=5.0.0"]
 mistral-ocr = ["mistralai>=1.0.0"]
 mistral-ocr-images = ["mistralai>=1.0.0", "Pillow>=10.0.0"]
+
+[tool.setuptools.package-data]
+definable = ["skills/library/*.md"]
 
 [tool.setuptools.packages.find]
 where = ["definable"]
