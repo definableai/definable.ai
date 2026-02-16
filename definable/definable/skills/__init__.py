@@ -60,6 +60,12 @@ from definable.skills.builtin.shell import Shell
 from definable.skills.builtin.text_processing import TextProcessing
 from definable.skills.builtin.web_search import WebSearch
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from definable.skills.markdown import MarkdownSkill, MarkdownSkillMeta, SkillLoader
+  from definable.skills.registry import SkillRegistry
+
 __all__ = [
   # Base class
   "Skill",
@@ -95,10 +101,3 @@ def __getattr__(name: str):
     globals()["SkillRegistry"] = SkillRegistry
     return SkillRegistry
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-
-
-# Define for static analysis (actual imports are lazy)
-MarkdownSkill: type
-MarkdownSkillMeta: type
-SkillLoader: type
-SkillRegistry: type

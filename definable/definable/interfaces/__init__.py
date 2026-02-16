@@ -42,6 +42,17 @@ from definable.interfaces.hooks import AllowlistHook, InterfaceHook, LoggingHook
 from definable.interfaces.message import InterfaceMessage, InterfaceResponse
 from definable.interfaces.session import InterfaceSession, SessionManager
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from definable.interfaces.discord.config import DiscordConfig
+  from definable.interfaces.discord.interface import DiscordInterface
+  from definable.interfaces.identity import IdentityResolver, PlatformIdentity, SQLiteIdentityResolver
+  from definable.interfaces.signal.config import SignalConfig
+  from definable.interfaces.signal.interface import SignalInterface
+  from definable.interfaces.telegram.config import TelegramConfig
+  from definable.interfaces.telegram.interface import TelegramInterface
+
 
 # Lazy imports for platform implementations to avoid requiring their dependencies
 def __getattr__(name: str):
@@ -75,17 +86,6 @@ def __getattr__(name: str):
     return getattr(_identity_mod, name)
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-
-# Define lazy-loaded types for static analysis
-TelegramInterface: type
-TelegramConfig: type
-DiscordInterface: type
-DiscordConfig: type
-SignalInterface: type
-SignalConfig: type
-IdentityResolver: type
-SQLiteIdentityResolver: type
-PlatformIdentity: type
 
 __all__ = [
   # Core

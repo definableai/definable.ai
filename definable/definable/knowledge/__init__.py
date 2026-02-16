@@ -6,6 +6,19 @@ from definable.knowledge.readers import Reader, ReaderConfig
 from definable.knowledge.rerankers import Reranker
 from definable.knowledge.vector_dbs import VectorDB
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from definable.knowledge.chunkers.recursive import RecursiveChunker
+  from definable.knowledge.chunkers.text import TextChunker
+  from definable.knowledge.embedders.voyageai import VoyageAIEmbedder
+  from definable.knowledge.readers.pdf import PDFReader
+  from definable.knowledge.readers.text import TextReader
+  from definable.knowledge.readers.url import URLReader
+  from definable.knowledge.rerankers.cohere import CohereReranker
+  from definable.knowledge.vector_dbs.memory import InMemoryVectorDB
+  from definable.knowledge.vector_dbs.pgvector import PgVectorDB
+
 __all__ = [
   # Core
   "Knowledge",
@@ -17,6 +30,16 @@ __all__ = [
   "ReaderConfig",
   "Chunker",
   "VectorDB",
+  # Implementations (lazy-loaded)
+  "CohereReranker",
+  "InMemoryVectorDB",
+  "PDFReader",
+  "PgVectorDB",
+  "RecursiveChunker",
+  "TextChunker",
+  "TextReader",
+  "URLReader",
+  "VoyageAIEmbedder",
 ]
 
 

@@ -3,6 +3,13 @@
 from definable.auth.api_key import APIKeyAuth
 from definable.auth.base import AuthContext, AuthProvider, AuthRequest, resolve_auth
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from definable.auth.allowlist import AllowlistAuth
+  from definable.auth.composite import CompositeAuth
+  from definable.auth.jwt import JWTAuth
+
 
 # Lazy imports for optional providers
 def __getattr__(name: str):
@@ -20,10 +27,6 @@ def __getattr__(name: str):
     return CompositeAuth
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-
-JWTAuth: type
-AllowlistAuth: type
-CompositeAuth: type
 
 __all__ = [
   "AuthProvider",

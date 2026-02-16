@@ -1,7 +1,16 @@
 from definable.knowledge.vector_dbs.base import VectorDB
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from definable.knowledge.vector_dbs.memory import InMemoryVectorDB
+  from definable.knowledge.vector_dbs.pgvector import PgVectorDB
+
 __all__ = [
   "VectorDB",
+  # Implementations (lazy-loaded)
+  "InMemoryVectorDB",
+  "PgVectorDB",
 ]
 
 

@@ -40,6 +40,26 @@ FileReaderConfig = ReaderConfig
 ReaderResult = ReaderOutput
 FileReaderRegistry = BaseReader
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+  from definable.readers.audio import AudioTranscriber, OpenAITranscriber
+  from definable.readers.parsers.audio import AudioParser
+  from definable.readers.parsers.base_parser import BaseParser
+  from definable.readers.parsers.docx import DocxParser
+  from definable.readers.parsers.html import HTMLParser
+  from definable.readers.parsers.image import ImageParser
+  from definable.readers.parsers.ods import OdsParser
+  from definable.readers.parsers.pdf import PDFParser
+  from definable.readers.parsers.pptx import PptxParser
+  from definable.readers.parsers.rtf import RtfParser
+  from definable.readers.parsers.text import TextParser
+  from definable.readers.parsers.xlsx import XlsxParser
+  from definable.readers.providers.anthropic import AnthropicReader
+  from definable.readers.providers.google import GoogleReader
+  from definable.readers.providers.mistral import MistralOCRReader, MistralReader
+  from definable.readers.providers.openai import OpenAIReader
+
 __all__ = [
   # New API
   "BaseReader",
@@ -52,6 +72,27 @@ __all__ = [
   "FileReaderConfig",
   "ReaderResult",
   "FileReaderRegistry",
+  # Parsers (lazy-loaded)
+  "AudioParser",
+  "BaseParser",
+  "DocxParser",
+  "HTMLParser",
+  "ImageParser",
+  "OdsParser",
+  "PDFParser",
+  "PptxParser",
+  "RtfParser",
+  "TextParser",
+  "XlsxParser",
+  # Providers (lazy-loaded)
+  "AnthropicReader",
+  "GoogleReader",
+  "MistralOCRReader",
+  "MistralReader",
+  "OpenAIReader",
+  # Audio (lazy-loaded)
+  "AudioTranscriber",
+  "OpenAITranscriber",
 ]
 
 _LAZY_IMPORTS = {
