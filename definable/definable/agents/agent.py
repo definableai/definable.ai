@@ -12,8 +12,10 @@ from typing import (
   Iterator,
   List,
   Optional,
+  Protocol,
   Type,
   Union,
+  runtime_checkable,
 )
 from uuid import uuid4
 
@@ -63,6 +65,24 @@ if TYPE_CHECKING:
   from definable.models.base import Model
   from definable.reasoning.step import ReasoningStep, ThinkingOutput
   from definable.replay import Replay, ReplayComparison
+
+
+@runtime_checkable
+class AsyncLifecycleToolkit(Protocol):
+  """Protocol for toolkits with async lifecycle (e.g. MCPToolkit).
+
+  Toolkits satisfying this protocol can be auto-managed by Agent:
+  - Agent.__aenter__ / arun() calls initialize() on uninitialized toolkits
+  - Agent.__aexit__ / _ashutdown() calls shutdown() on agent-owned toolkits
+  """
+
+  _initialized: bool
+
+  async def initialize(self) -> None: ...
+  async def shutdown(self) -> None: ...
+
+  @property
+  def tools(self) -> list: ...
 
 
 class Agent:
@@ -204,6 +224,8 @@ class Agent:
     self._auth: Optional[Any] = None
     self._started = False
     self._pending_memory_tasks: list[asyncio.Task] = []
+    self._agent_owned_toolkits: list[Any] = []
+    self._toolkit_init_lock: asyncio.Lock = asyncio.Lock()
     self.session_id = session_id or str(uuid4())
 
   # --- Properties ---
@@ -237,6 +259,7 @@ class Agent:
   async def __aenter__(self) -> "Agent":
     """Async context manager entry."""
     self._start()
+    await self._ensure_toolkits_initialized()
     return self
 
   async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -263,10 +286,36 @@ class Agent:
   async def _ashutdown(self) -> None:
     """Async cleanup."""
     await self._drain_memory_tasks()
+    # Shutdown toolkits we initialized (not user-managed ones)
+    for toolkit in self._agent_owned_toolkits:
+      with contextlib.suppress(Exception):
+        await toolkit.shutdown()
+    self._agent_owned_toolkits.clear()
     if self.memory:
       with contextlib.suppress(Exception):
         await self.memory.close()
     self._shutdown()
+
+  async def _ensure_toolkits_initialized(self) -> None:
+    """Initialize any AsyncLifecycleToolkit instances that aren't yet initialized.
+
+    Skips already-initialized toolkits (user-managed), tracks which toolkits
+    we initialized (for shutdown), and refreshes _tools_dict after init.
+    """
+    async with self._toolkit_init_lock:
+      needs_refresh = False
+      for toolkit in self.toolkits:
+        if isinstance(toolkit, AsyncLifecycleToolkit) and not toolkit._initialized:
+          try:
+            await toolkit.initialize()
+            self._agent_owned_toolkits.append(toolkit)
+            needs_refresh = True
+          except Exception as e:
+            from definable.utils.log import log_warning
+
+            log_warning(f"Toolkit {toolkit!r} init failed (non-fatal): {e}")
+      if needs_refresh:
+        self._tools_dict = self._flatten_tools()
 
   # --- Middleware Support ---
 
@@ -513,6 +562,9 @@ class Agent:
     """
     run_id = run_id or str(uuid4())
     session_id = session_id or self.session_id
+
+    # Auto-initialize async toolkits (e.g. MCPToolkit) if not already done
+    await self._ensure_toolkits_initialized()
 
     # Normalize instruction to messages
     new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
@@ -784,6 +836,9 @@ class Agent:
     """
     run_id = run_id or str(uuid4())
     session_id = session_id or self.session_id
+
+    # Auto-initialize async toolkits (e.g. MCPToolkit) if not already done
+    await self._ensure_toolkits_initialized()
 
     # Normalize instruction to messages
     new_messages = self._normalize_instruction(instruction, images)

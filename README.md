@@ -4,11 +4,11 @@
 
 **Build LLM agents that work in production.**
 
-[![PyPI](https://img.shields.io/pypi/v/definable)](https://pypi.org/project/definable-ai/)
-[![Python](https://img.shields.io/pypi/pyversions/definable)](https://pypi.org/project/definable-ai/)
-[![License](https://img.shields.io/github/license/definable-ai/definable)](https://github.com/definable-ai/definable/blob/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/definable)](https://pypi.org/project/definable/)
+[![Python](https://img.shields.io/pypi/pyversions/definable)](https://pypi.org/project/definable/)
+[![License](https://img.shields.io/github/license/definable-ai/definable)](https://github.com/definableai/definable.ai/blob/main/LICENSE)
 
-[Documentation](https://definable.ai/docs) · [Examples](https://github.com/definable-ai/definable/tree/main/definable/examples) · [PyPI](https://pypi.org/project/definable-ai/)
+[Documentation](https://docs.definable.ai) · [Examples](https://github.com/definableai/definable.ai/tree/main/definable/examples) · [PyPI](https://pypi.org/project/definable/)
 
 </div>
 
