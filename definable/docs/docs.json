@@ -108,9 +108,23 @@
             ]
           },
           {
+            "group": "Skills",
+            "pages": [
+              "skills/overview",
+              "skills/built-in",
+              "skills/registry"
+            ]
+          },
+          {
             "group": "Readers",
             "pages": [
               "readers/overview"
+            ]
+          },
+          {
+            "group": "Guardrails",
+            "pages": [
+              "guardrails/overview"
             ]
           },
           {
@@ -139,6 +153,12 @@
             ]
           },
           {
+            "group": "Replay",
+            "pages": [
+              "replay/overview"
+            ]
+          },
+          {
             "group": "Advanced",
             "pages": [
               "advanced/error-handling",
@@ -163,7 +183,10 @@
               "examples/memory",
               "examples/interfaces",
               "examples/readers",
-              "examples/mcp"
+              "examples/mcp",
+              "examples/skills",
+              "examples/replay",
+              "examples/auth"
             ]
           }
         ]

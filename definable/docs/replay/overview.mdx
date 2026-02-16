@@ -1,0 +1,190 @@
+---
+title: Replay Overview
+sidebarTitle: Overview
+description: Inspect, compare, and re-execute past agent runs.
+icon: rotate
+---
+
+The replay module lets you look inside completed agent runs, compare two runs side-by-side, and re-execute a past run with different configuration — all without touching trace files manually.
+
+## Quick Example
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+
+agent = Agent(model=OpenAIChat(id="gpt-4o"), tools=[...])
+
+# Run and inspect
+output = agent.run("Summarize the Q4 report.")
+replay = agent.replay(run_output=output)
+
+print(replay.model)           # "gpt-4o"
+print(replay.tokens.total_tokens)  # 1234
+print(replay.cost)            # 0.0042
+print(replay.tool_calls)      # [ToolCallRecord(...), ...]
+print(replay.status)          # "completed"
+```
+
+## Inspecting a Run
+
+Build a `Replay` from any of these sources:
+
+<CodeGroup>
+```python From RunOutput
+# From a just-completed run
+output = agent.run("Hello")
+replay = agent.replay(run_output=output)
+```
+
+```python From Trace File
+# From a JSONL trace file
+replay = agent.replay(trace_file="./traces/run.jsonl")
+```
+
+```python From Events
+# From pre-loaded events
+from definable.replay import Replay
+
+replay = Replay.from_events(events, run_id="abc123")
+```
+</CodeGroup>
+
+## Replay Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `run_id` | `str` | Run identifier |
+| `session_id` | `str` | Session identifier |
+| `agent_name` | `str` | Agent name |
+| `model` | `str` | Model used |
+| `input` | `Any` | Original input |
+| `content` | `Any` | Final output content |
+| `messages` | `List` | Full conversation messages |
+| `tool_calls` | `List[ToolCallRecord]` | All tool executions with timing |
+| `tokens` | `ReplayTokens` | Aggregated token usage |
+| `cost` | `Optional[float]` | Total cost in USD |
+| `duration` | `Optional[float]` | Total duration in milliseconds |
+| `steps` | `List[ReplayStep]` | Step-by-step timeline |
+| `knowledge_retrievals` | `List[KnowledgeRetrievalRecord]` | RAG retrieval records |
+| `memory_recalls` | `List[MemoryRecallRecord]` | Memory recall records |
+| `status` | `str` | `"completed"`, `"error"`, or `"cancelled"` |
+| `error` | `Optional[str]` | Error message (if status is `"error"`) |
+
+### ReplayTokens
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `input_tokens` | `int` | Prompt tokens |
+| `output_tokens` | `int` | Completion tokens |
+| `total_tokens` | `int` | Total tokens |
+| `reasoning_tokens` | `int` | Reasoning/thinking tokens |
+| `cache_read_tokens` | `int` | Tokens read from cache |
+| `cache_write_tokens` | `int` | Tokens written to cache |
+
+### ToolCallRecord
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tool_name` | `str` | Tool function name |
+| `tool_args` | `Dict` | Arguments passed |
+| `result` | `Optional[str]` | Tool return value |
+| `error` | `Optional[bool]` | Whether the call errored |
+| `duration_ms` | `Optional[float]` | Execution time |
+
+## Comparing Runs
+
+Compare two runs to see what changed:
+
+```python
+output_a = agent.run("Summarize the report.")
+output_b = agent.run("Summarize the report.")
+
+diff = agent.compare(output_a, output_b)
+
+print(diff.token_diff)        # -150  (b used 150 fewer tokens)
+print(diff.cost_diff)         # -0.0005
+print(diff.content_diff)      # Unified diff string
+print(diff.tool_calls_diff.added)    # Tools in b but not a
+print(diff.tool_calls_diff.removed)  # Tools in a but not b
+print(diff.tool_calls_diff.common)   # Count of matching tools
+```
+
+### ReplayComparison Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `original` | `Replay` | First run |
+| `replayed` | `Replay` | Second run |
+| `content_diff` | `Optional[str]` | Unified diff of output content |
+| `cost_diff` | `Optional[float]` | Cost difference (b − a) |
+| `token_diff` | `int` | Token difference (b − a) |
+| `duration_diff` | `Optional[float]` | Duration difference (b − a) |
+| `tool_calls_diff` | `ToolCallsDiff` | Added, removed, and common tool calls |
+
+You can also use `compare_runs` directly:
+
+```python
+from definable.replay import compare_runs
+
+diff = compare_runs(output_a, output_b)  # Accepts Replay or RunOutput
+```
+
+## Re-Executing with Overrides
+
+Pass override arguments to `replay()` to re-run the same input with different configuration. This returns a new `RunOutput` instead of a `Replay`:
+
+```python
+# Re-execute with a different model
+new_output = agent.replay(
+  run_output=output,
+  model=OpenAIChat(id="gpt-4o-mini"),
+)
+
+# Re-execute with different instructions and tools
+new_output = agent.replay(
+  trace_file="./traces/run.jsonl",
+  run_id="abc123",
+  instructions="Be more concise.",
+  tools=[new_tool],
+)
+
+# Compare original vs re-execution
+diff = agent.compare(output, new_output)
+print(diff.cost_diff)  # How much cheaper was gpt-4o-mini?
+```
+
+<Note>
+Re-execution makes a live API call. The original input is extracted from the replay and sent to the model with your overrides applied.
+</Note>
+
+## Async API
+
+All replay methods have async equivalents:
+
+```python
+replay = await agent.areplay(run_output=output)
+new_output = await agent.areplay(run_output=output, model=new_model)
+```
+
+`compare()` and `compare_runs()` are synchronous (no I/O involved).
+
+## Construction Methods
+
+| Method | Input | Description |
+|--------|-------|-------------|
+| `Replay.from_run_output(run_output)` | `RunOutput` | Build from a just-completed run |
+| `Replay.from_events(events, run_id=)` | `List[Event]` | Build from deserialized trace events |
+| `Replay.from_trace_file(path, run_id=)` | `str \| Path` | Build from a JSONL trace file |
+| `agent.replay(run_output=)` | `RunOutput` | Convenience wrapper (returns Replay or RunOutput) |
+| `agent.replay(trace_file=)` | `str` | Load from trace file |
+| `agent.replay(events=)` | `List[Event]` | Load from events |
+
+<CardGroup cols={2}>
+  <Card title="Tracing" icon="chart-line" href="/agents/tracing">
+    Configure JSONL trace export for replay sources.
+  </Card>
+  <Card title="Cost Tracking" icon="dollar-sign" href="/advanced/cost-tracking">
+    Understand token metrics and pricing used in comparisons.
+  </Card>
+</CardGroup>

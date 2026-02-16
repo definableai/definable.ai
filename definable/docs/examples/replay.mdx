@@ -1,0 +1,41 @@
+---
+title: Replay Examples
+sidebarTitle: Replay
+description: Examples for inspecting past runs and comparing outputs.
+icon: rotate
+---
+
+## 01 — Basic Replay
+
+Demonstrates inspecting a completed run and comparing two runs side-by-side.
+
+```python
+from definable.agents import Agent
+
+agent = Agent(model=model, tools=[...])
+
+# Run and inspect
+output = agent.run("Summarize this document.")
+replay = agent.replay(run_output=output)
+
+print(f"Model: {replay.model}")
+print(f"Status: {replay.status}")
+print(f"Tokens: {replay.tokens.total_tokens}")
+print(f"Cost: ${replay.cost:.4f}")
+print(f"Tool calls: {len(replay.tool_calls)}")
+print(f"Content: {replay.content}")
+
+# Compare two runs
+output2 = agent.run("Summarize this document.")
+diff = agent.compare(output, output2)
+
+print(f"Token diff: {diff.token_diff}")
+print(f"Cost diff: ${diff.cost_diff:.4f}")
+print(f"Content changed: {diff.content_diff is not None}")
+print(f"Tools added: {len(diff.tool_calls_diff.added)}")
+print(f"Tools removed: {len(diff.tool_calls_diff.removed)}")
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/replay/01_basic_replay.py">
+  `definable/examples/replay/01_basic_replay.py`
+</Card>

@@ -76,6 +76,42 @@ examples/
 │   ├── 02_cron_basic.py       # Cron trigger + agent.serve()
 │   └── 03_unified.py         # Interface + webhook + cron + auth + hooks
 │
+├── interfaces/                # Messaging interfaces
+│   ├── 01_discord_bot.py      # Discord bot interface
+│   ├── 02_signal_bot.py       # Signal bot interface
+│   └── 03_multi_interface.py  # Multiple interfaces on one agent
+│
+├── readers/                   # File reading and parsing
+│   ├── 01_basic_readers.py    # Read common file formats
+│   ├── 02_custom_reader.py    # Custom parser implementation
+│   ├── 03_standalone_usage.py # Readers without an agent
+│   ├── 04_provider_override.py# Override format detection
+│   ├── 05_mistral_ocr.py     # Mistral OCR provider
+│   └── 06_multimodal_agent.py # Agent with reader integration
+│
+├── auth/                      # Authentication
+│   └── 01_unified_auth.py     # APIKeyAuth, AllowlistAuth, CompositeAuth
+│
+├── guardrails/                # Content policy and safety
+│   ├── 01_basic_guardrails.py # Built-in guardrails with Agent
+│   └── 02_custom_guardrails.py# Custom + composable guardrails
+│
+├── skills/                    # Skills and skill registry
+│   └── 01_markdown_skills.py  # SkillRegistry eager/lazy/auto modes
+│
+├── replay/                    # Run inspection and comparison
+│   └── 01_basic_replay.py     # Replay inspection + compare_runs
+│
+├── mcp/                       # Model Context Protocol
+│   ├── 01_basic_mcp.py        # Basic MCP server connection
+│   ├── 02_multiple_servers.py # Multiple MCP servers
+│   ├── 03_resources.py        # MCP resource access
+│   ├── 04_config_file.py      # Config file-based setup
+│   ├── 05_mock_server_basics.py # Mock server for testing
+│   ├── 06_prompts_provider.py # MCP prompts provider
+│   ├── 07_error_handling.py   # Error handling patterns
+│   └── 08_mock_server_agent.py# Mock server with agent integration
+│
 └── advanced/                  # Advanced features
     ├── 01_middleware.py       # Custom middleware
     ├── 02_tracing.py          # JSONLExporter for debugging
