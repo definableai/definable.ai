@@ -25,10 +25,12 @@ agent.serve()
 
 ```
 auth/
-├── __init__.py    # Public API exports (JWTAuth lazy-loaded)
-├── base.py        # AuthProvider Protocol, AuthContext dataclass
-├── api_key.py     # APIKeyAuth implementation
-└── jwt.py         # JWTAuth implementation (requires pyjwt)
+├── __init__.py    # Public API exports (JWTAuth, AllowlistAuth, CompositeAuth lazy-loaded)
+├── base.py        # AuthProvider Protocol, AuthContext, AuthRequest
+├── api_key.py     # APIKeyAuth — HTTP header-based key validation
+├── jwt.py         # JWTAuth — JWT Bearer token validation (requires pyjwt)
+├── allowlist.py   # AllowlistAuth — user/chat/platform allowlisting
+└── composite.py   # CompositeAuth — chain multiple providers
 ```
 
 ## API Reference
@@ -87,16 +89,49 @@ auth = JWTAuth(
 
 Validates JWT from `Authorization: Bearer <token>`. Extracts `user_id` from claims (`sub` > `user_id` > `id`). Returns `AuthContext` with remaining claims as metadata.
 
+### AllowlistAuth
+
+```python
+from definable.auth import AllowlistAuth
+
+auth = AllowlistAuth(
+  user_ids={"user-123", "user-456"},  # Required: allowed user IDs
+  chat_ids=None,                      # Optional: restrict to specific chats
+  platforms=None,                     # Optional: restrict to specific platforms
+)
+```
+
+User-ID-based allowlisting for messaging interfaces. Only applies to `AuthRequest` instances (returns `None` for raw HTTP requests without platform context). Returns `AuthContext` with `platform` and `auth_method: "allowlist"` in metadata.
+
+### CompositeAuth
+
+```python
+from definable.auth import CompositeAuth
+
+auth = CompositeAuth(
+  APIKeyAuth(keys={"sk-123"}),
+  AllowlistAuth(user_ids={"user-1"}, platforms={"telegram"}),
+)
+```
+
+Chains multiple auth providers. Tries each in order and returns the first successful `AuthContext`. Supports mixed sync/async providers. Raises `ValueError` if no providers are given.
+
 ## Usage with Agent
 
 ```python
-from definable.auth import APIKeyAuth, JWTAuth
+from definable.auth import APIKeyAuth, AllowlistAuth, CompositeAuth, JWTAuth
 
 # API key auth
 agent.auth = APIKeyAuth(keys="sk-secret")
 
 # JWT auth
 agent.auth = JWTAuth(secret="jwt-secret", audience="my-app")
+
+# Composite: API keys for HTTP + allowlist for messaging
+agent.auth = CompositeAuth(
+  APIKeyAuth(keys={"sk-123"}),
+  AllowlistAuth(user_ids={"user-1"}, platforms={"telegram"}),
+)
 
 # Per-trigger auth override
 @agent.on(Webhook("/github", auth=APIKeyAuth(keys="gh-secret")))

@@ -2,6 +2,7 @@
 
 from typing import Any, Optional
 
+from definable.auth.api_key import _get_header
 from definable.auth.base import AuthContext
 
 
@@ -52,7 +53,7 @@ class JWTAuth:
     except ImportError as e:
       raise ImportError("pyjwt is required for JWTAuth. Install it with: pip install 'definable[jwt]'") from e
 
-    auth_header = getattr(request, "headers", {}).get("authorization", "")
+    auth_header = _get_header(getattr(request, "headers", {}), "authorization")
     if not auth_header.lower().startswith("bearer "):
       return None
 

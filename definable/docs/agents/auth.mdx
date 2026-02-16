@@ -1,7 +1,7 @@
 ---
 title: Authentication
 sidebarTitle: Authentication
-description: Secure your agent's HTTP endpoints with API keys or JWT tokens.
+description: Secure your agent's HTTP endpoints and messaging interfaces with API keys, JWT, allowlists, or composite auth.
 icon: lock
 ---
 
@@ -81,6 +81,52 @@ User ID is extracted from token claims, checking `sub`, then `user_id`, then `id
 <Note>
 Requires `pyjwt`: `pip install pyjwt` or `pip install 'definable[jwt]'`
 </Note>
+
+## Allowlist Authentication
+
+For messaging interfaces (Telegram, Discord, Signal), use `AllowlistAuth` to restrict access by user ID:
+
+```python
+from definable.auth import AllowlistAuth
+
+agent.auth = AllowlistAuth(
+  user_ids={"user-123", "user-456"},
+  platforms={"telegram"},
+)
+```
+
+<ParamField path="user_ids" type="Set[str]" required>
+  Set of allowed user IDs.
+</ParamField>
+
+<ParamField path="chat_ids" type="Set[str]">
+  Optional set of allowed chat/group IDs.
+</ParamField>
+
+<ParamField path="platforms" type="Set[str]">
+  Optional platform filter. When set, the provider only applies to requests from these platforms (e.g., `{"telegram", "discord"}`). Returns `None` for other platforms.
+</ParamField>
+
+AllowlistAuth only applies to `AuthRequest` instances (messages from interfaces). It returns `None` for raw HTTP requests, making it safe to combine with API key auth.
+
+## Composite Authentication
+
+Chain multiple providers with `CompositeAuth`. It tries each in order and returns the first successful result:
+
+```python
+from definable.auth import APIKeyAuth, AllowlistAuth, CompositeAuth
+
+agent.auth = CompositeAuth(
+  APIKeyAuth(keys={"sk-my-api-key"}),
+  AllowlistAuth(user_ids={"user-123"}, platforms={"telegram"}),
+)
+```
+
+This is the recommended pattern for agents that serve both HTTP endpoints and messaging interfaces — API keys protect `/run` while the allowlist controls messaging access.
+
+<ParamField path="*providers" type="AuthProvider">
+  One or more auth providers. At least one is required. Supports mixed sync/async providers.
+</ParamField>
 
 ## Per-Webhook Auth Override
 

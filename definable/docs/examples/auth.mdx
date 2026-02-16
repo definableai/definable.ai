@@ -1,0 +1,47 @@
+---
+title: Auth Examples
+sidebarTitle: Auth
+description: Examples for API key, JWT, allowlist, and composite authentication.
+icon: lock
+---
+
+## 01 — Unified Auth
+
+A complete example combining all auth features in one agent: API key auth for HTTP, allowlist auth for messaging interfaces, composite auth for combining providers, and per-trigger overrides.
+
+```python
+from definable.agents import Agent
+from definable.auth import APIKeyAuth, AllowlistAuth, CompositeAuth
+from definable.models import OpenAIChat
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  tools=[...],
+)
+
+# Composite auth: API keys for HTTP + allowlist for Telegram
+agent.auth = CompositeAuth(
+  APIKeyAuth(keys={"sk-my-api-key"}),
+  AllowlistAuth(
+    user_ids={"telegram-user-123", "telegram-user-456"},
+    platforms={"telegram"},
+  ),
+)
+
+# Public webhook (no auth)
+@agent.on(Webhook("/public-hook", auth=False))
+async def public_endpoint(event):
+  return "Public response"
+
+# Auth context in hooks
+@agent.before_request
+async def log_auth(context):
+  if hasattr(context, "auth") and context.auth:
+    print(f"Authenticated: {context.auth.user_id}")
+
+agent.serve(port=8000)
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/auth/01_unified_auth.py">
+  `definable/examples/auth/01_unified_auth.py`
+</Card>

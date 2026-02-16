@@ -60,15 +60,21 @@ async def on_signup(event):
   return f"Write a short welcome message for {name}."
 
 
-# --- Optional: Telegram interface ---
+# --- Optional: Telegram interface with AllowlistAuth ---
 def maybe_add_telegram():
   bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
   if not bot_token:
     return
+  from definable.auth import AllowlistAuth
   from definable.interfaces.telegram import TelegramConfig, TelegramInterface
+
+  # Only allow specific Telegram users (set via env var or hardcode)
+  allowed = os.environ.get("TELEGRAM_ALLOWED_USERS", "")
+  allowed_ids = {uid.strip() for uid in allowed.split(",") if uid.strip()}
 
   telegram = TelegramInterface(
     config=TelegramConfig(bot_token=bot_token),
+    auth=AllowlistAuth(user_ids=allowed_ids) if allowed_ids else None,
   )
   agent.add_interface(telegram)
   print("Telegram interface registered")

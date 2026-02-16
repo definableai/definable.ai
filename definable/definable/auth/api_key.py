@@ -1,8 +1,27 @@
 """API key authentication provider."""
 
-from typing import Any, Optional, Set, Union
+from typing import Any, Mapping, Optional, Set, Union
 
 from definable.auth.base import AuthContext
+
+
+def _get_header(headers: Any, name: str) -> str:
+  """Case-insensitive header lookup.
+
+  Starlette Headers are natively case-insensitive, but plain dicts
+  (e.g. from AuthRequest) are not. This helper normalises lookup so
+  both work identically.
+  """
+  # Try exact match first (fast path for Starlette Headers / matching case)
+  value = headers.get(name, "")
+  if value:
+    return value
+  # Fall back to case-insensitive scan for plain dicts
+  name_lower = name.lower()
+  for key, val in headers.items() if isinstance(headers, Mapping) else []:
+    if key.lower() == name_lower:
+      return val
+  return ""
 
 
 class APIKeyAuth:
@@ -34,15 +53,16 @@ class APIKeyAuth:
     """Check the request header for a valid API key.
 
     Args:
-      request: HTTP request object with a ``headers`` attribute.
+      request: An AuthRequest or HTTP request object with a ``headers`` attribute.
 
     Returns:
       AuthContext with a hashed user_id on success, None on failure.
     """
-    value = getattr(request, "headers", {}).get(self.header, "")
+    headers = getattr(request, "headers", {})
+    value = _get_header(headers, self.header)
     if not value:
       # Fall back to Authorization header
-      value = getattr(request, "headers", {}).get("authorization", "")
+      value = _get_header(headers, "authorization")
 
     # Strip "Bearer " prefix
     if value.lower().startswith("bearer "):

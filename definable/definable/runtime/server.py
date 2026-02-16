@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Optional
 
+from definable.auth.base import AuthRequest, resolve_auth
 from definable.utils.log import log_info
 
 if TYPE_CHECKING:
@@ -77,7 +78,11 @@ class AgentServer:
             if request.url.path == trigger.path and request.method == trigger.method:
               return await call_next(request)
 
-        auth_context = await _resolve_auth(auth_provider, request)
+        auth_request = AuthRequest(
+          platform="http",
+          headers=dict(request.headers),
+        )
+        auth_context = await resolve_auth(auth_provider, auth_request)
         if auth_context is None:
           return JSONResponse(status_code=401, content={"error": "Unauthorized"})
 
@@ -164,11 +169,7 @@ class AgentServer:
 async def _resolve_auth(auth_provider: Any, request: Any) -> Optional[Any]:
   """Call the auth provider's authenticate method.
 
-  Supports both sync and async authenticate methods.
+  .. deprecated::
+    Use :func:`definable.auth.base.resolve_auth` instead.
   """
-  import inspect
-
-  result = auth_provider.authenticate(request)
-  if inspect.isawaitable(result):
-    return await result
-  return result
+  return await resolve_auth(auth_provider, request)

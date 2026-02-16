@@ -4,6 +4,7 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, List, Optional
 
+from definable.auth.base import AuthRequest, resolve_auth
 from definable.interfaces.config import InterfaceConfig
 from definable.interfaces.hooks import InterfaceHook
 from definable.interfaces.message import InterfaceMessage, InterfaceResponse
@@ -32,6 +33,9 @@ class BaseInterface(ABC):
     session_manager: Optional session manager (created automatically if not provided).
     hooks: Optional list of hooks to register.
     identity_resolver: Optional resolver for mapping platform user IDs to canonical user IDs.
+    auth: Optional auth provider for this interface. Receives an AuthRequest
+      and returns AuthContext on success, None to reject. Set to False to
+      explicitly disable auth.
 
   Example:
     class MyPlatformInterface(BaseInterface):
@@ -49,6 +53,7 @@ class BaseInterface(ABC):
     session_manager: Optional[SessionManager] = None,
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
+    auth: Optional[Any] = None,
   ) -> None:
     self.agent: Optional["Agent"] = agent
     self.config = config
@@ -58,6 +63,7 @@ class BaseInterface(ABC):
     self._hooks: List[InterfaceHook] = list(hooks or [])
     self._identity_resolver: Optional["IdentityResolver"] = identity_resolver
     self._identity_resolver_initialized = False
+    self._auth = auth
     self._running = False
     self._request_semaphore: Optional[asyncio.Semaphore] = None
 
@@ -91,6 +97,44 @@ class BaseInterface(ABC):
       raise RuntimeError("Cannot bind agent while interface is running")
     self.agent = agent
     return self
+
+  # --- Auth ---
+
+  async def _check_auth(self, message: InterfaceMessage) -> bool:
+    """Check auth for an inbound message.
+
+    Constructs an :class:`AuthRequest` from the message fields and passes
+    it to the configured auth provider.
+
+    Args:
+      message: The normalized inbound message.
+
+    Returns:
+      True if auth passes (or no auth configured), False to reject.
+    """
+    if self._auth is None or self._auth is False:
+      return True
+
+    auth_request = AuthRequest(
+      platform=message.platform,
+      user_id=message.platform_user_id,
+      username=message.username,
+      chat_id=message.platform_chat_id,
+      metadata=dict(message.metadata),
+    )
+
+    try:
+      auth_context = await resolve_auth(self._auth, auth_request)
+    except Exception as e:
+      log_warning(f"[{self.config.platform}] Auth provider error: {e}")
+      return False
+
+    if auth_context is None:
+      log_info(f"[{self.config.platform}] Auth rejected user={message.platform_user_id}")
+      return False
+
+    message.metadata["auth_context"] = auth_context
+    return True
 
   # --- Lifecycle ---
 
@@ -185,14 +229,15 @@ class BaseInterface(ABC):
 
     Pipeline steps:
       1. Convert inbound message
-      2. Run on_message_received hooks (can veto)
-      3. Get/create session
-      4. Run on_before_respond hooks (can modify message)
-      5. Call agent.arun()
-      6. Build InterfaceResponse from RunOutput
-      7. Run on_after_respond hooks (can modify response)
-      8. Send response to platform
-      9. Update session history
+      2. Auth check (if configured)
+      3. Run on_message_received hooks (can veto)
+      4. Get/create session
+      5. Run on_before_respond hooks (can modify message)
+      6. Call agent.arun()
+      7. Build InterfaceResponse from RunOutput
+      8. Run on_after_respond hooks (can modify response)
+      9. Send response to platform
+      10. Update session history
 
     Args:
       raw_message: The raw message from the platform.
@@ -204,46 +249,50 @@ class BaseInterface(ABC):
       if message is None:
         return
 
-      # 2. Run on_message_received hooks
+      # 2. Auth check
+      if not await self._check_auth(message):
+        return
+
+      # 3. Run on_message_received hooks
       for hook in self._hooks:
         if hasattr(hook, "on_message_received"):
           result = await hook.on_message_received(message)
           if result is False:
             return
 
-      # 3. Get/create session
+      # 4. Get/create session
       session = self.session_manager.get_or_create(
         platform=message.platform,
         user_id=message.platform_user_id,
         chat_id=message.platform_chat_id,
       )
 
-      # 4. Run on_before_respond hooks
+      # 5. Run on_before_respond hooks
       for hook in self._hooks:
         if hasattr(hook, "on_before_respond"):
           modified = await hook.on_before_respond(message, session)
           if modified is not None:
             message = modified
 
-      # 5. Call agent
+      # 6. Call agent
       assert self._request_semaphore is not None
       async with self._request_semaphore:
         run_output = await self._run_agent(message, session)
 
-      # 6. Build response
+      # 7. Build response
       response = self._build_response(run_output)
 
-      # 7. Run on_after_respond hooks
+      # 8. Run on_after_respond hooks
       for hook in self._hooks:
         if hasattr(hook, "on_after_respond"):
           modified = await hook.on_after_respond(message, response, session)
           if modified is not None:
             response = modified
 
-      # 8. Send response
+      # 9. Send response
       await self._send_response(message, response, raw_message)
 
-      # 9. Update session
+      # 10. Update session
       self._update_session(session, run_output)
 
     except Exception as e:
@@ -283,10 +332,15 @@ class BaseInterface(ABC):
       RunOutput from the agent.
     """
     user_id = message.platform_user_id
+
+    # Prefer identity resolver if configured
     if self._identity_resolver is not None:
       resolved = await self._safe_resolve_identity(message.platform, message.platform_user_id)
       if resolved is not None:
         user_id = resolved
+    elif "auth_context" in message.metadata:
+      # Fall back to auth_context user_id if no identity resolver
+      user_id = message.metadata["auth_context"].user_id
 
     assert self.agent is not None
     return await self.agent.arun(
