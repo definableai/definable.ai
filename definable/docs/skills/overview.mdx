@@ -1,0 +1,151 @@
+---
+title: Skills Overview
+sidebarTitle: Overview
+description: Bundle instructions, tools, and dependencies into reusable agent capabilities.
+icon: puzzle-piece
+---
+
+Skills are a higher-level abstraction that combines **instructions** (domain expertise), **tools** (capabilities), and **dependencies** (shared config) into a single reusable unit. They're the recommended way to compose agent behavior.
+
+## Quick Example
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+from definable.skills import Calculator, DateTime
+
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  skills=[Calculator(), DateTime()],
+)
+
+output = agent.run("What is 2^10? And what day of the week is it?")
+print(output.content)
+```
+
+Skills inject their instructions into the system prompt and register their tools automatically.
+
+## Creating a Skill
+
+### Inline (Instance-Based)
+
+Pass tools and instructions directly:
+
+```python
+from definable.skills import Skill
+from definable.tools import tool
+
+@tool
+def search_docs(query: str) -> str:
+  """Search the documentation."""
+  return docs.search(query)
+
+support = Skill(
+  name="support",
+  instructions="You are a support specialist. Always cite sources.",
+  tools=[search_docs],
+)
+
+agent = Agent(model=model, skills=[support])
+```
+
+### Class-Based (Reusable)
+
+Subclass `Skill` for configurable, reusable skills with lifecycle hooks:
+
+```python
+from definable.skills import Skill
+from definable.tools import tool
+
+class CustomerSupport(Skill):
+  name = "customer_support"
+  instructions = "You are a support specialist. Look up orders before answering."
+
+  def __init__(self, db_url: str):
+    super().__init__(dependencies={"db_url": db_url})
+
+  def setup(self):
+    """Called once when the agent initializes."""
+    self._db = connect(self.dependencies["db_url"])
+
+  def teardown(self):
+    """Called when the agent shuts down."""
+    self._db.close()
+
+  @tool
+  def lookup_order(self, order_id: str) -> str:
+    """Look up an order by ID."""
+    return self._db.query(order_id)
+
+agent = Agent(model=model, skills=[CustomerSupport(db_url="sqlite:///orders.db")])
+```
+
+Methods decorated with `@tool` are auto-discovered — no need to pass them explicitly.
+
+## Skill Constructor
+
+```python
+from definable.skills import Skill
+
+skill = Skill(
+  name="my_skill",
+  instructions="Domain expertise...",
+  tools=[my_tool],
+  dependencies={"api_key": "..."},
+)
+```
+
+<ParamField path="name" type="str">
+  Skill identifier. Defaults to the class name.
+</ParamField>
+
+<ParamField path="instructions" type="str">
+  Domain expertise text injected into the system prompt. Override `get_instructions()` for dynamic content.
+</ParamField>
+
+<ParamField path="tools" type="List[Function]">
+  Explicit list of tool functions. If not provided, tools are auto-discovered from `@tool`-decorated methods.
+</ParamField>
+
+<ParamField path="dependencies" type="Dict[str, Any]">
+  Shared configuration accessible via `self.dependencies` in methods and tools.
+</ParamField>
+
+## Lifecycle Hooks
+
+| Method | When | Purpose |
+|--------|------|---------|
+| `setup()` | Agent init | One-time initialization (DB connections, API clients). Non-fatal if it raises. |
+| `teardown()` | Agent shutdown | Cleanup resources. |
+| `get_instructions()` | Every model call | Return instructions for system prompt. Override for dynamic content. |
+
+## Combining Multiple Skills
+
+Skills compose naturally — their tools and instructions are merged:
+
+```python
+from definable.skills import Calculator, DateTime, WebSearch, Shell
+
+agent = Agent(
+  model=model,
+  skills=[
+    Calculator(),
+    DateTime(),
+    WebSearch(),
+    Shell(allowed_commands={"ls", "cat", "grep"}),
+  ],
+)
+```
+
+Tool names must be unique across all skills. Skills listed later take priority if names overlap.
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Built-in Skills" icon="toolbox" href="/skills/built-in">
+    8 ready-to-use skills: Calculator, DateTime, Shell, WebSearch, and more.
+  </Card>
+  <Card title="Skill Registry" icon="book" href="/skills/registry">
+    Manage large collections of markdown-based skills with eager/lazy loading.
+  </Card>
+</CardGroup>

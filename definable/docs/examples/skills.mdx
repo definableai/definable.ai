@@ -1,0 +1,33 @@
+---
+title: Skills Examples
+sidebarTitle: Skills
+description: Examples for built-in skills, markdown skills, and the skill registry.
+icon: puzzle-piece
+---
+
+## 01 — Markdown Skills
+
+Demonstrates the `SkillRegistry` in three modes: eager (all skills injected), lazy (catalog + `read_skill` tool), and auto (agent picks based on collection size).
+
+```python
+from definable.agents import Agent
+from definable.skills import SkillRegistry
+
+registry = SkillRegistry()  # loads 8 built-in library skills
+
+# Eager mode — all skill instructions in system prompt
+agent = Agent(model=model, skills=registry.as_eager())
+output = agent.run("Review this code: def add(a, b): return a + b")
+
+# Lazy mode — catalog table + read_skill tool
+agent = Agent(model=model, skills=[registry.as_lazy()])
+output = agent.run("Help me debug a null pointer error")
+
+# Auto mode — picks eager or lazy based on collection size
+agent = Agent(model=model, skill_registry=registry)
+output = agent.run("Write a project plan for a REST API")
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/skills/01_markdown_skills.py">
+  `definable/examples/skills/01_markdown_skills.py`
+</Card>

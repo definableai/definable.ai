@@ -1,0 +1,198 @@
+---
+title: Built-in Skills
+sidebarTitle: Built-in Skills
+description: Ready-to-use skills for math, date/time, text processing, file I/O, HTTP, JSON, shell, and web search.
+icon: toolbox
+---
+
+Definable ships 8 built-in skills that cover common agent needs. Each provides domain instructions and pre-configured tools.
+
+```python
+from definable.skills import Calculator, DateTime, TextProcessing
+from definable.skills import FileOperations, HTTPRequests, JSONOperations
+from definable.skills import Shell, WebSearch
+```
+
+## Calculator
+
+Safe math evaluation via AST parsing. Supports arithmetic, functions (`sqrt`, `log`, `sin`, `cos`, `factorial`, etc.), and constants (`pi`, `e`).
+
+```python
+from definable.skills import Calculator
+
+agent = Agent(model=model, skills=[Calculator()])
+agent.run("What is sqrt(144) + 2^8?")
+```
+
+**Tools:** `calculate(expression)`
+
+## DateTime
+
+Current date/time with timezone support and date difference calculations.
+
+```python
+from definable.skills import DateTime
+
+agent = Agent(model=model, skills=[DateTime()])
+agent.run("What time is it in UTC+5:30?")
+```
+
+**Tools:** `get_current_time(timezone_name=)`, `date_difference(date1, date2)`
+
+## TextProcessing
+
+Regex search/replace, text statistics, transformations, and pattern extraction (emails, URLs, phone numbers, etc.).
+
+```python
+from definable.skills import TextProcessing
+
+agent = Agent(model=model, skills=[TextProcessing()])
+agent.run("Extract all email addresses from this text: ...")
+```
+
+**Tools:** `regex_search`, `regex_replace`, `text_stats`, `text_transform`, `extract_patterns`
+
+## FileOperations
+
+Sandboxed file reading, writing, listing, and appending.
+
+```python
+from definable.skills import FileOperations
+
+agent = Agent(
+  model=model,
+  skills=[FileOperations(base_dir="./data", allow_write=False)],
+)
+agent.run("List all files in the data directory")
+```
+
+<ParamField path="base_dir" type="str" default=".">
+  Root directory. All paths are sandboxed to this location.
+</ParamField>
+
+<ParamField path="allow_write" type="bool" default={true}>
+  Enable `write_file` and `append_to_file` tools. Set to `False` for read-only access.
+</ParamField>
+
+<ParamField path="max_read_size" type="int" default={1048576}>
+  Maximum file read size in bytes (default: 1 MB).
+</ParamField>
+
+**Tools:** `read_file`, `list_files`, `write_file` (if writable), `append_to_file` (if writable)
+
+## HTTPRequests
+
+Make HTTP calls with optional domain restrictions.
+
+```python
+from definable.skills import HTTPRequests
+
+agent = Agent(
+  model=model,
+  skills=[HTTPRequests(allowed_domains={"api.example.com"})],
+)
+agent.run("GET https://api.example.com/users")
+```
+
+<ParamField path="allowed_domains" type="Set[str]">
+  Domain allowlist. Empty or `None` allows all domains.
+</ParamField>
+
+<ParamField path="timeout" type="int" default={30}>
+  Request timeout in seconds.
+</ParamField>
+
+<ParamField path="default_headers" type="Dict[str, str]">
+  Headers included in every request.
+</ParamField>
+
+**Tools:** `http_get`, `http_post`, `http_put`, `http_patch`, `http_delete`
+
+## JSONOperations
+
+Parse, query (dot notation + wildcards), transform, and diff JSON data.
+
+```python
+from definable.skills import JSONOperations
+
+agent = Agent(model=model, skills=[JSONOperations()])
+agent.run('Extract the name from: {"users": [{"name": "Alice"}]}')
+```
+
+**Tools:** `parse_json`, `query_json`, `transform_json`, `compare_json`
+
+Query paths support dot notation (`users.0.name`), array indices, and wildcards (`items.*.id`).
+
+## Shell
+
+Execute shell commands with safety controls.
+
+```python
+from definable.skills import Shell
+
+agent = Agent(
+  model=model,
+  skills=[Shell(allowed_commands={"ls", "cat", "grep", "wc"})],
+)
+agent.run("Count the lines in all Python files")
+```
+
+<ParamField path="allowed_commands" type="Set[str]">
+  If set, only these base commands are allowed. Overrides blocked list.
+</ParamField>
+
+<ParamField path="blocked_commands" type="Set[str]">
+  Commands blocked by default: `rm`, `sudo`, `kill`, `chmod`, `shutdown`, and other destructive operations.
+</ParamField>
+
+<ParamField path="timeout" type="int" default={30}>
+  Command timeout in seconds.
+</ParamField>
+
+<ParamField path="working_dir" type="str">
+  Working directory for command execution.
+</ParamField>
+
+**Tools:** `run_command`
+
+## WebSearch
+
+Web search (DuckDuckGo by default) and URL content fetching.
+
+```python
+from definable.skills import WebSearch
+
+agent = Agent(model=model, skills=[WebSearch()])
+agent.run("Search for the latest Python release notes")
+```
+
+<ParamField path="max_results" type="int" default={5}>
+  Maximum search results to return.
+</ParamField>
+
+<ParamField path="search_fn" type="Callable">
+  Custom search function. Signature: `(query: str, max_results: int) -> str`. Default uses DuckDuckGo.
+</ParamField>
+
+<ParamField path="enable_fetch" type="bool" default={true}>
+  Enable the `fetch_url` tool for reading web page content.
+</ParamField>
+
+**Tools:** `search_web`, `fetch_url` (if enabled)
+
+<Note>
+The default DuckDuckGo provider requires `duckduckgo-search`, which is lazy-imported at first use.
+</Note>
+
+## Summary
+
+| Skill | Tools | Optional Deps |
+|-------|-------|---------------|
+| `Calculator` | `calculate` | — |
+| `DateTime` | `get_current_time`, `date_difference` | — |
+| `TextProcessing` | `regex_search`, `regex_replace`, `text_stats`, `text_transform`, `extract_patterns` | — |
+| `FileOperations` | `read_file`, `list_files`, `write_file`, `append_to_file` | — |
+| `HTTPRequests` | `http_get`, `http_post`, `http_put`, `http_patch`, `http_delete` | — |
+| `JSONOperations` | `parse_json`, `query_json`, `transform_json`, `compare_json` | — |
+| `Shell` | `run_command` | — |
+| `WebSearch` | `search_web`, `fetch_url` | `duckduckgo-search` |

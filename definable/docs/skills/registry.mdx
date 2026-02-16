@@ -1,0 +1,191 @@
+---
+title: Skill Registry
+sidebarTitle: Skill Registry
+description: Manage collections of markdown-based skills with eager or lazy loading.
+icon: book
+---
+
+The `SkillRegistry` manages collections of markdown-based skills and provides search, discovery, and smart loading modes. It's ideal for building prompt libraries that agents can draw from.
+
+## Quick Example
+
+```python
+from definable.agents import Agent
+from definable.models import OpenAIChat
+from definable.skills import SkillRegistry
+
+# Load built-in library (8 markdown skills)
+registry = SkillRegistry()
+
+# Auto mode: picks eager or lazy based on collection size
+agent = Agent(
+  model=OpenAIChat(id="gpt-4o"),
+  skill_registry=registry,
+)
+```
+
+## Markdown Skills
+
+A markdown skill is a `.md` file with YAML frontmatter that provides methodology and instructions — no tools, just expertise.
+
+```markdown
+---
+name: code-review
+description: Systematic code review with severity-ranked findings
+version: 1.0.0
+tags: [code, review, quality]
+---
+
+## When to Use
+Use this skill when reviewing code changes.
+
+## Steps
+1. Understand the context and purpose of the change
+2. Check for correctness and edge cases
+3. Evaluate code style and maintainability
+4. Rate findings by severity: critical > major > minor > nit
+
+## Output Format
+- Summary of changes
+- Findings list with severity ratings
+- Overall assessment
+```
+
+### Frontmatter Fields
+
+<ParamField path="name" type="str" required>
+  Unique identifier for the skill.
+</ParamField>
+
+<ParamField path="description" type="str">
+  Short description shown in the skill catalog.
+</ParamField>
+
+<ParamField path="version" type="str" default="1.0.0">
+  Semantic version.
+</ParamField>
+
+<ParamField path="tags" type="List[str]">
+  Searchable tags for discovery.
+</ParamField>
+
+<ParamField path="requires_tools" type="List[str]">
+  Tool names this skill expects to be available.
+</ParamField>
+
+<ParamField path="author" type="str">
+  Skill author.
+</ParamField>
+
+When loaded, the markdown body is wrapped in `<skill name="...">` tags in the system prompt for clear delineation.
+
+## Loading Skills
+
+### From a File
+
+```python
+from definable.skills import SkillLoader
+
+skill = SkillLoader.load_file(Path("my-skill.md"))
+```
+
+### From a String
+
+```python
+skill = SkillLoader.parse("""
+---
+name: my-skill
+description: A custom skill
+tags: [custom]
+---
+
+## Instructions
+Do the thing.
+""")
+```
+
+### From a Directory
+
+```python
+skills = SkillLoader.load_directory(Path("./my-skills/"))
+# Recursively loads all .md files; logs warnings and skips failures
+```
+
+## SkillRegistry Constructor
+
+```python
+from definable.skills import SkillRegistry
+
+registry = SkillRegistry(
+  skills=None,
+  directories=None,
+  include_library=True,
+)
+```
+
+<ParamField path="skills" type="List[MarkdownSkill]">
+  Explicit skills to include (highest priority, overrides duplicates).
+</ParamField>
+
+<ParamField path="directories" type="List[Path]">
+  Custom directories to load markdown skills from.
+</ParamField>
+
+<ParamField path="include_library" type="bool" default={true}>
+  Include the 8 built-in library skills (code-review, data-analysis, debug-code, explain-concept, plan-project, summarize-document, web-research, write-report).
+</ParamField>
+
+Loading order (last wins for duplicate names): built-in library → custom directories → explicit skills.
+
+## Methods
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `list_skills()` | `List[MarkdownSkillMeta]` | All skill metadata, sorted by name |
+| `get_skill(name)` | `Optional[MarkdownSkill]` | Look up a skill by name |
+| `search_skills(query)` | `List[MarkdownSkill]` | Search by keyword/tag (scored: name=3, tag=2, desc=1) |
+| `as_eager()` | `List[Skill]` | Return all skills as a list — all injected into system prompt |
+| `as_lazy()` | `Skill` | Return a single wrapper skill with catalog table + `read_skill` tool |
+
+## Eager vs. Lazy Mode
+
+The registry can provide skills in two modes:
+
+### Eager Mode
+
+```python
+agent = Agent(model=model, skills=registry.as_eager())
+```
+
+All skill instructions are injected into the system prompt at once. Best for **small collections** (fewer than 15 skills) where the token overhead is acceptable.
+
+### Lazy Mode
+
+```python
+agent = Agent(model=model, skills=[registry.as_lazy()])
+```
+
+Injects a catalog table listing all available skills, plus a `read_skill(skill_name)` tool. The model loads skills on demand. Best for **large collections** (15+ skills) to avoid bloating the prompt.
+
+### Auto Mode
+
+When using `skill_registry=` on the Agent, the mode is chosen automatically:
+
+```python
+agent = Agent(model=model, skill_registry=registry)
+# len(registry) <= 15 → eager
+# len(registry) > 15  → lazy
+```
+
+## Built-in Library Skills
+
+| Name | Description | Tags |
+|------|-------------|------|
+| `code-review` | Systematic code review with severity-ranked findings | code, review, quality |
+| `data-analysis` | Structured data analysis with statistical reasoning | data, analysis, statistics |
+| `debug-code` | Methodical debugging with hypothesis testing | debug, code, troubleshooting |
+| `explain-concept` | Clear explanation of technical concepts | explain, concept, education |
+| `plan-project` | Project planning with scope/timeline/risks | plan, project, organization |
+| `summarize-document` | Document summarization with key insights | summarize, document, writing |
+| `web-research` | Deep research using web search + source synthesis | research, web, search |
+| `write-report` | Report writing with structure/clarity/evidence | write, report, documentation |
