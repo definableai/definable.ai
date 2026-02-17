@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from os import getenv
@@ -735,6 +736,15 @@ class OpenAIChat(Model):
         if reasoning_content:
           model_response.reasoning_content = reasoning_content
           model_response.content = output_content
+
+      # Parse structured output if response_format is a Pydantic BaseModel subclass
+      if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel) and model_response.content:
+        try:
+          parsed_data = json.loads(model_response.content)
+          model_response.parsed = response_format.model_validate(parsed_data)
+        except (json.JSONDecodeError, Exception) as e:
+          log_warning(f"Failed to parse structured output into {response_format.__name__}: {e}")
+
     # Add tool calls
     if response_message.tool_calls is not None and len(response_message.tool_calls) > 0:
       try:
