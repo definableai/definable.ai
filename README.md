@@ -1,16 +1,26 @@
 <div align="center">
 
-# Definable
+<h1>Definable</h1>
 
-**Build LLM agents that work in production.**
+<p><strong>Build LLM agents that work in production.</strong></p>
 
-[![PyPI](https://img.shields.io/pypi/v/definable)](https://pypi.org/project/definable/)
-[![Python](https://img.shields.io/pypi/pyversions/definable)](https://pypi.org/project/definable/)
-[![License](https://img.shields.io/github/license/definable-ai/definable)](https://github.com/definableai/definable.ai/blob/main/LICENSE)
+<p>
+  <a href="https://pypi.org/project/definable/"><img src="https://img.shields.io/pypi/v/definable?color=%2334D058&label=pypi" alt="PyPI"></a>
+  <a href="https://pypi.org/project/definable/"><img src="https://img.shields.io/pypi/pyversions/definable?color=%2334D058" alt="Python"></a>
+  <a href="https://github.com/definableai/definable.ai/blob/main/LICENSE"><img src="https://img.shields.io/github/license/definableai/definable.ai?color=%2334D058" alt="License"></a>
+  <a href="https://pypi.org/project/definable/"><img src="https://img.shields.io/pypi/dm/definable?color=%2334D058&label=downloads" alt="Downloads"></a>
+  <a href="https://github.com/definableai/definable.ai/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/definableai/definable.ai/ci.yml?label=CI" alt="CI"></a>
+</p>
 
-[Documentation](https://docs.definable.ai) · [Examples](https://github.com/definableai/definable.ai/tree/main/definable/examples) · [PyPI](https://pypi.org/project/definable/)
+<p>
+  <a href="https://docs.definable.ai">Documentation</a> &nbsp;·&nbsp;
+  <a href="https://github.com/definableai/definable.ai/tree/main/definable/examples">Examples</a> &nbsp;·&nbsp;
+  <a href="https://pypi.org/project/definable/">PyPI</a>
+</p>
 
 </div>
+
+<br>
 
 A Python framework for building agent applications with tools, RAG, persistent memory, guardrails, skills, file readers, messaging platform integrations, and the Model Context Protocol. Switch providers without rewriting agent code.
 
@@ -360,6 +370,8 @@ pip install definable[mongodb-memory]   # MongoDB memory store
 pip install definable[pinecone-memory]  # Pinecone memory store
 pip install definable[mistral-ocr]      # Mistral AI document parsing
 pip install definable[mistral-ocr-images]  # Mistral OCR with image support
+pip install definable[research]            # Deep research (DuckDuckGo + curl-cffi)
+pip install definable[mem0-memory]         # Mem0 hosted memory store
 ```
 
 ## Documentation
@@ -409,4 +421,4 @@ See `definable/examples/` for usage patterns.
 
 ## License
 
-MIT
+Apache 2.0 — see [LICENSE](LICENSE) for details.
