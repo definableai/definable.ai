@@ -85,4 +85,51 @@
 - Run an example from repo root, e.g. `python definable/examples/models/01_basic_invoke.py`.
 - E2E tests live in `definable/tests_e2e/` and some require API keys (see markers in `definable/tests_e2e/pytest.ini`).
 
+---
+
+## Evaluator Agent System
+
+This repo includes an autonomous evaluator agent that stress-tests the framework.
+
+### Commands
+| Command | Purpose | Interactive? |
+|---------|---------|-------------|
+| `/setup` | One-time credential & preference collection | ✅ Yes (once) |
+| `/evaluate` | Full autonomous evaluation | ❌ No |
+| `/smoke-test` | Quick import check | ❌ No |
+| `/memory` | View/manage stored memory | ✅ Yes |
+| `/file-issue` | File a single bug manually | ✅ Yes |
+
+### Autonomy Rules (for all agents)
+- **Never ask the user anything during /evaluate** — use stored credentials or skip.
+- If credentials missing → skip that feature, log in report.
+- If unsure whether something is a bug → file with `needs-triage` label.
+- If `gh` CLI unavailable → write issues to `reports/unfiled-issues.md`.
+- **Always write memory files** after every run. All 5 files in `.claude/memory/`.
+
+### Persistent Memory
+Stored in `.claude/memory/`:
+- `credentials.md` — which API keys are in `.env.test`
+- `project-profile.md` — framework structure, deps, versions
+- `evaluation-history.md` — append-only run results
+- `known-issues.md` — filed issues (prevents duplicates)
+- `user-preferences.md` — timeout, skip providers, etc.
+
+### Reports
+Every `/evaluate` run saves a full report to `reports/eval-<YYYY-MM-DD>-<HHMMSS>.md` with:
+- Pass/fail counts and details for every eval script
+- Robustness / Reliability / Scalability / Extensibility scores (X/10)
+- mypy and ruff results
+- Issues filed with links
+- Recommendations
+
+### Evaluation Focus
+The evaluator tests four dimensions:
+1. **Robustness** — null inputs, type mismatches, missing fields, malformed data
+2. **Reliability** — idempotency, error recovery, resource cleanup, import chains
+3. **Scalability** — large prompts, many tools, deep conversations, bulk documents
+4. **Extensibility** — custom tools, custom providers, middleware hooks
+
+### Credential Source
+All API keys are in `.env.test` (gitignored). Source with `source .env.test`.
 
