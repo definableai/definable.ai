@@ -74,6 +74,7 @@
                 "expanded": false,
                 "pages": [
                   "agents/thinking",
+                  "agents/deep-research",
                   "agents/multi-turn",
                   "agents/middleware",
                   "agents/tracing"

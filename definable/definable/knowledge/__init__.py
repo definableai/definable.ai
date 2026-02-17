@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
   from definable.knowledge.chunkers.recursive import RecursiveChunker
   from definable.knowledge.chunkers.text import TextChunker
+  from definable.knowledge.embedders.openai import OpenAIEmbedder
   from definable.knowledge.embedders.voyageai import VoyageAIEmbedder
   from definable.knowledge.readers.pdf import PDFReader
   from definable.knowledge.readers.text import TextReader
@@ -31,6 +32,7 @@ __all__ = [
   "Chunker",
   "VectorDB",
   # Implementations (lazy-loaded)
+  "OpenAIEmbedder",
   "CohereReranker",
   "InMemoryVectorDB",
   "PDFReader",
@@ -45,6 +47,10 @@ __all__ = [
 
 def __getattr__(name: str):
   # Embedder implementations
+  if name == "OpenAIEmbedder":
+    from definable.knowledge.embedders.openai import OpenAIEmbedder
+
+    return OpenAIEmbedder
   if name == "VoyageAIEmbedder":
     from definable.knowledge.embedders.voyageai import VoyageAIEmbedder
 

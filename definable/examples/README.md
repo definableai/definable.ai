@@ -42,7 +42,8 @@ examples/
 │   ├── 03_agent_with_toolkit.py # Custom Toolkit class
 │   ├── 04_multi_turn.py       # Conversation sessions
 │   ├── 05_streaming_agent.py  # run_stream() usage
-│   └── 06_async_agent.py      # arun() and arun_stream()
+│   ├── 06_async_agent.py      # arun() and arun_stream()
+│   └── 07_thinking_agent.py   # Thinking layer with reasoning steps
 │
 ├── tools/                     # Tool definitions
 │   ├── 01_basic_tool.py       # Simple @tool decorator
@@ -101,6 +102,10 @@ examples/
 │
 ├── replay/                    # Run inspection and comparison
 │   └── 01_basic_replay.py     # Replay inspection + compare_runs
+│
+├── research/                  # Deep research
+│   ├── 01_basic_research.py   # Standalone DeepResearch usage
+│   └── 02_agent_with_research.py # Agent with deep_research enabled
 │
 ├── mcp/                       # Model Context Protocol
 │   ├── 01_basic_mcp.py        # Basic MCP server connection

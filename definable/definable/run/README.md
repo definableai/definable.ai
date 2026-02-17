@@ -28,6 +28,8 @@ Execution context passed through the middleware chain and into tool calls.
 | `knowledge_context` | `Optional[str]` | Injected RAG context |
 | `knowledge_documents` | `Optional[List]` | Retrieved documents |
 | `memory_context` | `Optional[str]` | Injected memory context |
+| `research_context` | `Optional[str]` | Formatted research context for system prompt injection |
+| `research_result` | `Optional[Any]` | Full `ResearchResult` object (for inspection) |
 | `readers_context` | `Optional[str]` | Extracted file content |
 
 ### RunStatus

@@ -58,6 +58,12 @@ agent = Agent(
   memory=memory,
   readers=True,
   name="my-agent",
+  skills=[...],
+  skill_registry=registry,
+  guardrails=Guardrails(...),
+  thinking=True,              # or ThinkingConfig(...)
+  deep_research=True,         # or DeepResearchConfig(...)
+  session_id="...",
   config=AgentConfig(...),
 )
 ```
@@ -103,6 +109,8 @@ from definable.agents import (
 | `KnowledgeConfig` | RAG integration (Knowledge instance, top_k, rerank, context format) |
 | `ReadersConfig` | File reader settings (registry, max content length) |
 | `TracingConfig` | Trace exporters, event filtering, batching |
+| `ThinkingConfig` | Reasoning phase settings (model, custom instructions) |
+| `DeepResearchConfig` | Multi-wave research pipeline (depth, search provider, context format) |
 
 ### Middleware
 
@@ -133,6 +141,14 @@ from definable.agents import Toolkit, KnowledgeToolkit
 - `Toolkit` — Base class for grouping related tools. Override the `tools` property or attach `Function` attributes.
 - `KnowledgeToolkit` — Provides `search_knowledge(query)` and `get_document_count()` tools for explicit RAG.
 
+**Agent-managed lifecycle**: Async toolkits (like `MCPToolkit`) that implement the `AsyncLifecycleToolkit` protocol are automatically initialized and shut down by the agent. No need for manual `async with toolkit:` — the agent handles it via `arun()` or `async with agent:`.
+
+```python
+toolkit = MCPToolkit(config=config)
+agent = Agent(model=model, toolkits=[toolkit])
+output = await agent.arun("List files")  # toolkit auto-initialized and shutdown
+```
+
 ### Tracing
 
 ```python
@@ -159,6 +175,7 @@ from definable.agents import MockModel, AgentTestCase, create_test_agent
 
 ## See Also
 
+- `research/` — Deep research pipeline
 - `models/` — LLM provider implementations
 - `tools/` — `@tool` decorator and `Function` class
 - `knowledge/` — RAG pipeline components

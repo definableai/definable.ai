@@ -133,7 +133,7 @@ agent.run("My name is Alice and I prefer dark mode.", user_id="alice")
 agent.run("What's my name?", user_id="alice")  # Recalls "Alice"
 ```
 
-Memory is automatic: the agent stores interactions and recalls relevant context on each turn. Eight store backends available (SQLite, PostgreSQL, Redis, Qdrant, Chroma, Pinecone, MongoDB, in-memory).
+Memory is automatic: the agent stores interactions and recalls relevant context on each turn. Nine store backends available (SQLite, PostgreSQL, Redis, Qdrant, Chroma, Pinecone, MongoDB, Mem0, in-memory).
 
 ## Knowledge Base (RAG)
 
@@ -321,7 +321,7 @@ assert "Paris" in output.content
 | **Skills** | Domain expertise + tools in one package; 8 built-in skills, custom `Skill` subclass |
 | **Knowledge / RAG** | Embedders, vector DBs, rerankers (Cohere), chunkers, automatic retrieval |
 | **Memory** | `CognitiveMemory` with multi-tier recall, distillation, topic prediction |
-| **Memory Stores** | SQLite, PostgreSQL, Redis, Qdrant, Chroma, Pinecone, MongoDB, in-memory |
+| **Memory Stores** | SQLite, PostgreSQL, Redis, Qdrant, Chroma, Pinecone, MongoDB, Mem0, in-memory |
 | **Readers** | PDF, DOCX, PPTX, XLSX, ODS, RTF, HTML, images, audio |
 | **Reader Providers** | Mistral OCR, OpenAI, Anthropic, Google (AI-powered document parsing) |
 | **Guardrails** | Input/output/tool checkpoints, PII redaction, token limits, topic blocking, regex filters |
@@ -344,7 +344,7 @@ assert "Paris" in output.content
 from definable.models.openai import OpenAIChat      # GPT-4o, GPT-4o-mini, o1, o3, ...
 from definable.models.deepseek import DeepSeekChat   # deepseek-chat, deepseek-reasoner
 from definable.models.moonshot import MoonshotChat   # moonshot-v1-8k, moonshot-v1-128k
-from definable.models.xai import xAIChat             # grok-2-latest
+from definable.models.xai import xAI                  # grok-2-latest
 ```
 
 Any OpenAI-compatible API works with `OpenAIChat(base_url=..., api_key=...)`.
@@ -390,10 +390,11 @@ definable/definable/
 ├── knowledge/     # RAG: embedders, vector DBs, rerankers, chunkers
 ├── mcp/           # Model Context Protocol client
 ├── media.py       # Image, Audio, Video, File types
-├── memory/        # CognitiveMemory + 8 store backends
+├── memory/        # CognitiveMemory + 9 store backends
 ├── models/        # OpenAI, DeepSeek, Moonshot, xAI providers
 ├── readers/       # File parsers + AI reader providers
 ├── reasoning/     # Reasoning capabilities
+├── research/      # Deep research: multi-wave web search, CKU compression, gap analysis
 ├── replay/        # Run inspection, re-execution, comparison
 ├── run/           # RunOutput, RunEvent types
 ├── runtime/       # AgentRuntime, AgentServer, dev mode

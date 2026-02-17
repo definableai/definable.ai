@@ -11,7 +11,7 @@ The `MCPToolkit` connects to one or more MCP (Model Context Protocol) servers an
 ```python
 from definable.agents import Agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
-from definable.models import OpenAIChat
+from definable.models.openai import OpenAIChat
 
 config = MCPConfig(servers=[
     MCPServerConfig(
@@ -134,5 +134,37 @@ agent = Agent(
     toolkits=[MCPToolkit(config=mcp_config), MathToolkit()],
 )
 ```
+
+## Agent-Managed Lifecycle
+
+Instead of manually managing the toolkit lifecycle with `async with`, you can let the agent handle it automatically. When you pass an uninitialized `MCPToolkit` to an agent, the agent will initialize it on first use and shut it down when the agent shuts down:
+
+```python
+from definable.agents import Agent
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
+from definable.models.openai import OpenAIChat
+
+config = MCPConfig(servers=[
+    MCPServerConfig(
+        name="filesystem",
+        transport="stdio",
+        command="npx",
+        args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    ),
+])
+
+# No `async with toolkit:` needed — agent handles lifecycle
+toolkit = MCPToolkit(config=config)
+agent = Agent(model=OpenAIChat(id="gpt-4o"), toolkits=[toolkit])
+output = await agent.arun("List the files in /tmp")
+
+# Or use the agent as a context manager for explicit cleanup
+async with Agent(model=OpenAIChat(id="gpt-4o"), toolkits=[toolkit]) as agent:
+    output = await agent.arun("List the files in /tmp")
+```
+
+<Note>
+If you pre-initialize the toolkit yourself (via `async with toolkit:` or `await toolkit.initialize()`), the agent detects this and does **not** take ownership — you remain responsible for shutting it down.
+</Note>
 
 For more on MCP configuration, transports, and advanced features, see the [MCP section](/mcp/overview).

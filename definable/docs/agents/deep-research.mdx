@@ -1,0 +1,334 @@
+---
+title: Deep Research
+sidebarTitle: Deep Research
+description: Multi-wave web research with automatic knowledge extraction and gap analysis.
+icon: magnifying-glass
+---
+
+The deep research layer conducts automated multi-wave web research before the agent responds. It decomposes queries into sub-questions, searches the web, reads pages, compresses them into Compressed Knowledge Units (CKUs), accumulates knowledge with deduplication and contradiction detection, and synthesizes the results into context for the agent's system prompt.
+
+## Quick Start
+
+```python
+from definable.agents import Agent
+from definable.models.openai import OpenAIChat
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a research assistant.",
+    deep_research=True,
+)
+
+output = await agent.arun("Compare React and Vue frameworks in 2025.")
+print(output.content)  # Response informed by live web research
+```
+
+With `deep_research=True`, the agent automatically:
+1. Breaks the question into sub-questions
+2. Searches the web for each sub-question
+3. Reads and compresses relevant pages
+4. Accumulates facts and detects contradictions
+5. Injects the research context into the system prompt
+6. Generates a response grounded in the research
+
+## How It Works
+
+```
+User Query
+    │
+    ▼
+┌─────────────┐
+│  Decompose  │ Break into sub-questions
+└──────┬──────┘
+       │
+  ┌────▼────┐
+  │ Wave N  │ ◄─── Repeat until coverage sufficient
+  │         │
+  │ Search  │ Parallel web searches
+  │   ▼     │
+  │  Read   │ Fetch + extract page content
+  │   ▼     │
+  │Compress │ Extract CKUs via cheap model
+  │   ▼     │
+  │Accumulate│ Knowledge graph + dedup + contradiction detection
+  │   ▼     │
+  │Gap Check│ Identify remaining knowledge gaps
+  └────┬────┘
+       │
+  ┌────▼────┐
+  │Synthesize│ Format context for system prompt
+  └─────────┘
+```
+
+## Configuration
+
+### Simple Enable
+
+```python
+# Uses standard depth (3 waves, 15 sources, DuckDuckGo)
+agent = Agent(model=model, deep_research=True)
+```
+
+### Custom Configuration
+
+```python
+from definable.research import DeepResearchConfig
+
+agent = Agent(
+    model=model,
+    deep_research=DeepResearchConfig(
+        depth="deep",                       # 5 waves, 30 sources
+        search_provider="duckduckgo",       # Free, no API key
+        include_citations=True,
+        include_contradictions=True,
+        context_format="xml",
+        max_context_tokens=4000,
+    ),
+)
+```
+
+### Via AgentConfig
+
+```python
+from definable.agents import Agent, AgentConfig
+from definable.research import DeepResearchConfig
+
+config = AgentConfig(
+    deep_research=DeepResearchConfig(depth="standard"),
+)
+agent = Agent(model=model, config=config)
+```
+
+## Depth Presets
+
+| Preset | Waves | Max Sources | Parallel Searches | Best For |
+|--------|-------|-------------|-------------------|----------|
+| `"quick"` | 1 | 8 | 3 | Fast lookups, simple questions |
+| `"standard"` | 3 | 15 | 5 | Balanced research (default) |
+| `"deep"` | 5 | 30 | 8 | Thorough investigation, complex topics |
+
+```python
+# Quick — single wave, fast
+agent = Agent(model=model, deep_research=DeepResearchConfig(depth="quick"))
+
+# Deep — thorough multi-wave research
+agent = Agent(model=model, deep_research=DeepResearchConfig(depth="deep"))
+```
+
+## Search Providers
+
+### DuckDuckGo (Default)
+
+Free, no API key required. Works out of the box.
+
+```python
+agent = Agent(model=model, deep_research=True)  # Uses DuckDuckGo by default
+```
+
+### Google Custom Search Engine
+
+Requires a Google API key and Custom Search Engine ID.
+
+```python
+from definable.research import DeepResearchConfig
+
+agent = Agent(
+    model=model,
+    deep_research=DeepResearchConfig(
+        search_provider="google",
+        search_provider_config={
+            "api_key": "your-google-api-key",
+            "cse_id": "your-cse-id",
+        },
+    ),
+)
+```
+
+### SerpAPI
+
+Requires a SerpAPI key.
+
+```python
+agent = Agent(
+    model=model,
+    deep_research=DeepResearchConfig(
+        search_provider="serpapi",
+        search_provider_config={"api_key": "your-serpapi-key"},
+    ),
+)
+```
+
+### Custom Search Function
+
+Provide any async callable that returns search results:
+
+```python
+from definable.research.search.base import SearchResult
+
+async def my_search(query: str, max_results: int = 10) -> list[SearchResult]:
+    # Your custom search logic
+    return [SearchResult(url="...", title="...", snippet="...")]
+
+agent = Agent(
+    model=model,
+    deep_research=DeepResearchConfig(search_fn=my_search),
+)
+```
+
+## Trigger Modes
+
+Control when research runs:
+
+| Mode | Description |
+|------|-------------|
+| `"always"` | Run research on every `arun()` call (default) |
+| `"auto"` | Model decides whether the query needs research |
+| `"tool"` | Research only runs when explicitly invoked as a tool |
+
+```python
+agent = Agent(
+    model=model,
+    deep_research=DeepResearchConfig(trigger="auto"),
+)
+```
+
+## Standalone Usage
+
+Use `DeepResearch` directly without an agent:
+
+```python
+from definable.models.openai import OpenAIChat
+from definable.research import DeepResearch, DeepResearchConfig
+from definable.research.search import create_search_provider
+
+model = OpenAIChat(id="gpt-4o-mini")
+researcher = DeepResearch(
+    model=model,
+    search_provider=create_search_provider("duckduckgo"),
+    config=DeepResearchConfig(depth="deep"),
+)
+
+result = await researcher.arun("What are the latest AI safety developments?")
+print(result.context)         # Formatted context string
+print(result.report)          # Standalone report
+print(result.sources)         # List of SourceInfo
+print(result.facts)           # Extracted facts
+print(result.contradictions)  # Contradictions found
+print(result.metrics)         # ResearchMetrics
+```
+
+## Events
+
+When streaming, the research pipeline emits progress events:
+
+```python
+async for event in agent.arun_stream("Compare React and Vue"):
+    if hasattr(event, "event_type"):
+        if event.event_type == "deep_research_started":
+            print(f"Research started: {event.query}")
+        elif event.event_type == "deep_research_progress":
+            print(f"Wave {event.wave}: {event.sources_read} sources, "
+                  f"{event.facts_extracted} facts, {event.gaps_remaining} gaps")
+        elif event.event_type == "deep_research_completed":
+            print(f"Done: {event.total_sources} sources, "
+                  f"{event.total_facts} facts in {event.total_time_ms:.0f}ms")
+    if event.content:
+        print(event.content, end="", flush=True)
+```
+
+| Event | Fields |
+|-------|--------|
+| `DeepResearchStartedEvent` | `query` |
+| `DeepResearchProgressEvent` | `wave`, `sources_read`, `facts_extracted`, `gaps_remaining`, `message` |
+| `DeepResearchCompletedEvent` | `total_sources`, `total_facts`, `total_time_ms` |
+
+## Output Types
+
+### ResearchResult
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `context` | `str` | Formatted context for system prompt |
+| `report` | `str` | Standalone research report |
+| `sources` | `List[SourceInfo]` | Sources consulted |
+| `facts` | `List[Fact]` | Extracted facts |
+| `gaps` | `List[TopicGap]` | Remaining knowledge gaps |
+| `contradictions` | `List[Contradiction]` | Contradictions between sources |
+| `sub_questions` | `List[str]` | Decomposed sub-questions |
+| `metrics` | `ResearchMetrics` | Performance metrics |
+
+## Configuration Reference
+
+<ParamField path="depth" type="str" default="standard">
+  Research depth preset: `"quick"`, `"standard"`, or `"deep"`.
+</ParamField>
+
+<ParamField path="search_provider" type="str" default="duckduckgo">
+  Search backend: `"duckduckgo"`, `"google"`, or `"serpapi"`.
+</ParamField>
+
+<ParamField path="search_provider_config" type="Dict[str, Any]">
+  Backend-specific config (API keys, CSE ID, etc.).
+</ParamField>
+
+<ParamField path="search_fn" type="Callable">
+  Custom async search callable. Overrides `search_provider`.
+</ParamField>
+
+<ParamField path="compression_model" type="Model">
+  Model for CKU extraction. Defaults to the agent's model.
+</ParamField>
+
+<ParamField path="max_sources" type="int" default="15">
+  Maximum unique sources across all waves.
+</ParamField>
+
+<ParamField path="max_waves" type="int" default="3">
+  Maximum number of research waves.
+</ParamField>
+
+<ParamField path="parallel_searches" type="int" default="5">
+  Concurrent search queries per wave.
+</ParamField>
+
+<ParamField path="parallel_reads" type="int" default="10">
+  Concurrent page reads.
+</ParamField>
+
+<ParamField path="min_relevance" type="float" default="0.3">
+  Minimum relevance score for CKU inclusion.
+</ParamField>
+
+<ParamField path="include_citations" type="bool" default="true">
+  Include source citations in research context.
+</ParamField>
+
+<ParamField path="include_contradictions" type="bool" default="true">
+  Surface contradictions between sources.
+</ParamField>
+
+<ParamField path="context_format" type="str" default="xml">
+  Format for injected context: `"xml"` or `"markdown"`.
+</ParamField>
+
+<ParamField path="max_context_tokens" type="int" default="4000">
+  Approximate token budget for the context block.
+</ParamField>
+
+<ParamField path="early_termination_threshold" type="float" default="0.2">
+  Stop when novelty ratio drops below this between waves.
+</ParamField>
+
+<ParamField path="trigger" type="str" default="always">
+  When to run: `"always"`, `"auto"`, or `"tool"`.
+</ParamField>
+
+## Installation
+
+Deep research requires the `research` extra:
+
+```bash
+pip install 'definable[research]'
+```
+
+This installs `duckduckgo-search` and `curl-cffi` for TLS-impersonated web reading.

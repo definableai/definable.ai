@@ -50,6 +50,28 @@ Enum controlling the reasoning flow:
 | `FINAL_ANSWER` | The reasoning is complete |
 | `RESET` | Restart the reasoning process |
 
+### ThinkingOutput
+
+```python
+from definable.reasoning.step import ThinkingOutput
+```
+
+Compact output from the context-aware thinking phase, used when the agent's thinking layer is enabled.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `analysis` | `str` | 1-2 sentence analysis of what the user needs |
+| `approach` | `str` | 1-2 sentence plan for how to respond |
+| `tool_plan` | `Optional[List[str]]` | Ordered tool names to use (null if no tools needed) |
+
+### thinking_output_to_reasoning_steps()
+
+```python
+from definable.reasoning.step import thinking_output_to_reasoning_steps
+```
+
+Maps a `ThinkingOutput` to a `List[ReasoningStep]` for backward compatibility. The thinking layer uses `ThinkingOutput` internally but exposes results as `ReasoningStep` objects on `RunOutput.reasoning_steps`.
+
 ## See Also
 
 - `agents/` — Agent streaming emits `ReasoningStepEvent` and `ReasoningContentDeltaEvent`

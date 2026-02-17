@@ -195,3 +195,108 @@ config = AgentConfig(
 <ParamField path="readers.context_format" type="str" default="xml">
   Format for injecting file content into the prompt. `"xml"` wraps content in XML tags, `"markdown"` uses code blocks.
 </ParamField>
+
+## Deep Research
+
+The deep research layer is configured directly on the `Agent` constructor (not in `AgentConfig`):
+
+```python
+from definable.agents import Agent
+from definable.research import DeepResearchConfig
+
+# Simple enable (standard depth, DuckDuckGo search)
+agent = Agent(model=model, deep_research=True)
+
+# Custom configuration
+agent = Agent(
+    model=model,
+    deep_research=DeepResearchConfig(
+        depth="deep",                    # "quick", "standard", or "deep"
+        search_provider="duckduckgo",    # or "google", "serpapi"
+        max_sources=30,
+        max_waves=5,
+        include_citations=True,
+        context_format="xml",
+    ),
+)
+```
+
+It can also be set via `AgentConfig`:
+
+```python
+from definable.agents import Agent, AgentConfig
+from definable.research import DeepResearchConfig
+
+config = AgentConfig(
+    deep_research=DeepResearchConfig(depth="standard"),
+)
+agent = Agent(model=model, config=config)
+```
+
+See [Deep Research](/agents/deep-research) for full documentation.
+
+### DeepResearchConfig Reference
+
+<ParamField path="depth" type="str" default="standard">
+  Research depth preset. `"quick"` (1 wave, 8 sources), `"standard"` (3 waves, 15 sources), `"deep"` (5 waves, 30 sources).
+</ParamField>
+
+<ParamField path="search_provider" type="str" default="duckduckgo">
+  Search backend name: `"duckduckgo"`, `"google"`, or `"serpapi"`.
+</ParamField>
+
+<ParamField path="search_provider_config" type="Dict[str, Any]">
+  Backend-specific config (API keys, CSE ID, etc.). Required for Google CSE and SerpAPI.
+</ParamField>
+
+<ParamField path="search_fn" type="Callable">
+  Custom async search callable. Overrides `search_provider` when set.
+</ParamField>
+
+<ParamField path="compression_model" type="Model">
+  Model for CKU extraction (should be cheap/fast). Defaults to the agent's model.
+</ParamField>
+
+<ParamField path="max_sources" type="int" default="15">
+  Maximum number of unique sources to read across all waves.
+</ParamField>
+
+<ParamField path="max_waves" type="int" default="3">
+  Maximum number of research waves.
+</ParamField>
+
+<ParamField path="parallel_searches" type="int" default="5">
+  Number of concurrent search queries per wave.
+</ParamField>
+
+<ParamField path="parallel_reads" type="int" default="10">
+  Number of concurrent page reads.
+</ParamField>
+
+<ParamField path="min_relevance" type="float" default="0.3">
+  Minimum relevance score for CKU inclusion.
+</ParamField>
+
+<ParamField path="include_citations" type="bool" default="true">
+  Whether to include source citations in the research context.
+</ParamField>
+
+<ParamField path="include_contradictions" type="bool" default="true">
+  Whether to surface contradictions between sources.
+</ParamField>
+
+<ParamField path="context_format" type="str" default="xml">
+  Format for the injected context: `"xml"` or `"markdown"`.
+</ParamField>
+
+<ParamField path="max_context_tokens" type="int" default="4000">
+  Approximate token budget for the research context block.
+</ParamField>
+
+<ParamField path="early_termination_threshold" type="float" default="0.2">
+  Stop when novelty ratio drops below this threshold between waves.
+</ParamField>
+
+<ParamField path="trigger" type="str" default="always">
+  When to run research: `"always"` (every run), `"auto"` (model decides), `"tool"` (explicit tool call).
+</ParamField>
