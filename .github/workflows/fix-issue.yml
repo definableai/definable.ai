@@ -161,8 +161,11 @@ jobs:
             6. Write tests in definable/tests_e2e/
             7. Run full test suite (offline markers only)
             8. Verify fix with reproduction script
-            9. Commit, push, and create PR referencing the issue
-            10. If unable to fix, comment analysis on the issue and add "needs-human" label
+            9. Commit and push the branch
+            10. CRITICAL — You MUST create the PR yourself by running:
+                gh pr create --base main --head fix/issue-${{ needs.should-fix.outputs.issue_number }} --title "fix: <description>" --body "<PR body referencing Fixes #${{ needs.should-fix.outputs.issue_number }}>"
+                Do NOT just create a branch and leave it. Do NOT ask the user to create the PR. You MUST run gh pr create.
+            11. If unable to fix, comment analysis on the issue and add "needs-human" label
 
             Be fully autonomous. Never ask questions. Follow every convention in .claude/agents/issue-fixer.md.
 
