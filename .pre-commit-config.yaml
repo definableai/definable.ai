@@ -13,6 +13,15 @@ repos:
           # Optionally enable auto-fix:
           # - --fix
 
+      - id: ruff-format
+        name: Ruff Format (local)
+        entry: .venv/bin/python3 -m ruff
+        language: system
+        pass_filenames: true
+        types: [python]
+        args:
+          - format
+
       # Local Mypy hook
       - id: mypy
         name: Mypy (local)

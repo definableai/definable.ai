@@ -32,7 +32,7 @@ def _format_contradictions(kg: KnowledgeGraph) -> str:
     return ""
   lines = ["Contradictions found:"]
   for c in contradictions:
-    lines.append(f"- \"{c.fact_a.content}\" vs \"{c.fact_b.content}\"")
+    lines.append(f'- "{c.fact_a.content}" vs "{c.fact_b.content}"')
   return "\n".join(lines)
 
 
@@ -101,18 +101,18 @@ def _fallback_xml(
   sub_questions: List[str],
   config: DeepResearchConfig,
 ) -> str:
-  parts = [f"<research_context query=\"{query}\">"]
+  parts = [f'<research_context query="{query}">']
   for sq in sub_questions:
     facts = kg.get_facts_by_topic(sq)
     if facts:
-      parts.append(f"  <topic question=\"{sq}\">")
+      parts.append(f'  <topic question="{sq}">')
       for f in facts:
-        parts.append(f"    <fact confidence=\"{f.confidence:.1f}\">{f.content}</fact>")
+        parts.append(f'    <fact confidence="{f.confidence:.1f}">{f.content}</fact>')
       parts.append("  </topic>")
   if config.include_citations:
     parts.append("  <sources>")
     for s in kg.get_sources():
-      parts.append(f"    <source url=\"{s.url}\" title=\"{s.title}\" facts=\"{s.fact_count}\"/>")
+      parts.append(f'    <source url="{s.url}" title="{s.title}" facts="{s.fact_count}"/>')
     parts.append("  </sources>")
   parts.append("</research_context>")
   return "\n".join(parts)

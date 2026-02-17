@@ -1,6 +1,5 @@
 """Tests for the knowledge graph — dedup, contradiction detection, ingestion."""
 
-
 from definable.research.knowledge_graph import KnowledgeGraph
 from definable.research.models import CKU, Fact
 

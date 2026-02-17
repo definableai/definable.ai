@@ -22,10 +22,7 @@ class DuckDuckGoSearchProvider:
     try:
       from duckduckgo_search import DDGS
     except ImportError:
-      raise ImportError(
-        "DuckDuckGo search requires 'duckduckgo-search'. "
-        "Install it with: pip install duckduckgo-search"
-      )
+      raise ImportError("DuckDuckGo search requires 'duckduckgo-search'. Install it with: pip install duckduckgo-search")
 
     results: List[SearchResult] = []
     try:

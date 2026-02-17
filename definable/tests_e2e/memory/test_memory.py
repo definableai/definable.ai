@@ -358,7 +358,7 @@ class TestMemoryEventsIntegration(AgentTestCase):
 
     # Verify memory update started event
     update_started = next(e for e in emitted_events if isinstance(e, MemoryUpdateStartedEvent))
-    assert update_started.message_count == 1  # One user message
+    assert update_started.message_count == 2  # User message + assistant response
 
   async def test_memory_events_emitted_on_stream(self, cognitive_memory):
     """Agent.arun_stream() yields memory events in correct order."""

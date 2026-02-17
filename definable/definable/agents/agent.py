@@ -252,10 +252,7 @@ class Agent:
 
     # Deep research engine (prebuilt instance or lazy init from config)
     dr_config = self._deep_research_config or (self.config.deep_research if self.config else None)
-    self._researcher: Optional["DeepResearch"] = (
-      self._prebuilt_researcher
-      or (self._init_deep_research(dr_config) if dr_config else None)
-    )
+    self._researcher: Optional["DeepResearch"] = self._prebuilt_researcher or (self._init_deep_research(dr_config) if dr_config else None)
 
   # --- Properties ---
 
@@ -974,8 +971,10 @@ class Agent:
 
         # Emit ReasoningStarted
         _rs_evt = ReasoningStartedEvent(
-          run_id=context.run_id, session_id=context.session_id,
-          agent_id=self.agent_id, agent_name=self.agent_name,
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
         )
         self._emit(_rs_evt)
         yield _rs_evt
@@ -998,8 +997,10 @@ class Agent:
           if hasattr(chunk, "content") and chunk.content:
             accumulated_reasoning += chunk.content
             _delta_evt = ReasoningContentDeltaEvent(
-              run_id=context.run_id, session_id=context.session_id,
-              agent_id=self.agent_id, agent_name=self.agent_name,
+              run_id=context.run_id,
+              session_id=context.session_id,
+              agent_id=self.agent_id,
+              agent_name=self.agent_name,
               reasoning_content=chunk.content,
             )
             self._emit(_delta_evt)
@@ -1022,8 +1023,10 @@ class Agent:
         # Emit ReasoningStepEvent for each parsed step
         for step in _reasoning_steps:
           _step_evt = ReasoningStepEvent(
-            run_id=context.run_id, session_id=context.session_id,
-            agent_id=self.agent_id, agent_name=self.agent_name,
+            run_id=context.run_id,
+            session_id=context.session_id,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
             reasoning_content=step.reasoning or "",
           )
           self._emit(_step_evt)
@@ -1031,8 +1034,10 @@ class Agent:
 
         # Emit ReasoningCompleted
         _rc_evt = ReasoningCompletedEvent(
-          run_id=context.run_id, session_id=context.session_id,
-          agent_id=self.agent_id, agent_name=self.agent_name,
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
         )
         self._emit(_rc_evt)
         yield _rc_evt
@@ -1495,9 +1500,7 @@ class Agent:
       return []
 
     config = (
-      self._deep_research_config
-      or (self.config.deep_research if self.config else None)
-      or (self._researcher._config if self._researcher else None)
+      self._deep_research_config or (self.config.deep_research if self.config else None) or (self._researcher._config if self._researcher else None)
     )
     if not config or not config.enabled:
       return []
@@ -2016,10 +2019,7 @@ class Agent:
 
   # --- Thinking Layer ---
 
-  _DEFAULT_THINKING_PROMPT = (
-    "Analyze the user's request. Determine what they need, "
-    "your approach, and which tools (if any) to use."
-  )
+  _DEFAULT_THINKING_PROMPT = "Analyze the user's request. Determine what they need, your approach, and which tools (if any) to use."
 
   def _build_thinking_prompt(
     self,
@@ -2091,12 +2091,14 @@ class Agent:
       thinking_prompt = self._build_thinking_prompt(context, tools)
 
     # Emit ReasoningStarted
-    self._emit(ReasoningStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-    ))
+    self._emit(
+      ReasoningStartedEvent(
+        run_id=context.run_id,
+        session_id=context.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+      )
+    )
 
     # Build thinking messages: system prompt + user/assistant messages (no tools)
     thinking_messages: list[Message] = [Message(role="system", content=thinking_prompt)]
@@ -2131,13 +2133,15 @@ class Agent:
 
     # Emit ReasoningStep for each step
     for step in reasoning_steps:
-      self._emit(ReasoningStepEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        reasoning_content=step.reasoning or "",
-      ))
+      self._emit(
+        ReasoningStepEvent(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          reasoning_content=step.reasoning or "",
+        )
+      )
 
     # Build reasoning messages list for RunOutput
     reasoning_agent_messages = thinking_messages + [
@@ -2149,12 +2153,14 @@ class Agent:
     ]
 
     # Emit ReasoningCompleted
-    self._emit(ReasoningCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-    ))
+    self._emit(
+      ReasoningCompletedEvent(
+        run_id=context.run_id,
+        session_id=context.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+      )
+    )
 
     return thinking_output, reasoning_steps, reasoning_agent_messages
 
@@ -2225,7 +2231,9 @@ class Agent:
       reasoning_agent_messages: Optional[list] = None
       if self._thinking and self._thinking.enabled:
         thinking_output, reasoning_steps, reasoning_agent_messages = await self._execute_thinking(
-          context, invoke_messages, tools,
+          context,
+          invoke_messages,
+          tools,
         )
         if thinking_output:
           injection = self._format_thinking_injection(thinking_output)
@@ -2418,8 +2426,7 @@ class Agent:
         reasoning_steps=reasoning_steps or None,
         reasoning_messages=reasoning_agent_messages or None,
         reasoning_content=(
-          self._format_reasoning_context(reasoning_steps) if reasoning_steps
-          else (final_response.reasoning_content if final_response else None)
+          self._format_reasoning_context(reasoning_steps) if reasoning_steps else (final_response.reasoning_content if final_response else None)
         ),
         citations=final_response.citations if final_response else None,
         images=final_response.images if final_response else None,

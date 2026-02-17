@@ -17,23 +17,27 @@ class MockSearchProvider:
   """Mock search provider that returns canned results."""
 
   def __init__(self, results: Optional[List[SearchResult]] = None):
-    self._results = results if results is not None else [
-      SearchResult(
-        title="Quantum Computing Advances 2025",
-        url="https://example.com/quantum-2025",
-        snippet="IBM unveiled a 1121-qubit processor in 2025.",
-      ),
-      SearchResult(
-        title="Google Quantum Supremacy Update",
-        url="https://example.com/google-quantum",
-        snippet="Google's Willow chip demonstrated error correction.",
-      ),
-      SearchResult(
-        title="Quantum Computing Applications",
-        url="https://example.com/quantum-apps",
-        snippet="Drug discovery and cryptography are leading use cases.",
-      ),
-    ]
+    self._results = (
+      results
+      if results is not None
+      else [
+        SearchResult(
+          title="Quantum Computing Advances 2025",
+          url="https://example.com/quantum-2025",
+          snippet="IBM unveiled a 1121-qubit processor in 2025.",
+        ),
+        SearchResult(
+          title="Google Quantum Supremacy Update",
+          url="https://example.com/google-quantum",
+          snippet="Google's Willow chip demonstrated error correction.",
+        ),
+        SearchResult(
+          title="Quantum Computing Applications",
+          url="https://example.com/quantum-apps",
+          snippet="Drug discovery and cryptography are leading use cases.",
+        ),
+      ]
+    )
     self.call_count = 0
     self.queries: List[str] = []
 
@@ -92,10 +96,7 @@ class ResearchMockModel(MockModel):
     })
     self._needs_research_response = json.dumps({"needs_research": True, "reason": "Current topic"})
     self._synthesis_response = (
-      "<research_context>\n"
-      "  <topic>Quantum Computing</topic>\n"
-      "  <fact>IBM has a 1121-qubit processor</fact>\n"
-      "</research_context>"
+      "<research_context>\n  <topic>Quantum Computing</topic>\n  <fact>IBM has a 1121-qubit processor</fact>\n</research_context>"
     )
 
   async def ainvoke(self, messages=None, tools=None, system_message=None, output_schema=None, **kwargs):

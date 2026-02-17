@@ -37,7 +37,7 @@ async def analyze(
     count = knowledge_graph.fact_count_for_topic(sq)
     facts = knowledge_graph.get_facts_by_topic(sq)
     fact_preview = "; ".join(f.content[:80] for f in facts[:3])
-    lines.append(f"- \"{sq}\": {count} facts. Preview: {fact_preview or '(none)'}")
+    lines.append(f'- "{sq}": {count} facts. Preview: {fact_preview or "(none)"}')
   coverage_summary = "\n".join(lines)
 
   prompt = GAP_ANALYSIS_PROMPT.format(

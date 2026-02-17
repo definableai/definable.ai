@@ -283,7 +283,7 @@ class TestAgentThinking:
     """Gracefully handles model returning empty/invalid ThinkingOutput JSON."""
     model = MockModel(
       responses=["Answer despite failed thinking."],
-      structured_responses=['{}'],
+      structured_responses=["{}"],
     )
     agent = Agent(
       model=model,

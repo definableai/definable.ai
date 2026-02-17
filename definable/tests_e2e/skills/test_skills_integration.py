@@ -179,6 +179,7 @@ class TestSkillsIntegration:
 
   def test_skills_with_tools_and_toolkits(self, mock_model, no_trace_config):
     """Skills work alongside direct tools and toolkits."""
+
     @tool
     def direct_tool(x: str) -> str:
       """A direct tool."""
@@ -232,6 +233,7 @@ class TestToolFlattening:
 
   def test_skill_tools_combined_with_direct(self, mock_model, no_trace_config):
     """Skill tools and direct tools are all available."""
+
     @tool
     def my_tool(x: str) -> str:
       """My tool."""
@@ -248,6 +250,7 @@ class TestToolFlattening:
 
   def test_direct_tools_override_skill_tools(self, mock_model, no_trace_config):
     """Direct tools with same name override skill tools (highest priority)."""
+
     @tool
     def greet(name: str) -> str:
       """Custom greet that overrides skill's greet."""
@@ -274,6 +277,7 @@ class TestToolFlattening:
         def greet(name: str) -> str:
           """Toolkit greet."""
           return f"Toolkit hello, {name}!"
+
         return [greet]
 
     agent = Agent(
@@ -582,6 +586,7 @@ class TestInlineSkills:
 
   def test_inline_skill_with_tools(self, mock_model, no_trace_config):
     """Create a skill inline with explicit tools."""
+
     @tool
     def search_docs(query: str) -> str:
       """Search docs."""

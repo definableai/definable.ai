@@ -12,11 +12,7 @@ from definable.knowledge.readers.base import Reader
 class URLReader(Reader):
   """Reader for web pages. Uses httpx + beautifulsoup."""
 
-  user_agent: str = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/131.0.0.0 Safari/537.36"
-  )
+  user_agent: str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
   impersonate: Optional[str] = "chrome"
   extract_links: bool = False
   remove_tags: List[str] = field(default_factory=lambda: ["script", "style", "nav", "footer", "header", "aside"])

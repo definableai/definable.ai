@@ -107,7 +107,7 @@ class TestParseFrontmatter:
     assert fm["tags"] == []
 
   def test_parse_quoted_values(self):
-    text = '---\nname: "my skill"\ndescription: \'quoted\'\n---\n\nBody.'
+    text = "---\nname: \"my skill\"\ndescription: 'quoted'\n---\n\nBody."
     fm, body = SkillLoader.parse_frontmatter(text)
     assert fm["name"] == "my skill"
     assert fm["description"] == "quoted"
