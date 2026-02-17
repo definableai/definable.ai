@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import dataclasses
+import warnings
 from typing import (
   TYPE_CHECKING,
   Any,
@@ -454,6 +455,32 @@ class Agent:
     """Set the auth provider."""
     self._auth = provider
 
+  @staticmethod
+  def _resolve_output_schema(
+    output_schema: "Optional[Type[BaseModel]]",
+    response_model: "Optional[Type[BaseModel]]",
+  ) -> "Optional[Type[BaseModel]]":
+    """Resolve output_schema from output_schema and response_model parameters.
+
+    ``response_model`` is a convenience alias for ``output_schema`` that
+    follows Pydantic / FastAPI conventions.  When both are provided,
+    ``response_model`` takes precedence and a warning is emitted.
+
+    Args:
+        output_schema: Explicit schema parameter.
+        response_model: Alias parameter (Pydantic/FastAPI convention).
+
+    Returns:
+        The resolved Pydantic model class, or None.
+    """
+    if response_model is not None and output_schema is not None:
+      warnings.warn(
+        "Both 'output_schema' and 'response_model' were provided. 'response_model' takes precedence. Prefer using only one.",
+        stacklevel=3,
+      )
+      return response_model
+    return response_model if response_model is not None else output_schema
+
   # --- Run Methods ---
 
   def run(
@@ -469,6 +496,7 @@ class Agent:
     audio: Optional[List[Audio]] = None,
     files: Optional[List[File]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
+    response_model: Optional[Type[BaseModel]] = None,
   ) -> RunOutput:
     """
     Synchronous run with multi-turn conversation support.
@@ -484,10 +512,13 @@ class Agent:
         audio: Audio to include with the instruction.
         files: Files to include with the instruction.
         output_schema: Optional Pydantic model for structured output.
+        response_model: Alias for output_schema (Pydantic/FastAPI convention).
+            If both are provided, response_model takes precedence.
 
     Returns:
         RunOutput with response, metrics, tool executions, and messages.
     """
+    output_schema = self._resolve_output_schema(output_schema, response_model)
     try:
       loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -567,6 +598,7 @@ class Agent:
     audio: Optional[List[Audio]] = None,
     files: Optional[List[File]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
+    response_model: Optional[Type[BaseModel]] = None,
   ) -> RunOutput:
     """
     Async run with middleware chain execution.
@@ -582,10 +614,13 @@ class Agent:
         audio: Audio to include with the instruction.
         files: Files to include with the instruction.
         output_schema: Optional Pydantic model for structured output.
+        response_model: Alias for output_schema (Pydantic/FastAPI convention).
+            If both are provided, response_model takes precedence.
 
     Returns:
         RunOutput with response, metrics, tool executions, and messages.
     """
+    output_schema = self._resolve_output_schema(output_schema, response_model)
     run_id = run_id or str(uuid4())
     session_id = session_id or self.session_id
 
@@ -682,6 +717,7 @@ class Agent:
     user_id: Optional[str] = None,
     images: Optional[List[Image]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
+    response_model: Optional[Type[BaseModel]] = None,
   ) -> Iterator[RunOutputEvent]:
     """
     Streaming run that yields events as they occur in real-time.
@@ -694,10 +730,13 @@ class Agent:
         user_id: User identifier for memory scoping and multi-user support.
         images: Images to include.
         output_schema: Optional structured output schema.
+        response_model: Alias for output_schema (Pydantic/FastAPI convention).
+            If both are provided, response_model takes precedence.
 
     Yields:
         RunOutputEvent instances as the run progresses.
     """
+    output_schema = self._resolve_output_schema(output_schema, response_model)
     import queue
     import sys
     import threading
@@ -847,6 +886,7 @@ class Agent:
     user_id: Optional[str] = None,
     images: Optional[List[Image]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
+    response_model: Optional[Type[BaseModel]] = None,
   ) -> AsyncIterator[RunOutputEvent]:
     """
     Async streaming run that yields events with full agent loop support.
@@ -859,10 +899,13 @@ class Agent:
         user_id: User identifier for memory scoping and multi-user support.
         images: Images to include.
         output_schema: Optional structured output schema.
+        response_model: Alias for output_schema (Pydantic/FastAPI convention).
+            If both are provided, response_model takes precedence.
 
     Yields:
         RunOutputEvent instances as the run progresses.
     """
+    output_schema = self._resolve_output_schema(output_schema, response_model)
     run_id = run_id or str(uuid4())
     session_id = session_id or self.session_id
 
