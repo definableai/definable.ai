@@ -1,6 +1,6 @@
 [project]
 name = "definable"
-version = "0.2.7"
+version = "0.2.8"
 description = "Production-grade AI agent framework with RAG, memory, tools, and multi-model support"
 readme = "README.md"
 license = "Apache-2.0"
