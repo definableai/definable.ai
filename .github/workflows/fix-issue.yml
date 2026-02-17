@@ -166,7 +166,7 @@ jobs:
             Be fully autonomous. Never ask questions. Follow every convention in .claude/agents/issue-fixer.md.
 
           # CLI args: model selection + turn limit
-          claude_args: "--model claude-sonnet-4-20250514 --max-turns 50"
+          claude_args: "--model claude-opus-4-6 --max-turns 50"
 
       - name: Update issue on failure
         if: failure()
