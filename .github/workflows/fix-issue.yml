@@ -1,0 +1,195 @@
+name: Auto Fix Issue
+
+on:
+  issues:
+    types: [opened, labeled]
+
+  # Manual trigger for re-running on specific issues
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to fix"
+        required: true
+        type: number
+
+# Only one fix job per issue at a time
+concurrency:
+  group: fix-issue-${{ github.event.issue.number || github.event.inputs.issue_number }}
+  cancel-in-progress: true
+
+jobs:
+  should-fix:
+    name: Check if issue should be auto-fixed
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      issue_number: ${{ steps.check.outputs.issue_number }}
+    steps:
+      - name: Determine issue number and eligibility
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
+          ISSUE_LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
+          ISSUE_STATE: ${{ github.event.issue.state }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          echo "issue_number=$ISSUE_NUMBER" >> "$GITHUB_OUTPUT"
+
+          # Manual dispatch always runs
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Manual trigger for issue #$ISSUE_NUMBER"
+            exit 0
+          fi
+
+          # Skip closed issues
+          if [ "$ISSUE_STATE" = "closed" ]; then
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ Issue is closed"
+            exit 0
+          fi
+
+          # Skip labels that shouldn't be auto-fixed
+          SKIP_LABELS='["wontfix","duplicate","question","needs-human","discussion","enhancement"]'
+          for label in $(echo "$ISSUE_LABELS" | jq -r '.[]'); do
+            if echo "$SKIP_LABELS" | jq -e "index(\"$label\")" > /dev/null 2>&1; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "⏭️ Skipping due to label: $label"
+              exit 0
+            fi
+          done
+
+          # On 'labeled' events, only proceed if the label is 'claude-fix'
+          if [ "$ACTION" = "labeled" ]; then
+            ADDED_LABEL="${{ github.event.label.name }}"
+            if [ "$ADDED_LABEL" != "claude-fix" ]; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "⏭️ Label '$ADDED_LABEL' is not 'claude-fix'"
+              exit 0
+            fi
+          fi
+
+          # On 'opened' events, check if auto-fix-on-open is enabled
+          # To enable: add a repo variable AUTOFIX_ON_OPEN=true
+          if [ "$ACTION" = "opened" ]; then
+            AUTOFIX_ON_OPEN="${{ vars.AUTOFIX_ON_OPEN || 'false' }}"
+            if [ "$AUTOFIX_ON_OPEN" != "true" ]; then
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              echo "⏭️ Auto-fix on open is disabled. Add label 'claude-fix' to trigger."
+              exit 0
+            fi
+          fi
+
+          echo "should_run=true" >> "$GITHUB_OUTPUT"
+          echo "✅ Will attempt to fix issue #$ISSUE_NUMBER"
+
+  fix-issue:
+    name: Fix Issue #${{ needs.should-fix.outputs.issue_number }}
+    needs: should-fix
+    if: needs.should-fix.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[readers,serve,jwt,cron,runtime]"
+          pip install pytest pytest-asyncio
+
+      - name: Setup Git identity
+        run: |
+          git config user.name "definable-fixer[bot]"
+          git config user.email "definable-fixer[bot]@users.noreply.github.com"
+
+      - name: Install Claude Code
+        run: |
+          npm install -g @anthropic-ai/claude-code
+
+      - name: Create workspace
+        run: |
+          mkdir -p .workspace .claude/memory
+
+      - name: Acknowledge issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ needs.should-fix.outputs.issue_number }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "🤖 **Auto-fixer activated.** Analyzing this issue now. I'll either open a PR with a fix or comment with my analysis if I can't resolve it automatically.
+
+          _Triggered by: ${{ github.event_name }} | Run: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+
+      - name: Run Claude Code to fix the issue
+        id: fix
+        timeout-minutes: 25
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ needs.should-fix.outputs.issue_number }}
+        run: |
+          # Run the fix-issue command
+          claude -p "/fix-issue $ISSUE_NUMBER" \
+            --dangerously-skip-permissions \
+            --max-tokens 100000 \
+            2>&1 | tee .workspace/fix-output.log
+
+          # Check if a PR was created
+          PR_URL=$(gh pr list --head "fix/issue-$ISSUE_NUMBER" --state open --json url -q '.[0].url' 2>/dev/null || echo "")
+
+          if [ -n "$PR_URL" ]; then
+            echo "result=pr-created" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            echo "✅ PR created: $PR_URL"
+          else
+            echo "result=commented" >> "$GITHUB_OUTPUT"
+            echo "⚠️ No PR created — check issue comments for analysis"
+          fi
+
+      - name: Update issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ needs.should-fix.outputs.issue_number }}
+        run: |
+          # Extract last 50 lines of output for context
+          TAIL_LOG=$(tail -50 .workspace/fix-output.log 2>/dev/null || echo "No output captured")
+
+          gh issue comment "$ISSUE_NUMBER" --body "❌ **Auto-fixer failed** during execution.
+
+          The automated fix attempt encountered an error. A human developer should look at this.
+
+          <details>
+          <summary>Last 50 lines of output</summary>
+
+          \`\`\`
+          $TAIL_LOG
+          \`\`\`
+          </details>
+
+          _Run: [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+
+          gh issue edit "$ISSUE_NUMBER" --add-label "needs-human"
+
+      - name: Cleanup workspace
+        if: always()
+        run: |
+          rm -rf .workspace/*
+          git checkout main 2>/dev/null || true

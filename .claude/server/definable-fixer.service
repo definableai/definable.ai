@@ -1,0 +1,26 @@
+[Unit]
+Description=Definable Issue Fixer Webhook Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=definable
+Group=definable
+WorkingDirectory=/opt/definable/repo
+EnvironmentFile=/opt/definable/.env
+ExecStart=/opt/definable/venv/bin/python /opt/definable/repo/.claude/server/webhook.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=definable-fixer
+
+# Security
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/definable/repo /opt/definable/logs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

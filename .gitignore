@@ -181,3 +181,11 @@ definable_runs.db
 # For pgAdmin
 *pgadmin*
 servers.json
+
+# Claude Code agents
+.claude/memory/credentials.md
+.claude/settings.local.json
+.claude/reports/
+.claude/server/.env
+.workspace/
+.env.test
