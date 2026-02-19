@@ -17,6 +17,7 @@ if TYPE_CHECKING:
   from definable.model.deepseek import DeepSeekChat
   from definable.model.moonshot import MoonshotChat
   from definable.model.openai import OpenAIChat, OpenAILike
+  from definable.model.utils import resolve_model_string as resolve_model_string
   from definable.model.xai import xAI
 
 
@@ -45,6 +46,10 @@ def __getattr__(name: str):
     from definable.model.xai import xAI
 
     return xAI
+  if name == "resolve_model_string":
+    from definable.model.utils import resolve_model_string
+
+    return resolve_model_string
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -64,4 +69,6 @@ __all__ = [
   "DeepSeekChat",
   "MoonshotChat",
   "xAI",
+  # Lazy — Utilities
+  "resolve_model_string",
 ]

@@ -194,11 +194,16 @@ class Agent:
         config: Optional advanced configuration settings.
     """
     # Direct attributes — resolve string model shorthand
+    if model is None:
+      raise TypeError(
+        "Agent requires a 'model' argument. Pass a Model instance "
+        "(e.g., OpenAIChat(id='gpt-4o-mini')) or a string shorthand (e.g., 'openai/gpt-4o-mini')."
+      )
     self.model: "Model"
     if isinstance(model, str):
-      from definable.model.openai.chat import OpenAIChat
+      from definable.model.utils import resolve_model_string
 
-      self.model = OpenAIChat(id=model)
+      self.model = resolve_model_string(model)
     else:
       self.model = model
     self.tools = tools or []
