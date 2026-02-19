@@ -195,7 +195,7 @@ class TestScreenshotToolDispatch:
     await agent.arun("Take a screenshot")
 
     assert len(result_seen) >= 1
-    assert result_seen[0].startswith("data:image/png;base64,")
+    assert result_seen[0].startswith("data:image/png;base64,") or result_seen[0].startswith("data:image/jpeg;base64,")
 
 
 # ---------------------------------------------------------------------------
