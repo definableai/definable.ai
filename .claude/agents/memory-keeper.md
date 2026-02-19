@@ -135,7 +135,7 @@ You manage 5 memory files in `.claude/memory/`. Your cardinal rule:
 - **Status**: fixed
 - **Branch**: fix/issue-42
 - **PR**: #45
-- **Files changed**: definable/agents/agent.py, definable/tests_e2e/agents/test_agent_validation.py
+- **Files changed**: definable/agents/agent.py, definable/tests/agents/test_agent_validation.py
 - **Root cause**: No None check on model param in Agent.__init__
 
 ## Issue #43 — tools: @tool drops defaults

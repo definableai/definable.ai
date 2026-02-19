@@ -14,12 +14,9 @@ Requirements:
 import os
 from typing import List
 
-from definable.knowledge import (
-  Document,
-  Embedder,
-  InMemoryVectorDB,
-  Knowledge,
-)
+from definable.embedder import Embedder
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 
 class MockEmbedder(Embedder):

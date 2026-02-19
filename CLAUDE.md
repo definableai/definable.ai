@@ -16,7 +16,7 @@
 - NEVER push without explicit user request
 - NEVER force-push to main
 
-### Important Rules
+### Strict Important Rules
 - EVERYTIME you do a deep-reasearch, you solutions muste be backed by solid research
 - EVERYTIME you do any type of research store in memory folder.
 - ALWAYS check in the memory folder if related memory is present.
@@ -38,8 +38,10 @@ model = OpenAIChat(id="gpt-4o-mini")
 ```python
 from definable.agent import Agent
 agent = Agent(model=OpenAIChat(id="gpt-4o-mini"), tools=[...], instructions="...")
-# Or string model shorthand:
-agent = Agent(model="gpt-4o-mini", instructions="...")
+# Or string model shorthand (format: "provider/model-id"):
+agent = Agent(model="openai/gpt-4o-mini", instructions="...")
+# Supported providers: openai, deepseek, moonshot, xai
+# e.g. "deepseek/deepseek-chat", "xai/grok-3", "moonshot/kimi-k2-turbo-preview"
 result = await agent.arun("prompt")  # result.content has the text
 # Structured output: await agent.arun("prompt", output_schema=MyModel) — NOT response_model
 ```
@@ -123,7 +125,7 @@ r2 = await agent.arun("follow-up", messages=r1.messages)
 ```
 definable/definable/     — core library package
 definable/examples/      — runnable examples per module
-definable/tests_e2e/     — test suites (unit/, contract/, behavioral/, integration/, regression/)
+definable/tests/         — test suites (unit/, integration/, regression/)
 definable/docs/          — Mintlify documentation
 ```
 
@@ -177,7 +179,7 @@ Agent ──┬── Model (lazy client, global HTTP pool) — or string shorth
 ## Development Standards
 
 ### Quality Gates (Every Change)
-- All tests must pass: `.venv/bin/python -m pytest definable/tests_e2e/<module>/`
+- All tests must pass: `.venv/bin/python -m pytest definable/tests/<category>/`
 - Lint: `.venv/bin/ruff check definable/definable/`
 - Format: `.venv/bin/ruff format definable/definable/`
 - Type check: `.venv/bin/python -m mypy definable/definable/`

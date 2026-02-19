@@ -1,22 +1,18 @@
-"""
-PlaywrightBrowser — direct tool usage (no agent).
+"""SeleniumBase browser — direct tool usage (no agent).
 
 Use this to explore what each browser tool does and what it returns,
 without needing an OpenAI key.
 
 Requirements:
     pip install 'definable[browser]'
-    playwright install chromium
 
 Usage:
     python definable/examples/browser/02_browser_tools_direct.py
 """
 
 import asyncio
-import json
 
-from definable.browser import BrowserConfig
-from definable.browser.playwright import PlaywrightBrowser
+from definable.browser import BrowserConfig, SeleniumBaseBrowser
 
 
 async def main():
@@ -24,13 +20,13 @@ async def main():
     headless=True,  # set False to watch the browser
     timeout=20.0,
   )
-  browser = PlaywrightBrowser(config)
+  browser = SeleniumBaseBrowser(config)
   await browser.start()
 
   print("=" * 60)
   print("navigate()")
   print("=" * 60)
-  result = await browser.navigate("https://linkedin.com")
+  result = await browser.navigate("https://example.com")
   print(result)
 
   print("\n" + "=" * 60)
@@ -39,18 +35,15 @@ async def main():
   print(await browser.get_url())
 
   print("\n" + "=" * 60)
-  print("get_page_text()  [first 300 chars]")
+  print("get_text()  [first 300 chars]")
   print("=" * 60)
-  text = await browser.get_page_text()
+  text = await browser.get_text()
   print(text[:300])
 
   print("\n" + "=" * 60)
-  print("observe()  [JSON snapshot]")
+  print("get_page_info()  [situational snapshot]")
   print("=" * 60)
-  snapshot = json.loads(await browser.observe())
-  print(f"url:          {snapshot['url']}")
-  print(f"title:        {snapshot['title']}")
-  print(f"text_preview: {snapshot['text_preview'][:120]}...")
+  print(await browser.get_page_info())
 
   print("\n" + "=" * 60)
   print("get_attribute()  — href of the first <a> tag")
@@ -63,25 +56,24 @@ async def main():
   print(await browser.execute_js("document.title"))
 
   print("\n" + "=" * 60)
-  print("scroll()  — scroll down 2 units")
+  print("scroll_down()  — scroll down 2 units")
   print("=" * 60)
-  print(await browser.scroll("down", 2))
+  print(await browser.scroll_down(2))
 
   print("\n" + "=" * 60)
-  print("screenshot()  [base64 PNG, first 60 chars]")
+  print("screenshot()  [file path]")
   print("=" * 60)
-  b64 = await browser.screenshot()
-  print(b64[:60] + "...")
-  print(f"(total {len(b64)} chars)")
+  path = await browser.screenshot()
+  print(path)
 
-  # --- DuckDuckGo search to demo type + click ---
+  # --- DuckDuckGo search to demo type_text + press_keys ---
   print("\n" + "=" * 60)
-  print("navigate() → wait_for() → type_text() → press_key()")
+  print("navigate() → wait_for_element() → type_text() → press_keys()")
   print("=" * 60)
   await browser.navigate("https://duckduckgo.com")
-  print(await browser.wait_for("[name='q']", timeout=10.0))
-  print(await browser.type_text("Playwright Python", selector="[name='q']"))
-  print(await browser.press_key("Enter"))
+  print(await browser.wait_for_element("[name='q']", timeout=10.0))
+  print(await browser.type_text("[name='q']", "SeleniumBase Python"))
+  print(await browser.press_keys("[name='q']", "\n"))
   await asyncio.sleep(1.5)  # let results load
   print(await browser.get_url())
 

@@ -23,7 +23,7 @@ every public symbol in the Definable library. You NEVER modify any files in the 
 6. **Env vars** — grep for `os.environ`, `os.getenv`, `env` references
 7. **Dependencies** — read `pyproject.toml` for required + optional deps
 8. **Existing examples** — scan `definable/examples/` for usage patterns
-9. **Existing tests** — scan `definable/tests_e2e/` for test coverage
+9. **Existing tests** — scan `definable/tests/` for test coverage
 
 ## Output
 

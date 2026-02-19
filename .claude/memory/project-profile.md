@@ -1,135 +1,117 @@
-# Project Profile — Definable v0.2.8
+# Project Profile -- Definable v0.2.8
 
-> Last updated: 2026-02-17 (eval run #3)
+> Last updated: 2026-02-19 (eval run #4, post-DX overhaul)
 
 ## Package Info
 - **Name**: definable
 - **Version**: 0.2.8
 - **Python**: >=3.12 (3.12.10 in .venv)
-- **Source**: `definable/definable/` (215 .py files)
-- **Tests**: `definable/tests_e2e/` (975 tests collected)
+- **Source**: `definable/definable/` (215+ .py files)
+- **Tests**: `definable/tests/` (700+ tests)
 
-## Key Correct Import Paths
+## Key Correct Import Paths (post-DX overhaul)
 
-These are the ACTUAL working imports (not what docs say):
+These are the ACTUAL working imports verified by eval run #4:
 
 ```python
 # Agents
-from definable.agent import Agent, AgentConfig, Middleware, Toolkit, KnowledgeToolkit
-from definable.agent import ThinkingConfig, KnowledgeConfig, TracingConfig, DeepResearchConfig
-from definable.agent import MockModel, create_test_agent, AgentTestCase
+from definable.agent import Agent, AgentConfig, MockModel, create_test_agent, AgentTestCase
+from definable.agent import Tracing, JSONLExporter, NoOpExporter, TraceExporter, TraceWriter
+from definable.agent import LoggingMiddleware, RetryMiddleware, MetricsMiddleware, Middleware
+from definable.agent import StreamingMiddleware, KnowledgeMiddleware
+from definable.agent import Toolkit, KnowledgeToolkit, MCPToolkit
+from definable.agent import AgentCancelled, CancellationToken, EventBus
+from definable.agent import CompressionConfig, ReadersConfig, DeepResearchConfig
+from definable.agent import Memory, MemoryManager, Thinking, Guardrails, GuardrailResult
+from definable.agent import Replay, ReplayComparison
 
 # Models
 from definable.model import OpenAIChat, DeepSeekChat, MoonshotChat, xAI, OpenAILike
-from definable.model.message import Message
-from definable.model.response import ModelResponse
+from definable.model import Message, Metrics, ModelResponse, ToolExecution
 
 # Tools
-from definable.tool.decorator import tool  # Returns Function object
-# Function.entrypoint is sync; Function.parameters returns OpenAI-format dict
+from definable.tool import tool, Function
+from definable.tool.decorator import tool  # same as above, explicit path
 
 # Skills
-from definable.skill import Skill  # or from definable.skill.base import Skill
-from definable.skill.registry import SkillRegistry  # uses .get_skill(), .list_skills()
+from definable.skill import Skill, Calculator, DateTime, FileOperations, HTTPRequests
+from definable.skill import JSONOperations, MacOS, Shell, TextProcessing, WebSearch
+from definable.skill import SkillRegistry  # lazy import
 
 # Knowledge
-from definable.knowledge import Knowledge, Document
-from definable.knowledge.vector_dbs import InMemoryVectorDB  # .add(docs), .search(query_embedding, top_k)
-from definable.knowledge.embedder.voyageai import VoyageAIEmbedder  # NOT re-exported!
-from definable.knowledge.embedder.openai import OpenAIEmbedder  # NOT re-exported!
-from definable.knowledge.reranker.cohere import CohereReranker  # NOT re-exported!
-# Document(content=str, meta_data=dict)  — note: meta_data, NOT metadata
+from definable.knowledge import Knowledge, Document, Reader, ReaderConfig
+from definable.embedder import Embedder, OpenAIEmbedder, VoyageAIEmbedder
+
+# VectorDB
+from definable.vectordb import InMemoryVectorDB, VectorDB, Distance, SearchType
 
 # Memory
-from definable.memory import CognitiveMemory
-from definable.memory.store import SQLiteMemoryStore, InMemoryStore
-# Store API: store_episode, get_episodes, store_atom, get_atoms (NOT add/recall)
+from definable.memory import Memory, MemoryManager, InMemoryStore, SQLiteStore, MemoryStore
 
 # Guardrails
-from definable.agent.guardrail import Guardrails, max_tokens, pii_filter, block_topics
-from definable.agent.guardrail import regex_filter, tool_allowlist, tool_blocklist
-from definable.agent.guardrail import ALL, ANY, NOT, InputGuardrail, OutputGuardrail
-
-# Auth
-from definable.agent.auth import APIKeyAuth, JWTAuth, AllowlistAuth, CompositeAuth
-# APIKeyAuth(keys=set), AllowlistAuth(user_ids=set), JWTAuth(secret=str)
+from definable.agent.guardrail import Guardrails, GuardrailResult
+from definable.agent.guardrail import InputGuardrail, OutputGuardrail, ToolGuardrail
+from definable.agent.guardrail import max_tokens, block_topics, regex_filter
+from definable.agent.guardrail import pii_filter, max_output_tokens
+from definable.agent.guardrail import tool_allowlist, tool_blocklist
+from definable.agent.guardrail import ALL, ANY, NOT, when
 
 # MCP
-from definable.mcp.toolkit import MCPToolkit  # MCPToolkit(config=MCPConfig)
+from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig, MCPClient
 
-# Readers
-from definable.reader import FileReader  # .read(file: File), NOT .read(path: str)
+# Tracing
+from definable.agent.tracing import Tracing, JSONLExporter, read_trace_file, read_trace_events
 
-# Research
-from definable.agent.research.engine import DeepResearch
-from definable.agent.research.config import DeepResearchConfig
+# Events
+from definable.agent.events import RunOutput, RunContext, RunStatus, RunInput
+from definable.agent.events import RunStartedEvent, RunCompletedEvent, RunContentEvent
 
-# Reasoning
-from definable.agent.reasoning.step import ReasoningStep, ThinkingOutput, thinking_output_to_reasoning_steps
-
-# Replay/Tracing
-from definable.agent.replay import Replay, ReplayComparison
-from definable.agent.tracing import JSONLExporter  # NOT definable.tracing
-
-# Runtime
-from definable.agent.runtime import AgentServer
-
-# Other
-from definable.agent.compression import CompressionManager
-from definable.agent.trigger import BaseTrigger, EventTrigger
-from definable.filters import FilterExpr
-from definable.media import Image, Audio, Video, File
+# Exceptions
+from definable.exceptions import AgentRunException, StopAgentRun, RetryAgentRun
+from definable.exceptions import DefinableError, ModelAuthenticationError, ModelProviderError
 ```
 
-## Agent API
+## Agent API (post-DX)
 
 ```python
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o-mini"),  # REQUIRED
-    tools=[...],             # List[Function]
-    toolkits=[...],          # List[Toolkit|MCPToolkit]
-    skills=[...],            # List[Skill]
-    instructions="...",      # str
-    memory=CognitiveMemory(store=InMemoryStore()),
-    guardrails=Guardrails(...),
-    thinking=True,           # or ThinkingConfig(...)
-    deep_research=True,      # or DeepResearchConfig(...)
-    config=AgentConfig(...), # Optional config
+    model="gpt-4o-mini",            # string shorthand OR OpenAIChat(id="gpt-4o-mini")
+    tools=[...],                     # List[Function] from @tool
+    toolkits=[...],                  # List[Toolkit|MCPToolkit]
+    skills=[...],                    # List[Skill]
+    instructions="...",              # str
+    name="my-agent",                 # str -> config.agent_name
+    memory=Memory(store=SQLiteStore("./memory.db")),  # or memory=True for InMemoryStore
+    knowledge=Knowledge(vector_db=InMemoryVectorDB(), top_k=5),  # knowledge=True raises ValueError!
+    thinking=True,                   # or Thinking(...)
+    tracing=True,                    # or Tracing(exporters=[JSONLExporter(...)])
+    guardrails=Guardrails(input=[max_tokens(500)], output=[pii_filter()]),
+    deep_research=True,              # or DeepResearchConfig(...)
+    config=AgentConfig(...),         # Optional advanced settings
 )
 
-# Run
-result = await agent.arun(
-    "prompt",
-    messages=[...],       # Optional history (for multi-turn, pass r.messages)
-    output_schema=Person, # NOT response_model
-    user_id="...",
-)
+# Run (sync or async)
+result = agent.run("prompt", messages=[...], output_schema=MyModel)
+result = await agent.arun("prompt", messages=[...], output_schema=MyModel)
 
-# Stream
-async for event in agent.arun_stream("prompt"):
-    ...  # RunStartedEvent, RunContentEvent, RunCompletedEvent, ToolCall*
+# Multi-turn
+out2 = agent.run("follow up", messages=out1.messages)
 
-# Middleware — __call__ protocol
-class MyMiddleware:
-    async def __call__(self, context, next_handler):
-        result = await next_handler(context)
-        return result
-agent.use(MyMiddleware())
+# Middleware
+agent.use(LoggingMiddleware(logger))
+agent.use(RetryMiddleware(max_retries=3))
 ```
 
-## RunOutput Attributes
-- `content`, `messages`, `metrics`, `model`, `run_id`, `session_id`, `user_id`
-- `events`, `status`, `reasoning_steps`, `reasoning_content`, `reasoning_messages`
-- `images`, `audio`, `videos`, `files`, `citations`, `references`
-- `tools`, `tools_awaiting_external_execution`, `tools_requiring_confirmation`
-- NOTE: NO `model_response` attribute — use `metrics` for token counts
-
-## Multi-Turn Conversations
-- `session_id` alone does NOT maintain history — requires CognitiveMemory or explicit message passing
-- For message passing: `r2 = await agent.arun("follow up", messages=r1.messages)`
-- For automatic memory: `Agent(memory=CognitiveMemory(store=InMemoryStore()), ...)`
+## Key Gotchas
+- `knowledge=True` raises ValueError (unlike memory=True which works)
+- `pii_filter()` is an OUTPUT guardrail, not input
+- `InMemoryVectorDB(dimensions=N)` is deprecated, dimensions param ignored
+- `Document(meta_data={})` -- note: meta_data NOT metadata
+- sync `run()` breaks after 2-3 sequential multi-turn calls (#19)
+- `Agent(model=None)` silently accepts None (#18)
+- `output_schema` not `response_model` for structured output
 
 ## Static Analysis
-- mypy: 0 errors (215 files)
+- mypy: 0 errors
 - ruff check: 0 warnings
 - ruff format: 0 issues

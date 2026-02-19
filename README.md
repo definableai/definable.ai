@@ -464,7 +464,7 @@ Contributions welcome! To get started:
 1. Fork the repo and clone it locally
 2. Install for development: `pip install -e .`
 3. Make your changes — follow existing code patterns (2-space indentation, 150 char lines)
-4. Add tests in `definable/tests_e2e/` for new features
+4. Add tests in `definable/tests/` for new features
 5. Run `ruff check` and `ruff format` for linting
 6. Run `mypy` for type checking
 7. Open a pull request

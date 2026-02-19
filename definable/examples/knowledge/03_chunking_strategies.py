@@ -13,14 +13,10 @@ Requirements:
 
 from typing import List
 
-from definable.knowledge import (
-  Document,
-  Embedder,
-  InMemoryVectorDB,
-  Knowledge,
-  RecursiveChunker,
-  TextChunker,
-)
+from definable.chunker import RecursiveChunker, TextChunker
+from definable.embedder import Embedder
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 
 class MockEmbedder(Embedder):

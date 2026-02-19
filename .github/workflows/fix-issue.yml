@@ -153,13 +153,13 @@ jobs:
             3. Write a minimal reproduction script in .workspace/ and run it to confirm the bug.
             4. git checkout -b fix/issue-${{ needs.should-fix.outputs.issue_number }}
             5. Implement the minimal fix. Follow existing code patterns.
-            6. Write a test in definable/tests_e2e/ that fails on main and passes with your fix.
+            6. Write a test in definable/tests/ that fails on main and passes with your fix.
 
             7. MANDATORY BEFORE COMMITTING — run the CI lint checks and fix any issues:
                ruff check definable/ --fix
                ruff format definable/
-               mypy definable/definable/ definable/tests_e2e/ --strict-equality --pretty --show-error-codes --config-file=mypy.ini
-               pytest definable/tests_e2e/ -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" -v --tb=short
+               mypy definable/definable/ definable/tests/ --strict-equality --pretty --show-error-codes --config-file=mypy.ini
+               pytest definable/tests/ -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" -v --tb=short
                If any of these fail, fix the issues BEFORE committing. Repeat until clean.
 
             8. Commit: git add -A && git commit -m "fix(<module>): <description>\n\nFixes #${{ needs.should-fix.outputs.issue_number }}."

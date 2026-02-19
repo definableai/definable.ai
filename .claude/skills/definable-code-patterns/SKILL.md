@@ -319,7 +319,7 @@ Toolkit auto-discovers all `Function`-typed class attributes. Shared dependencie
 
 ## Writing Tests
 
-**File location**: `definable/tests_e2e/`
+**File location**: `definable/tests/`
 
 **Markers** (from `pytest.ini`):
 - `@pytest.mark.unit` — pure logic, no API calls
@@ -431,5 +431,5 @@ if __name__ == "__main__":
 6. Async methods are primary; sync wraps async
 7. Errors: use framework exceptions, include actionable messages
 8. Logging: `log_debug`/`log_info`/`log_warning`/`log_error` — no print()
-9. Tests: add or update in `definable/tests_e2e/`
+9. Tests: add or update in `definable/tests/`
 10. Docs: update if public API changed

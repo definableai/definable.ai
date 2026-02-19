@@ -44,7 +44,7 @@ follows the library's architecture, write tests, and raise a PR — all without 
 | Type hints | Google-style docstrings, full type annotations | Every public function |
 | Exports | Explicit `__all__` in every `__init__.py` | All modules |
 | Dependencies | No new required deps without strong justification | `pyproject.toml` |
-| Tests | `pytest` + `pytest-asyncio`, E2E in `definable/tests_e2e/` | Existing test suite |
+| Tests | `pytest` + `pytest-asyncio`, E2E in `definable/tests/` | Existing test suite |
 
 ### Module Map
 
@@ -72,7 +72,7 @@ follows the library's architecture, write tests, and raise a PR — all without 
 | What | Where |
 |------|-------|
 | Library source | `definable/definable/` |
-| E2E tests | `definable/tests_e2e/` |
+| E2E tests | `definable/tests/` |
 | Examples | `definable/examples/` |
 | Package config | `pyproject.toml` |
 | CI config | `.github/workflows/ci.yml` |
@@ -148,7 +148,7 @@ git checkout -b fix/issue-<N>
 
 **Every fix MUST have at least one test.** Add tests to the appropriate location:
 
-- Unit-style tests: `definable/tests_e2e/<module>/`
+- Unit-style tests: `definable/tests/<module>/`
 - If no subdirectory exists for the module, create one
 - Test file naming: `test_<feature>.py` or add to existing test file
 
@@ -164,10 +164,10 @@ git checkout -b fix/issue-<N>
 
 ```bash
 # Run the new test specifically
-pytest definable/tests_e2e/<path_to_new_test> -v
+pytest definable/tests/<path_to_new_test> -v
 
 # Run the full offline test suite (same as CI)
-pytest definable/tests_e2e/ \
+pytest definable/tests/ \
   -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" \
   -v --tb=short
 
@@ -252,7 +252,7 @@ gh pr create \
 
 ## Testing
 
-- [ ] New test added: `definable/tests_e2e/<path>`
+- [ ] New test added: `definable/tests/<path>`
 - [ ] Test fails on `main`, passes on this branch
 - [ ] Full offline test suite passes
 - [ ] Linter passes (ruff)

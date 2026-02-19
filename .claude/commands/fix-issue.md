@@ -88,7 +88,7 @@ Read the relevant source files to understand the current implementation.
 Key files to always check:
 - `definable/definable/<module>/__init__.py` → public API
 - `definable/definable/<module>/<relevant_file>.py` → implementation
-- `definable/tests_e2e/<module>/` → existing tests
+- `definable/tests/<module>/` → existing tests
 - `definable/examples/<module>/` → usage examples
 
 ### Step 3: Reproduce
@@ -118,7 +118,7 @@ Implement the fix following the conventions in the issue-fixer agent definition.
 
 ### Step 6: Write Tests
 
-Add test(s) to `definable/tests_e2e/`. The test must:
+Add test(s) to `definable/tests/`. The test must:
 1. Fail on `main` (verify by checking out main, running test, checking out fix branch)
 2. Pass on the fix branch
 3. Cover the exact issue scenario
@@ -128,10 +128,10 @@ Add test(s) to `definable/tests_e2e/`. The test must:
 
 ```bash
 # New test
-pytest definable/tests_e2e/<new_test_path> -v
+pytest definable/tests/<new_test_path> -v
 
 # Full offline suite
-pytest definable/tests_e2e/ \
+pytest definable/tests/ \
   -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" \
   -v --tb=short
 
