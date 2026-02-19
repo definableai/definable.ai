@@ -16,14 +16,18 @@
 | #13 | agents: Agent.arun() uses output_schema but docs reference response_model | 2026-02-17 run #2 | bug | P0 |
 | #14 | tests: xAI tests fail — grok-beta deprecated, use grok-3 | 2026-02-17 run #2 | bug | P1 |
 
+| #18 | Agent(model=None) silently accepts None, fails at runtime with unhelpful error | 2026-02-19 run #4 | bug | P1 |
+| #19 | Sync run() breaks on sequential multi-turn calls (Event loop is closed) | 2026-02-19 run #4 | bug | P0 |
+
 ## Closed Issues
 
 (none yet)
 
 ## Issue Categories
 
-- **Structured output**: #6, #13 (P0 — broken end-to-end)
-- **Export consistency**: #7, #10, #12 (P1-P2 — missing re-exports)
-- **Naming/DX**: #11, #13 (P2 — confusing API names)
-- **Tests**: #8, #14 (P1-P2 — broken tests)
-- **Dependencies**: #9 (P3 — deprecated package name)
+- **Structured output**: #6, #13 (P0 -- broken end-to-end)
+- **Export consistency**: #7, #10, #12 (P1-P2 -- missing re-exports)
+- **Naming/DX**: #11, #13, #18 (P1-P2 -- confusing API / missing validation)
+- **Tests**: #8, #14 (P1-P2 -- broken tests)
+- **Dependencies**: #9 (P3 -- deprecated package name)
+- **Runtime**: #19 (P0 -- sync run() multi-turn breaks)

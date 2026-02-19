@@ -1,133 +1,150 @@
 ---
 description: >
-  Full autonomous evaluation of the Definable library.
-  Stress-tests every module with adversarial inputs and real-world patterns.
-  Files GitHub issues for bugs. Saves report to .claude/reports/.
-  Test scripts go in .workspace/ (gitignored, never in the library).
+  Stability evaluation: every test is a developer use-case with Agent.
+  Writes eval scripts to .workspace/evals/, runs each, reads stdout.
+  Files GitHub issues for confirmed bugs. Reports to .claude/reports/.
   Zero user interaction. Never asks questions.
 ---
 
-# /evaluate — Autonomous Evaluation Pipeline
+# /evaluate — Stability Evaluation Pipeline
 
-**ZERO USER INTERACTION. Never ask. Never pause. All decisions autonomous.**
+**ZERO USER INTERACTION. All decisions autonomous. Run everything, report everything.**
 
-## Pre-flight (Silent — no output unless fatal)
+## Pre-flight
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 
-# 1. Check credentials exist
-if [ ! -f .env.test ] && [ ! -f .claude/memory/credentials.md ]; then
-  echo "❌ Run /setup first — no credentials found."
-  exit 1
+# Check credentials
+if [ ! -f .env.test ]; then
+  echo "⚠️  No .env.test found. Running MockModel-only evals."
 fi
 
-# 2. Clean workspace, create dirs
-rm -rf .workspace/* 2>/dev/null
-mkdir -p .workspace .workspace/test_files .claude/reports .claude/memory
+# Clean workspace
+rm -rf .workspace/evals 2>/dev/null
+mkdir -p .workspace/evals .workspace/evals/fixtures .claude/reports .claude/memory
 
-# 3. Source environment
+# Environment
 source .env.test 2>/dev/null || true
 source .venv/bin/activate 2>/dev/null || true
 
-# 4. Check gh auth (silent — fallback if not available)
-gh auth status 2>/dev/null
-# If fails, issues go to .claude/reports/unfiled-issues.md — don't stop
-
-# 5. Install library with all extras
-pip install -e ".[readers,serve,jwt,cron,runtime]" 2>&1 | tail -5
-# If fails → P0 blocker. File issue if possible, STOP.
+# Install
+pip install -e ".[readers,serve,jwt,cron,runtime]" 2>&1 | tail -3
 ```
 
-## Pipeline — Execute ALL steps sequentially without pausing
+## Pipeline — Sequential, No Pausing
 
-### Step 1: Load Memory + Context
-- Read `.claude/CLAUDE.md` — exact API surface (constructor signatures, exports)
-- Read `.claude/memory/` — known issues, project profile, eval history, preferences
-- Determine which API keys are available from `.env.test`
+### Step 1: Load Context
+- Read `CLAUDE.md` — API surface, constructor signatures, import paths
+- Read `.claude/memory/` — known issues, eval history, user preferences
+- Determine available API keys from environment
 
-### Step 2: Static Analysis (always runs, no API keys needed)
-1. **Import integrity** — every public symbol from every `__init__.py`
-2. **Circular import detection** — subprocess isolation per module
-3. **mypy** — `python -m mypy definable/definable/ --ignore-missing-imports 2>&1 | head -100`
-4. **ruff** — `python -m ruff check definable/definable/ 2>&1 | head -100`
+### Step 2: Read Library Source (MANDATORY)
+Before writing any eval, read the actual source for every module you'll test:
+- `definable/definable/agent/__init__.py` and `agent/agent.py` (constructor, run, arun)
+- `definable/definable/tool/__init__.py` and `tool/decorator.py`
+- `definable/definable/skill/__init__.py` and at least one builtin
+- `definable/definable/knowledge/__init__.py` and `knowledge/base.py`
+- `definable/definable/memory/__init__.py`
+- `definable/definable/vectordb/__init__.py`
+- `definable/definable/mcp/__init__.py`
+- `definable/definable/agent/guardrail/__init__.py`
+- `definable/definable/agent/tracing/__init__.py`
+- `definable/definable/agent/testing.py`
+- `definable/definable/agent/events.py` (RunOutput, RunStatus)
+- At least 3 examples from `definable/examples/`
 
-### Step 3: Write ALL Test Scripts to .workspace/
-Follow the **defineable-evaluator** agent's 12-tier test matrix. Write scripts for:
+**Do NOT write eval scripts from memory. Use the actual exports and signatures.**
 
-**Always (no API key needed) — 14 scripts:**
-1. `eval_imports.py` — all modules, all public symbols from `__all__`
-2. `eval_circular.py` — subprocess isolation per module
-3. `eval_agent_construction.py` — Agent() with every edge case input
-4. `eval_agent_run_mock.py` — Agent.run() with MockModel, multi-turn, bad inputs
-5. `eval_agent_middleware.py` — middleware chain, ordering, error handling
-6. `eval_tools.py` — @tool decorator, schemas, edge cases, agent integration
-7. `eval_skills.py` — all 8 built-in skills + custom skill creation + security
-8. `eval_knowledge.py` — InMemoryVectorDB, Document, chunkers, pipeline
-9. `eval_memory.py` — InMemoryStore, SQLiteMemoryStore, CognitiveMemory
-10. `eval_guardrails.py` — all built-ins + composability + decorators + agent integration
-11. `eval_readers.py` — file parsers with test files
-12. `eval_auth.py` — JWT, API key, allowlist, composite
-13. `eval_testing.py` — MockModel, create_test_agent, AgentTestCase
-14. `eval_dx.py` — error message quality audit (score 1-5 per scenario)
+### Step 3: Write ALL Eval Scripts to `.workspace/evals/`
 
-**If OPENAI_API_KEY available — 3 scripts:**
-15. `eval_agent_run_real.py` — real model calls, metrics, error handling
-16. `eval_agent_streaming.py` — streaming events, ordering, completeness
-17. `eval_realworld.py` — calculator agent, multi-turn chat, tool+skill combo, concurrent runs
+Follow the **defineable-evaluator** agent's use-case matrix. Write these scripts in order:
 
-### Step 4: Execute All Scripts
+| # | Script | Use Case | Needs API Key? |
+|---|--------|----------|----------------|
+| 00 | `eval_00_foundation.py` | Imports + circular dependency check | No |
+| 01 | `eval_01_bare_agent.py` | Agent + MockModel basics | No |
+| 02 | `eval_02_agent_tools.py` | Agent + @tool (customer support) | Partial |
+| 03 | `eval_03_agent_skills.py` | Agent + Skills (data analyst) | Partial |
+| 04 | `eval_04_agent_knowledge.py` | Agent + Knowledge RAG (HR assistant) | Partial |
+| 05 | `eval_05_agent_memory.py` | Agent + Memory (personal assistant) | Partial |
+| 06 | `eval_06_agent_guardrails.py` | Agent + Guardrails (safety) | Partial |
+| 07 | `eval_07_agent_observability.py` | Agent + Middleware + Tracing | No |
+| 08 | `eval_08_tools_and_knowledge.py` | Agent + Tools + Knowledge (tech support) | Yes |
+| 09 | `eval_09_tools_and_memory.py` | Agent + Tools + Memory (PA) | Yes |
+| 10 | `eval_10_knowledge_and_memory.py` | Agent + Knowledge + Memory (HR onboarding) | Yes |
+| 11 | `eval_11_guardrails_and_tools.py` | Agent + Guardrails + Tools (security) | Yes |
+| 12 | `eval_12_agent_mcp.py` | Agent + MCP (filesystem server) | Partial (npx) |
+| 13 | `eval_13_full_stack.py` | All systems wired together | Yes |
+| 14 | `eval_14_multi_turn_stress.py` | 10-turn conversation stability | Yes |
+| 15 | `eval_15_error_handling.py` | Bad inputs, error messages | Partial |
+
+**"Partial"** = some tests use MockModel (always run), some need OPENAI_API_KEY (skip if missing).
+
+**Every script MUST:**
+- Print `✅ PASS: <description>` for each passing check
+- Print `❌ FAIL: <description> — <error detail>` for each failure
+- Print `⚠️  SKIP: <description> — <reason>` for skipped checks
+- Print final summary: `RESULT: X passed | Y failed | Z skipped`
+- Exit 0 if no failures, exit 1 if any failures
+- Clean up temp files (db files, trace dirs) in a finally block
+- Be runnable standalone: `python .workspace/evals/eval_02_agent_tools.py`
+
+### Step 4: Execute ALL Scripts — Read Stdout
+
+**This is the critical step. You MUST run each script and read the output.**
+
 ```bash
-cd /Users/hash/work/definable.ai
+cd "$(git rev-parse --show-toplevel)"
 source .env.test 2>/dev/null || true
 source .venv/bin/activate 2>/dev/null || true
 
-# Run each with timeout, capture output
-for script in .workspace/eval_*.py; do
-  echo "=== Running $(basename $script) ==="
-  timeout 120 python "$script" 2>&1
-  echo "Exit code: $?"
-  echo "==========================="
+for script in $(ls .workspace/evals/eval_*.py | sort); do
+    echo ""
+    echo "╔══════════════════════════════════════════════════╗"
+    echo "║ $(basename $script)"
+    echo "╚══════════════════════════════════════════════════╝"
+    timeout 180 python "$script" 2>&1
+    echo "Exit: $?"
 done
 ```
 
-- Run no-API-key scripts first
-- Run API-key scripts if keys available
-- Failed scripts → re-run 2 more times for flaky detection
-- Run existing e2e tests (same marker filter as CI):
-  ```bash
-  python -m pytest definable/tests_e2e/ \
-    -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" \
-    -v --tb=short --timeout=120 2>&1 || true
-  ```
+After running each script:
+1. **Read** the stdout — count ✅ / ❌ / ⚠️
+2. For each ❌: is this a library bug or a test bug?
+3. If a script crashes (exit code != 0 and no ✅/❌ output): the crash itself is the finding
+4. **Re-run failed scripts once** to confirm. If still fails → confirmed bug.
 
 ### Step 5: File Issues
 For each confirmed bug:
-1. Check `.claude/memory/known-issues.md` — skip if title matches existing
-2. Check GitHub: `gh issue list --search "<keywords>" --limit 10`
-3. New bug → `gh issue create --title "..." --body "..." --label bug,evaluator-found,<component>`
-4. `gh` unavailable → append to `.claude/reports/unfiled-issues.md`
-5. Update `.claude/memory/known-issues.md` immediately
-6. Max 20 issues per run (configurable in user-preferences.md)
+1. Check `.claude/memory/known-issues.md` — skip duplicates
+2. Check GitHub: `gh issue list --search "<keywords>" --limit 5`
+3. New → `gh issue create --title "..." --body "..." --label bug,evaluator-found`
+4. `gh` unavailable → `.claude/reports/unfiled-issues.md`
+5. Update `.claude/memory/known-issues.md`
+6. Max 15 issues per run
 
 ### Step 6: Generate Report
 Save to `.claude/reports/eval-<YYYY-MM-DD>-<HHMMSS>.md`
-Print compact summary to stdout with scores, pass/fail counts, issues filed.
+Print summary table to stdout with pass/fail counts and stability score.
 
 ### Step 7: Save Memory — MANDATORY
-Write all 5 memory files. For append-only files (evaluation-history.md, known-issues.md): READ existing → MERGE → WRITE.
+Update all 5 memory files in `.claude/memory/`:
+- `evaluation-history.md` (APPEND)
+- `known-issues.md` (MERGE)
+- `project-profile.md` (OVERWRITE)
+- `credentials.md` (OVERWRITE)
+- `user-preferences.md` (PRESERVE)
 
-Verify: `ls -la .claude/memory/` — all 5 files must exist.
+Verify all 5 exist: `ls -la .claude/memory/`
 
 ## Quick Reference
 
 | What | Where |
 |------|-------|
-| Test scripts | `.workspace/eval_*.py` |
-| Test fixture files | `.workspace/test_files/` |
-| Report | `.claude/reports/eval-<timestamp>.md` |
+| Eval scripts | `.workspace/evals/eval_*.py` |
+| Reports | `.claude/reports/eval-<timestamp>.md` |
 | Unfiled issues | `.claude/reports/unfiled-issues.md` |
 | Memory | `.claude/memory/*.md` |
-| Library source | `definable/definable/` (READ ONLY!) |
-| Existing examples | `definable/examples/` (READ ONLY!) |
-| Existing e2e tests | `definable/tests_e2e/` (READ ONLY!) |
+| Library source | `definable/definable/` (READ ONLY) |
+| Examples | `definable/examples/` (READ ONLY) |
