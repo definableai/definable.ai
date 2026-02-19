@@ -12,6 +12,12 @@ _PROVIDER_MAP: Dict[str, Tuple[str, str]] = {
   "deepseek": ("definable.model.deepseek.chat", "DeepSeekChat"),
   "moonshot": ("definable.model.moonshot.chat", "MoonshotChat"),
   "xai": ("definable.model.xai.xai", "xAI"),
+  "anthropic": ("definable.model.anthropic.claude", "Claude"),
+  "mistral": ("definable.model.mistral.mistral", "MistralChat"),
+  "google": ("definable.model.google.gemini", "Gemini"),
+  "perplexity": ("definable.model.perplexity.perplexity", "Perplexity"),
+  "ollama": ("definable.model.ollama.chat", "Ollama"),
+  "openrouter": ("definable.model.openrouter.openrouter", "OpenRouter"),
 }
 
 
@@ -36,12 +42,14 @@ def resolve_model_string(model_string: str) -> Model:
     raise ValueError(f"Model string must be a non-empty string, got: {model_string!r}")
 
   if "/" not in model_string:
-    supported = ", ".join(get_supported_providers())
-    raise ValueError(
-      f"Invalid model string '{model_string}'. "
-      f"Use 'provider/model-id' format (e.g., 'openai/gpt-4o', 'deepseek/deepseek-chat'). "
-      f"Supported providers: {supported}"
-    )
+    # Bare model ID without provider prefix — default to OpenAI
+    # e.g. "gpt-4o-mini" → OpenAIChat(id="gpt-4o-mini")
+    provider = "openai"
+    model_id = model_string.strip()
+    module_path, class_name = _PROVIDER_MAP[provider]
+    module = import_module(module_path)
+    model_class = getattr(module, class_name)
+    return model_class(id=model_id)
 
   provider, _, model_id = model_string.partition("/")
   provider = provider.strip().lower()

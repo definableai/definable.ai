@@ -22,7 +22,7 @@ class xAI(OpenAILike):
   Class for interacting with the xAI API.
 
   Attributes:
-      id (str): The ID of the language model. Defaults to "grok-beta".
+      id (str): The ID of the language model. Defaults to "grok-3".
       name (str): The name of the API. Defaults to "xAI".
       provider (str): The provider of the API. Defaults to "xAI".
       api_key (Optional[str]): The API key for the xAI API.
@@ -30,7 +30,7 @@ class xAI(OpenAILike):
       search_parameters (Optional[Dict[str, Any]]): Search parameters for enabling live search.
   """
 
-  id: str = "grok-beta"
+  id: str = "grok-3"
   name: str = "xAI"
   provider: str = "xAI"
   supports_native_structured_outputs: bool = False

@@ -1,0 +1,165 @@
+from dataclasses import dataclass, field
+from os import getenv
+from typing import Any, Dict, List, Optional, Type, Union
+
+from pydantic import BaseModel
+
+from definable.exceptions import ModelAuthenticationError, ModelProviderError
+from definable.model.message import Citations, UrlCitation
+from definable.model.metrics import Metrics
+from definable.model.response import ModelResponse
+from definable.agent.events import RunOutput
+from definable.utils.log import log_debug, log_warning
+
+try:
+  from openai.types.chat.chat_completion import ChatCompletion
+  from openai.types.chat.chat_completion_chunk import (
+    ChatCompletionChunk,
+    ChoiceDelta,
+  )
+  from openai.types.chat.parsed_chat_completion import ParsedChatCompletion
+  from openai.types.completion_usage import CompletionUsage
+except ModuleNotFoundError:
+  raise ImportError("`openai` not installed. Please install using `pip install openai`")
+
+from definable.model.openai.like import OpenAILike
+
+
+@dataclass
+class Perplexity(OpenAILike):
+  """
+  A class for using models hosted on Perplexity.
+
+  Attributes:
+    id (str): The model id. Defaults to "sonar".
+    name (str): The model name. Defaults to "Perplexity".
+    provider (str): The provider name. Defaults to "Perplexity".
+    api_key (Optional[str]): The API key.
+    base_url (str): The base URL. Defaults to "https://api.perplexity.ai/".
+    max_tokens (int): The maximum number of tokens. Defaults to 1024.
+  """
+
+  id: str = "sonar"
+  name: str = "Perplexity"
+  provider: str = "Perplexity"
+  # Perplexity returns cumulative token counts in each streaming chunk, so only collect on final chunk
+  collect_metrics_on_completion: bool = True
+
+  api_key: Optional[str] = field(default_factory=lambda: getenv("PERPLEXITY_API_KEY"))
+  base_url: str = "https://api.perplexity.ai/"
+  max_tokens: int = 1024
+  top_k: Optional[float] = None
+
+  supports_native_structured_outputs: bool = False
+  supports_json_schema_outputs: bool = True
+
+  def _get_client_params(self) -> Dict[str, Any]:
+    if not self.api_key:
+      self.api_key = getenv("PERPLEXITY_API_KEY")
+      if not self.api_key:
+        raise ModelAuthenticationError(
+          message="PERPLEXITY_API_KEY not set. Please set the PERPLEXITY_API_KEY environment variable.",
+          model_name=self.name,
+        )
+    return super()._get_client_params()
+
+  def get_request_params(
+    self,
+    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
+    run_response: Optional[RunOutput] = None,
+  ) -> Dict[str, Any]:
+    base_params: Dict[str, Any] = {
+      "max_tokens": self.max_tokens,
+      "temperature": self.temperature,
+      "top_p": self.top_p,
+      "top_k": self.top_k,
+      "presence_penalty": self.presence_penalty,
+      "frequency_penalty": self.frequency_penalty,
+    }
+
+    if response_format is not None:
+      base_params["response_format"] = response_format
+
+    # Filter out None values
+    request_params = {k: v for k, v in base_params.items() if v is not None}
+    if self.request_params:
+      request_params.update(self.request_params)
+
+    if request_params:
+      log_debug(f"Calling {self.provider} with request parameters: {request_params}", log_level=2)
+    return request_params
+
+  def parse_provider_response(self, response: Union[ChatCompletion, ParsedChatCompletion], **kwargs) -> ModelResponse:
+    model_response = ModelResponse()
+
+    if hasattr(response, "error") and response.error:
+      raise ModelProviderError(
+        message=response.error.get("message", "Unknown model error"),
+        model_name=self.name,
+        model_id=self.id,
+      )
+
+    response_message = response.choices[0].message
+
+    if response_message.role is not None:
+      model_response.role = response_message.role
+
+    if response_message.content is not None:
+      model_response.content = response_message.content
+
+    if response_message.tool_calls is not None and len(response_message.tool_calls) > 0:
+      try:
+        model_response.tool_calls = [t.model_dump() for t in response_message.tool_calls]
+      except Exception as e:
+        log_warning(f"Error processing tool calls: {e}")
+
+    if hasattr(response, "citations") and response.citations is not None:
+      model_response.citations = Citations(
+        urls=[UrlCitation(url=c) for c in response.citations],
+      )
+
+    if response.usage is not None:
+      model_response.response_usage = self._get_metrics(response.usage)
+
+    return model_response
+
+  def parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:
+    model_response = ModelResponse()
+    if response_delta.choices and len(response_delta.choices) > 0:
+      choice_delta: ChoiceDelta = response_delta.choices[0].delta
+
+      if choice_delta:
+        if choice_delta.content is not None:
+          model_response.content = choice_delta.content
+
+        if choice_delta.tool_calls is not None:
+          model_response.tool_calls = choice_delta.tool_calls  # type: ignore
+
+    if hasattr(response_delta, "citations") and response_delta.citations is not None:
+      model_response.citations = Citations(
+        urls=[UrlCitation(url=c) for c in response_delta.citations],
+      )
+
+    if response_delta.usage is not None:
+      model_response.response_usage = self._get_metrics(response_delta.usage)
+
+    return model_response
+
+  def _get_metrics(self, response_usage: CompletionUsage) -> Metrics:
+    metrics = Metrics()
+
+    metrics.input_tokens = response_usage.prompt_tokens or 0
+    metrics.output_tokens = response_usage.completion_tokens or 0
+    metrics.total_tokens = response_usage.total_tokens or 0
+
+    if prompt_token_details := response_usage.prompt_tokens_details:
+      metrics.audio_input_tokens = prompt_token_details.audio_tokens or 0
+      metrics.cache_read_tokens = prompt_token_details.cached_tokens or 0
+
+    if completion_tokens_details := response_usage.completion_tokens_details:
+      metrics.audio_output_tokens = completion_tokens_details.audio_tokens or 0
+      metrics.reasoning_tokens = completion_tokens_details.reasoning_tokens or 0
+
+    return metrics

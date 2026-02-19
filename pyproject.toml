@@ -55,6 +55,10 @@ pinecone = ["pinecone>=5.0.0"]
 pgvector = ["psycopg[binary]>=3.1.0", "pgvector>=0.3.0"]
 mongodb = ["pymongo>=4.0.0"]
 redis = ["redis>=5.0.0", "redisvl>=0.3.0"]
+anthropic = ["anthropic>=0.40.0"]
+google = ["google-genai>=1.0.0"]
+ollama = ["ollama>=0.4.0"]
+mistral = ["mistralai>=1.0.0"]
 browser = ["seleniumbase>=4.32.0"]
 desktop = ["websockets>=12.0"]
 
@@ -96,6 +100,11 @@ markers = [
   "pinecone: Tests requiring PINECONE_API_KEY",
   "mem0: Tests requiring MEM0_API_KEY",
   "mistral: Tests requiring MISTRAL_API_KEY",
+  "anthropic: Tests requiring ANTHROPIC_API_KEY",
+  "google: Tests requiring GOOGLE_API_KEY",
+  "ollama: Tests requiring a local Ollama server",
+  "perplexity: Tests requiring PERPLEXITY_API_KEY",
+  "openrouter: Tests requiring OPENROUTER_API_KEY",
   "playwright: Tests requiring a real browser via Playwright",
   "desktop: Tests requiring the macOS Desktop Bridge app running",
 ]

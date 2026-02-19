@@ -110,7 +110,7 @@ def xai_example():
     return
 
   model = xAI(
-    id="grok-beta",
+    id="grok-3",
     # api_key=os.getenv("XAI_API_KEY"),  # Auto-detected from env
     # search_parameters={"enabled": True},  # Enable live web search
   )
@@ -163,7 +163,7 @@ def compare_providers():
   # You can easily swap in other providers:
   # model = DeepSeekChat(id="deepseek-chat")
   # model = MoonshotChat(id="moonshot-v1-8k")
-  # model = xAI(id="grok-beta")
+  # model = xAI(id="grok-3")
   print()
 
 

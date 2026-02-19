@@ -63,7 +63,7 @@ Built-in features: exponential backoff retry, response caching (MD5-keyed, TTL s
 | `OpenAILike` | `definable.model.openai` | — | — | `OpenAIChat` |
 | `DeepSeekChat` | `definable.model.deepseek` | `deepseek-chat` | `DEEPSEEK_API_KEY` | `OpenAILike` |
 | `MoonshotChat` | `definable.model.moonshot` | `kimi-k2-turbo-preview` | `MOONSHOT_API_KEY` | `OpenAILike` |
-| `xAI` | `definable.model.xai` | `grok-beta` | `XAI_API_KEY` | `OpenAILike` |
+| `xAI` | `definable.model.xai` | `grok-3` | `XAI_API_KEY` | `OpenAILike` |
 
 **OpenAILike** is a generic wrapper for any provider using an OpenAI-compatible API — set `base_url` and `api_key` for third-party providers.
 

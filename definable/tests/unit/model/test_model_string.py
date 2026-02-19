@@ -104,15 +104,16 @@ class TestProviderModelResolution:
 class TestStringModelErrors:
   """Invalid model strings produce clear, actionable errors."""
 
-  def test_bare_model_id_rejected(self):
-    """'gpt-4o' without provider prefix raises ValueError."""
-    with pytest.raises(ValueError, match="provider/model-id"):
-      resolve_model_string("gpt-4o")
+  def test_bare_model_id_defaults_to_openai(self):
+    """'gpt-4o' without provider prefix defaults to OpenAI."""
+    model = resolve_model_string("gpt-4o")
+    assert model.id == "gpt-4o"
+    assert type(model).__name__ == "OpenAIChat"
 
   def test_unknown_provider_rejected(self):
-    """'anthropic/claude-3' raises ValueError listing supported providers."""
-    with pytest.raises(ValueError, match="Unknown model provider 'anthropic'"):
-      resolve_model_string("anthropic/claude-3")
+    """'foobar/some-model' raises ValueError listing supported providers."""
+    with pytest.raises(ValueError, match="Unknown model provider 'foobar'"):
+      resolve_model_string("foobar/some-model")
 
   def test_empty_string_rejected(self):
     """Empty string raises ValueError."""

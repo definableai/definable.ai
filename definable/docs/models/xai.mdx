@@ -16,7 +16,7 @@ export XAI_API_KEY="xai-..."
 from definable.model import xAI
 from definable.model.message import Message
 
-model = xAI(id="grok-beta")
+model = xAI(id="grok-3")
 response = model.invoke(
     messages=[Message(role="user", content="Hello!")],
     assistant_message=Message(role="assistant", content=""),
@@ -26,8 +26,8 @@ print(response.content)
 
 ## Parameters
 
-<ParamField path="id" type="str" default="grok-beta">
-  Model identifier. Common values: `grok-beta`, `grok-2`.
+<ParamField path="id" type="str" default="grok-3">
+  Model identifier. Common values: `grok-3`, `grok-2`.
 </ParamField>
 
 <ParamField path="api_key" type="str">
@@ -58,7 +58,7 @@ xAI Grok models can search the web for real-time information:
 from definable.model.message import Message
 
 model = xAI(
-    id="grok-beta",
+    id="grok-3",
     search_parameters={"mode": "auto"},
 )
 

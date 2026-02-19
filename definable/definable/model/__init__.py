@@ -19,6 +19,12 @@ if TYPE_CHECKING:
   from definable.model.openai import OpenAIChat, OpenAILike
   from definable.model.utils import resolve_model_string as resolve_model_string
   from definable.model.xai import xAI
+  from definable.model.anthropic import Claude
+  from definable.model.mistral import MistralChat
+  from definable.model.google import Gemini
+  from definable.model.perplexity import Perplexity
+  from definable.model.ollama import Ollama
+  from definable.model.openrouter import OpenRouter
 
 
 def __getattr__(name: str):
@@ -46,6 +52,30 @@ def __getattr__(name: str):
     from definable.model.xai import xAI
 
     return xAI
+  if name == "Claude":
+    from definable.model.anthropic import Claude
+
+    return Claude
+  if name == "MistralChat":
+    from definable.model.mistral import MistralChat
+
+    return MistralChat
+  if name == "Gemini":
+    from definable.model.google import Gemini
+
+    return Gemini
+  if name == "Perplexity":
+    from definable.model.perplexity import Perplexity
+
+    return Perplexity
+  if name == "Ollama":
+    from definable.model.ollama import Ollama
+
+    return Ollama
+  if name == "OpenRouter":
+    from definable.model.openrouter import OpenRouter
+
+    return OpenRouter
   if name == "resolve_model_string":
     from definable.model.utils import resolve_model_string
 
@@ -69,6 +99,12 @@ __all__ = [
   "DeepSeekChat",
   "MoonshotChat",
   "xAI",
+  "Claude",
+  "MistralChat",
+  "Gemini",
+  "Perplexity",
+  "Ollama",
+  "OpenRouter",
   # Lazy — Utilities
   "resolve_model_string",
 ]
