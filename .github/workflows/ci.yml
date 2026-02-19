@@ -49,3 +49,68 @@ jobs:
           pytest definable/tests/ \
             -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" \
             -v --tb=short
+
+  integration-test:
+    if: github.event_name == 'push'
+    needs: [test]
+    runs-on: ubuntu-latest
+    environment: integration_test
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: definable_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6333:6333
+          - 6334:6334
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      MOONSHOT_API_KEY: ${{ secrets.MOONSHOT_API_KEY }}
+      XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+      VOYAGEAI_API_KEY: ${{ secrets.VOYAGEAI_API_KEY }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+      MEM0_API_KEY: ${{ secrets.MEM0_API_KEY }}
+      PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
+      DATABASE_URL: postgresql://test:test@localhost:5432/definable_test
+      PGVECTOR_URL: postgresql://test:test@localhost:5432/definable_test
+      MEMORY_POSTGRES_URL: postgresql://test:test@localhost:5432/definable_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -e ".[mem0-memory,readers,runtime,research,serve,cron,jwt,discord]"
+          pip install pytest pytest-asyncio
+      - name: Run integration tests
+        run: |
+          pytest definable/tests/ \
+            -m "not telegram and not discord and not signal and not desktop and not playwright and not mcp" \
+            -v --tb=short --timeout=120
