@@ -54,7 +54,7 @@ def search_db(query: str) -> str:
   """Search the database."""
   return f"DB results for {query}"
 
-agent = Agent(model="gpt-4o", tools=[search_web, search_db])
+agent = Agent(model="openai/gpt-4o", tools=[search_web, search_db])
 
 # If the model calls both tools at once, they run in parallel
 output = await agent.arun("Find info about Python both on the web and in our database")
@@ -93,7 +93,7 @@ def send_email(to: str, subject: str, body: str) -> str:
 # Require human confirmation before sending
 send_email.requires_confirmation = True
 
-agent = Agent(model="gpt-4o", tools=[send_email])
+agent = Agent(model="openai/gpt-4o", tools=[send_email])
 output = await agent.arun("Send an email to alice@example.com about the meeting")
 
 # The run is paused — the tool has not executed yet
@@ -130,7 +130,7 @@ import asyncio
 from definable.agent import Agent
 from definable.agent.cancellation import CancellationToken, AgentCancelled
 
-agent = Agent(model="gpt-4o", tools=[...])
+agent = Agent(model="openai/gpt-4o", tools=[...])
 token = CancellationToken()
 
 async def cancel_after(seconds: float):
@@ -169,7 +169,7 @@ The `EventBus` lets you register callbacks for any event type emitted during a r
 from definable.agent import Agent
 from definable.agent.events import RunCompletedEvent, ToolCallStartedEvent
 
-agent = Agent(model="gpt-4o", tools=[...])
+agent = Agent(model="openai/gpt-4o", tools=[...])
 
 @agent.events.on(RunCompletedEvent)
 async def on_complete(event):
@@ -235,7 +235,7 @@ def generate_report(data: str) -> str:
 # Loop stops after this tool — no follow-up model call
 generate_report.stop_after_tool_call = True
 
-agent = Agent(model="gpt-4o", tools=[generate_report])
+agent = Agent(model="openai/gpt-4o", tools=[generate_report])
 output = await agent.arun("Generate a report from the sales data")
 ```
 

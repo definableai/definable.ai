@@ -22,7 +22,7 @@ from definable.browser import BrowserToolkit, BrowserConfig
 async def main():
   config = BrowserConfig(headless=False)
   async with BrowserToolkit(config=config) as toolkit:
-    agent = Agent(model="gpt-4o", toolkits=[toolkit])
+    agent = Agent(model="openai/gpt-4o", toolkits=[toolkit])
     result = await agent.arun("Go to news.ycombinator.com and list the top 3 stories")
     print(result.content)
 ```
@@ -273,7 +273,7 @@ from definable.mcp import MCPToolkit, MCPConfig
 async with BrowserToolkit(config=config) as browser:
   async with MCPToolkit(config=MCPConfig(...)) as mcp:
     agent = Agent(
-      model="gpt-4o",
+      model="openai/gpt-4o",
       toolkits=[browser, mcp],
     )
 ```
