@@ -14,16 +14,26 @@ The agent follows a loop:
 ```mermaid
 flowchart TD
   UserInput["User Input"] --> ReadFiles["Read attached files"]
-  ReadFiles --> RetrieveKnowledge["Retrieve knowledge"]
-  RetrieveKnowledge --> RecallMemory["Recall memory"]
-  RecallMemory --> ThinkingPhase{"Thinking enabled?"}
-  ThinkingPhase -->|Yes| Think["Thinking phase (analyze + plan)"]
-  Think --> BuildMsgs["Build messages"]
+  ReadFiles --> KC{"Knowledge\ntrigger?"}
+  KC -->|always| RetrieveKnowledge["Retrieve knowledge"]
+  KC -->|auto| KCGate["Routing model: need knowledge?"]
+  KC -->|never| MC
+  KCGate -->|YES| RetrieveKnowledge
+  KCGate -->|NO| MC
+  RetrieveKnowledge --> MC{"Memory\ntrigger?"}
+  MC -->|always| RecallMemory["Recall memory"]
+  MC -->|auto| MCGate["Routing model: need memory?"]
+  MC -->|never| ThinkingPhase
+  MCGate -->|YES| RecallMemory
+  MCGate -->|NO| ThinkingPhase
+  RecallMemory --> ThinkingPhase
+  ThinkingPhase{"Thinking enabled?"} -->|Yes| Think["Thinking phase (analyze + plan)"]
+  Think --> BuildMsgs["Build system prompt\n(layer guide + retrieved context)"]
   ThinkingPhase -->|No| BuildMsgs
   BuildMsgs --> CallModel["Call model with tools"]
   CallModel --> ModelResp["Model returns response"]
   ModelResp --> Decision{Text or Tool calls?}
-  Decision -->|Text| StoreMemory["Store memory"]
+  Decision -->|Text| StoreMemory["Store memory (fire-and-forget)\nif trigger ≠ never"]
   StoreMemory --> FinalResp["Final Response"]
   Decision -->|Tool calls| ExecTools["Execute each tool call"]
   ExecTools --> AddResults["Add results to messages"]
@@ -35,9 +45,9 @@ The loop continues until the model returns a text response with no tool calls, o
 ## Creating an Agent
 
 ```python
-from definable.models import OpenAIChat
-from definable.agents import Agent
-from definable.tools import tool
+from definable.model import OpenAIChat
+from definable.agent import Agent
+from definable.tool.decorator import tool
 
 @tool
 def search_docs(query: str) -> str:
@@ -82,7 +92,7 @@ print(output.content)
     Test agents without API calls using `MockModel` and `AgentTestCase`.
   </Card>
   <Card title="Memory" icon="brain" href="/memory/overview">
-    Persistent multi-tier memory with automatic recall, distillation, and cross-session context.
+    LLM-driven persistent memory with automatic recall and cross-session context.
   </Card>
   <Card title="Readers" icon="file-lines" href="/readers/overview">
     Extract text from PDF, DOCX, XLSX, and audio files attached to agent messages.
@@ -110,7 +120,7 @@ print(agent.tool_names)   # ['search_docs']
 Chain middleware onto an agent with the fluent `.use()` method:
 
 ```python
-from definable.agents import LoggingMiddleware, RetryMiddleware
+from definable.agent import LoggingMiddleware, RetryMiddleware
 
 agent = (
     Agent(model=model, tools=[search_docs])
@@ -124,7 +134,7 @@ agent = (
 Use `agent.serve()` to start the full agent runtime — messaging interfaces, HTTP endpoints, webhooks, and cron jobs:
 
 ```python
-from definable.triggers import Webhook
+from definable.agent.trigger import Webhook
 
 @agent.on(Webhook("/webhook"))
 async def handle(event):

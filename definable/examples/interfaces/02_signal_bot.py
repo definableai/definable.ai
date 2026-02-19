@@ -14,9 +14,9 @@ Usage:
 import asyncio
 import os
 
-from definable.agents import Agent
-from definable.interfaces.signal import SignalConfig, SignalInterface
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.agent.interface.signal import SignalConfig, SignalInterface
+from definable.model.openai import OpenAIChat
 
 
 async def main():

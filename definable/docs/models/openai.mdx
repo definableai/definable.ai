@@ -13,10 +13,14 @@ export OPENAI_API_KEY="sk-..."
 ## Basic Usage
 
 ```python
-from definable.models import OpenAIChat
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -67,7 +71,9 @@ print(response.content)
 OpenAI supports native structured outputs via JSON Schema:
 
 ```python
+import json
 from pydantic import BaseModel
+from definable.model.message import Message
 
 class Movie(BaseModel):
     title: str
@@ -75,10 +81,12 @@ class Movie(BaseModel):
     genre: str
 
 response = model.invoke(
-    messages=[{"role": "user", "content": "Recommend a sci-fi movie."}],
+    messages=[Message(role="user", content="Recommend a sci-fi movie.")],
+    assistant_message=Message(role="assistant", content=""),
     response_format=Movie,
 )
-print(response.parsed)  # Movie(title='Interstellar', year=2014, genre='Science Fiction')
+movie = Movie(**json.loads(response.content))
+print(movie)  # Movie(title='Interstellar', year=2014, genre='Science Fiction')
 ```
 
 ## Audio Support
@@ -86,7 +94,8 @@ print(response.parsed)  # Movie(title='Interstellar', year=2014, genre='Science 
 OpenAI models support audio input and output:
 
 ```python
-from definable.media import Audio
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(
     id="gpt-4o-audio-preview",
@@ -95,10 +104,8 @@ model = OpenAIChat(
 )
 
 response = model.invoke(
-    messages=[{
-        "role": "user",
-        "content": "Say hello in French.",
-    }]
+    messages=[Message(role="user", content="Say hello in French.")],
+    assistant_message=Message(role="assistant", content=""),
 )
 print(response.audio.transcript)
 ```
@@ -109,13 +116,11 @@ Pass images in messages for visual understanding:
 
 ```python
 from definable.media import Image
+from definable.model.message import Message
 
 response = model.invoke(
-    messages=[{
-        "role": "user",
-        "content": "What's in this image?",
-        "images": [Image(url="https://example.com/photo.jpg")],
-    }]
+    messages=[Message(role="user", content="What's in this image?", images=[Image(url="https://example.com/photo.jpg")])],
+    assistant_message=Message(role="assistant", content=""),
 )
 print(response.content)
 ```
@@ -123,16 +128,22 @@ print(response.content)
 ## Async Usage
 
 ```python
+from definable.model.message import Message
+
 response = await model.ainvoke(
-    messages=[{"role": "user", "content": "Hello!"}]
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
 )
 ```
 
 ## Streaming
 
 ```python
+from definable.model.message import Message
+
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "Tell me a story."}]
+    messages=[Message(role="user", content="Tell me a story.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         print(chunk.content, end="", flush=True)

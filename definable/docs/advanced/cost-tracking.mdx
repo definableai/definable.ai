@@ -11,10 +11,14 @@ Definable automatically tracks token usage and calculates costs for every model 
 Every model call returns usage metrics:
 
 ```python
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 
 metrics = response.response_usage
 print(f"Input:  {metrics.input_tokens} tokens")
@@ -28,7 +32,7 @@ print(f"Cost:   ${metrics.cost:.6f}")
 Agent runs aggregate metrics across all model calls in the run (including tool execution loops):
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 
 agent = Agent(model=model, tools=[my_tool])
 output = agent.run("Analyze this data and create a summary.")
@@ -43,7 +47,7 @@ print(f"Duration:     {output.metrics.duration:.2f}s")
 Use `Metrics` addition to aggregate costs across a session or batch:
 
 ```python
-from definable.models.metrics import Metrics
+from definable.model.metrics import Metrics
 
 session_metrics = Metrics()
 
@@ -69,7 +73,7 @@ print(f"Batch cost: ${total.cost:.4f}")
 The `MetricsMiddleware` tracks aggregate stats across all runs for an agent:
 
 ```python
-from definable.agents import Agent, MetricsMiddleware
+from definable.agent import Agent, MetricsMiddleware
 
 metrics_mw = MetricsMiddleware()
 agent = Agent(model=model).use(metrics_mw)

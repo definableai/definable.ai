@@ -1,0 +1,343 @@
+---
+title: MacOS Skill
+sidebarTitle: MacOS
+description: Give any agent full macOS control — screen capture, input simulation, app management, file operations, and more.
+icon: apple
+---
+
+The `MacOS` skill lets agents control a Mac like a human: taking screenshots, clicking and typing, opening apps, managing files, and reading system state. It communicates with the **Definable Desktop Bridge** — a lightweight Swift app that exposes macOS capabilities over a local HTTP API.
+
+<Warning>
+  This skill executes real macOS actions. Always use `allowed_apps` or `blocked_apps` in production to limit exposure. Keep the bridge bound to `127.0.0.1` (default) — never expose it to external networks.
+</Warning>
+
+## Setup
+
+### 1. Build and run the Desktop Bridge
+
+```bash
+cd definable/desktop-bridge
+swift build -c release
+.build/release/DesktopBridge
+```
+
+On first launch the bridge:
+- Generates a random auth token and writes it to `~/.definable/bridge-token` (chmod 600)
+- Checks Accessibility and Screen Recording permissions
+- Listens on `http://127.0.0.1:7777`
+
+```
+Definable Desktop Bridge v1.0.0
+  URL:   http://127.0.0.1:7777
+  Token: written to ~/.definable/bridge-token
+  ⚠  Accessibility: DENIED  — input simulation will fail
+  ✓  Screen Recording: GRANTED
+```
+
+Grant permissions in **System Settings → Privacy & Security** when prompted.
+
+### 2. Install the Python package
+
+```bash
+pip install 'definable[desktop]'
+```
+
+The `desktop` extra adds `websockets` for the optional `DesktopInterface`. The bridge client uses `httpx`, which is already a core dependency.
+
+## Quick Start
+
+```python
+import asyncio
+import os
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+from definable.skill.builtin.macos import MacOS
+
+async def main():
+  agent = Agent(
+    model=OpenAIChat(id="gpt-4o", api_key=os.environ["OPENAI_API_KEY"]),
+    skills=[MacOS()],
+    instructions="Take a screenshot before every action to understand the current state.",
+  )
+  output = await agent.arun("Open Safari and go to apple.com")
+  print(output.content)
+
+asyncio.run(main())
+```
+
+The skill reads `~/.definable/bridge-token` automatically — no token configuration required.
+
+## Constructor Parameters
+
+```python
+from definable.skill.builtin.macos import MacOS
+
+skill = MacOS(
+  bridge_host="127.0.0.1",      # Bridge hostname
+  bridge_port=7777,              # Bridge port
+  bridge_token=None,             # None → reads ~/.definable/bridge-token
+  allowed_apps=None,             # Set[str] allowlist; None = no restriction
+  blocked_apps=set(),            # Set[str] blocklist
+  enable_applescript=True,       # Expose run_applescript tool
+  enable_file_write=True,        # Expose write_file and move_file tools
+  enable_input=True,             # Expose mouse/keyboard tools
+)
+```
+
+<ParamField path="bridge_host" type="str" default='"127.0.0.1"'>
+  Bridge hostname. Change only if the bridge runs on a different host.
+</ParamField>
+
+<ParamField path="bridge_port" type="int" default={7777}>
+  Bridge port.
+</ParamField>
+
+<ParamField path="bridge_token" type="Optional[str]" default="None">
+  Bearer token for bridge authentication. If `None`, automatically reads from `~/.definable/bridge-token`.
+</ParamField>
+
+<ParamField path="allowed_apps" type="Optional[Set[str]]" default="None">
+  App allowlist. When set, only app names in this set can be targeted by tools. Apps in both `allowed_apps` and `blocked_apps` are blocked (blocked takes precedence).
+</ParamField>
+
+<ParamField path="blocked_apps" type="Set[str]" default="set()">
+  App blocklist. App names in this set are always rejected, regardless of `allowed_apps`.
+</ParamField>
+
+<ParamField path="enable_applescript" type="bool" default={true}>
+  Expose the `run_applescript` tool. Disable when scripting access is not needed.
+</ParamField>
+
+<ParamField path="enable_file_write" type="bool" default={true}>
+  Expose `write_file` and `move_file` tools. `read_file` and `list_files` are always available.
+</ParamField>
+
+<ParamField path="enable_input" type="bool" default={true}>
+  Expose input simulation tools: `click`, `type_text`, `press_key`, `scroll`, `drag`, `set_clipboard`, `click_element`, `set_element_value`.
+</ParamField>
+
+## Tools Reference
+
+### Screen (always available)
+
+| Tool | Description |
+|------|-------------|
+| `screenshot` | Capture the screen. Returns a `data:image/png;base64,...` URI that vision models interpret directly. |
+| `read_screen` | OCR the screen (or a region) and return the visible text. |
+| `find_text_on_screen` | Locate text on screen and return its coordinates. |
+
+### Input (requires `enable_input=True`)
+
+| Tool | Description |
+|------|-------------|
+| `click` | Click at coordinates (x, y) with optional button and click count. |
+| `type_text` | Type text using keyboard events. |
+| `press_key` | Press a key with optional modifiers (`cmd`, `shift`, `ctrl`, `alt`). |
+| `scroll` | Scroll at coordinates with configurable delta. |
+| `drag` | Drag from one coordinate to another. |
+| `set_clipboard` | Write text to the clipboard. |
+| `click_element` | Click a UI element identified by app name, role, and title. Preferred over coordinate clicks. |
+| `set_element_value` | Set a text field's value via Accessibility API. |
+
+### Apps (always available)
+
+| Tool | Description |
+|------|-------------|
+| `list_running_apps` | List all running applications. |
+| `open_app` | Launch an app by name. Returns the PID. |
+| `quit_app` | Quit an app (optionally force-quit). |
+| `activate_app` | Bring an app to the foreground. |
+| `open_url` | Open a URL in the default browser. |
+
+### Windows (always available)
+
+| Tool | Description |
+|------|-------------|
+| `list_windows` | List open windows (app, title, bounds). |
+| `focus_window` | Focus a window by title. |
+
+### Accessibility (always available)
+
+| Tool | Description |
+|------|-------------|
+| `find_element` | Find a UI element by app, role, and title. Returns bounds and attributes. |
+| `get_ui_tree` | Return the full Accessibility tree for an app. |
+
+### Files (always readable; write requires `enable_file_write=True`)
+
+| Tool | Description |
+|------|-------------|
+| `list_files` | List files at a path (optionally recursive). |
+| `read_file` | Read a file's text content. |
+| `write_file` | Write text to a file. *(requires `enable_file_write=True`)* |
+| `move_file` | Move or rename a file. *(requires `enable_file_write=True`)* |
+
+### Clipboard (always available)
+
+| Tool | Description |
+|------|-------------|
+| `get_clipboard` | Read the current clipboard text. |
+| `set_clipboard` | Write text to the clipboard. *(requires `enable_input=True`)* |
+
+### System (always available)
+
+| Tool | Description |
+|------|-------------|
+| `system_info` | Hostname, OS version, CPU, and RAM. |
+| `get_battery` | Battery level and charging status. |
+| `set_volume` | Set system volume (0–100). |
+| `send_notification` | Send a macOS notification banner. |
+
+### AppleScript (requires `enable_applescript=True`)
+
+| Tool | Description |
+|------|-------------|
+| `run_applescript` | Execute an AppleScript and return its output. |
+
+## Tool Counts
+
+| Configuration | Tool count |
+|---------------|-----------|
+| All enabled (default) | 30 |
+| `enable_input=False` only | 22 |
+| `enable_file_write=False` only | 28 |
+| `enable_applescript=False` only | 29 |
+| All disabled (read-only) | 19 |
+
+## Safety Controls
+
+### App Allowlisting
+
+```python
+# Only allow Safari and TextEdit — any other app name is rejected by tools
+skill = MacOS(allowed_apps={"Safari", "TextEdit"})
+```
+
+### App Blocklisting
+
+```python
+# Block dangerous apps; allow everything else
+skill = MacOS(blocked_apps={"Terminal", "System Preferences"})
+```
+
+### Read-Only Mode
+
+```python
+# No mouse/keyboard input, no file writes, no AppleScript
+skill = MacOS(
+  enable_input=False,
+  enable_file_write=False,
+  enable_applescript=False,
+)
+```
+
+When `allowed_apps` and `blocked_apps` both contain the same app, `blocked_apps` wins (security-first).
+
+## Required macOS Permissions
+
+Grant these in **System Settings → Privacy & Security** before using the bridge:
+
+| Permission | Required for |
+|-----------|-------------|
+| Accessibility | Mouse/keyboard input (`click`, `type_text`, `press_key`, `scroll`, `drag`) and UI element operations |
+| Screen & System Audio Recording | `screenshot`, `read_screen`, `find_text_on_screen` |
+| Automation (per-app) | `run_applescript` targeting specific apps (granted on first use) |
+
+The `/health` endpoint reports current permission status:
+
+```python
+# Check bridge permissions programmatically
+from definable.agent.interface.desktop.bridge_client import BridgeClient
+
+async with BridgeClient() as client:
+  health = await client.health()
+  print(health["permissions"])
+  # {"accessibility": true, "screenRecording": true, "fullDiskAccess": false}
+```
+
+## Remote Control via Telegram
+
+Control your Mac remotely using the MacOS skill + Telegram interface:
+
+```python
+import asyncio, os
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+from definable.skill.builtin.macos import MacOS
+
+async def main():
+  agent = Agent(
+    model=OpenAIChat(id="gpt-4o", api_key=os.environ["OPENAI_API_KEY"]),
+    skills=[MacOS(allowed_apps={"Safari", "Finder"})],
+    instructions="Take a screenshot before and after every action.",
+  )
+  interface = TelegramInterface(
+    agent=agent,
+    config=TelegramConfig(
+      bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+      allowed_user_ids={int(os.environ["MY_TELEGRAM_USER_ID"])},
+    ),
+  )
+  async with interface:
+    await interface.serve_forever()
+
+asyncio.run(main())
+```
+
+The MacOS skill works with **any** Definable interface — Telegram, Discord, Signal, or a custom WebSocket frontend.
+
+## Using BridgeClient Directly
+
+```python
+from definable.agent.interface.desktop.bridge_client import BridgeClient
+
+async def example():
+  async with BridgeClient() as client:
+    # Take a screenshot
+    png = await client.capture_screen()
+
+    # Click at coordinates
+    await client.click(x=500, y=300)
+
+    # List running apps
+    apps = await client.list_apps()
+    print([a.name for a in apps])
+
+    # Read a file
+    content = await client.read_file("/etc/hosts")
+```
+
+See `definable/definable/interfaces/desktop/bridge_client.py` for the full API.
+
+## DesktopInterface (Local Chat)
+
+The `DesktopInterface` provides a local WebSocket server for direct chat without an external messaging platform:
+
+```python
+from definable.agent import Agent
+from definable.agent.interface.desktop import DesktopConfig, DesktopInterface
+from definable.skill.builtin.macos import MacOS
+from definable.model.openai import OpenAIChat
+import asyncio, os
+
+async def main():
+  agent = Agent(
+    model=OpenAIChat(id="gpt-4o", api_key=os.environ["OPENAI_API_KEY"]),
+    skills=[MacOS()],
+  )
+  interface = DesktopInterface(
+    agent=agent,
+    config=DesktopConfig(websocket_port=8765),
+  )
+  async with interface:
+    await interface.serve_forever()
+
+asyncio.run(main())
+```
+
+Connect with any WebSocket client sending `{"text": "your message"}`.
+
+## Bridge API Reference
+
+The bridge exposes a JSON HTTP API on `http://127.0.0.1:7777`. All endpoints require `Authorization: Bearer <token>`. See the [Desktop Bridge README](https://github.com/definable-ai/definable/blob/main/desktop-bridge/README.md) for the full endpoint reference.

@@ -24,7 +24,7 @@ Here is a minimal interface for a hypothetical Slack integration:
 
 ```python
 from typing import Any, Optional, List
-from definable.interfaces import (
+from definable.agent.interface import (
     BaseInterface,
     InterfaceConfig,
     InterfaceMessage,
@@ -135,7 +135,7 @@ Your `_send_response` method receives this and translates it into platform API c
 Use the built-in error hierarchy for consistent error handling across interfaces:
 
 ```python
-from definable.interfaces import (
+from definable.agent.interface import (
     InterfaceError,                 # Base — general interface failure
     InterfaceConnectionError,       # 503 — cannot connect to platform
     InterfaceAuthenticationError,   # 401 — invalid credentials

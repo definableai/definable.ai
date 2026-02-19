@@ -7,8 +7,8 @@ This example shows how to:
 3. Compare two runs side-by-side
 """
 
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
 # 1. Create an agent
 agent = Agent(
@@ -30,9 +30,9 @@ print(f"Model: {replay.model} ({replay.model_provider})")
 print(f"Status: {replay.status}")
 print(f"Input: {replay.input.input_content if replay.input else 'N/A'}")
 print(f"Content: {replay.content}")
-print(f"Tokens: {replay.tokens.total_tokens} (in={replay.tokens.input_tokens}, out={replay.tokens.output_tokens})")
-print(f"Cost: ${replay.cost:.6f}" if replay.cost else "Cost: N/A")
-print(f"Tool calls: {len(replay.tool_calls)}")
+print(f"Tokens: {replay.tokens.total_tokens} (in={replay.tokens.input_tokens}, out={replay.tokens.output_tokens})")  # type: ignore[union-attr]
+print(f"Cost: ${replay.cost:.6f}" if replay.cost else "Cost: N/A")  # type: ignore[union-attr]
+print(f"Tool calls: {len(replay.tool_calls)}")  # type: ignore[union-attr]
 
 # 4. Run again with different instructions and compare
 output2 = agent.run("What is the capital of France?")

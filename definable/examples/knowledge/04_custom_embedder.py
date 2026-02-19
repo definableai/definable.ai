@@ -15,7 +15,9 @@ Requirements:
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from definable.knowledge import Document, Embedder, InMemoryVectorDB, Knowledge
+from definable.embedder import Embedder
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 
 def voyageai_embedder_example():
@@ -29,7 +31,7 @@ def voyageai_embedder_example():
     print("Set the environment variable to use VoyageAI embeddings.")
     return None
 
-  from definable.knowledge import VoyageAIEmbedder
+  from definable.embedder import VoyageAIEmbedder
 
   # Create VoyageAI embedder
   embedder = VoyageAIEmbedder(
@@ -67,7 +69,7 @@ def openai_embedder_example():
   # Note: OpenAIEmbedder may need to be imported differently
   # depending on your definable version
   try:
-    from definable.knowledge.embedders.openai import OpenAIEmbedder
+    from definable.knowledge.embedder.openai import OpenAIEmbedder
 
     embedder = OpenAIEmbedder(
       id="text-embedding-3-large",
@@ -224,10 +226,10 @@ def compare_embedders():
   # Try VoyageAI
   if os.getenv("VOYAGE_API_KEY"):
     try:
-      from definable.knowledge import VoyageAIEmbedder
+      from definable.embedder import VoyageAIEmbedder
 
       voyage = VoyageAIEmbedder()
-      embedders.append(("VoyageAI", voyage))
+      embedders.append(("VoyageAI", voyage))  # type: ignore[arg-type]
     except Exception as e:
       print(f"VoyageAI not available: {e}")
 

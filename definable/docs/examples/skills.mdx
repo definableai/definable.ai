@@ -10,8 +10,8 @@ icon: puzzle-piece
 Demonstrates the `SkillRegistry` in three modes: eager (all skills injected), lazy (catalog + `read_skill` tool), and auto (agent picks based on collection size).
 
 ```python
-from definable.agents import Agent
-from definable.skills import SkillRegistry
+from definable.agent import Agent
+from definable.skill import SkillRegistry
 
 registry = SkillRegistry()  # loads 8 built-in library skills
 

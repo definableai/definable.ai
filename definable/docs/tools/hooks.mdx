@@ -12,7 +12,7 @@ Hooks let you run custom logic around tool execution — validate inputs, transf
 Use `pre_hook` and `post_hook` on the `@tool` decorator:
 
 ```python
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 def log_before(tool_name, args):
     print(f"Calling {tool_name} with {args}")

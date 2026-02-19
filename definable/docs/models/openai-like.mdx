@@ -10,7 +10,8 @@ The `OpenAILike` class lets you connect to any LLM provider that implements the 
 ## Basic Usage
 
 ```python
-from definable.models import OpenAILike
+from definable.model import OpenAILike
+from definable.model.message import Message
 
 model = OpenAILike(
     id="my-model",
@@ -18,7 +19,10 @@ model = OpenAILike(
     base_url="https://your-provider.com/v1",
 )
 
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -98,8 +102,11 @@ model = OpenAILike(
 ## Streaming
 
 ```python
+from definable.model.message import Message
+
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "Tell me a joke."}]
+    messages=[Message(role="user", content="Tell me a joke.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         print(chunk.content, end="", flush=True)
@@ -110,7 +117,7 @@ for chunk in model.invoke_stream(
 For repeated use, subclass `OpenAILike`:
 
 ```python
-from definable.models.openai.like import OpenAILike
+from definable.model.openai.like import OpenAILike
 
 class MyProviderChat(OpenAILike):
     id: str = "my-default-model"

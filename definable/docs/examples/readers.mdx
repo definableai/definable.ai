@@ -10,9 +10,9 @@ icon: file-lines
 The simplest way to use file readers: set `readers=True` on the agent and pass files with `run()`.
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.media import File
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o-mini"),
@@ -42,10 +42,10 @@ Build a custom `BaseParser` for a specific file format. Register it with a `Pars
 from typing import List, Set
 
 from definable.media import File
-from definable.readers.base import BaseReader
-from definable.readers.models import ContentBlock, ReaderConfig
-from definable.readers.parsers.base_parser import BaseParser
-from definable.readers.registry import ParserRegistry
+from definable.reader.base import BaseReader
+from definable.reader.models import ContentBlock, ReaderConfig
+from definable.reader.parsers.base_parser import BaseParser
+from definable.reader.registry import ParserRegistry
 
 class MarkdownParser(BaseParser):
   """Custom parser that adds markdown-specific metadata."""
@@ -93,7 +93,7 @@ Use `BaseReader` without an agent for file processing pipelines.
 
 ```python
 from definable.media import File
-from definable.readers import BaseReader
+from definable.reader import BaseReader
 
 reader = BaseReader()
 
@@ -127,13 +127,13 @@ Replace the default PDF parser with a custom cloud-based parser. Shows the prior
 ```python
 from typing import List, Set
 
-from definable.agents import Agent
-from definable.agents.testing import MockModel
+from definable.agent import Agent
+from definable.agent.testing import MockModel
 from definable.media import File
-from definable.readers.base import BaseReader
-from definable.readers.models import ContentBlock, ReaderConfig
-from definable.readers.parsers.base_parser import BaseParser
-from definable.readers.registry import ParserRegistry
+from definable.reader.base import BaseReader
+from definable.reader.models import ContentBlock, ReaderConfig
+from definable.reader.parsers.base_parser import BaseParser
+from definable.reader.registry import ParserRegistry
 
 class CloudPDFParser(BaseParser):
   """Simulated cloud-based PDF parser."""

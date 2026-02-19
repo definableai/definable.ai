@@ -11,17 +11,17 @@ Definable provides unified media types that work across all providers supporting
 Pass images from URLs, local files, or raw bytes:
 
 ```python
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
+from definable.model.message import Message
 from definable.media import Image
 
 model = OpenAIChat(id="gpt-4o")
 
 # From a URL
-response = model.invoke(messages=[{
-    "role": "user",
-    "content": "Describe what you see.",
-    "images": [Image(url="https://example.com/photo.jpg")],
-}])
+response = model.invoke(
+    messages=[Message(role="user", content="Describe what you see.", images=[Image(url="https://example.com/photo.jpg")])],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -61,18 +61,20 @@ Send audio input and receive audio output from supported models:
 ### Audio Input
 
 ```python
+from definable.model.message import Message
 from definable.media import Audio
 
-response = model.invoke(messages=[{
-    "role": "user",
-    "content": "Transcribe this audio.",
-    "audio": [Audio(filepath="/path/to/recording.mp3")],
-}])
+response = model.invoke(
+    messages=[Message(role="user", content="Transcribe this audio.", audio=[Audio(filepath="/path/to/recording.mp3")])],
+    assistant_message=Message(role="assistant", content=""),
+)
 ```
 
 ### Audio Output
 
 ```python
+from definable.model.message import Message
+
 model = OpenAIChat(
     id="gpt-4o-audio-preview",
     modalities=["text", "audio"],
@@ -80,7 +82,8 @@ model = OpenAIChat(
 )
 
 response = model.invoke(
-    messages=[{"role": "user", "content": "Read this sentence aloud: Hello world!"}]
+    messages=[Message(role="user", content="Read this sentence aloud: Hello world!")],
+    assistant_message=Message(role="assistant", content=""),
 )
 
 # Access the audio output
@@ -93,13 +96,13 @@ audio_bytes = response.audio.get_content_bytes()
 Pass video files for analysis:
 
 ```python
+from definable.model.message import Message
 from definable.media import Video
 
-response = model.invoke(messages=[{
-    "role": "user",
-    "content": "Summarize what happens in this video.",
-    "videos": [Video(filepath="/path/to/clip.mp4")],
-}])
+response = model.invoke(
+    messages=[Message(role="user", content="Summarize what happens in this video.", videos=[Video(filepath="/path/to/clip.mp4")])],
+    assistant_message=Message(role="assistant", content=""),
+)
 ```
 
 ## Files
@@ -107,13 +110,13 @@ response = model.invoke(messages=[{
 Send documents and other files:
 
 ```python
+from definable.model.message import Message
 from definable.media import File
 
-response = model.invoke(messages=[{
-    "role": "user",
-    "content": "Summarize this document.",
-    "files": [File(filepath="/path/to/report.pdf", mime_type="application/pdf")],
-}])
+response = model.invoke(
+    messages=[Message(role="user", content="Summarize this document.", files=[File(filepath="/path/to/report.pdf", mime_type="application/pdf")])],
+    assistant_message=Message(role="assistant", content=""),
+)
 ```
 
 ## Using Media with Agents
@@ -121,7 +124,7 @@ response = model.invoke(messages=[{
 Agents accept media directly in the `run()` call:
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.media import Image
 
 agent = Agent(

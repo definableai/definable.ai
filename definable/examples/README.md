@@ -64,7 +64,7 @@ examples/
 │   ├── 03_chunking_strategies.py # TextChunker vs RecursiveChunker
 │   ├── 04_custom_embedder.py  # OpenAI and VoyageAI embedders
 │   ├── 05_vector_databases.py # InMemory vs PgVector
-│   ├── 06_agent_with_knowledge.py # KnowledgeConfig integration
+│   ├── 06_agent_with_knowledge.py # Knowledge integration
 │   └── 07_reranking.py        # CohereReranker usage
 │
 ├── memory/                    # Cognitive memory
@@ -129,8 +129,8 @@ examples/
 ### Basic Model Invocation
 
 ```python
-from definable.models.openai import OpenAIChat
-from definable.models.message import Message
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o-mini")
 response = model.invoke(
@@ -143,9 +143,9 @@ print(response.content)
 ### Basic Agent with Tools
 
 ```python
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 @tool
 def add(a: int, b: int) -> int:
@@ -161,14 +161,17 @@ print(output.content)
 ### Agent with Knowledge Base (RAG)
 
 ```python
-from definable.agents import Agent, AgentConfig, KnowledgeConfig
-from definable.knowledge import Knowledge, Document, InMemoryVectorDB, VoyageAIEmbedder
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.embedder import VoyageAIEmbedder
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
+from definable.model.openai import OpenAIChat
 
 # Setup knowledge base
 kb = Knowledge(
     vector_db=InMemoryVectorDB(),
     embedder=VoyageAIEmbedder(),
+    top_k=3,
 )
 kb.add(Document(content="Company policy: Employees get 20 days PTO per year."))
 
@@ -176,9 +179,7 @@ kb.add(Document(content="Company policy: Employees get 20 days PTO per year."))
 agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
     instructions="You are a helpful HR assistant.",
-    config=AgentConfig(
-        knowledge=KnowledgeConfig(knowledge=kb, top_k=3),
-    ),
+    knowledge=kb,
 )
 
 output = agent.run("How many vacation days do I get?")

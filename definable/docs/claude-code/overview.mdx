@@ -1,0 +1,227 @@
+---
+title: "Claude Code Agent"
+description: "Wrap the Claude Code CLI with Definable's full feature ecosystem"
+---
+
+## Overview
+
+`ClaudeCodeAgent` integrates the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) with the Definable framework. Claude Code is an **agent** with its own LLM loop, file operations, and code execution. `ClaudeCodeAgent` communicates with the CLI via subprocess + JSONL protocol and layers Definable features on top: memory, knowledge/RAG, custom tools, guardrails, middleware, tracing, and structured output.
+
+**No external SDK dependency** — the transport layer is built-in.
+
+## Quick Start
+
+```python
+from definable.claude_code import ClaudeCodeAgent
+
+agent = ClaudeCodeAgent(
+    model="claude-sonnet-4-6",
+    instructions="Senior backend developer for the Lovable app.",
+    allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
+    cwd="/workspace/lovable-app",
+)
+result = await agent.arun("Fix the auth bug in the login endpoint")
+
+print(result.content)       # Claude's response
+print(result.session_id)    # For multi-turn sessions
+print(result.metrics.cost)  # Cost from CLI
+```
+
+<Note>
+  Requires Claude Code CLI installed: `npm install -g @anthropic-ai/claude-code`
+</Note>
+
+## Prerequisites
+
+1. Install the Claude Code CLI: `npm install -g @anthropic-ai/claude-code`
+2. Authenticate: `claude auth`
+3. Install Definable: `pip install definable`
+
+## Configuration
+
+### Claude Code Settings
+
+```python
+agent = ClaudeCodeAgent(
+    model="claude-sonnet-4-6",          # Claude model to use
+    instructions="You are a ...",        # System prompt
+    allowed_tools=["Read", "Write"],     # CLI tool allowlist
+    disallowed_tools=["Bash"],           # CLI tool blocklist
+    permission_mode="bypassPermissions", # Permission mode
+    max_turns=30,                        # Max conversation turns
+    max_budget_usd=5.0,                  # Cost limit per run
+    cwd="/workspace/my-app",             # Working directory
+    cli_path="/usr/local/bin/claude",    # Custom CLI path
+    env={"MY_API_KEY": "..."},           # Extra environment variables
+    thinking_budget_tokens=4096,         # Extended thinking budget
+)
+```
+
+### Definable Features
+
+All standard Definable features work with `ClaudeCodeAgent`:
+
+```python
+from definable.agent.guardrail import Guardrails, tool_blocklist
+from definable.agent.tracing import Tracing
+from definable.memory import Memory, SQLiteStore
+
+agent = ClaudeCodeAgent(
+    model="claude-sonnet-4-6",
+    instructions="...",
+    # Memory — recall user preferences across sessions
+    memory=Memory(store=SQLiteStore(db_path="memory.db")),
+    # Knowledge — RAG from your codebase docs
+    knowledge=kb,
+    # Custom tools — exposed via MCP protocol
+    tools=[deploy_to_prod, query_database],
+    # Guardrails — block dangerous operations
+    guardrails=Guardrails(tool=[tool_blocklist({"rm", "DROP"})]),
+    # Tracing — full event stream
+    tracing=Tracing(),
+    # Middleware — wrap execution
+    middleware=[LoggingMiddleware()],
+)
+```
+
+## Custom Tools
+
+Define tools with the `@tool` decorator. They're automatically registered as MCP tools and called by Claude Code when needed:
+
+```python
+from definable.tool.decorator import tool
+
+@tool
+def deploy(branch: str = "main") -> str:
+    """Deploy the application to staging."""
+    # Your deployment logic here
+    return f"Deployed {branch} to staging"
+
+@tool
+async def query_db(sql: str) -> str:
+    """Execute a read-only SQL query."""
+    result = await db.execute(sql)
+    return str(result)
+
+agent = ClaudeCodeAgent(
+    tools=[deploy, query_db],
+    allowed_tools=["Read", "Write"],  # Claude Code's built-in tools
+)
+```
+
+## Guardrails
+
+### Tool Guardrails
+
+Tool guardrails intercept Claude Code's tool calls via the control protocol. When the CLI requests permission to use a tool, your guardrails can allow or deny:
+
+```python
+from definable.agent.guardrail import Guardrails, tool_blocklist
+
+agent = ClaudeCodeAgent(
+    guardrails=Guardrails(
+        tool=[tool_blocklist({"Bash"})],  # Block bash commands
+    ),
+)
+```
+
+### Input/Output Guardrails
+
+Input guardrails run before the CLI is called. Output guardrails run after:
+
+```python
+from definable.agent.guardrail import Guardrails, max_tokens, pii_filter
+
+agent = ClaudeCodeAgent(
+    guardrails=Guardrails(
+        input=[max_tokens(1000)],
+        output=[pii_filter()],
+    ),
+)
+```
+
+## Multi-Turn Sessions
+
+Use `session_id` to continue conversations:
+
+```python
+r1 = await agent.arun("Fix the auth bug")
+# r1.session_id contains the CLI session ID
+
+r2 = await agent.arun(
+    "Now add tests for the fix",
+    session_id=r1.session_id,
+)
+```
+
+For automatic session continuation, set `continue_conversation=True`:
+
+```python
+agent = ClaudeCodeAgent(continue_conversation=True)
+```
+
+## Streaming
+
+Stream events as they arrive from the CLI:
+
+```python
+async for event in agent.arun_stream("Fix the auth bug"):
+    if isinstance(event, RunContentEvent):
+        print(event.content, end="", flush=True)
+    elif isinstance(event, ToolCallStartedEvent):
+        print(f"\n[Tool: {event.tool.tool_name}]")
+    elif isinstance(event, RunCompletedEvent):
+        print(f"\nDone! Cost: ${event.metrics.cost:.4f}")
+```
+
+## RunOutput
+
+`ClaudeCodeAgent.arun()` returns the same `RunOutput` type as `Agent.arun()`:
+
+| Field | Description |
+|-------|-------------|
+| `content` | Claude's text response (or structured output) |
+| `session_id` | CLI session ID for multi-turn |
+| `metrics` | Token counts, cost, duration |
+| `tools` | List of tool executions |
+| `reasoning_content` | Extended thinking content |
+| `status` | `completed`, `error`, or `blocked` |
+| `model` | Model used |
+
+## Architecture
+
+```
+agent.arun("Fix the auth bug")
+     │
+     ▼
+┌─────────────────────────────────────┐
+│         ClaudeCodeAgent             │
+│                                     │
+│  1. Input guardrails                │
+│  2. Middleware chain                 │
+│  3. Knowledge retrieval → prompt    │
+│  4. Memory recall → prompt          │
+│  5. Build system prompt             │
+│  6. Register custom tools as MCP    │
+│                                     │
+│  ┌────────────────────────────────┐ │
+│  │    SubprocessTransport         │ │
+│  │    ┌────────────────────────┐  │ │
+│  │    │   claude CLI process   │  │ │
+│  │    │   stdin ← JSONL        │  │ │
+│  │    │   stdout → JSONL       │  │ │
+│  │    └────────────────────────┘  │ │
+│  │    Bidirectional:              │ │
+│  │    • Tool permission checks    │ │
+│  │    • MCP tool execution        │ │
+│  └────────────────────────────────┘ │
+│                                     │
+│  7. Parse CLI messages → RunOutput  │
+│  8. Output guardrails               │
+│  9. Memory store (fire-and-forget)  │
+│  10. Emit tracing events            │
+└─────────────────────────────────────┘
+     │
+     ▼
+  RunOutput
+```

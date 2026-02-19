@@ -1,16 +1,17 @@
 ---
 title: Built-in Skills
 sidebarTitle: Built-in Skills
-description: Ready-to-use skills for math, date/time, text processing, file I/O, HTTP, JSON, shell, and web search.
+description: Ready-to-use skills for math, date/time, text processing, file I/O, HTTP, JSON, shell, web search, and macOS control.
 icon: toolbox
 ---
 
-Definable ships 8 built-in skills that cover common agent needs. Each provides domain instructions and pre-configured tools.
+Definable ships 9 built-in skills that cover common agent needs. Each provides domain instructions and pre-configured tools.
 
 ```python
-from definable.skills import Calculator, DateTime, TextProcessing
-from definable.skills import FileOperations, HTTPRequests, JSONOperations
-from definable.skills import Shell, WebSearch
+from definable.skill import Calculator, DateTime, TextProcessing
+from definable.skill import FileOperations, HTTPRequests, JSONOperations
+from definable.skill import Shell, WebSearch
+from definable.skill import MacOS  # macOS control via Desktop Bridge
 ```
 
 ## Calculator
@@ -18,7 +19,7 @@ from definable.skills import Shell, WebSearch
 Safe math evaluation via AST parsing. Supports arithmetic, functions (`sqrt`, `log`, `sin`, `cos`, `factorial`, etc.), and constants (`pi`, `e`).
 
 ```python
-from definable.skills import Calculator
+from definable.skill import Calculator
 
 agent = Agent(model=model, skills=[Calculator()])
 agent.run("What is sqrt(144) + 2^8?")
@@ -31,7 +32,7 @@ agent.run("What is sqrt(144) + 2^8?")
 Current date/time with timezone support and date difference calculations.
 
 ```python
-from definable.skills import DateTime
+from definable.skill import DateTime
 
 agent = Agent(model=model, skills=[DateTime()])
 agent.run("What time is it in UTC+5:30?")
@@ -44,7 +45,7 @@ agent.run("What time is it in UTC+5:30?")
 Regex search/replace, text statistics, transformations, and pattern extraction (emails, URLs, phone numbers, etc.).
 
 ```python
-from definable.skills import TextProcessing
+from definable.skill import TextProcessing
 
 agent = Agent(model=model, skills=[TextProcessing()])
 agent.run("Extract all email addresses from this text: ...")
@@ -57,7 +58,7 @@ agent.run("Extract all email addresses from this text: ...")
 Sandboxed file reading, writing, listing, and appending.
 
 ```python
-from definable.skills import FileOperations
+from definable.skill import FileOperations
 
 agent = Agent(
   model=model,
@@ -85,7 +86,7 @@ agent.run("List all files in the data directory")
 Make HTTP calls with optional domain restrictions.
 
 ```python
-from definable.skills import HTTPRequests
+from definable.skill import HTTPRequests
 
 agent = Agent(
   model=model,
@@ -113,7 +114,7 @@ agent.run("GET https://api.example.com/users")
 Parse, query (dot notation + wildcards), transform, and diff JSON data.
 
 ```python
-from definable.skills import JSONOperations
+from definable.skill import JSONOperations
 
 agent = Agent(model=model, skills=[JSONOperations()])
 agent.run('Extract the name from: {"users": [{"name": "Alice"}]}')
@@ -128,7 +129,7 @@ Query paths support dot notation (`users.0.name`), array indices, and wildcards 
 Execute shell commands with safety controls.
 
 ```python
-from definable.skills import Shell
+from definable.skill import Shell
 
 agent = Agent(
   model=model,
@@ -160,7 +161,7 @@ agent.run("Count the lines in all Python files")
 Web search (DuckDuckGo by default) and URL content fetching.
 
 ```python
-from definable.skills import WebSearch
+from definable.skill import WebSearch
 
 agent = Agent(model=model, skills=[WebSearch()])
 agent.run("Search for the latest Python release notes")
@@ -184,6 +185,26 @@ agent.run("Search for the latest Python release notes")
 The default DuckDuckGo provider requires `duckduckgo-search`, which is lazy-imported at first use.
 </Note>
 
+## MacOS
+
+Control a Mac like a human: screen capture, mouse/keyboard input, app management, file operations, AppleScript, and system info. Requires the **Definable Desktop Bridge** to be running.
+
+```python
+from definable.skill import MacOS
+
+agent = Agent(
+  model=model,
+  skills=[MacOS(allowed_apps={"Safari", "TextEdit"})],
+)
+agent.run("Open Safari and navigate to apple.com")
+```
+
+See the [MacOS skill guide](/skills/macos) for setup, permissions, and the full tool reference.
+
+**Tools (30 default):** `screenshot`, `read_screen`, `find_text_on_screen`, `click`, `type_text`, `press_key`, `scroll`, `drag`, `open_app`, `quit_app`, `activate_app`, `list_running_apps`, `open_url`, `list_windows`, `focus_window`, `find_element`, `get_ui_tree`, `click_element`, `set_element_value`, `read_file`, `list_files`, `write_file`, `move_file`, `get_clipboard`, `set_clipboard`, `run_applescript`, `system_info`, `get_battery`, `set_volume`, `send_notification`
+
+**Optional dep:** `pip install 'definable[desktop]'` (adds `websockets` for `DesktopInterface`)
+
 ## Summary
 
 | Skill | Tools | Optional Deps |
@@ -196,3 +217,4 @@ The default DuckDuckGo provider requires `duckduckgo-search`, which is lazy-impo
 | `JSONOperations` | `parse_json`, `query_json`, `transform_json`, `compare_json` | — |
 | `Shell` | `run_command` | — |
 | `WebSearch` | `search_web`, `fetch_url` | `duckduckgo-search` |
+| `MacOS` | 30 tools (screen, input, apps, files, system, AppleScript) | `websockets` (optional, for `DesktopInterface`) |

@@ -10,9 +10,9 @@ Usage:
   python examples/runtime/02_cron_basic.py
 """
 
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
-from definable.triggers import Cron
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+from definable.agent.trigger import Cron
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o-mini"),

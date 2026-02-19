@@ -3,8 +3,9 @@
 import asyncio
 import os
 
-from definable.agents import Agent, ThinkingConfig
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.agent.reasoning import Thinking
+from definable.model.openai import OpenAIChat
 
 
 async def main():
@@ -31,7 +32,7 @@ async def main():
   agent_custom = Agent(
     model=model,
     instructions="You are a senior architect.",
-    thinking=ThinkingConfig(
+    thinking=Thinking(
       model=OpenAIChat(id="gpt-4o"),  # Use a stronger model for thinking
     ),
   )

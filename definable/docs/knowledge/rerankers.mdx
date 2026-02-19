@@ -20,7 +20,7 @@ The vector database finds candidates quickly using embedding similarity. The rer
 Uses Cohere's reranking API:
 
 ```python
-from definable.knowledge.rerankers import CohereReranker
+from definable.reranker import CohereReranker
 
 reranker = CohereReranker(
     model="rerank-multilingual-v3.0",
@@ -47,8 +47,10 @@ Requires the `cohere` package. Install with `pip install cohere`.
 ## Using with Knowledge
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
-from definable.knowledge.rerankers import CohereReranker
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.reranker import CohereReranker
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),
@@ -93,7 +95,7 @@ reranked = await reranker.arerank("Who created Python?", documents)
 Subclass `Reranker`:
 
 ```python
-from definable.knowledge.rerankers import Reranker
+from definable.knowledge.reranker import Reranker
 from definable.knowledge import Document
 
 class SimpleReranker(Reranker):

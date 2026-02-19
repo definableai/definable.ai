@@ -10,9 +10,9 @@ Usage:
     python definable/examples/readers/01_basic_readers.py
 """
 
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.media import File
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
 
 model = OpenAIChat(id="gpt-4o-mini")
 

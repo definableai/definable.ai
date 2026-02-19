@@ -10,8 +10,8 @@ The deep research layer conducts automated multi-wave web research before the ag
 ## Quick Start
 
 ```python
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
@@ -72,7 +72,7 @@ agent = Agent(model=model, deep_research=True)
 ### Custom Configuration
 
 ```python
-from definable.research import DeepResearchConfig
+from definable.agent.research import DeepResearchConfig
 
 agent = Agent(
     model=model,
@@ -87,16 +87,20 @@ agent = Agent(
 )
 ```
 
-### Via AgentConfig
+### Via DeepResearch Engine
+
+You can also pass a pre-built `DeepResearch` engine instance directly:
 
 ```python
-from definable.agents import Agent, AgentConfig
-from definable.research import DeepResearchConfig
+from definable.agent.research import DeepResearch, DeepResearchConfig
+from definable.agent.research.search import create_search_provider
 
-config = AgentConfig(
-    deep_research=DeepResearchConfig(depth="standard"),
+researcher = DeepResearch(
+    model=model,
+    search_provider=create_search_provider("duckduckgo"),
+    config=DeepResearchConfig(depth="deep"),
 )
-agent = Agent(model=model, config=config)
+agent = Agent(model=model, deep_research=researcher)
 ```
 
 ## Depth Presets
@@ -130,7 +134,7 @@ agent = Agent(model=model, deep_research=True)  # Uses DuckDuckGo by default
 Requires a Google API key and Custom Search Engine ID.
 
 ```python
-from definable.research import DeepResearchConfig
+from definable.agent.research import DeepResearchConfig
 
 agent = Agent(
     model=model,
@@ -163,7 +167,7 @@ agent = Agent(
 Provide any async callable that returns search results:
 
 ```python
-from definable.research.search.base import SearchResult
+from definable.agent.research.search.base import SearchResult
 
 async def my_search(query: str, max_results: int = 10) -> list[SearchResult]:
     # Your custom search logic
@@ -197,9 +201,9 @@ agent = Agent(
 Use `DeepResearch` directly without an agent:
 
 ```python
-from definable.models.openai import OpenAIChat
-from definable.research import DeepResearch, DeepResearchConfig
-from definable.research.search import create_search_provider
+from definable.model.openai import OpenAIChat
+from definable.agent.research import DeepResearch, DeepResearchConfig
+from definable.agent.research.search import create_search_provider
 
 model = OpenAIChat(id="gpt-4o-mini")
 researcher = DeepResearch(
@@ -223,24 +227,24 @@ When streaming, the research pipeline emits progress events:
 
 ```python
 async for event in agent.arun_stream("Compare React and Vue"):
-    if hasattr(event, "event_type"):
-        if event.event_type == "deep_research_started":
+    match event.event:
+        case "DeepResearchStarted":
             print(f"Research started: {event.query}")
-        elif event.event_type == "deep_research_progress":
+        case "DeepResearchProgress":
             print(f"Wave {event.wave}: {event.sources_read} sources, "
                   f"{event.facts_extracted} facts, {event.gaps_remaining} gaps")
-        elif event.event_type == "deep_research_completed":
-            print(f"Done: {event.total_sources} sources, "
-                  f"{event.total_facts} facts in {event.total_time_ms:.0f}ms")
-    if event.content:
-        print(event.content, end="", flush=True)
+        case "DeepResearchCompleted":
+            print(f"Done: {event.sources_used} sources, "
+                  f"{event.facts_extracted} facts in {event.duration_ms:.0f}ms")
+        case "RunContent":
+            print(event.content, end="", flush=True)
 ```
 
-| Event | Fields |
-|-------|--------|
-| `DeepResearchStartedEvent` | `query` |
-| `DeepResearchProgressEvent` | `wave`, `sources_read`, `facts_extracted`, `gaps_remaining`, `message` |
-| `DeepResearchCompletedEvent` | `total_sources`, `total_facts`, `total_time_ms` |
+| Event | `event.event` value | Key Fields |
+|-------|---------------------|------------|
+| `DeepResearchStartedEvent` | `"DeepResearchStarted"` | `query`, `depth` |
+| `DeepResearchProgressEvent` | `"DeepResearchProgress"` | `wave`, `sources_read`, `facts_extracted`, `gaps_remaining`, `message` |
+| `DeepResearchCompletedEvent` | `"DeepResearchCompleted"` | `sources_used`, `facts_extracted`, `waves_executed`, `duration_ms`, `contradictions_found` |
 
 ## Output Types
 
@@ -321,6 +325,10 @@ async for event in agent.arun_stream("Compare React and Vue"):
 
 <ParamField path="trigger" type="str" default="always">
   When to run: `"always"`, `"auto"`, or `"tool"`.
+</ParamField>
+
+<ParamField path="description" type="str">
+  Description shown in the layer guide injected into the system prompt. If `None`, uses the default description.
 </ParamField>
 
 ## Installation

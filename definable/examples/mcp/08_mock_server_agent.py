@@ -72,8 +72,8 @@ async def demo_mode() -> None:
 
 async def agent_mode() -> None:
   """Full agent mode: Run agent with MCP tools."""
-  from definable.agents import Agent
-  from definable.models.openai import OpenAIChat
+  from definable.agent import Agent
+  from definable.model.openai import OpenAIChat
 
   print("=" * 70)
   print("MCP Mock Server Agent Example")
@@ -122,8 +122,8 @@ async def agent_mode() -> None:
         # Show tool usage
         if response.tools:
           print("\n[Tools Used]:")
-          for tool in response.tools:
-            result_preview = tool.result[:80] + "..." if tool.result and len(tool.result) > 80 else tool.result
+          for tool in response.tools:  # type: ignore[assignment]
+            result_preview = tool.result[:80] + "..." if tool.result and len(tool.result) > 80 else tool.result  # type: ignore[attr-defined]
             print(f"  - {tool.name}: {result_preview}")
 
       except Exception as e:
@@ -138,8 +138,8 @@ async def agent_mode() -> None:
 
 async def streaming_demo() -> None:
   """Demonstrate streaming with MCP tools."""
-  from definable.agents import Agent
-  from definable.models.openai import OpenAIChat
+  from definable.agent import Agent
+  from definable.model.openai import OpenAIChat
 
   print("\n" + "=" * 70)
   print("Streaming Demo with MCP Tools")
@@ -160,7 +160,7 @@ async def streaming_demo() -> None:
     print("-" * 50)
     print("[Streaming Response]: ", end="", flush=True)
 
-    async for chunk in agent.astream("Add 100 and 200, then explain the result"):
+    async for chunk in agent.astream("Add 100 and 200, then explain the result"):  # type: ignore[attr-defined]
       if chunk.content:
         print(chunk.content, end="", flush=True)
 

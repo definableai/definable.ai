@@ -24,7 +24,7 @@ flowchart TD
 Implement any combination of these four methods. All are optional — only implement the ones you need:
 
 ```python
-from definable.interfaces import InterfaceHook, InterfaceMessage, InterfaceResponse, InterfaceSession
+from definable.agent.interface import InterfaceHook, InterfaceMessage, InterfaceResponse, InterfaceSession
 
 class MyHook:
     async def on_message_received(self, message: InterfaceMessage) -> bool | None:
@@ -53,7 +53,7 @@ class MyHook:
 Use `.add_hook()` for fluent chaining:
 
 ```python
-from definable.interfaces import TelegramInterface, LoggingHook, AllowlistHook
+from definable.agent.interface import TelegramInterface, LoggingHook, AllowlistHook
 
 interface = (
     TelegramInterface(agent=agent, config=config)
@@ -81,7 +81,7 @@ Hooks run in the order they are added. For `on_message_received`, if any hook re
 Logs incoming messages and errors for observability:
 
 ```python
-from definable.interfaces import LoggingHook
+from definable.agent.interface import LoggingHook
 
 interface.add_hook(LoggingHook())
 ```
@@ -93,7 +93,7 @@ Logs `on_message_received` (user, chat, text preview) and `on_error` (exception 
 Restricts access to a set of user IDs:
 
 ```python
-from definable.interfaces import AllowlistHook
+from definable.agent.interface import AllowlistHook
 
 interface.add_hook(AllowlistHook(allowed_user_ids={"user-123", "user-456"}))
 ```
@@ -124,7 +124,7 @@ class ContentFilterHook:
 
     async def on_after_respond(self, message, response, session):
         if response.content and contains_inappropriate(response.content):
-            from definable.interfaces import InterfaceResponse
+            from definable.agent.interface import InterfaceResponse
             return InterfaceResponse(
                 content="I'm sorry, I can't provide that information."
             )
@@ -157,7 +157,7 @@ class ContextHook:
     """Add context to messages before agent processing."""
 
     async def on_before_respond(self, message, session):
-        from definable.interfaces import InterfaceMessage
+        from definable.agent.interface import InterfaceMessage
         user_tier = await lookup_user_tier(message.platform_user_id)
         enriched_text = f"[User tier: {user_tier}] {message.text}"
         return InterfaceMessage(

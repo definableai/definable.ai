@@ -16,11 +16,10 @@ Usage:
 import asyncio
 import os
 
-from definable.agents import Agent
-from definable.interfaces.discord import DiscordConfig, DiscordInterface
-from definable.knowledge.embedders.voyageai import VoyageAIEmbedder
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.agent.interface.discord import DiscordConfig, DiscordInterface
+from definable.memory import Memory, SQLiteStore
+from definable.model.openai import OpenAIChat
 
 # Set these environment variables before running:
 #   export DISCORD_BOT_TOKEN="your-discord-bot-token"
@@ -38,15 +37,9 @@ class ContentFilterHook:
 
 
 async def main(user_id: str):
-  store = SQLiteMemoryStore("./example_memory.db")
-  memory = CognitiveMemory(
-    store=store,
-    token_budget=500,
-    distillation_model=OpenAIChat(id="gpt-5.2", api_key=os.environ["OPENAI_API_KEY"]),
-    embedder=VoyageAIEmbedder(id="voyage-4-lite", api_key=os.environ["VOYAGEAI_API_KEY"]),
-  )
+  memory = Memory(store=SQLiteStore("./example_memory.db"))
   agent = Agent(
-    model=OpenAIChat(id="gpt-5.2", api_key=os.environ["OPENAI_API_KEY"]),
+    model=OpenAIChat(id="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"]),
     instructions="You are a helpful assistant on Discord. Keep responses concise.",
     memory=memory,
   )
@@ -63,7 +56,7 @@ async def main(user_id: str):
     ),
   )
 
-  interface.add_hook(ContentFilterHook())
+  interface.add_hook(ContentFilterHook())  # type: ignore[arg-type]
 
   async with interface:
     print("Discord bot is running! Press Ctrl+C to stop.")

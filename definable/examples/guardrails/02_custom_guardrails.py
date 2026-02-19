@@ -16,9 +16,9 @@ Usage:
   python definable/examples/guardrails/02_custom_guardrails.py
 """
 
-from definable.agents import Agent, MockModel
+from definable.agent import Agent, MockModel
 from definable.exceptions import InputCheckError
-from definable.guardrails import (
+from definable.agent.guardrail import (
   ALL,
   ANY,
   NOT,
@@ -84,7 +84,7 @@ print("1. Custom guardrails (decorator + class-based)")
 print("=" * 60)
 
 agent = Agent(
-  model=MockModel(responses=["Here is the info: https://internal.corp/secret-doc"]),
+  model=MockModel(responses=["Here is the info: https://internal.corp/secret-doc"]),  # type: ignore[arg-type]
   guardrails=Guardrails(
     input=[no_shouting, require_minimum_length, LanguageGuardrail()],
     output=[redact_internal_urls],
@@ -121,7 +121,7 @@ strict_input = ALL(
 )
 
 agent_all = Agent(
-  model=MockModel(responses=["Got it!"]),
+  model=MockModel(responses=["Got it!"]),  # type: ignore[arg-type]
   guardrails=Guardrails(input=[strict_input], on_block="raise"),
 )
 
@@ -150,7 +150,7 @@ flexible_check = ANY(
 )
 
 agent_any = Agent(
-  model=MockModel(responses=["Processing your request."]),
+  model=MockModel(responses=["Processing your request."]),  # type: ignore[arg-type]
   guardrails=Guardrails(input=[flexible_check], on_block="return_message"),
 )
 
@@ -173,7 +173,7 @@ must_be_support = NOT(
 )
 
 agent_not = Agent(
-  model=MockModel(responses=["I'll help with your support request."]),
+  model=MockModel(responses=["I'll help with your support request."]),  # type: ignore[arg-type]
   guardrails=Guardrails(input=[must_be_support], on_block="return_message"),
 )
 
@@ -200,7 +200,7 @@ restricted_for_users = when(
 )
 
 agent_when = Agent(
-  model=MockModel(responses=["Processed."]),
+  model=MockModel(responses=["Processed."]),  # type: ignore[arg-type]
   guardrails=Guardrails(input=[restricted_for_users], on_block="return_message"),
 )
 

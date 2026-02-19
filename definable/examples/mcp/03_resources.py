@@ -58,7 +58,7 @@ async def main() -> None:
       "write_file",
       {"path": test_file, "content": test_content},
     )
-    print(f"Write result: {result.content[0].text if result.content else 'OK'}")
+    print(f"Write result: {result.content[0].text if result.content else 'OK'}")  # type: ignore[union-attr]
 
     # Read it back as resource
     print("\n--- Reading as resource ---")
@@ -74,7 +74,7 @@ async def main() -> None:
         "read_file",
         {"path": test_file},
       )
-      print(f"Content (via tool): {read_result.content[0].text if read_result.content else 'N/A'}")
+      print(f"Content (via tool): {read_result.content[0].text if read_result.content else 'N/A'}")  # type: ignore[union-attr]
 
 
 if __name__ == "__main__":

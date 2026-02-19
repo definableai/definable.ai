@@ -26,7 +26,7 @@ The `IdentityResolver` maps `(platform, platform_user_id)` pairs to a single `ca
 ## Quick Example
 
 ```python
-from definable.interfaces import (
+from definable.agent.interface import (
     SQLiteIdentityResolver,
     TelegramInterface,
     TelegramConfig,
@@ -78,7 +78,7 @@ Any identity resolver must implement:
 The built-in implementation uses SQLite for persistence:
 
 ```python
-from definable.interfaces import SQLiteIdentityResolver
+from definable.agent.interface import SQLiteIdentityResolver
 
 resolver = SQLiteIdentityResolver(db_path="./identity.db")
 ```

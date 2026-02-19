@@ -8,10 +8,10 @@ built-in parsers for the same formats.
 from typing import List, Set
 
 from definable.media import File
-from definable.readers.base import BaseReader
-from definable.readers.models import ContentBlock, ReaderConfig
-from definable.readers.parsers.base_parser import BaseParser
-from definable.readers.registry import ParserRegistry
+from definable.reader.base import BaseReader
+from definable.reader.models import ContentBlock, ReaderConfig
+from definable.reader.parsers.base_parser import BaseParser
+from definable.reader.registry import ParserRegistry
 
 
 class MarkdownParser(BaseParser):

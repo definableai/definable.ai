@@ -38,7 +38,7 @@ config = MCPConfig(servers=[
 Combine `MockModel` with a mock MCP server to test the full agent-MCP integration:
 
 ```python
-from definable.agents import Agent, MockModel, create_test_agent
+from definable.agent import Agent, MockModel, create_test_agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
 
 async def test_agent_uses_mcp_tools():

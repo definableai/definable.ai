@@ -27,9 +27,9 @@ export TELEGRAM_BOT_TOKEN="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 ```python
 import asyncio
 import os
-from definable.agents import Agent
-from definable.models import OpenAIChat
-from definable.interfaces import TelegramInterface, TelegramConfig
+from definable.agent import Agent
+from definable.model import OpenAIChat
+from definable.agent.interface import TelegramInterface, TelegramConfig
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
@@ -172,7 +172,7 @@ Media is passed to the agent in the `images`, `audio`, and `files` parameters, s
 The agent can return media in its response. Images are sent as photos, and files are sent as documents:
 
 ```python
-from definable.tools import tool
+from definable.tool.decorator import tool
 from definable.media import Image
 
 @tool
@@ -205,9 +205,9 @@ To find your Telegram user ID, message [@userinfobot](https://t.me/userinfobot).
 Give your Telegram bot capabilities:
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
-from definable.tools import tool
+from definable.agent import Agent
+from definable.model import OpenAIChat
+from definable.tool.decorator import tool
 
 @tool
 def get_weather(city: str) -> str:
@@ -236,9 +236,9 @@ Session state is preserved across messages, so the reminder list persists throug
 import asyncio
 import os
 import logging
-from definable.agents import Agent, AgentConfig, LoggingMiddleware
-from definable.models import OpenAIChat
-from definable.interfaces import (
+from definable.agent import Agent, AgentConfig, LoggingMiddleware
+from definable.model import OpenAIChat
+from definable.agent.interface import (
     TelegramInterface,
     TelegramConfig,
     LoggingHook,

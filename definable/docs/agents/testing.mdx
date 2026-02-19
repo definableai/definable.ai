@@ -11,7 +11,7 @@ Definable includes testing utilities that let you verify agent behavior without 
 `MockModel` simulates model responses with pre-defined outputs:
 
 ```python
-from definable.agents import Agent, MockModel
+from definable.agent import Agent, MockModel
 
 model = MockModel(responses=["The capital of France is Paris."])
 
@@ -73,6 +73,8 @@ Simulate the [thinking phase](/agents/thinking) with `structured_responses`. Whe
 
 ```python
 import json
+from definable.agent import Agent, MockModel
+from definable.agent.tracing import Tracing
 
 thinking_json = json.dumps({
     "analysis": "The user wants a comparison of two approaches.",
@@ -88,7 +90,7 @@ model = MockModel(
 agent = Agent(
     model=model,
     thinking=True,
-    config=AgentConfig(tracing=TracingConfig(enabled=False)),
+    tracing=Tracing(enabled=False),
 )
 
 output = agent.run("Compare X vs Y")
@@ -118,8 +120,8 @@ model.reset()                  # Reset counters
 A base class for test suites with built-in assertion helpers:
 
 ```python
-from definable.agents import AgentTestCase, MockModel
-from definable.tools import tool
+from definable.agent import AgentTestCase, MockModel
+from definable.tool.decorator import tool
 
 @tool
 def add(a: int, b: int) -> int:
@@ -180,7 +182,7 @@ agent = self.create_agent(
 For simple tests outside a test class, use `create_test_agent`:
 
 ```python
-from definable.agents import create_test_agent
+from definable.agent import create_test_agent
 
 agent = create_test_agent(
     responses=["Hello!"],
@@ -194,8 +196,8 @@ output = agent.run("Hi!")
 
 ```python
 import pytest
-from definable.agents import Agent, MockModel, create_test_agent
-from definable.tools import tool
+from definable.agent import Agent, MockModel, create_test_agent
+from definable.tool.decorator import tool
 
 @tool
 def search(query: str) -> str:

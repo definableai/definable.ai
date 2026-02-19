@@ -28,14 +28,12 @@ Usage:
 import os
 from datetime import datetime, timezone
 
-from definable.agents import Agent
-from definable.auth import AllowlistAuth, APIKeyAuth, CompositeAuth
-from definable.knowledge.embedders.voyageai import VoyageAIEmbedder
-from definable.memory import CognitiveMemory
-from definable.memory.store import SQLiteMemoryStore
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
-from definable.triggers import Webhook
+from definable.agent import Agent
+from definable.agent.auth import AllowlistAuth, APIKeyAuth, CompositeAuth
+from definable.memory import Memory, SQLiteStore
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
+from definable.agent.trigger import Webhook
 
 # ---------------------------------------------------------------------------
 # Tools — give the agent something real to do
@@ -69,13 +67,7 @@ def list_services() -> str:
 # ---------------------------------------------------------------------------
 # Agent setup
 # ---------------------------------------------------------------------------
-store = SQLiteMemoryStore("./test_memory.db")
-memory = CognitiveMemory(
-  store=store,
-  token_budget=500,
-  distillation_model=OpenAIChat(id="gpt-5.2", api_key=os.environ["OPENAI_API_KEY"]),
-  embedder=VoyageAIEmbedder(id="voyage-4-lite", api_key=os.environ["VOYAGEAI_API_KEY"]),
-)
+memory = Memory(store=SQLiteStore("./test_memory.db"))
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o-mini"),
@@ -100,9 +92,9 @@ _discord_ids = {uid.strip() for uid in _discord_users.split(",") if uid.strip()}
 # Assemble the composite: APIKeyAuth handles HTTP, AllowlistAuth handles each platform
 _providers = [APIKeyAuth(keys={"demo-key-123"})]
 if _telegram_ids:
-  _providers.append(AllowlistAuth(user_ids=_telegram_ids, platforms={"telegram"}))
+  _providers.append(AllowlistAuth(user_ids=_telegram_ids, platforms={"telegram"}))  # type: ignore[arg-type]
 if _discord_ids:
-  _providers.append(AllowlistAuth(user_ids=_discord_ids, platforms={"discord"}))
+  _providers.append(AllowlistAuth(user_ids=_discord_ids, platforms={"discord"}))  # type: ignore[arg-type]
 
 agent.auth = CompositeAuth(*_providers)
 
@@ -146,7 +138,7 @@ def maybe_add_telegram():
   bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
   if not bot_token:
     return
-  from definable.interfaces.telegram import TelegramConfig, TelegramInterface
+  from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
 
   telegram = TelegramInterface(
     config=TelegramConfig(bot_token=bot_token),
@@ -161,7 +153,7 @@ def maybe_add_discord():
   bot_token = os.environ.get("DISCORD_BOT_TOKEN")
   if not bot_token:
     return
-  from definable.interfaces.discord import DiscordConfig, DiscordInterface
+  from definable.agent.interface.discord import DiscordConfig, DiscordInterface
 
   discord = DiscordInterface(
     config=DiscordConfig(bot_token=bot_token),

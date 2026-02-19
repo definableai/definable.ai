@@ -10,7 +10,9 @@ icon: book
 Set up a knowledge base, add content, and search.
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),
@@ -37,7 +39,9 @@ python definable/examples/knowledge/01_basic_rag.py
 Add, remove, and manage documents in a knowledge base.
 
 ```python
-from definable.knowledge import Knowledge, Document, InMemoryVectorDB, OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(vector_db=InMemoryVectorDB(), embedder=OpenAIEmbedder())
 
@@ -64,7 +68,7 @@ Compare TextChunker and RecursiveChunker on the same content.
 
 ```python
 from definable.knowledge import Document
-from definable.knowledge.chunkers import TextChunker, RecursiveChunker
+from definable.knowledge.chunker import TextChunker, RecursiveChunker
 
 long_text = "..." # A long document
 
@@ -88,7 +92,7 @@ python definable/examples/knowledge/03_chunking_strategies.py
 Use different embedding providers.
 
 ```python
-from definable.knowledge import OpenAIEmbedder, VoyageAIEmbedder
+from definable.embedder import OpenAIEmbedder, VoyageAIEmbedder
 
 # OpenAI
 openai_embedder = OpenAIEmbedder(id="text-embedding-3-small")
@@ -111,21 +115,23 @@ Requires `VOYAGE_API_KEY` for the Voyage AI embedder.
 
 ## 05 — Vector Databases
 
-Compare InMemoryVectorDB and PgVectorDB.
+Compare InMemoryVectorDB and PgVector.
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 # In-memory (development)
 knowledge = Knowledge(
-    vector_db=InMemoryVectorDB(dimensions=1536),
+    vector_db=InMemoryVectorDB(),
     embedder=OpenAIEmbedder(),
 )
 
 # PgVector (production)
-# from definable.knowledge import PgVectorDB
+# from definable.vectordb import PgVector
 # knowledge = Knowledge(
-#     vector_db=PgVectorDB(connection_string="postgresql://..."),
+#     vector_db=PgVector(connection_string="postgresql://..."),
 #     embedder=OpenAIEmbedder(),
 # )
 ```
@@ -136,23 +142,23 @@ python definable/examples/knowledge/05_vector_databases.py
 
 ## 06 — Agent with Knowledge
 
-Connect a knowledge base to an agent using `KnowledgeConfig`.
+Connect a knowledge base to an agent by passing a `Knowledge` instance directly.
 
 ```python
-from definable.agents import Agent, AgentConfig, KnowledgeConfig
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
+from definable.model.openai import OpenAIChat
 
-kb = Knowledge(vector_db=InMemoryVectorDB(), embedder=OpenAIEmbedder())
+kb = Knowledge(vector_db=InMemoryVectorDB(), embedder=OpenAIEmbedder(), top_k=3)
 kb.add("Employees get 20 days PTO per year.")
 kb.add("The engineering team uses Python and TypeScript.")
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
     instructions="You are an HR assistant. Answer from the provided context.",
-    config=AgentConfig(
-        knowledge=KnowledgeConfig(knowledge=kb, top_k=3),
-    ),
+    knowledge=kb,
 )
 
 output = agent.run("How many vacation days do I get?")
@@ -168,8 +174,10 @@ python definable/examples/knowledge/06_agent_with_knowledge.py
 Improve search results with Cohere reranking.
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
-from definable.knowledge.rerankers import CohereReranker
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.reranker import CohereReranker
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),

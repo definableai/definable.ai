@@ -1,21 +1,20 @@
 ---
 title: Memory Examples
 sidebarTitle: Memory
-description: Examples for cognitive memory, store backends, and agent integration.
+description: Examples for LLM-driven memory, store backends, and agent integration.
 icon: brain
 ---
 
 ## 01 — Basic Memory
 
-An agent with `SQLiteMemoryStore` that remembers across turns. Demonstrates the simplest memory setup.
+An agent with `SQLiteStore` that remembers across turns. Demonstrates the simplest memory setup.
 
 ```python
-from definable.agents import Agent
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.memory import Memory, SQLiteStore
+from definable.model import OpenAIChat
 
-store = SQLiteMemoryStore(db_path="./example_memory.db")
-memory = CognitiveMemory(store=store, token_budget=300)
+memory = Memory(store=SQLiteStore("./example_memory.db"))
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o-mini"),
@@ -41,37 +40,29 @@ print(output.content)
 
 ## 02 — Store Protocol
 
-Exercises all 19 `MemoryStore` protocol methods using `InMemoryStore`. Useful for understanding the data model without any external dependencies.
+Exercises the `MemoryStore` protocol methods using `InMemoryStore`. Useful for understanding the data model without any external dependencies.
 
 ```python
-from definable.memory import InMemoryStore, Episode, KnowledgeAtom, Procedure
+from definable.memory import InMemoryStore, UserMemory
 
 store = InMemoryStore()
 await store.initialize()
 
-# Store an episode
-episode_id = await store.store_episode(Episode(
-  id="ep-1",
+# Store a memory
+mem = UserMemory(
+  memory="Alice works at Acme Corp as a software engineer.",
+  topics=["work", "personal"],
   user_id="alice",
-  session_id="sess-1",
-  role="user",
-  content="I work at Acme Corp.",
-  topics=["work", "acme"],
-))
+)
+await store.upsert_user_memory(mem)
 
-# Store a knowledge atom
-atom_id = await store.store_atom(KnowledgeAtom(
-  id="atom-1",
-  user_id="alice",
-  subject="Alice",
-  predicate="works-at",
-  object="Acme Corp",
-  content="Alice works at Acme Corp.",
-))
+# Query memories
+memories = await store.get_user_memories(user_id="alice")
+for m in memories:
+  print(f"[{m.memory_id}] {m.memory}")
 
-# Query
-episodes = await store.get_episodes(user_id="alice")
-atoms = await store.get_atoms(user_id="alice")
+# Delete
+await store.delete_user_memory(mem.memory_id, user_id="alice")
 ```
 
 <Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/memory/02_store_protocol.py">
@@ -85,11 +76,8 @@ Smoke-tests all available memory store backends. Detects which optional dependen
 ```python
 # Tests whichever backends are available:
 # - InMemoryStore (always)
-# - SQLiteMemoryStore (always, aiosqlite is a core dep)
-# - PostgresMemoryStore (if asyncpg installed)
-# - ChromaMemoryStore (if chromadb installed)
-# - QdrantMemoryStore (if qdrant-client installed)
-# - PineconeMemoryStore (if pinecone installed)
+# - SQLiteStore (always, aiosqlite is a core dep)
+# - PostgresStore (if asyncpg installed)
 ```
 
 <Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/memory/03_store_backends.py">

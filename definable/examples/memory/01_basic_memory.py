@@ -1,10 +1,10 @@
 """
-Agent with cognitive memory.
+Agent with persistent memory.
 
 This example shows how to:
-- Set up an agent with persistent memory using SQLiteMemoryStore
+- Set up an agent with persistent memory using SQLiteStore
 - Have the agent remember facts across conversation turns
-- Inspect what memories were recalled
+- Use the memory=True shorthand for quick testing
 - Clean up memory data
 
 Requirements:
@@ -14,22 +14,19 @@ Requirements:
 import asyncio
 import os
 
-from definable.agents import Agent
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.memory import Memory, SQLiteStore
+from definable.model.openai import OpenAIChat
 
 
 async def main():
   # 1. Create the memory store (SQLite file — persists across runs)
-  store = SQLiteMemoryStore("./example_memory.db")
+  store = SQLiteStore("./example_memory.db")
 
-  # 2. Create CognitiveMemory with the store
-  #    - token_budget: max tokens of memory context injected into the system prompt
-  #    - The store is initialized lazily on first use
-  memory = CognitiveMemory(
-    store=store,
-    token_budget=500,
-  )
+  # 2. Create Memory with the store
+  #    - The LLM decides what to remember via tool calls (add/update/delete)
+  #    - Store is initialized lazily on first use
+  memory = Memory(store=store)
 
   # 3. Create an agent with memory attached
   model = OpenAIChat(id="gpt-4o-mini")

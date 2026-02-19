@@ -12,8 +12,8 @@ Requirements:
 
 from typing import List, Optional
 
-from definable.models.message import Message
-from definable.models.openai import OpenAIChat
+from definable.model.message import Message
+from definable.model.openai import OpenAIChat
 from pydantic import BaseModel, Field
 
 

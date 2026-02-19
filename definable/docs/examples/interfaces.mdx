@@ -12,12 +12,12 @@ A Discord bot with memory that remembers conversations per user.
 ```python
 import asyncio
 
-from definable.agents import Agent
-from definable.interfaces import DiscordInterface, DiscordConfig
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.agent.interface import DiscordInterface, DiscordConfig
+from definable.memory import Memory, SQLiteStore
+from definable.model import OpenAIChat
 
-memory = CognitiveMemory(store=SQLiteMemoryStore(db_path="./discord_memory.db"))
+memory = Memory(store=SQLiteStore("./discord_memory.db"))
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
@@ -44,9 +44,9 @@ A Signal bot with auto-managed Docker container. Definable handles starting and 
 ```python
 import asyncio
 
-from definable.agents import Agent
-from definable.interfaces import SignalInterface, SignalConfig
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.agent.interface import SignalInterface, SignalConfig
+from definable.model import OpenAIChat
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
@@ -76,8 +76,8 @@ Run Telegram and Discord simultaneously with a shared identity resolver, so the 
 ```python
 import asyncio
 
-from definable.agents import Agent
-from definable.interfaces import (
+from definable.agent import Agent
+from definable.agent.interface import (
     TelegramInterface,
     TelegramConfig,
     DiscordInterface,
@@ -85,10 +85,10 @@ from definable.interfaces import (
     SQLiteIdentityResolver,
     serve,
 )
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-from definable.models import OpenAIChat
+from definable.memory import Memory, SQLiteStore
+from definable.model import OpenAIChat
 
-memory = CognitiveMemory(store=SQLiteMemoryStore(db_path="./multi_memory.db"))
+memory = Memory(store=SQLiteStore("./multi_memory.db"))
 resolver = SQLiteIdentityResolver(db_path="./identity.db")
 
 agent = Agent(

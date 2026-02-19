@@ -10,8 +10,8 @@ Requirements:
     export OPENAI_API_KEY=sk-...
 """
 
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
 
 def main():
@@ -47,7 +47,7 @@ def main():
 
 def agent_with_config():
   """Agent with custom configuration."""
-  from definable.agents import Agent, AgentConfig
+  from definable.agent import Agent, AgentConfig
 
   model = OpenAIChat(id="gpt-4o-mini")
 

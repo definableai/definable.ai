@@ -10,9 +10,9 @@ icon: lock
 A complete example combining all auth features in one agent: API key auth for HTTP, allowlist auth for messaging interfaces, composite auth for combining providers, and per-trigger overrides.
 
 ```python
-from definable.agents import Agent
-from definable.auth import APIKeyAuth, AllowlistAuth, CompositeAuth
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.agent.auth import APIKeyAuth, AllowlistAuth, CompositeAuth
+from definable.model import OpenAIChat
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),

@@ -62,13 +62,13 @@ async def demo_direct_client() -> None:
     print("\n2. Calling 'echo' tool:")
     result = await client.call_tool("mock", "echo", {"message": "Hello from MCP!"})
     # result.content is a list of content items
-    text = result.content[0].text if result.content else ""
+    text = result.content[0].text if result.content else ""  # type: ignore[union-attr]
     print(f"   Result: {text}")
 
     # Call the add_numbers tool
     print("\n3. Calling 'add_numbers' tool:")
     result = await client.call_tool("mock", "add_numbers", {"a": 10, "b": 32})
-    text = result.content[0].text if result.content else ""
+    text = result.content[0].text if result.content else ""  # type: ignore[union-attr]
     print(f"   10 + 32 = {text}")
 
     # Get server info

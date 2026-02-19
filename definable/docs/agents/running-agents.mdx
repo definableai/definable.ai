@@ -12,8 +12,8 @@ Agents support four execution modes. Choose based on your application's needs.
 The simplest way to run an agent. Blocks until the full response is ready.
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),

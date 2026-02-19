@@ -10,13 +10,13 @@ defaults for overlapping formats. This lets you:
 
 from typing import List, Set
 
-from definable.agents import Agent
-from definable.agents.testing import MockModel
+from definable.agent import Agent
+from definable.agent.testing import MockModel
 from definable.media import File
-from definable.readers.base import BaseReader
-from definable.readers.models import ContentBlock, ReaderConfig
-from definable.readers.parsers.base_parser import BaseParser
-from definable.readers.registry import ParserRegistry
+from definable.reader.base import BaseReader
+from definable.reader.models import ContentBlock, ReaderConfig
+from definable.reader.parsers.base_parser import BaseParser
+from definable.reader.registry import ParserRegistry
 
 
 class CloudPDFParser(BaseParser):
@@ -58,6 +58,6 @@ print(f"Result: {result.content}")
 
 # --- Use with Agent ---
 model = MockModel(responses=["I analyzed the PDF."])
-agent = Agent(model=model, readers=custom_reader)
+agent = Agent(model=model, readers=custom_reader)  # type: ignore[arg-type]
 output = agent.run("Analyze this PDF.", files=[pdf_file])
 print(f"\nAgent response: {output.content}")

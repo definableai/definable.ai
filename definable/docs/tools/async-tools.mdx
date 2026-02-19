@@ -13,7 +13,7 @@ Use `async def` with the `@tool` decorator:
 
 ```python
 import httpx
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool
 async def fetch_url(url: str) -> str:

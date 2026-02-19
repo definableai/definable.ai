@@ -74,6 +74,7 @@
                 "expanded": false,
                 "pages": [
                   "agents/thinking",
+                  "agents/agentic-loop",
                   "agents/deep-research",
                   "agents/multi-turn",
                   "agents/middleware",
@@ -119,6 +120,10 @@
                 ]
               }
             ]
+          },
+          {
+            "group": "Browser",
+            "pages": ["browser/overview"]
           },
           {
             "group": "Interfaces",
@@ -174,7 +179,7 @@
                 "group": "Built-in Skills",
                 "icon": "puzzle-piece",
                 "expanded": false,
-                "pages": ["skills/built-in"]
+                "pages": ["skills/built-in", "skills/macos"]
               },
               {
                 "group": "Advanced",
@@ -234,6 +239,10 @@
                 ]
               }
             ]
+          },
+          {
+            "group": "Claude Code",
+            "pages": ["claude-code/overview"]
           },
           {
             "group": "Replay",

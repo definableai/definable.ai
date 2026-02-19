@@ -16,9 +16,9 @@ Usage:
     -d '{"message": "Hello from webhook!"}'
 """
 
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
-from definable.triggers import Webhook
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+from definable.agent.trigger import Webhook
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o-mini"),

@@ -10,8 +10,8 @@ The thinking layer adds an explicit reasoning phase before the agent produces it
 ## Quick Start
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
@@ -68,12 +68,12 @@ agent = Agent(
 Use a separate (potentially cheaper or faster) model for the thinking phase:
 
 ```python
-from definable.agents import ThinkingConfig
-from definable.models import OpenAIChat
+from definable.agent.reasoning import Thinking
+from definable.model import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
-    thinking=ThinkingConfig(
+    thinking=Thinking(
         model=OpenAIChat(id="gpt-4o-mini"),  # Cheaper model for thinking
     ),
 )
@@ -86,7 +86,7 @@ Override the context-aware prompt with a fully custom thinking prompt:
 ```python
 agent = Agent(
     model=model,
-    thinking=ThinkingConfig(
+    thinking=Thinking(
         instructions="Focus on identifying edge cases and potential failures in the user's approach.",
     ),
 )
@@ -101,11 +101,11 @@ Custom instructions bypass the context-aware prompt building entirely. The think
 ```python
 agent = Agent(
     model=model,
-    thinking=ThinkingConfig(enabled=False),  # Explicitly disabled
+    thinking=Thinking(enabled=False),  # Explicitly disabled
 )
 ```
 
-## ThinkingConfig Reference
+## Thinking Reference
 
 <ParamField path="enabled" type="bool" default="true">
   Whether thinking is active. Always `True` when instantiated directly.
@@ -117,6 +117,14 @@ agent = Agent(
 
 <ParamField path="instructions" type="str">
   Custom thinking prompt. If `None`, uses the context-aware prompt builder which includes tool catalog, agent instructions summary, and context availability flags.
+</ParamField>
+
+<ParamField path="trigger" type="str" default="always">
+  When to activate thinking. `"always"` runs every call; `"auto"` does a lightweight model pre-check and only activates thinking when the query is judged complex; `"never"` disables even if configured.
+</ParamField>
+
+<ParamField path="description" type="str">
+  Description shown in the layer guide injected into the system prompt. If `None`, uses the default description for the thinking layer.
 </ParamField>
 
 ## Output
@@ -189,8 +197,9 @@ Use `MockModel` with `structured_responses` to test the thinking phase without A
 
 ```python
 import json
-from definable.agents import Agent, AgentConfig, ThinkingConfig, TracingConfig
-from definable.agents.testing import MockModel
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.agent.tracing import Tracing
 
 thinking_json = json.dumps({
     "analysis": "The user wants to compare two architectures.",
@@ -206,7 +215,7 @@ model = MockModel(
 agent = Agent(
     model=model,
     thinking=True,
-    config=AgentConfig(tracing=TracingConfig(enabled=False)),
+    tracing=Tracing(enabled=False),
 )
 
 output = agent.run("Compare microservices vs monoliths")

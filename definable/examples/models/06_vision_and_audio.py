@@ -15,8 +15,8 @@ Note: This example requires vision/audio capable models like gpt-4o or gpt-4o-mi
 from pathlib import Path
 
 from definable.media import Audio, Image
-from definable.models.message import Message
-from definable.models.openai import OpenAIChat
+from definable.model.message import Message
+from definable.model.openai import OpenAIChat
 
 
 def image_from_url():

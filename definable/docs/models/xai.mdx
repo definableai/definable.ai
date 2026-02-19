@@ -13,10 +13,14 @@ export XAI_API_KEY="xai-..."
 ## Basic Usage
 
 ```python
-from definable.models import xAI
+from definable.model import xAI
+from definable.model.message import Message
 
 model = xAI(id="grok-beta")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -51,13 +55,16 @@ print(response.content)
 xAI Grok models can search the web for real-time information:
 
 ```python
+from definable.model.message import Message
+
 model = xAI(
     id="grok-beta",
     search_parameters={"mode": "auto"},
 )
 
 response = model.invoke(
-    messages=[{"role": "user", "content": "What happened in tech news today?"}]
+    messages=[Message(role="user", content="What happened in tech news today?")],
+    assistant_message=Message(role="assistant", content=""),
 )
 print(response.content)
 
@@ -70,8 +77,11 @@ if response.citations:
 ## Streaming
 
 ```python
+from definable.model.message import Message
+
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "Explain the latest AI developments."}]
+    messages=[Message(role="user", content="Explain the latest AI developments.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         print(chunk.content, end="", flush=True)
@@ -80,8 +90,11 @@ for chunk in model.invoke_stream(
 ## Async Usage
 
 ```python
+from definable.model.message import Message
+
 response = await model.ainvoke(
-    messages=[{"role": "user", "content": "Hello!"}]
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
 )
 ```
 

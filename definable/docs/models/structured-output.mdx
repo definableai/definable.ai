@@ -11,8 +11,10 @@ Structured output lets you define a Pydantic model and have the LLM return data 
 Define a Pydantic model and pass it as `response_format`:
 
 ```python
+import json
 from pydantic import BaseModel
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
+from definable.model.message import Message
 
 class MovieRecommendation(BaseModel):
     title: str
@@ -22,16 +24,17 @@ class MovieRecommendation(BaseModel):
 
 model = OpenAIChat(id="gpt-4o")
 response = model.invoke(
-    messages=[{"role": "user", "content": "Recommend a great sci-fi movie."}],
+    messages=[Message(role="user", content="Recommend a great sci-fi movie.")],
+    assistant_message=Message(role="assistant", content=""),
     response_format=MovieRecommendation,
 )
 
-movie = response.parsed  # MovieRecommendation instance
+movie = MovieRecommendation(**json.loads(response.content))
 print(f"{movie.title} ({movie.year}) - {movie.genre}")
 print(f"Why: {movie.reason}")
 ```
 
-The `response.parsed` field contains a fully validated Pydantic model instance. The raw JSON is still available in `response.content`.
+The raw JSON is available in `response.content`. Parse it into your model using `YourModel(**json.loads(response.content))`.
 
 ## Complex Schemas
 
@@ -59,12 +62,16 @@ class ProjectPlan(BaseModel):
     tasks: List[Task]
     total_estimated_hours: float
 
+import json
+from definable.model.message import Message
+
 response = model.invoke(
-    messages=[{"role": "user", "content": "Create a plan for building a REST API."}],
+    messages=[Message(role="user", content="Create a plan for building a REST API.")],
+    assistant_message=Message(role="assistant", content=""),
     response_format=ProjectPlan,
 )
 
-plan = response.parsed
+plan = ProjectPlan(**json.loads(response.content))
 for task in plan.tasks:
     print(f"[{task.priority.value}] {task.title} ({task.estimated_hours}h)")
 ```
@@ -97,7 +104,7 @@ Set `strict_output=False` if you encounter schema compatibility issues with stri
 Pass `output_schema` to an agent run to get structured output from the final response:
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 
 agent = Agent(model=model, tools=[search_web])
 
@@ -111,9 +118,13 @@ print(output.content)  # Parsed FrameworkComparison
 ## Async
 
 ```python
+import json
+from definable.model.message import Message
+
 response = await model.ainvoke(
-    messages=[{"role": "user", "content": "Recommend a sci-fi movie."}],
+    messages=[Message(role="user", content="Recommend a sci-fi movie.")],
+    assistant_message=Message(role="assistant", content=""),
     response_format=MovieRecommendation,
 )
-movie = response.parsed
+movie = MovieRecommendation(**json.loads(response.content))
 ```

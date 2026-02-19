@@ -10,8 +10,8 @@ icon: microchip
 The simplest way to call an LLM. Sends a message and prints the response.
 
 ```python
-from definable.models.openai import OpenAIChat
-from definable.models.message import Message
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o-mini")
 
@@ -39,8 +39,8 @@ Same as above, but using `asyncio` for non-blocking execution.
 
 ```python
 import asyncio
-from definable.models.openai import OpenAIChat
-from definable.models.message import Message
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 async def main():
     model = OpenAIChat(id="gpt-4o-mini")
@@ -63,8 +63,8 @@ python definable/examples/models/02_async_invoke.py
 Stream tokens as they are generated for real-time output.
 
 ```python
-from definable.models.openai import OpenAIChat
-from definable.models.message import Message
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o-mini")
 messages = [Message(role="user", content="Tell me a short story.")]
@@ -86,9 +86,10 @@ python definable/examples/models/03_streaming.py
 Return Pydantic models instead of free text.
 
 ```python
+import json
 from pydantic import BaseModel
-from definable.models.openai import OpenAIChat
-from definable.models.message import Message
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 class Movie(BaseModel):
     title: str
@@ -101,7 +102,8 @@ response = model.invoke(
     assistant_message=Message(role="assistant", content=""),
     response_format=Movie,
 )
-print(response.parsed)  # Movie(title=..., year=..., genre=...)
+movie = Movie(**json.loads(response.content))
+print(movie)  # Movie(title=..., year=..., genre=...)
 ```
 
 ```bash
@@ -113,10 +115,10 @@ python definable/examples/models/04_structured_output.py
 Use the same message format across OpenAI, DeepSeek, Moonshot, and xAI.
 
 ```python
-from definable.models.openai import OpenAIChat
-from definable.models.deepseek import DeepSeekChat
-from definable.models.moonshot import MoonshotChat
-from definable.models.xai import xAI
+from definable.model.openai import OpenAIChat
+from definable.model.deepseek import DeepSeekChat
+from definable.model.moonshot import MoonshotChat
+from definable.model.xai import xAI
 
 providers = [
     OpenAIChat(id="gpt-4o-mini"),
@@ -125,8 +127,13 @@ providers = [
     xAI(id="grok-beta"),
 ]
 
+from definable.model.message import Message
+
+messages = [Message(role="user", content="What is 2 + 2?")]
+assistant = Message(role="assistant", content="")
+
 for model in providers:
-    response = model.invoke(messages=[...])
+    response = model.invoke(messages=messages, assistant_message=assistant)
     print(f"{model.provider}: {response.content[:100]}")
 ```
 
@@ -143,15 +150,15 @@ Requires API keys for each provider: `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MOON
 Send images and audio to multimodal models.
 
 ```python
-from definable.models.openai import OpenAIChat
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 from definable.media import Image
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(messages=[{
-    "role": "user",
-    "content": "Describe this image.",
-    "images": [Image(url="https://example.com/photo.jpg")],
-}])
+response = model.invoke(
+    messages=[Message(role="user", content="Describe this image.", images=[Image(url="https://example.com/photo.jpg")])],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 

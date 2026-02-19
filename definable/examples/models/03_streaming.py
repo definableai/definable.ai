@@ -12,8 +12,8 @@ Requirements:
 
 import asyncio
 
-from definable.models.message import Message
-from definable.models.openai import OpenAIChat
+from definable.model.message import Message
+from definable.model.openai import OpenAIChat
 
 
 def sync_streaming():

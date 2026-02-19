@@ -12,9 +12,9 @@ Tools often need access to external services (databases, API clients) or runtime
 Define dependencies on the agent config and receive them in any tool:
 
 ```python
-from definable.agents import Agent, AgentConfig
-from definable.models import OpenAIChat
-from definable.tools import tool
+from definable.agent import Agent, AgentConfig
+from definable.model import OpenAIChat
+from definable.tool.decorator import tool
 
 # Your service
 class Database:
@@ -99,7 +99,7 @@ config = AgentConfig(
 Combining dependencies and context for a production tool:
 
 ```python
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool
 def create_ticket(
@@ -130,7 +130,7 @@ Inject mock dependencies in tests:
 
 ```python
 from unittest.mock import MagicMock
-from definable.agents import create_test_agent, AgentConfig
+from definable.agent import create_test_agent, AgentConfig
 
 mock_db = MagicMock()
 mock_db.query.return_value = "Mock results"

@@ -14,9 +14,9 @@ Requirements:
 from dataclasses import dataclass
 from typing import Dict
 
-from definable.agents import Agent, MetricsMiddleware
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent, MetricsMiddleware
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 # Approximate pricing per 1M tokens (as of 2024)
 # Check OpenAI pricing page for current rates

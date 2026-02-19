@@ -17,7 +17,7 @@ Chunking splits large documents into smaller pieces that fit within embedding mo
 Splits text on a single separator (e.g., double newlines for paragraphs):
 
 ```python
-from definable.knowledge.chunkers import TextChunker
+from definable.knowledge.chunker import TextChunker
 
 chunker = TextChunker(
     chunk_size=500,
@@ -47,7 +47,7 @@ chunker = TextChunker(
 Splits text using a hierarchy of separators, falling back to finer-grained splits when chunks are too large. This is the default chunker and generally produces the best results.
 
 ```python
-from definable.knowledge.chunkers import RecursiveChunker
+from definable.knowledge.chunker import RecursiveChunker
 
 chunker = RecursiveChunker(
     chunk_size=1000,
@@ -72,8 +72,10 @@ The default separator hierarchy:
 Pass a chunker when creating a knowledge base:
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
-from definable.knowledge.chunkers import RecursiveChunker
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.knowledge.chunker import RecursiveChunker
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),
@@ -103,7 +105,7 @@ Both chunkers implement:
 
 ```python
 from definable.knowledge import Document
-from definable.knowledge.chunkers import TextChunker, RecursiveChunker
+from definable.knowledge.chunker import TextChunker, RecursiveChunker
 
 doc = Document(content="Long document content here...")
 

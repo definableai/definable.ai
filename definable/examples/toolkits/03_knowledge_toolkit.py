@@ -14,9 +14,11 @@ Note: This example uses a mock embedder for demonstration.
 
 from typing import List
 
-from definable.agents import Agent, KnowledgeToolkit
-from definable.knowledge import Document, Embedder, InMemoryVectorDB, Knowledge
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent, KnowledgeToolkit
+from definable.embedder import Embedder
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
+from definable.model.openai import OpenAIChat
 
 
 class MockEmbedder(Embedder):

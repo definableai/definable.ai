@@ -44,8 +44,8 @@ toolkit = MCPToolkit(config=config)
 Use the toolkit as a context manager to manage the server connection lifecycle:
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model import OpenAIChat
 
 async with toolkit:
     # Inspect available tools
@@ -67,9 +67,9 @@ async with toolkit:
 
 ```python
 import asyncio
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
 
 async def main():
     config = MCPConfig(servers=[

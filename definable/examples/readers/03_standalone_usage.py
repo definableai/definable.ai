@@ -8,7 +8,7 @@ without any agent or model involvement. This is useful for:
 """
 
 from definable.media import File
-from definable.readers import BaseReader
+from definable.reader import BaseReader
 
 # Create a reader with default parsers
 reader = BaseReader()

@@ -10,9 +10,9 @@ Requirements:
     export OPENAI_API_KEY=sk-...
 """
 
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 
 @tool

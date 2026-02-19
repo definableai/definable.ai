@@ -21,10 +21,12 @@ Use `KnowledgeToolkit` when:
 ## Setup
 
 ```python
-from definable.agents import Agent
-from definable.agents.toolkits import KnowledgeToolkit
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.agent.toolkits import KnowledgeToolkit
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
+from definable.model import OpenAIChat
 
 # Build a knowledge base
 knowledge = Knowledge(

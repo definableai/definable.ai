@@ -1,0 +1,296 @@
+---
+title: Browser Toolkit
+sidebarTitle: Overview
+description: SeleniumBase CDP browser automation — 50 tools, 3 connection modes.
+icon: globe
+---
+
+The **BrowserToolkit** gives agents full browser automation via [SeleniumBase](https://seleniumbase.io/) CDP mode. It drives Chrome directly through the Chrome DevTools Protocol — no WebDriver, no automation fingerprints. Websites cannot detect it with standard bot-detection checks.
+
+## Installation
+
+```bash
+pip install 'definable[browser]'
+```
+
+## Quick Start
+
+```python
+from definable.agent import Agent
+from definable.browser import BrowserToolkit, BrowserConfig
+
+async def main():
+  config = BrowserConfig(headless=False)
+  async with BrowserToolkit(config=config) as toolkit:
+    agent = Agent(model="gpt-4o", toolkits=[toolkit])
+    result = await agent.arun("Go to news.ycombinator.com and list the top 3 stories")
+    print(result.content)
+```
+
+The toolkit exposes **50 tools** that the agent can call to navigate, read, interact with, and extract data from web pages.
+
+## Connection Modes
+
+BrowserToolkit supports three connection modes, selected by the `BrowserConfig` you pass in.
+
+### Fresh Chrome (Default)
+
+Launches a new ephemeral Chrome instance. Cookies and storage are discarded when the toolkit shuts down.
+
+```python
+config = BrowserConfig(headless=False)
+```
+
+### Persistent Profile
+
+Launch Chrome with a persistent user data directory. Cookies, localStorage, and logged-in sessions survive between runs.
+
+```python
+config = BrowserConfig(user_data_dir="/tmp/my-profile")
+```
+
+### CDP Attach
+
+Attach to an already-running Chrome instance via its remote debugging port. No new browser window is opened — the agent controls your existing browser.
+
+```bash
+# First, launch Chrome with remote debugging enabled:
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 --no-first-run
+```
+
+```python
+config = BrowserConfig(host="127.0.0.1", port=9222)
+```
+
+## BrowserConfig Reference
+
+<ParamField path="headless" type="bool" default="false">
+  Run Chrome without a visible window. CDP mode works best headed for maximum stealth.
+</ParamField>
+
+<ParamField path="user_data_dir" type="str">
+  Path to a Chrome user data directory for session persistence.
+</ParamField>
+
+<ParamField path="host" type="str">
+  Remote-debugging host to attach to an existing Chrome. Must be combined with `port`.
+</ParamField>
+
+<ParamField path="port" type="int">
+  Remote-debugging port to attach to an existing Chrome. Must be combined with `host`.
+</ParamField>
+
+<ParamField path="proxy" type="str">
+  Proxy server in `"host:port"` or `"user:pass@host:port"` format.
+</ParamField>
+
+<ParamField path="user_agent" type="str">
+  Override the browser's User-Agent string.
+</ParamField>
+
+<ParamField path="lang" type="str" default="en">
+  Language locale code, e.g. `"en"`, `"fr"`, `"zh-CN"`.
+</ParamField>
+
+<ParamField path="incognito" type="bool" default="false">
+  Launch in incognito mode.
+</ParamField>
+
+<ParamField path="mobile" type="bool" default="false">
+  Enable mobile emulation mode.
+</ParamField>
+
+<ParamField path="ad_block" type="bool" default="false">
+  Enable SeleniumBase's built-in ad blocker.
+</ParamField>
+
+<ParamField path="timeout" type="float" default="30.0">
+  Default per-operation timeout in seconds.
+</ParamField>
+
+## Tools Reference
+
+All 50 tools are grouped by category below. Every tool name is prefixed with `browser_`.
+
+### Navigation (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_navigate` | Navigate to a URL (must include scheme, e.g. `https://`) |
+| `browser_go_back` | Navigate to the previous page in history |
+| `browser_go_forward` | Navigate forward in history |
+| `browser_refresh` | Reload the current page |
+
+### Page State (7 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_get_url` | Return the current page URL |
+| `browser_get_title` | Return the current page title |
+| `browser_get_text` | Return visible text of an element (default: `body`) |
+| `browser_get_source` | Return page HTML source (capped at 20,000 chars) |
+| `browser_get_attribute` | Return an HTML attribute value on an element |
+| `browser_is_visible` | Check if an element is currently visible |
+| `browser_get_page_info` | Situational snapshot: URL, title, scroll position, element counts |
+
+### Page Snapshot (1 tool)
+
+| Tool | Description |
+|------|-------------|
+| `browser_snapshot` | Accessibility-tree view of the page showing interactive elements with CSS selectors |
+
+### Interaction (11 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_click` | Click an element by CSS selector |
+| `browser_click_if_visible` | Click only if the element is visible (safe for popups) |
+| `browser_click_by_text` | Click the first element whose visible text contains the given string |
+| `browser_type` | Clear an input and type text into it |
+| `browser_type_slowly` | Type with human-like 75ms delays (avoids bot detection) |
+| `browser_press_keys` | Send keystrokes to a specific element (requires selector) |
+| `browser_press_key` | Press a key on the focused element (no selector needed) |
+| `browser_clear_input` | Clear an input field or textarea |
+| `browser_select_option` | Select an option from a `<select>` dropdown by visible text |
+| `browser_hover` | Hover over an element (reveals dropdowns, tooltips) |
+| `browser_drag` | Drag one element to another via HTML5 drag-and-drop |
+
+### Scrolling (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_scroll_down` | Scroll down by N screen-heights (default 3) |
+| `browser_scroll_up` | Scroll up by N screen-heights (default 3) |
+| `browser_scroll_to` | Scroll until an element is in view |
+
+### Waiting (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_wait` | Pause for N seconds (use after page loads) |
+| `browser_wait_for_element` | Wait up to N seconds for an element to appear |
+| `browser_wait_for_text` | Wait up to N seconds for text to appear inside a selector |
+
+### DOM Manipulation (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_execute_js` | Execute JavaScript in the page context |
+| `browser_remove_elements` | Remove all elements matching a selector from the DOM |
+
+### Forms & Checkboxes (5 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_set_value` | Set an element's value directly (works for sliders, range inputs) |
+| `browser_is_checked` | Check if a checkbox or radio is checked |
+| `browser_check` | Check a checkbox or radio (idempotent) |
+| `browser_uncheck` | Uncheck a checkbox (idempotent) |
+| `browser_highlight` | Flash a gold border around an element for 2 seconds |
+
+### Cookies (3 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_get_cookies` | Return all cookies as a JSON array |
+| `browser_set_cookie` | Set a cookie on the current domain |
+| `browser_clear_cookies` | Delete all cookies for the session |
+
+### Storage (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_get_storage` | Get a value from localStorage or sessionStorage |
+| `browser_set_storage` | Set a key/value pair in localStorage or sessionStorage |
+
+### Tabs (4 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_open_tab` | Open a new tab, optionally navigating to a URL |
+| `browser_close_tab` | Close the currently active tab |
+| `browser_get_tabs` | Return the number of open tabs |
+| `browser_switch_to_tab` | Switch to a tab by zero-based index |
+
+### Output (2 tools)
+
+| Tool | Description |
+|------|-------------|
+| `browser_screenshot` | Take a screenshot and save to a file |
+| `browser_print_to_pdf` | Save the current page as PDF |
+
+### Dialogs (1 tool)
+
+| Tool | Description |
+|------|-------------|
+| `browser_handle_dialog` | Accept or dismiss a browser dialog (alert/confirm/prompt) |
+
+### Browser State (1 tool)
+
+| Tool | Description |
+|------|-------------|
+| `browser_set_geolocation` | Override GPS coordinates via CDP |
+
+### CAPTCHA (1 tool)
+
+| Tool | Description |
+|------|-------------|
+| `browser_solve_captcha` | Attempt to solve Cloudflare Turnstile, reCAPTCHA, hCaptcha |
+
+## Usage with Agent
+
+The toolkit follows the `AsyncLifecycleToolkit` protocol. Use `async with` for automatic startup and shutdown:
+
+```python
+from definable.agent import Agent
+from definable.browser import BrowserToolkit, BrowserConfig
+from definable.model.openai import OpenAIChat
+
+async def run():
+  config = BrowserConfig(headless=False)
+  async with BrowserToolkit(config=config) as toolkit:
+    agent = Agent(
+      model=OpenAIChat(id="gpt-4o"),
+      toolkits=[toolkit],
+      instructions="You are a web research assistant. Use browser_snapshot before interacting with any page.",
+    )
+    result = await agent.arun("Go to example.com and tell me the page title")
+    print(result.content)
+```
+
+<Tip>
+Use `browser_snapshot` before interacting with a page. It returns an accessibility-tree view with CSS selectors for every interactive element, which is more useful than `browser_get_source` for understanding page structure.
+</Tip>
+
+## Combining with Other Toolkits
+
+BrowserToolkit can be used alongside other toolkits:
+
+```python
+from definable.mcp import MCPToolkit, MCPConfig
+
+async with BrowserToolkit(config=config) as browser:
+  async with MCPToolkit(config=MCPConfig(...)) as mcp:
+    agent = Agent(
+      model="gpt-4o",
+      toolkits=[browser, mcp],
+    )
+```
+
+## Testing
+
+Inject a mock browser to test without launching Chrome:
+
+```python
+from unittest.mock import AsyncMock
+from definable.browser import BrowserToolkit
+
+mock_browser = AsyncMock()
+mock_browser.navigate.return_value = "Navigated to https://example.com | Title: Example"
+
+toolkit = BrowserToolkit(browser=mock_browser)
+await toolkit.initialize()
+
+assert len(toolkit.tools) == 50
+```

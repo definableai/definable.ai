@@ -10,9 +10,9 @@ Skills are a higher-level abstraction that combines **instructions** (domain exp
 ## Quick Example
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
-from definable.skills import Calculator, DateTime
+from definable.agent import Agent
+from definable.model import OpenAIChat
+from definable.skill import Calculator, DateTime
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
@@ -32,8 +32,8 @@ Skills inject their instructions into the system prompt and register their tools
 Pass tools and instructions directly:
 
 ```python
-from definable.skills import Skill
-from definable.tools import tool
+from definable.skill import Skill
+from definable.tool.decorator import tool
 
 @tool
 def search_docs(query: str) -> str:
@@ -54,8 +54,8 @@ agent = Agent(model=model, skills=[support])
 Subclass `Skill` for configurable, reusable skills with lifecycle hooks:
 
 ```python
-from definable.skills import Skill
-from definable.tools import tool
+from definable.skill import Skill
+from definable.tool.decorator import tool
 
 class CustomerSupport(Skill):
   name = "customer_support"
@@ -85,7 +85,7 @@ Methods decorated with `@tool` are auto-discovered — no need to pass them expl
 ## Skill Constructor
 
 ```python
-from definable.skills import Skill
+from definable.skill import Skill
 
 skill = Skill(
   name="my_skill",
@@ -124,7 +124,7 @@ skill = Skill(
 Skills compose naturally — their tools and instructions are merged:
 
 ```python
-from definable.skills import Calculator, DateTime, WebSearch, Shell
+from definable.skill import Calculator, DateTime, WebSearch, Shell, MacOS
 
 agent = Agent(
   model=model,
@@ -133,6 +133,7 @@ agent = Agent(
     DateTime(),
     WebSearch(),
     Shell(allowed_commands={"ls", "cat", "grep"}),
+    MacOS(allowed_apps={"Safari", "TextEdit"}),
   ],
 )
 ```

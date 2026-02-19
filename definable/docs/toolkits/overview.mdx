@@ -12,8 +12,8 @@ A **Toolkit** is a collection of related tools packaged together. Instead of man
 Subclass `Toolkit` and define tool methods:
 
 ```python
-from definable.agents import Toolkit
-from definable.tools import tool
+from definable.agent import Toolkit
+from definable.tool.decorator import tool
 
 class MathToolkit(Toolkit):
     @tool
@@ -41,8 +41,8 @@ Tools are discovered automatically — any method decorated with `@tool` is incl
 Pass toolkit instances to an agent:
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),

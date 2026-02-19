@@ -10,8 +10,8 @@ The replay module lets you look inside completed agent runs, compare two runs si
 ## Quick Example
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model import OpenAIChat
 
 agent = Agent(model=OpenAIChat(id="gpt-4o"), tools=[...])
 
@@ -44,7 +44,7 @@ replay = agent.replay(trace_file="./traces/run.jsonl")
 
 ```python From Events
 # From pre-loaded events
-from definable.replay import Replay
+from definable.agent.replay import Replay
 
 replay = Replay.from_events(events, run_id="abc123")
 ```
@@ -125,7 +125,7 @@ print(diff.tool_calls_diff.common)   # Count of matching tools
 You can also use `compare_runs` directly:
 
 ```python
-from definable.replay import compare_runs
+from definable.agent.replay import compare_runs
 
 diff = compare_runs(output_a, output_b)  # Accepts Replay or RunOutput
 ```

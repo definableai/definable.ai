@@ -13,9 +13,9 @@ Usage:
 import asyncio
 import os
 
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.mcp import MCPConfig, MCPServerConfig, MCPToolkit
-from definable.models.openai import OpenAIChat
+from definable.model.openai import OpenAIChat
 
 
 async def main() -> None:
@@ -56,7 +56,7 @@ async def main() -> None:
     if output.tools:
       print("\n--- Tools Used ---")
       for tool in output.tools:
-        print(f"  - {tool.name}: {tool.result[:100]}..." if tool.result else f"  - {tool.name}")
+        print(f"  - {tool.name}: {tool.result[:100]}..." if tool.result else f"  - {tool.name}")  # type: ignore[attr-defined]
 
 
 if __name__ == "__main__":

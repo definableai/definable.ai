@@ -2,7 +2,7 @@
 Agent with automatic knowledge retrieval (RAG).
 
 This example shows how to:
-- Configure KnowledgeConfig for automatic RAG
+- Configure Knowledge for automatic RAG
 - Agent automatically retrieves relevant context
 - Control retrieval behavior
 
@@ -14,9 +14,11 @@ Note: This example uses a mock embedder to work without additional API keys.
 
 from typing import List, Literal
 
-from definable.agents import Agent, AgentConfig, KnowledgeConfig
-from definable.knowledge import Document, Embedder, InMemoryVectorDB, Knowledge
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.embedder import Embedder
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
+from definable.model.openai import OpenAIChat
 
 
 class MockEmbedder(Embedder):
@@ -123,15 +125,11 @@ def basic_knowledge_config():
   model = OpenAIChat(id="gpt-4o-mini")
 
   # Create agent with automatic knowledge retrieval
+  kb.top_k = 3  # Retrieve top 3 relevant documents
   agent = Agent(
     model=model,
     instructions="You are an HR assistant for the company. Answer questions about company policies.",
-    config=AgentConfig(
-      knowledge=KnowledgeConfig(
-        knowledge=kb,
-        top_k=3,  # Retrieve top 3 relevant documents
-      ),
-    ),
+    knowledge=kb,
   )
 
   # Ask questions - knowledge is automatically retrieved
@@ -156,23 +154,20 @@ def advanced_knowledge_config():
   kb = create_company_knowledge_base()
   model = OpenAIChat(id="gpt-4o-mini")
 
-  # Advanced configuration
+  # Advanced configuration — set fields directly on Knowledge
+  kb.top_k = 5  # More documents for broader context
+  kb.rerank = True  # Rerank results by relevance (if reranker available)
+  kb.min_score = 0.5  # Minimum relevance score
+  kb.context_format = "xml"  # Format: "xml", "markdown", or "json"
+  kb.context_position = "system"  # Position: "system" or "before_user"
+  kb.query_from = "last_user"  # Query source: "last_user" or "full_conversation"
+  kb.max_query_length = 500  # Truncate long queries
+  kb.enabled = True  # Can be disabled dynamically
+
   agent = Agent(
     model=model,
     instructions="You are a company assistant. Use the provided context to answer questions accurately.",
-    config=AgentConfig(
-      knowledge=KnowledgeConfig(
-        knowledge=kb,
-        top_k=5,  # More documents for broader context
-        rerank=True,  # Rerank results by relevance (if reranker available)
-        min_score=0.5,  # Minimum relevance score
-        context_format="xml",  # Format: "xml", "markdown", or "json"
-        context_position="system",  # Position: "system" or "before_user"
-        query_from="last_user",  # Query source: "last_user" or "full_conversation"
-        max_query_length=500,  # Truncate long queries
-        enabled=True,  # Can be disabled dynamically
-      ),
-    ),
+    knowledge=kb,
   )
 
   print("\nKnowledge Config:")
@@ -199,16 +194,12 @@ def context_formats():
     print(f"\n{fmt.upper()} Format:")
     print("-" * 30)
 
+    kb.top_k = 2
+    kb.context_format = fmt
     agent = Agent(
       model=model,
       instructions="Answer concisely based on the provided context.",
-      config=AgentConfig(
-        knowledge=KnowledgeConfig(
-          knowledge=kb,
-          top_k=2,
-          context_format=fmt,
-        ),
-      ),
+      knowledge=kb,
     )
 
     output = agent.run("What is the vacation policy?")
@@ -224,15 +215,11 @@ def multi_turn_with_knowledge():
   kb = create_company_knowledge_base()
   model = OpenAIChat(id="gpt-4o-mini")
 
+  kb.top_k = 3
   agent = Agent(
     model=model,
     instructions="You are an HR assistant. Help employees understand company policies.",
-    config=AgentConfig(
-      knowledge=KnowledgeConfig(
-        knowledge=kb,
-        top_k=3,
-      ),
-    ),
+    knowledge=kb,
   )
 
   # Multi-turn conversation
@@ -261,16 +248,12 @@ def conditional_knowledge():
   model = OpenAIChat(id="gpt-4o-mini")
 
   # Agent with knowledge enabled
+  kb.top_k = 3
+  kb.enabled = True  # Knowledge enabled
   agent_with_kb = Agent(
     model=model,
     instructions="You are a helpful assistant.",
-    config=AgentConfig(
-      knowledge=KnowledgeConfig(
-        knowledge=kb,
-        top_k=3,
-        enabled=True,  # Knowledge enabled
-      ),
-    ),
+    knowledge=kb,
   )
 
   # Agent without knowledge (for general questions)

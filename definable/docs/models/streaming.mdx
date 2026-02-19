@@ -10,24 +10,28 @@ Streaming lets your application display tokens as they are generated instead of 
 
 <CodeGroup>
 ```python Sync
-from definable.models import OpenAIChat
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
 
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "Explain how DNS works."}]
+    messages=[Message(role="user", content="Explain how DNS works.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         print(chunk.content, end="", flush=True)
 ```
 
 ```python Async
-from definable.models import OpenAIChat
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
 
 async for chunk in model.ainvoke_stream(
-    messages=[{"role": "user", "content": "Explain how DNS works."}]
+    messages=[Message(role="user", content="Explain how DNS works.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         print(chunk.content, end="", flush=True)
@@ -41,8 +45,11 @@ Each chunk is a `ModelResponse` object. During streaming, most chunks contain a 
 When the model decides to call a tool during streaming, you'll receive chunks with `tool_calls` instead of `content`:
 
 ```python
+from definable.model.message import Message
+
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "What's the weather?"}],
+    messages=[Message(role="user", content="What's the weather?")],
+    assistant_message=Message(role="assistant", content=""),
     tools=[get_weather],
 ):
     if chunk.content:
@@ -60,12 +67,14 @@ When using agents, tool execution during streaming is handled automatically. You
 Models that support reasoning (like DeepSeek Reasoner or OpenAI o1) emit reasoning content before the final answer:
 
 ```python
-from definable.models import DeepSeekChat
+from definable.model import DeepSeekChat
+from definable.model.message import Message
 
 model = DeepSeekChat(id="deepseek-reasoner")
 
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "What is 127 * 843?"}]
+    messages=[Message(role="user", content="What is 127 * 843?")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.reasoning_content:
         print(f"[thinking] {chunk.reasoning_content}", end="")
@@ -78,10 +87,13 @@ for chunk in model.invoke_stream(
 To stream output to the user while also capturing the complete response:
 
 ```python
+from definable.model.message import Message
+
 full_content = []
 
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "Write a poem."}]
+    messages=[Message(role="user", content="Write a poem.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         full_content.append(chunk.content)

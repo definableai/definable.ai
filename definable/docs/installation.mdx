@@ -56,11 +56,6 @@ Some features require additional packages:
 | All interfaces | `discord.py>=2.3.0` | `pip install 'definable[interfaces]'` |
 | File readers (PDF, DOCX, PPTX, XLSX, ODS, RTF) | `pypdf`, `python-docx`, `python-pptx`, `openpyxl`, `odfpy`, `striprtf` | `pip install 'definable[readers]'` |
 | PostgreSQL memory | `asyncpg>=0.29.0` | `pip install 'definable[postgres-memory]'` |
-| Redis memory | `redis>=5.0.0` | `pip install 'definable[redis-memory]'` |
-| Qdrant memory | `qdrant-client>=1.9.0` | `pip install 'definable[qdrant-memory]'` |
-| Chroma memory | `chromadb>=0.5.0` | `pip install 'definable[chroma-memory]'` |
-| MongoDB memory | `motor>=3.3.0` | `pip install 'definable[mongodb-memory]'` |
-| Pinecone memory | `pinecone>=5.0.0` | `pip install 'definable[pinecone-memory]'` |
 | Mistral OCR | `mistralai>=1.0.0` | `pip install 'definable[mistral-ocr]'` |
 | HTTP server | `fastapi`, `uvicorn` | `pip install 'definable[serve]'` |
 | Cron scheduling | `croniter` | `pip install 'definable[cron]'` |
@@ -102,10 +97,14 @@ model = OpenAIChat(id="gpt-4o", api_key="sk-...")
 
 ```python
 import definable
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 

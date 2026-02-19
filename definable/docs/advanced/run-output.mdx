@@ -65,7 +65,7 @@ output = agent.run("Summarize this document.")
 ## RunStatus
 
 ```python
-from definable.run import RunStatus
+from definable.agent.run import RunStatus
 
 # Possible values:
 RunStatus.PENDING      # Not yet started
@@ -88,7 +88,7 @@ for event in agent.run_stream("Hello"):
         case "RunStarted":
             print(f"Run {event.run_id} started")
         case "RunCompleted":
-            print(f"Done! Tokens: {event.output.metrics.total_tokens}")
+            print(f"Done! Tokens: {event.metrics.total_tokens}")
         case "RunError":
             print(f"Error: {event.error}")
 ```
@@ -110,9 +110,9 @@ for event in agent.run_stream("Write a story"):
 for event in agent.run_stream("Check the weather"):
     match event.event:
         case "ToolCallStarted":
-            print(f"Calling {event.tool_name}({event.tool_args})")
+            print(f"Calling {event.tool.tool_name}({event.tool.tool_args})")
         case "ToolCallCompleted":
-            print(f"  Result: {event.result}")
+            print(f"  Result: {event.tool.result}")
         case "ToolCallError":
             print(f"  Error: {event.error}")
 ```
@@ -142,9 +142,9 @@ for event in agent.run_stream("Solve this math problem"):
 | `RunContent` | `content` | Content chunk |
 | `RunContentCompleted` | `full_content` | All content generated |
 | `IntermediateRunContent` | `content` | Intermediate content (between tool calls) |
-| `ToolCallStarted` | `tool_name`, `tool_args` | Tool call began |
-| `ToolCallCompleted` | `tool_name`, `result` | Tool call finished |
-| `ToolCallError` | `tool_name`, `error` | Tool call failed |
+| `ToolCallStarted` | `tool.tool_name`, `tool.tool_args` | Tool call began |
+| `ToolCallCompleted` | `tool.tool_name`, `tool.result` | Tool call finished |
+| `ToolCallError` | `tool.tool_name`, `error` | Tool call failed |
 | `PreHookStarted` | `tool_name` | Pre-hook began |
 | `PreHookCompleted` | `tool_name` | Pre-hook finished |
 | `PostHookStarted` | `tool_name` | Post-hook began |
@@ -165,25 +165,25 @@ for event in agent.run_stream("Solve this math problem"):
 | `SessionSummaryCompleted` | | Session summary finished |
 | `RunPaused` | `requirements` | Waiting for user action |
 | `RunContinued` | | Resumed after pause |
-| `RunCompleted` | `output` | Run finished (includes full `RunOutput`) |
+| `RunCompleted` | `metrics`, `content`, `messages` | Run finished (carries full run data directly) |
 | `RunError` | `error` | Run failed |
 | `RunCancelled` | | Run was cancelled |
 | `CustomEvent` | `data` | Application-defined event |
 
-## Getting RunOutput from a Stream
+## Getting Metrics from a Stream
 
-The `RunCompleted` event contains the full `RunOutput`:
+The `RunCompleted` event carries the full run metrics and content directly on the event object:
 
 ```python
-final_output = None
+completed_event = None
 
 for event in agent.run_stream("Hello"):
     if event.event == "RunContent":
         print(event.content, end="")
     elif event.event == "RunCompleted":
-        final_output = event.output
+        completed_event = event
 
-# Now you have full metrics, messages, etc.
-print(f"\nTokens: {final_output.metrics.total_tokens}")
-print(f"Cost: ${final_output.metrics.cost:.4f}")
+# Access metrics directly on the RunCompleted event
+print(f"\nTokens: {completed_event.metrics.total_tokens}")
+print(f"Cost: ${completed_event.metrics.cost:.4f}")
 ```

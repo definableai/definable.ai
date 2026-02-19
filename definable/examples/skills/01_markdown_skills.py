@@ -10,16 +10,16 @@ This example demonstrates:
 No API keys required — uses MockModel for demonstration.
 """
 
-from definable.agents import Agent
-from definable.agents.config import AgentConfig, TracingConfig
-from definable.agents.testing import MockModel
-from definable.skills import SkillRegistry
+from definable.agent import Agent
+from definable.agent.tracing import Tracing
+from definable.agent.testing import MockModel
+from definable.skill import SkillRegistry
 
 
 def main():
   # Create a mock model (no API keys needed)
   model = MockModel(responses=["I'll follow the methodology to help you."])
-  config = AgentConfig(tracing=TracingConfig(enabled=False))
+  tracing = Tracing(enabled=False)
 
   # --- 1. Load the built-in skill library ---
   print("=" * 60)
@@ -50,10 +50,10 @@ def main():
   print("=" * 60)
 
   agent = Agent(
-    model=model,
+    model=model,  # type: ignore[arg-type]
     skills=registry.as_eager(),
     instructions="You are a helpful assistant.",
-    config=config,
+    tracing=tracing,
   )
   print(f"Agent has {len(agent.skills)} skills")
   print(f"Skill instructions length: {len(agent._build_skill_instructions())} chars")
@@ -67,10 +67,10 @@ def main():
 
   lazy_skill = registry.as_lazy()
   agent = Agent(
-    model=model,
+    model=model,  # type: ignore[arg-type]
     skills=[lazy_skill],
     instructions="You are a helpful assistant.",
-    config=config,
+    tracing=tracing,
   )
   print(f"Agent has {len(agent.skills)} skill wrapper(s)")
   print(f"Tools: {agent.tool_names}")
@@ -86,10 +86,10 @@ def main():
   print("=" * 60)
 
   agent = Agent(
-    model=model,
+    model=model,  # type: ignore[arg-type]
     skill_registry=registry,
     instructions="You are a helpful assistant.",
-    config=config,
+    tracing=tracing,
   )
   print(f"Agent has {len(agent.skills)} skills (auto-selected eager mode)")
   output = agent.run("Help me debug this error.")

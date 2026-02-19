@@ -12,7 +12,7 @@ Tool caching stores results for previously seen arguments, so repeated calls wit
 Set `cache_results=True` on the `@tool` decorator:
 
 ```python
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool(cache_results=True)
 def search_database(query: str) -> str:
@@ -68,7 +68,7 @@ Do not cache tools with side effects (sending emails, writing to databases) or t
 
 ```python
 import httpx
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool(cache_results=True, cache_ttl=300)  # 5-minute cache
 def get_weather(city: str) -> str:

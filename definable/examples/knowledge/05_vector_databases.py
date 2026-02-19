@@ -113,17 +113,17 @@ def pgvector_db_example():
     return
 
   try:
-    from definable.knowledge import PgVectorDB
+    from definable.vectordb import PgVector as PgVectorDB
 
     # Create PgVector database
-    vector_db = PgVectorDB(
+    vector_db = PgVectorDB(  # type: ignore[call-arg]
       connection_string=connection_string,
       collection_name="documents",
       dimensions=64,
     )
 
     print("Connected to PostgreSQL")
-    print(f"  Collection: {vector_db.collection_name}")
+    print(f"  Collection: {vector_db.collection_name}")  # type: ignore[attr-defined]
     print(f"  Dimensions: {vector_db.dimensions}")
 
     # Use with knowledge base
@@ -139,7 +139,7 @@ def pgvector_db_example():
     print(f"Search found: {len(results)} results")
 
     # Clean up
-    vector_db.clear()
+    vector_db.clear()  # type: ignore[attr-defined]
     print("Cleared test data")
 
   except ImportError:

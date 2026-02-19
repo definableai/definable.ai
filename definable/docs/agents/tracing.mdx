@@ -8,29 +8,40 @@ Tracing captures every significant event during an agent run — model calls, to
 
 ## Enabling Tracing
 
-Configure tracing through `AgentConfig`:
+Pass `tracing` directly to the `Agent` constructor:
 
 ```python
-from definable.agents import Agent, AgentConfig, TracingConfig, JSONLExporter
-from definable.models import OpenAIChat
-
-config = AgentConfig(
-    tracing=TracingConfig(
-        enabled=True,
-        exporters=[JSONLExporter("./traces")],
-    ),
-)
+from definable.agent import Agent, JSONLExporter
+from definable.agent.tracing import Tracing
+from definable.model import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
-    config=config,
+    tracing=Tracing(
+        enabled=True,
+        exporters=[JSONLExporter("./traces")],
+    ),
 )
 
 output = agent.run("Hello!")
 # Trace written to ./traces/{session_id}.jsonl
 ```
 
-## TracingConfig
+Alternatively, tracing can also be configured via `AgentConfig` for backward compatibility:
+
+```python
+from definable.agent import Agent, AgentConfig, JSONLExporter
+from definable.agent.tracing import Tracing
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    config=AgentConfig(tracing=Tracing(exporters=[JSONLExporter("./traces")])),
+)
+```
+
+When both `Agent(tracing=...)` and `AgentConfig(tracing=...)` are supplied, the direct `tracing` parameter takes precedence.
+
+## Tracing Reference
 
 <ParamField path="enabled" type="bool" default="true">
   Enable or disable tracing.
@@ -57,7 +68,7 @@ output = agent.run("Hello!")
 The built-in exporter writes one JSON object per line to a file, organized by session ID:
 
 ```python
-from definable.agents import JSONLExporter
+from definable.agent import JSONLExporter
 
 exporter = JSONLExporter(
     trace_dir="./traces",
@@ -71,7 +82,7 @@ Each file is named `{session_id}.jsonl`. Events include timestamps, run IDs, and
 ### Reading Trace Files
 
 ```python
-from definable.agents.tracing import read_trace_file, read_trace_events
+from definable.agent.tracing import read_trace_file, read_trace_events
 
 # Read raw lines
 lines = read_trace_file("./traces/abc-123.jsonl")
@@ -87,8 +98,9 @@ for event in events:
 Skip noisy events to keep traces focused:
 
 ```python
-config = AgentConfig(
-    tracing=TracingConfig(
+agent = Agent(
+    model=model,
+    tracing=Tracing(
         exporters=[JSONLExporter("./traces")],
         event_filter=lambda e: e.event != "RunContent",  # Skip streaming chunks
     ),
@@ -114,7 +126,7 @@ config = AgentConfig(
 Implement the `TraceExporter` protocol to send events to any backend:
 
 ```python
-from definable.agents.tracing import TraceExporter
+from definable.agent.tracing import TraceExporter
 
 class DatadogExporter:
     """Send trace events to Datadog."""
@@ -133,8 +145,9 @@ class DatadogExporter:
 Use it alongside other exporters:
 
 ```python
-config = AgentConfig(
-    tracing=TracingConfig(
+agent = Agent(
+    model=model,
+    tracing=Tracing(
         exporters=[
             JSONLExporter("./traces"),
             DatadogExporter(),
@@ -148,10 +161,12 @@ config = AgentConfig(
 Use `NoOpExporter` to discard all events. Useful in tests where you want tracing enabled but don't need output:
 
 ```python
-from definable.agents.tracing import NoOpExporter
+from definable.agent import Agent
+from definable.agent.tracing import Tracing, NoOpExporter
 
-config = AgentConfig(
-    tracing=TracingConfig(exporters=[NoOpExporter()]),
+agent = Agent(
+    model=model,
+    tracing=Tracing(exporters=[NoOpExporter()]),
 )
 ```
 

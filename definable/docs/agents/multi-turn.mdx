@@ -12,8 +12,8 @@ Agents can maintain context across multiple turns by passing message history bet
 The simplest approach is to feed the messages from one run into the next:
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),

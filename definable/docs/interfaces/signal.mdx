@@ -49,9 +49,9 @@ pip install definable
 ```python
 import asyncio
 
-from definable.agents import Agent
-from definable.interfaces import SignalInterface, SignalConfig
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.agent.interface import SignalInterface, SignalConfig
+from definable.model import OpenAIChat
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),

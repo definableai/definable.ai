@@ -10,7 +10,7 @@ icon: wrench
 Define a tool with the `@tool` decorator.
 
 ```python
-from definable.tools.decorator import tool
+from definable.tool.decorator import tool
 
 @tool
 def greet(name: str) -> str:
@@ -33,7 +33,7 @@ Use complex types, enums, defaults, and Pydantic models.
 
 ```python
 from typing import List, Literal, Optional
-from definable.tools.decorator import tool
+from definable.tool.decorator import tool
 
 @tool
 def search(
@@ -63,7 +63,7 @@ Define async tool functions for I/O-bound operations.
 
 ```python
 import httpx
-from definable.tools.decorator import tool
+from definable.tool.decorator import tool
 
 @tool
 async def fetch_url(url: str) -> str:
@@ -82,7 +82,7 @@ python definable/examples/tools/03_async_tools.py
 Run logic before and after tool execution.
 
 ```python
-from definable.tools.decorator import tool
+from definable.tool.decorator import tool
 
 def log_before(tool_name, args):
     print(f"  -> Calling {tool_name} with {args}")
@@ -105,7 +105,7 @@ python definable/examples/tools/04_tool_hooks.py
 Cache results to avoid redundant computation.
 
 ```python
-from definable.tools.decorator import tool
+from definable.tool.decorator import tool
 
 @tool(cache_results=True, cache_ttl=300)
 def expensive_search(query: str) -> str:
@@ -130,9 +130,9 @@ python definable/examples/tools/05_tool_caching.py
 Inject services and context into tools.
 
 ```python
-from definable.agents import Agent, AgentConfig
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent, AgentConfig
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 class Database:
     def query(self, sql: str) -> str:

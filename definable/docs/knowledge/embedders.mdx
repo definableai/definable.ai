@@ -11,7 +11,7 @@ Embedders convert text into high-dimensional vectors. Similar texts produce simi
 Uses OpenAI's embedding models. The most common choice.
 
 ```python
-from definable.knowledge import OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
 
 embedder = OpenAIEmbedder(
     id="text-embedding-3-small",
@@ -44,7 +44,7 @@ embedder = OpenAIEmbedder(
 Uses Voyage AI's embedding models, which excel at domain-specific and multilingual content.
 
 ```python
-from definable.knowledge import VoyageAIEmbedder
+from definable.embedder import VoyageAIEmbedder
 
 embedder = VoyageAIEmbedder(
     id="voyage-2",
@@ -75,7 +75,9 @@ Requires the `voyageai` package. Install with `pip install voyageai`.
 Pass an embedder when creating a knowledge base:
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),
@@ -117,7 +119,7 @@ embeddings, usages = await embedder.async_get_embeddings_batch_and_usage(texts)
 Subclass `Embedder` and implement the embedding methods:
 
 ```python
-from definable.knowledge.embedders import Embedder
+from definable.knowledge.embedder import Embedder
 
 class LocalEmbedder(Embedder):
     dimensions: int = 384

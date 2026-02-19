@@ -85,8 +85,8 @@ Resources have a URI scheme and optional MIME type:
 Combine resource reading with agent tool calls:
 
 ```python
-from definable.tools import tool
-from definable.agents import Agent
+from definable.tool.decorator import tool
+from definable.agent import Agent
 from definable.mcp import MCPClient, MCPConfig
 
 @tool

@@ -1,17 +1,12 @@
 """
 Smoke-test all MemoryStore backends.
 
-Runs a minimal round-trip (store, retrieve, search, delete) against each
-backend.  Backends whose dependencies are not installed or whose services
-are not reachable are skipped gracefully.
+Runs a minimal round-trip (upsert, retrieve, delete) against each backend.
+Backends whose dependencies are not installed or whose services are not
+reachable are skipped gracefully.
 
 Environment variables for optional backends:
-    MEMORY_REDIS_URL      — e.g. redis://localhost:6379
     MEMORY_POSTGRES_URL   — e.g. postgresql://user:pass@localhost/dbname
-    MEMORY_MONGODB_URL    — e.g. mongodb://localhost:27017
-    MEMORY_QDRANT_URL     — e.g. http://localhost:6333
-    PINECONE_API_KEY      — Pinecone API key
-    MEM0_API_KEY          — Mem0 API key
 
 Usage:
     python definable/examples/memory/03_store_backends.py
@@ -19,11 +14,10 @@ Usage:
 
 import asyncio
 import os
-import time
 from typing import Any, List, Tuple
 
 from definable.memory import InMemoryStore
-from definable.memory.types import Episode, KnowledgeAtom
+from definable.memory.types import UserMemory
 
 
 async def test_store(name: str, store: Any) -> str:
@@ -31,50 +25,29 @@ async def test_store(name: str, store: Any) -> str:
 
   await store.initialize()
 
-  # --- Episode round-trip ---
-  ep = Episode(
-    id="test-ep-1",
-    user_id="example-user",
-    session_id="example-session",
-    role="user",
-    content="Hello from the smoke test!",
-    embedding=[1.0, 0.0, 0.0],
+  # --- Upsert a memory ---
+  mem = UserMemory(
+    memory="Hello from the smoke test!",
     topics=["test"],
-    created_at=time.time(),
-  )
-  await store.store_episode(ep)
-
-  episodes = await store.get_episodes(user_id="example-user", limit=10)
-  assert len(episodes) >= 1, f"{name}: expected at least 1 episode"
-  assert episodes[0].content == "Hello from the smoke test!"
-
-  # --- Atom round-trip ---
-  atom = KnowledgeAtom(
-    id="test-atom-1",
     user_id="example-user",
-    subject="test",
-    predicate="is",
-    object="passing",
-    content="test is passing",
-    embedding=[0.0, 1.0, 0.0],
-    confidence=0.9,
-    created_at=time.time(),
   )
-  await store.store_atom(atom)
+  await store.upsert_user_memory(mem)
 
-  atoms = await store.get_atoms(user_id="example-user")
-  assert len(atoms) >= 1, f"{name}: expected at least 1 atom"
+  # --- Retrieve ---
+  memories = await store.get_user_memories(user_id="example-user")
+  assert len(memories) >= 1, f"{name}: expected at least 1 memory"
+  assert memories[0].memory == "Hello from the smoke test!"
 
-  # --- Vector search ---
-  results = await store.search_episodes_by_embedding(
-    [0.9, 0.1, 0.0],
-    user_id="example-user",
-    top_k=5,
-  )
-  assert len(results) >= 1, f"{name}: vector search returned no results"
+  # --- Get single ---
+  single = await store.get_user_memory(mem.memory_id, user_id="example-user")
+  assert single is not None, f"{name}: get_user_memory returned None"
+
+  # --- Delete ---
+  await store.delete_user_memory(mem.memory_id, user_id="example-user")
+  after_delete = await store.get_user_memories(user_id="example-user")
+  assert len(after_delete) == 0, f"{name}: expected 0 after delete, got {len(after_delete)}"
 
   # --- Cleanup ---
-  await store.delete_session_data("example-session")
   await store.close()
 
   return "PASS"
@@ -90,90 +63,21 @@ def _build_backends() -> List[Tuple[str, Any]]:
   # 1. InMemoryStore — always available
   backends.append(("InMemoryStore", InMemoryStore()))
 
-  # 2. SQLiteMemoryStore
+  # 2. SQLiteStore
   try:
-    from definable.memory import SQLiteMemoryStore
+    from definable.memory import SQLiteStore
 
-    backends.append(("SQLiteMemoryStore", SQLiteMemoryStore("./test_example.db")))
+    backends.append(("SQLiteStore", SQLiteStore("./test_example.db")))
   except ImportError:
     pass
 
-  # 3. ChromaMemoryStore
-  try:
-    from definable.memory import ChromaMemoryStore
-
-    backends.append(("ChromaMemoryStore", ChromaMemoryStore(collection_prefix="example_")))
-  except ImportError:
-    pass
-
-  # 4. RedisMemoryStore
-  redis_url = os.environ.get("MEMORY_REDIS_URL")
-  if redis_url:
-    try:
-      from definable.memory import RedisMemoryStore
-
-      backends.append(("RedisMemoryStore", RedisMemoryStore(redis_url=redis_url, prefix="example")))
-    except ImportError:
-      pass
-
-  # 5. PostgresMemoryStore
+  # 3. PostgresStore
   pg_url = os.environ.get("MEMORY_POSTGRES_URL")
   if pg_url:
     try:
-      from definable.memory import PostgresMemoryStore
+      from definable.memory import PostgresStore
 
-      backends.append(("PostgresMemoryStore", PostgresMemoryStore(db_url=pg_url, table_prefix="example_")))
-    except ImportError:
-      pass
-
-  # 6. MongoMemoryStore
-  mongo_url = os.environ.get("MEMORY_MONGODB_URL")
-  if mongo_url:
-    try:
-      from definable.memory import MongoMemoryStore
-
-      backends.append((
-        "MongoMemoryStore",
-        MongoMemoryStore(connection_string=mongo_url, database="example", collection_prefix="example_"),
-      ))
-    except ImportError:
-      pass
-
-  # 7. QdrantMemoryStore
-  qdrant_url = os.environ.get("MEMORY_QDRANT_URL")
-  if qdrant_url:
-    try:
-      from definable.memory import QdrantMemoryStore
-
-      # Parse host and port from URL like http://localhost:6333
-      url_clean = qdrant_url.replace("http://", "").replace("https://", "")
-      parts = url_clean.split(":")
-      host = parts[0]
-      port = int(parts[1]) if len(parts) > 1 else 6333
-      backends.append(("QdrantMemoryStore", QdrantMemoryStore(url=host, port=port, prefix="example", vector_size=3)))
-    except (ImportError, ValueError):
-      pass
-
-  # 8. PineconeMemoryStore
-  pinecone_key = os.environ.get("PINECONE_API_KEY")
-  if pinecone_key:
-    try:
-      from definable.memory import PineconeMemoryStore
-
-      backends.append((
-        "PineconeMemoryStore",
-        PineconeMemoryStore(api_key=pinecone_key, index_name="example-memory", vector_size=3),
-      ))
-    except ImportError:
-      pass
-
-  # 9. Mem0MemoryStore
-  mem0_key = os.environ.get("MEM0_API_KEY")
-  if mem0_key:
-    try:
-      from definable.memory import Mem0MemoryStore
-
-      backends.append(("Mem0MemoryStore", Mem0MemoryStore(api_key=mem0_key)))
+      backends.append(("PostgresStore", PostgresStore(db_url=pg_url)))
     except ImportError:
       pass
 

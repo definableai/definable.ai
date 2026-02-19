@@ -10,9 +10,9 @@ Guardrails let you enforce content policies on every agent run — blocking dang
 ## Quick Example
 
 ```python
-from definable.agents import Agent
-from definable.guardrails import Guardrails, max_tokens, pii_filter, tool_blocklist
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.agent.guardrail import Guardrails, max_tokens, pii_filter, tool_blocklist
+from definable.model.openai import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
@@ -53,7 +53,7 @@ Three checkpoints run automatically on every `arun()` / `arun_stream()` call:
 ## Guardrails Constructor
 
 ```python
-from definable.guardrails import Guardrails
+from definable.agent.guardrail import Guardrails
 
 guardrails = Guardrails(
     input=[...],
@@ -89,7 +89,7 @@ guardrails = Guardrails(
 ### Input Guardrails
 
 ```python
-from definable.guardrails import max_tokens, block_topics, regex_filter
+from definable.agent.guardrail import max_tokens, block_topics, regex_filter
 ```
 
 <ParamField path="max_tokens(n, model_id='gpt-4o')" type="InputGuardrail">
@@ -107,7 +107,7 @@ from definable.guardrails import max_tokens, block_topics, regex_filter
 ### Output Guardrails
 
 ```python
-from definable.guardrails import pii_filter, max_output_tokens
+from definable.agent.guardrail import pii_filter, max_output_tokens
 ```
 
 <ParamField path="pii_filter(action='modify')" type="OutputGuardrail">
@@ -121,7 +121,7 @@ from definable.guardrails import pii_filter, max_output_tokens
 ### Tool Guardrails
 
 ```python
-from definable.guardrails import tool_allowlist, tool_blocklist
+from definable.agent.guardrail import tool_allowlist, tool_blocklist
 ```
 
 <ParamField path="tool_allowlist(allowed)" type="ToolGuardrail">
@@ -139,7 +139,7 @@ from definable.guardrails import tool_allowlist, tool_blocklist
 The fastest way to create a custom guardrail:
 
 ```python
-from definable.guardrails import input_guardrail, GuardrailResult
+from definable.agent.guardrail import input_guardrail, GuardrailResult
 
 @input_guardrail
 async def no_profanity(text: str, context) -> GuardrailResult:
@@ -162,7 +162,7 @@ Also available: `@output_guardrail` and `@tool_guardrail`.
 Implement the protocol directly for more control:
 
 ```python
-from definable.guardrails import GuardrailResult
+from definable.agent.guardrail import GuardrailResult
 
 class SentimentGuardrail:
     name = "sentiment_check"
@@ -192,7 +192,7 @@ async def redact_names(text: str, context) -> GuardrailResult:
 Combine guardrails with logic operators:
 
 ```python
-from definable.guardrails import ALL, ANY, NOT, when, max_tokens, block_topics
+from definable.agent.guardrail import ALL, ANY, NOT, when, max_tokens, block_topics
 
 # ALL — every guardrail must allow
 strict_input = ALL(
@@ -248,7 +248,7 @@ except OutputCheckError as e:
 ### Return Blocked Status
 
 ```python
-from definable.run import RunStatus
+from definable.agent.run import RunStatus
 
 agent = Agent(
     model=model,

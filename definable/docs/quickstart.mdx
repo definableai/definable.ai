@@ -24,13 +24,17 @@ export OPENAI_API_KEY="sk-..."
 
 ## Your First Model Call
 
-Call an LLM with three lines of code:
+Call an LLM with a few lines of code:
 
 ```python
-from definable.models import OpenAIChat
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -39,9 +43,9 @@ print(response.content)
 Create an agent with tools that can take actions:
 
 ```python
-from definable.models import OpenAIChat
-from definable.tools import tool
-from definable.agents import Agent
+from definable.model import OpenAIChat
+from definable.tool.decorator import tool
+from definable.agent import Agent
 
 @tool
 def get_weather(city: str) -> str:
@@ -63,7 +67,9 @@ print(output.content)
 Build a knowledge base and search it:
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),
@@ -85,11 +91,11 @@ for doc in results:
 Give an agent persistent memory that works across conversations:
 
 ```python
-from definable.agents import Agent
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.memory import Memory, SQLiteStore
+from definable.model import OpenAIChat
 
-memory = CognitiveMemory(store=SQLiteMemoryStore(db_path="./memory.db"))
+memory = Memory(store=SQLiteStore("./memory.db"))
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
@@ -107,16 +113,20 @@ print(output.content)  # "You work at Acme Corp."
 
 ## Stream Responses
 
-Get tokens as they are generated:
+Stream tokens from an agent as they are generated:
 
 ```python
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
-model = OpenAIChat(id="gpt-4o")
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o"),
+    instructions="You are a helpful assistant.",
+)
 
-for chunk in model.invoke_stream(messages=[{"role": "user", "content": "Tell me a story."}]):
-    if chunk.content:
-        print(chunk.content, end="", flush=True)
+for event in agent.run_stream("Tell me a story."):
+    if event.event == "RunContent" and event.content:
+        print(event.content, end="", flush=True)
 ```
 
 ## What's Next?
@@ -135,7 +145,7 @@ for chunk in model.invoke_stream(messages=[{"role": "user", "content": "Tell me 
     Build complete RAG pipelines with readers, chunkers, and vector databases.
   </Card>
   <Card title="Memory" icon="brain" href="/memory/overview">
-    Persistent multi-tier memory with recall, distillation, and multiple backends.
+    LLM-driven persistent memory with automatic recall and 3 storage backends.
   </Card>
   <Card title="Interfaces" icon="message-bot" href="/interfaces/overview">
     Deploy agents to Telegram, Discord, and Signal.

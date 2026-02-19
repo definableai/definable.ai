@@ -137,12 +137,17 @@ All media types share these methods:
 Pass media in messages:
 
 ```python
-response = model.invoke(messages=[{
-    "role": "user",
-    "content": "Describe what you see and hear.",
-    "images": [Image(url="https://example.com/photo.jpg")],
-    "audio": [Audio(filepath="recording.mp3")],
-}])
+from definable.model.message import Message
+
+response = model.invoke(
+    messages=[Message(
+        role="user",
+        content="Describe what you see and hear.",
+        images=[Image(url="https://example.com/photo.jpg")],
+        audio=[Audio(filepath="recording.mp3")],
+    )],
+    assistant_message=Message(role="assistant", content=""),
+)
 ```
 
 ## Using with Agents

@@ -12,15 +12,15 @@ The `serve()` function runs multiple interfaces at the same time, with automatic
 ```python
 import asyncio
 
-from definable.agents import Agent
-from definable.interfaces import (
+from definable.agent import Agent
+from definable.agent.interface import (
     TelegramInterface,
     TelegramConfig,
     DiscordInterface,
     DiscordConfig,
     serve,
 )
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
@@ -93,7 +93,7 @@ For the full runtime documentation including webhooks, cron jobs, event triggers
 For cross-platform memory continuity, pass a shared identity resolver:
 
 ```python
-from definable.interfaces import SQLiteIdentityResolver, serve
+from definable.agent.interface import SQLiteIdentityResolver, serve
 
 resolver = SQLiteIdentityResolver(db_path="./identity.db")
 

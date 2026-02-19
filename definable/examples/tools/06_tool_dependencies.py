@@ -12,9 +12,9 @@ Requirements:
 
 from typing import Dict, List, Optional
 
-from definable.agents import Agent, Toolkit
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent, Toolkit
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 # ========================================
 # Database Tools

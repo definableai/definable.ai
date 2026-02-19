@@ -12,7 +12,7 @@ Tools are Python functions that agents can invoke to perform actions — search 
 Use the `@tool` decorator on any function:
 
 ```python
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool
 def get_weather(city: str) -> str:
@@ -32,8 +32,8 @@ That's it. Definable automatically:
 Pass tools when creating an agent:
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
+from definable.agent import Agent
+from definable.model import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),

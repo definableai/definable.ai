@@ -21,14 +21,14 @@ Usage:
 import asyncio
 import os
 
-from definable.agents import Agent, AgentConfig, JSONLExporter, TracingConfig
-from definable.interfaces import serve
-from definable.interfaces.discord import DiscordConfig, DiscordInterface
-from definable.interfaces.identity import SQLiteIdentityResolver
-from definable.interfaces.telegram import TelegramConfig, TelegramInterface
-from definable.knowledge.embedders.voyageai import VoyageAIEmbedder
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.agent.tracing import Tracing, JSONLExporter
+from definable.agent.interface import serve
+from definable.agent.interface.discord import DiscordConfig, DiscordInterface
+from definable.agent.interface.identity import SQLiteIdentityResolver
+from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+from definable.memory import Memory, SQLiteStore
+from definable.model.openai import OpenAIChat
 
 # Set these environment variables before running:
 #   export OPENAI_API_KEY="sk-proj-..."
@@ -38,22 +38,14 @@ from definable.models.openai import OpenAIChat
 
 
 async def main():
-  store = SQLiteMemoryStore("./example_memory.db")
-  memory = CognitiveMemory(
-    store=store,
-    token_budget=500,
-    distillation_model=OpenAIChat(id="gpt-5.2", api_key=os.environ["OPENAI_API_KEY"]),
-    embedder=VoyageAIEmbedder(id="voyage-4-lite", api_key=os.environ["VOYAGEAI_API_KEY"]),
-  )
+  memory = Memory(store=SQLiteStore("./example_memory.db"))
   agent = Agent(
-    model=OpenAIChat(id="gpt-5.2"),
+    model=OpenAIChat(id="gpt-4o-mini"),
     instructions="You are a helpful assistant. Keep responses concise.",
     name="multi-bot",
     memory=memory,
-    config=AgentConfig(
-      tracing=TracingConfig(
-        exporters=[JSONLExporter("./traces")],
-      ),
+    tracing=Tracing(
+      exporters=[JSONLExporter("./traces")],
     ),
   )
 

@@ -10,8 +10,8 @@ icon: gear
 ## Basic Configuration
 
 ```python
-from definable.agents import Agent, AgentConfig
-from definable.models import OpenAIChat
+from definable.agent import Agent, AgentConfig
+from definable.model import OpenAIChat
 
 config = AgentConfig(
     agent_name="Support Agent",
@@ -78,14 +78,8 @@ agent = Agent(
 
 ### Tracing
 
-<ParamField path="tracing" type="TracingConfig">
-  Tracing configuration. See [Tracing](/agents/tracing) for details.
-</ParamField>
-
-### Knowledge
-
-<ParamField path="knowledge" type="KnowledgeConfig">
-  RAG configuration for automatic knowledge retrieval. See [Agent Integration](/knowledge/agent-integration).
+<ParamField path="tracing" type="Tracing">
+  Tracing configuration (backward compat). Prefer passing `tracing=Tracing(...)` directly to `Agent`. See [Tracing](/agents/tracing) for details.
 </ParamField>
 
 ### Compression
@@ -100,12 +94,63 @@ agent = Agent(
   File reader configuration for processing attached files. See [File Readers](/readers/overview).
 </ParamField>
 
+## Memory
+
+Memory is configured directly on the `Agent` constructor:
+
+```python
+from definable.agent import Agent
+from definable.memory import Memory, SQLiteStore
+
+# Ephemeral in-memory store (useful for testing)
+agent = Agent(model=model, memory=True)
+
+# Persistent store via Memory
+agent = Agent(
+    model=model,
+    memory=Memory(
+        store=SQLiteStore("./memory.db"),
+        trigger="always",  # "always", "auto", or "never"
+    ),
+)
+```
+
+See [Memory](/memory/agent-integration) for full documentation.
+
+## Knowledge
+
+Knowledge (RAG) is configured directly on the `Agent` constructor:
+
+```python
+from definable.agent import Agent
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
+
+kb = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
+    top_k=5,
+    rerank=True,
+    trigger="always",  # "always", "auto", or "never"
+)
+kb.add("Company policy: employees get 20 days PTO per year.")
+
+agent = Agent(
+    model=model,
+    knowledge=kb,
+)
+```
+
+See [Knowledge Agent Integration](/knowledge/agent-integration) for full documentation.
+
 ## Thinking
 
 The thinking layer is configured directly on the `Agent` constructor (not in `AgentConfig`):
 
 ```python
-from definable.agents import Agent, ThinkingConfig
+from definable.agent import Agent
+from definable.agent.reasoning import Thinking
 
 # Simple enable
 agent = Agent(model=model, thinking=True)
@@ -113,7 +158,7 @@ agent = Agent(model=model, thinking=True)
 # Custom configuration
 agent = Agent(
     model=model,
-    thinking=ThinkingConfig(
+    thinking=Thinking(
         model=thinking_model,           # Optional separate model
         instructions="Custom prompt",    # Optional custom prompt
     ),
@@ -147,13 +192,13 @@ The original `base_config` is unchanged. This pattern makes it safe to share con
 Compress large tool results to save tokens:
 
 ```python
-from definable.agents import AgentConfig, CompressionConfig
+from definable.agent import AgentConfig, CompressionConfig
 
 config = AgentConfig(
     compression=CompressionConfig(
         enabled=True,
-        tool_results_limit=5000,   # Compress results over 5000 chars
-        token_limit=2000,          # Target compressed token count
+        tool_results_limit=5,      # Trigger compression after 5 uncompressed tool results
+        token_limit=None,          # Or set a token threshold to trigger compression
         instructions="Preserve key facts and data. Remove formatting.",
     ),
 )
@@ -168,7 +213,7 @@ Compression uses a separate model call to summarize tool output. This adds a sma
 Configure file reader behavior for processing attached files:
 
 ```python
-from definable.agents import AgentConfig, ReadersConfig
+from definable.agent import AgentConfig, ReadersConfig
 
 config = AgentConfig(
     readers=ReadersConfig(
@@ -198,11 +243,11 @@ config = AgentConfig(
 
 ## Deep Research
 
-The deep research layer is configured directly on the `Agent` constructor (not in `AgentConfig`):
+The deep research layer is configured directly on the `Agent` constructor:
 
 ```python
-from definable.agents import Agent
-from definable.research import DeepResearchConfig
+from definable.agent import Agent
+from definable.agent.research import DeepResearchConfig
 
 # Simple enable (standard depth, DuckDuckGo search)
 agent = Agent(model=model, deep_research=True)
@@ -219,18 +264,6 @@ agent = Agent(
         context_format="xml",
     ),
 )
-```
-
-It can also be set via `AgentConfig`:
-
-```python
-from definable.agents import Agent, AgentConfig
-from definable.research import DeepResearchConfig
-
-config = AgentConfig(
-    deep_research=DeepResearchConfig(depth="standard"),
-)
-agent = Agent(model=model, config=config)
 ```
 
 See [Deep Research](/agents/deep-research) for full documentation.
@@ -299,4 +332,8 @@ See [Deep Research](/agents/deep-research) for full documentation.
 
 <ParamField path="trigger" type="str" default="always">
   When to run research: `"always"` (every run), `"auto"` (model decides), `"tool"` (explicit tool call).
+</ParamField>
+
+<ParamField path="description" type="str">
+  Description shown in the layer guide injected into the system prompt. If `None`, uses the default description.
 </ParamField>

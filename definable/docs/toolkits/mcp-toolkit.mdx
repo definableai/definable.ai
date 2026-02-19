@@ -9,9 +9,9 @@ The `MCPToolkit` connects to one or more MCP (Model Context Protocol) servers an
 ## Basic Usage
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
-from definable.models.openai import OpenAIChat
+from definable.model.openai import OpenAIChat
 
 config = MCPConfig(servers=[
     MCPServerConfig(
@@ -140,9 +140,9 @@ agent = Agent(
 Instead of manually managing the toolkit lifecycle with `async with`, you can let the agent handle it automatically. When you pass an uninitialized `MCPToolkit` to an agent, the agent will initialize it on first use and shut it down when the agent shuts down:
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
-from definable.models.openai import OpenAIChat
+from definable.model.openai import OpenAIChat
 
 config = MCPConfig(servers=[
     MCPServerConfig(

@@ -11,10 +11,14 @@ Every model invocation automatically tracks token usage, timing, and cost. This 
 Access usage metrics on any `ModelResponse`:
 
 ```python
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 
 metrics = response.response_usage
 print(f"Input tokens:  {metrics.input_tokens}")
@@ -45,7 +49,12 @@ The `Metrics` dataclass tracks all usage dimensions:
 Definable includes a built-in pricing registry with per-token rates for all supported models. Cost is calculated automatically when available:
 
 ```python
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+from definable.model.message import Message
+
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(f"Cost: ${response.response_usage.cost:.6f}")
 ```
 
@@ -56,11 +65,15 @@ The pricing registry loads from `model_pricing.json` and covers input, output, c
 `Metrics` objects can be added together, which is useful for tracking total usage across multiple calls:
 
 ```python
-from definable.models.metrics import Metrics
+from definable.model.metrics import Metrics
+from definable.model.message import Message
 
 total = Metrics()
 for question in questions:
-    response = model.invoke(messages=[{"role": "user", "content": question}])
+    response = model.invoke(
+        messages=[Message(role="user", content=question)],
+        assistant_message=Message(role="assistant", content=""),
+    )
     total = total + response.response_usage
 
 print(f"Total tokens: {total.total_tokens}")
@@ -79,7 +92,7 @@ total = sum(all_metrics)
 When using agents, metrics are aggregated across all model calls in a run:
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 
 agent = Agent(model=model, tools=[my_tool])
 output = agent.run("Do something complex.")

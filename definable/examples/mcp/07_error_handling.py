@@ -246,7 +246,7 @@ async def demo_graceful_degradation() -> None:
     tool_names = [t.name for t in mock_tools]
 
     if "echo" in tool_names:
-      result = await client.call_tool("mock", "echo", {"message": "Safe call!"})
+      result = await client.call_tool("mock", "echo", {"message": "Safe call!"})  # type: ignore[assignment]
       print(f"   Echo tool available: {get_text(result)}")
     else:
       print("   Echo tool not available, using alternative...")
@@ -261,8 +261,8 @@ async def demo_graceful_degradation() -> None:
 
     results = []
     for tool_name, args in operations:
-      result = await client.call_tool("mock", tool_name, args)
-      if result.isError:
+      result = await client.call_tool("mock", tool_name, args)  # type: ignore[assignment, arg-type]
+      if result.isError:  # type: ignore[attr-defined]
         print(f"   {tool_name}: FAILED - {get_text(result)}")
       else:
         print(f"   {tool_name}: OK - {get_text(result)}")

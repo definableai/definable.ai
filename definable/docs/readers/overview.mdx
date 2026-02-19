@@ -8,15 +8,15 @@ icon: file-lines
 File readers extract content from files attached to agent messages before they are sent to the model. This lets agents process PDFs, Word documents, presentations, spreadsheets, images, and audio files without manual preprocessing.
 
 <Note>
-**File readers** (`definable.readers`) extract content from files attached to agent messages for LLM processing. They are distinct from **Knowledge readers** (`definable.knowledge.readers`), which convert raw sources into `Document` objects for the [RAG pipeline](/knowledge/readers).
+**File readers** (`definable.reader`) extract content from files attached to agent messages for LLM processing. They are distinct from **Knowledge readers** (`definable.knowledge.reader`), which convert raw sources into `Document` objects for the [RAG pipeline](/knowledge/readers).
 </Note>
 
 ## Quick Example
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.media import File
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
@@ -115,7 +115,7 @@ Every file read returns a `ReaderOutput`:
 The main orchestrator that resolves files to parsed content:
 
 ```python
-from definable.readers import BaseReader
+from definable.reader import BaseReader
 
 reader = BaseReader()
 result = reader.read(file)
@@ -151,12 +151,12 @@ Three ways to enable file readers on an agent:
 agent = Agent(model=model, readers=True)
 
 # 2. Custom reader instance
-from definable.readers import BaseReader
+from definable.reader import BaseReader
 reader = BaseReader(config=ReaderConfig(max_file_size=10_000_000))
 agent = Agent(model=model, readers=reader)
 
 # 3. Single parser (auto-wrapped in BaseReader)
-from definable.readers.parsers.base_parser import BaseParser
+from definable.reader.parsers.base_parser import BaseParser
 agent = Agent(model=model, readers=SomeParser())
 ```
 
@@ -167,7 +167,7 @@ When the agent receives files via `run(..., files=[...])`, it automatically extr
 Configure reader behavior:
 
 ```python
-from definable.readers import ReaderConfig
+from definable.reader import ReaderConfig
 
 config = ReaderConfig(
   max_file_size=None,          # Max file size in bytes (None = unlimited)
@@ -183,8 +183,8 @@ Subclass `BaseParser` and implement three methods:
 
 ```python
 from typing import List, Set
-from definable.readers.parsers.base_parser import BaseParser
-from definable.readers.models import ContentBlock, ReaderConfig
+from definable.reader.parsers.base_parser import BaseParser
+from definable.reader.models import ContentBlock, ReaderConfig
 
 class MarkdownParser(BaseParser):
   def supported_mime_types(self) -> List[str]:
@@ -207,8 +207,8 @@ class MarkdownParser(BaseParser):
 Register it with a reader:
 
 ```python
-from definable.readers import BaseReader
-from definable.readers.registry import ParserRegistry
+from definable.reader import BaseReader
+from definable.reader.registry import ParserRegistry
 
 registry = ParserRegistry()
 registry.register(MarkdownParser(), priority=200)  # Higher priority wins
@@ -220,7 +220,7 @@ reader = BaseReader(registry=registry)
 AI-backed OCR provider using the Mistral OCR API. Handles PDFs, DOCX, PPTX, and images with high-quality extraction.
 
 ```python
-from definable.readers.providers.mistral import MistralReader
+from definable.reader.providers.mistral import MistralReader
 
 reader = MistralReader(api_key="your-key")
 agent = Agent(model=model, readers=reader)
@@ -253,28 +253,28 @@ Requires `mistralai`: `pip install 'definable[mistral-ocr]'`
 ### PDFParser
 
 ```python
-from definable.readers.parsers.pdf import PDFParser
+from definable.reader.parsers.pdf import PDFParser
 parser = PDFParser(page_separator="\n\n")
 ```
 
 ### DocxParser
 
 ```python
-from definable.readers.parsers.docx import DocxParser
+from definable.reader.parsers.docx import DocxParser
 parser = DocxParser(include_tables=True)
 ```
 
 ### XlsxParser
 
 ```python
-from definable.readers.parsers.xlsx import XlsxParser
+from definable.reader.parsers.xlsx import XlsxParser
 parser = XlsxParser(max_rows=1000)
 ```
 
 ### OdsParser
 
 ```python
-from definable.readers.parsers.ods import OdsParser
+from definable.reader.parsers.ods import OdsParser
 parser = OdsParser(max_rows=1000)
 ```
 
@@ -283,7 +283,7 @@ parser = OdsParser(max_rows=1000)
 The registry maps formats to parsers with priority-based dispatch:
 
 ```python
-from definable.readers.registry import ParserRegistry
+from definable.reader.registry import ParserRegistry
 
 registry = ParserRegistry(include_defaults=True)  # Registers all available parsers
 registry.register(MyParser(), priority=200)        # Higher priority wins
@@ -298,7 +298,7 @@ Built-in parsers are registered at priority `0`. User-registered parsers default
 Configure the readers integration on the agent via `AgentConfig`:
 
 ```python
-from definable.agents import Agent, AgentConfig, ReadersConfig
+from definable.agent import Agent, AgentConfig, ReadersConfig
 
 agent = Agent(
   model=model,
@@ -319,7 +319,7 @@ Use `BaseReader` without an agent for file processing pipelines:
 
 ```python
 from definable.media import File
-from definable.readers import BaseReader
+from definable.reader import BaseReader
 
 reader = BaseReader()
 

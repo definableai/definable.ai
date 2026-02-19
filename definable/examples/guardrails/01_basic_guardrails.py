@@ -15,17 +15,17 @@ Usage:
   python definable/examples/guardrails/01_basic_guardrails.py
 """
 
-from definable.agents import Agent, MockModel
+from definable.agent import Agent, MockModel
 from definable.exceptions import InputCheckError, OutputCheckError
-from definable.guardrails import (
+from definable.agent.guardrail import (
   Guardrails,
   block_topics,
   max_tokens,
   pii_filter,
   tool_blocklist,
 )
-from definable.run.base import RunStatus
-from definable.tools.decorator import tool
+from definable.agent.events import RunStatus
+from definable.tool.decorator import tool
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ print("1. on_block='raise' — exceptions on blocked content")
 print("=" * 60)
 
 agent_raise = Agent(
-  model=MockModel(responses=["Hello! How can I help you today?"]),
+  model=MockModel(responses=["Hello! How can I help you today?"]),  # type: ignore[arg-type]
   tools=[lookup_user, delete_account],
   guardrails=Guardrails(
     input=[
@@ -84,7 +84,7 @@ print("2. PII filter — redacts sensitive data from output")
 print("=" * 60)
 
 agent_pii = Agent(
-  model=MockModel(
+  model=MockModel(  # type: ignore[arg-type]
     responses=[
       "The user's SSN is 123-45-6789 and card is 4111-1111-1111-1111.",
     ]
@@ -107,7 +107,7 @@ print("3. on_block='return_message' — check RunStatus.blocked")
 print("=" * 60)
 
 agent_return = Agent(
-  model=MockModel(responses=["This should not appear."]),
+  model=MockModel(responses=["This should not appear."]),  # type: ignore[arg-type]
   guardrails=Guardrails(
     input=[block_topics(["violence"])],
     on_block="return_message",
@@ -130,7 +130,7 @@ print("4. Output guardrail — block PII instead of redacting")
 print("=" * 60)
 
 agent_block_pii = Agent(
-  model=MockModel(responses=["Contact me at bob@example.com for details."]),
+  model=MockModel(responses=["Contact me at bob@example.com for details."]),  # type: ignore[arg-type]
   guardrails=Guardrails(
     output=[pii_filter(action="block")],
     on_block="raise",

@@ -33,9 +33,9 @@ Deploy an agent to Telegram in a few lines:
 
 ```python
 import asyncio
-from definable.agents import Agent
-from definable.models import OpenAIChat
-from definable.interfaces import TelegramInterface, TelegramConfig
+from definable.agent import Agent
+from definable.model import OpenAIChat
+from definable.agent.interface import TelegramInterface, TelegramConfig
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
@@ -127,7 +127,7 @@ custom_config = config.with_updates(max_concurrent_requests=20, session_ttl_seco
 Chain hooks with `.add_hook()`:
 
 ```python
-from definable.interfaces import TelegramInterface, LoggingHook, AllowlistHook
+from definable.agent.interface import TelegramInterface, LoggingHook, AllowlistHook
 
 interface = (
     TelegramInterface(agent=agent, config=config)

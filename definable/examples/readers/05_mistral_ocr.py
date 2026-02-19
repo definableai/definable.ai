@@ -11,7 +11,7 @@ Usage:
 from pathlib import Path
 
 from definable.media import File
-from definable.readers.providers.mistral import MistralReader
+from definable.reader.providers.mistral import MistralReader
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "readers"
 

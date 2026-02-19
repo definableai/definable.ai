@@ -13,10 +13,14 @@ export DEEPSEEK_API_KEY="sk-..."
 ## Basic Usage
 
 ```python
-from definable.models import DeepSeekChat
+from definable.model import DeepSeekChat
+from definable.model.message import Message
 
 model = DeepSeekChat(id="deepseek-chat")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -47,9 +51,12 @@ print(response.content)
 DeepSeek models can produce reasoning content alongside their response:
 
 ```python
+from definable.model.message import Message
+
 model = DeepSeekChat(id="deepseek-reasoner")
 response = model.invoke(
-    messages=[{"role": "user", "content": "Solve: what is 15! / 13!?"}]
+    messages=[Message(role="user", content="Solve: what is 15! / 13!?")],
+    assistant_message=Message(role="assistant", content=""),
 )
 print(response.reasoning_content)  # Step-by-step reasoning
 print(response.content)            # Final answer
@@ -58,8 +65,11 @@ print(response.content)            # Final answer
 ## Streaming
 
 ```python
+from definable.model.message import Message
+
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "Explain quantum computing."}]
+    messages=[Message(role="user", content="Explain quantum computing.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         print(chunk.content, end="", flush=True)
@@ -68,8 +78,11 @@ for chunk in model.invoke_stream(
 ## Async Usage
 
 ```python
+from definable.model.message import Message
+
 response = await model.ainvoke(
-    messages=[{"role": "user", "content": "Hello!"}]
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
 )
 ```
 

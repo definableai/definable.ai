@@ -15,7 +15,10 @@ Note: This example includes a mock reranker to work without API keys.
 import os
 from typing import List
 
-from definable.knowledge import Document, Embedder, InMemoryVectorDB, Knowledge, Reranker
+from definable.embedder import Embedder
+from definable.knowledge import Document, Knowledge
+from definable.reranker import Reranker
+from definable.vectordb import InMemoryVectorDB
 
 
 class MockEmbedder(Embedder):
@@ -99,7 +102,7 @@ def cohere_reranker_example():
     return None
 
   try:
-    from definable.knowledge import CohereReranker
+    from definable.reranker import CohereReranker
 
     reranker = CohereReranker(
       # api_key=os.getenv("COHERE_API_KEY"),  # Auto-detected
@@ -188,7 +191,7 @@ def reranking_workflow():
   query_embedding = embedder.get_embedding(query)
 
   # Get more results than needed
-  initial_results = vector_db.search(query_embedding, top_k=5)
+  initial_results = vector_db.search(query_embedding, top_k=5)  # type: ignore[arg-type, call-arg]
   print(f"   Retrieved {len(initial_results)} candidates")
 
   # Step 2: Rerank

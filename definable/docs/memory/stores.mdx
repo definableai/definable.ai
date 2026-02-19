@@ -5,300 +5,215 @@ description: Storage backends for persistent agent memory.
 icon: database
 ---
 
-A `MemoryStore` is the storage backend for `CognitiveMemory`. Definable provides nine built-in implementations, from ephemeral in-memory stores for testing to production-grade vector databases.
+A `MemoryStore` is the storage backend for `Memory`. Definable provides three built-in implementations, from ephemeral in-memory stores for testing to production-grade PostgreSQL.
 
 ## Available Backends
 
 | Backend | Import | Dependency | Best For |
 |---------|--------|------------|----------|
 | `InMemoryStore` | `definable.memory` | None | Testing, ephemeral sessions |
-| `SQLiteMemoryStore` | `definable.memory` | `aiosqlite` (core) | Local dev, single-process |
-| `PostgresMemoryStore` | `definable.memory` | `asyncpg` | Production, multi-process |
-| `RedisMemoryStore` | `definable.memory` | `redis` | High-throughput caching |
-| `ChromaMemoryStore` | `definable.memory` | `chromadb` | Vector-native storage |
-| `QdrantMemoryStore` | `definable.memory` | `qdrant-client` | Vector-native at scale |
-| `PineconeMemoryStore` | `definable.memory` | `pinecone` | Managed vector DB |
-| `MongoMemoryStore` | `definable.memory` | `motor` | Document-oriented |
-| `Mem0MemoryStore` | `definable.memory` | `mem0ai` | Hosted Mem0 API |
+| `SQLiteStore` | `definable.memory` | `aiosqlite` (core) | Local dev, single-process |
+| `PostgresStore` | `definable.memory` | `asyncpg` | Production, multi-process |
 
 ## Installation
 
-Core stores (InMemory, SQLite) require no extra dependencies. For others, install the matching extra:
+The InMemory store requires no extra dependencies. SQLite uses `aiosqlite` (included as a core dependency). For PostgreSQL:
 
 ```bash
 pip install 'definable[postgres-memory]'   # asyncpg
-pip install 'definable[redis-memory]'       # redis
-pip install 'definable[qdrant-memory]'      # qdrant-client
-pip install 'definable[chroma-memory]'      # chromadb
-pip install 'definable[mongodb-memory]'     # motor
-pip install 'definable[pinecone-memory]'    # pinecone
-pip install 'definable[mem0-memory]'       # mem0ai
 ```
 
 ## Backend Examples
-
-### SQLiteMemoryStore
-
-The default choice for local development. Uses `aiosqlite` (included as a core dependency).
-
-```python
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
-
-store = SQLiteMemoryStore(db_path="./memory.db")
-memory = CognitiveMemory(store=store)
-```
-
-<ParamField path="db_path" type="str" default="./memory.db">
-  Path to the SQLite database file. Created automatically if it doesn't exist.
-</ParamField>
-
-### PostgresMemoryStore
-
-Production-ready backend with connection pooling. Requires a running PostgreSQL instance.
-
-```python
-from definable.memory import CognitiveMemory
-from definable.memory.store.postgres import PostgresMemoryStore
-
-store = PostgresMemoryStore(
-  db_url="postgresql://user:pass@localhost:5432/mydb",
-  pool_size=5,
-  table_prefix="memory_",
-)
-memory = CognitiveMemory(store=store)
-```
-
-<ParamField path="db_url" type="str" default="">
-  PostgreSQL connection URL.
-</ParamField>
-<ParamField path="pool_size" type="int" default={5}>
-  Connection pool size.
-</ParamField>
-<ParamField path="table_prefix" type="str" default="memory_">
-  Prefix for database table names.
-</ParamField>
-
-### ChromaMemoryStore
-
-Vector-native storage using ChromaDB. Supports both in-memory and persistent modes.
-
-```python
-from definable.memory import CognitiveMemory
-from definable.memory.store.chroma import ChromaMemoryStore
-
-store = ChromaMemoryStore(
-  persist_directory="./chroma_data",
-  collection_prefix="memory_",
-)
-memory = CognitiveMemory(store=store)
-```
-
-<ParamField path="persist_directory" type="str" default="None">
-  Directory for persistent storage. When `None`, uses in-memory mode.
-</ParamField>
-<ParamField path="collection_prefix" type="str" default="memory_">
-  Prefix for ChromaDB collection names.
-</ParamField>
-
-### QdrantMemoryStore
-
-High-performance vector database for production workloads.
-
-```python
-from definable.memory import CognitiveMemory
-from definable.memory.store.qdrant import QdrantMemoryStore
-
-store = QdrantMemoryStore(
-  url="localhost",
-  port=6333,
-  api_key=None,
-  prefix="memory",
-  vector_size=1536,
-)
-memory = CognitiveMemory(store=store)
-```
-
-<ParamField path="url" type="str" default="localhost">
-  Qdrant server URL.
-</ParamField>
-<ParamField path="port" type="int" default={6333}>
-  Qdrant server port.
-</ParamField>
-<ParamField path="api_key" type="str" default="None">
-  API key for Qdrant Cloud.
-</ParamField>
-<ParamField path="prefix" type="str" default="memory">
-  Prefix for collection names.
-</ParamField>
-<ParamField path="vector_size" type="int" default={1536}>
-  Dimension of embedding vectors.
-</ParamField>
-
-### PineconeMemoryStore
-
-Managed vector database — no infrastructure to maintain.
-
-```python
-from definable.memory import CognitiveMemory
-from definable.memory.store.pinecone import PineconeMemoryStore
-
-store = PineconeMemoryStore(
-  api_key="your-pinecone-api-key",
-  index_name="memory",
-  vector_size=1536,
-)
-memory = CognitiveMemory(store=store)
-```
-
-<ParamField path="api_key" type="str" default="">
-  Pinecone API key.
-</ParamField>
-<ParamField path="index_name" type="str" default="memory">
-  Name of the Pinecone index.
-</ParamField>
-<ParamField path="environment" type="str" default="None">
-  Pinecone environment (e.g., `us-east-1-aws`).
-</ParamField>
-<ParamField path="vector_size" type="int" default={1536}>
-  Dimension of embedding vectors.
-</ParamField>
-
-### Mem0MemoryStore
-
-Hosted Mem0 API — no infrastructure to maintain. Uses `infer=False` for verbatim storage.
-
-<Note>
-  Mem0 does not accept raw embedding vectors. `search_episodes_by_embedding()` and
-  `search_atoms_by_embedding()` return empty lists. The retrieval pipeline handles this gracefully.
-</Note>
-
-```python
-from definable.memory import CognitiveMemory
-from definable.memory.store.mem0 import Mem0MemoryStore
-
-store = Mem0MemoryStore(
-  api_key="your-mem0-api-key",
-  org_id=None,
-  project_id=None,
-)
-memory = CognitiveMemory(store=store)
-```
-
-<ParamField path="api_key" type="str" default="">
-  Mem0 API key. Falls back to `MEM0_API_KEY` environment variable.
-</ParamField>
-<ParamField path="org_id" type="str" default="None">
-  Mem0 organization ID.
-</ParamField>
-<ParamField path="project_id" type="str" default="None">
-  Mem0 project ID.
-</ParamField>
 
 ### InMemoryStore
 
 Ephemeral store for testing. Data is lost when the process exits.
 
 ```python
-from definable.memory import CognitiveMemory, InMemoryStore
+from definable.memory import Memory, InMemoryStore
 
-store = InMemoryStore()
-memory = CognitiveMemory(store=store)
+memory = Memory(store=InMemoryStore())
 ```
+
+This is also what you get with `memory=True` on an Agent or when you omit the `store` parameter:
+
+```python
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+
+# Both of these use InMemoryStore:
+agent = Agent(model=OpenAIChat(id="gpt-4o"), memory=True)
+agent = Agent(model=OpenAIChat(id="gpt-4o"), memory=Memory())
+```
+
+### SQLiteStore
+
+The default choice for local development. Uses `aiosqlite` (included as a core dependency). Tables are auto-created on first use.
+
+```python
+from definable.memory import Memory, SQLiteStore
+
+memory = Memory(store=SQLiteStore("./memory.db"))
+```
+
+<ParamField path="db_path" type="str" default="./memory.db">
+  Path to the SQLite database file. Created automatically if it does not exist.
+</ParamField>
+
+### PostgresStore
+
+Production-ready backend with connection pooling. Requires a running PostgreSQL instance.
+
+```python
+from definable.memory import Memory
+from definable.memory.store.postgres import PostgresStore
+
+memory = Memory(
+  store=PostgresStore(
+    db_url="postgresql://user:pass@localhost:5432/mydb",
+    pool_size=5,
+    table_prefix="memory_",
+  )
+)
+```
+
+<ParamField path="db_url" type="str" default="">
+  PostgreSQL connection URL. Falls back to the `MEMORY_POSTGRES_URL` environment variable if not provided.
+</ParamField>
+
+<ParamField path="pool_size" type="int" default={5}>
+  Connection pool size.
+</ParamField>
+
+<ParamField path="table_prefix" type="str" default="memory_">
+  Prefix for database table names (e.g., `memory_memories`).
+</ParamField>
 
 ## MemoryStore Protocol
 
-All backends implement the `MemoryStore` protocol. You can create custom stores by implementing these methods:
+All backends implement the `MemoryStore` protocol. You can create custom stores by implementing these seven methods:
 
 ```python
-from definable.memory import MemoryStore, Episode, KnowledgeAtom, Procedure, TopicTransition
+from definable.memory.store.base import MemoryStore
+from definable.memory.types import UserMemory
 
-class MyStore(MemoryStore):
-    # Lifecycle
-    async def initialize(self) -> None: ...
-    async def close(self) -> None: ...
+class MyStore:
+  async def initialize(self) -> None:
+    """Prepare the store (create tables, open connections)."""
+    ...
 
-    # Episodes
-    async def store_episode(self, episode: Episode) -> str: ...
-    async def get_episodes(self, *, user_id=None, session_id=None, limit=50,
-                           min_stage=None, max_stage=None) -> list[Episode]: ...
-    async def update_episode(self, episode_id: str, **fields) -> None: ...
-    async def get_episodes_for_distillation(self, stage: int, older_than: float) -> list[Episode]: ...
+  async def close(self) -> None:
+    """Release resources (close connections, flush buffers)."""
+    ...
 
-    # Knowledge Atoms
-    async def store_atom(self, atom: KnowledgeAtom) -> str: ...
-    async def get_atoms(self, *, user_id=None, min_confidence=0.1, limit=50) -> list[KnowledgeAtom]: ...
-    async def find_similar_atom(self, subject: str, predicate: str, user_id=None) -> KnowledgeAtom | None: ...
-    async def update_atom(self, atom_id: str, **fields) -> None: ...
-    async def prune_atoms(self, min_confidence: float) -> int: ...
+  async def get_user_memory(
+    self,
+    memory_id: str,
+    user_id: str | None = None,
+  ) -> UserMemory | None:
+    """Retrieve a single memory by ID."""
+    ...
 
-    # Procedures
-    async def store_procedure(self, procedure: Procedure) -> str: ...
-    async def get_procedures(self, *, user_id=None, min_confidence=0.3) -> list[Procedure]: ...
-    async def find_similar_procedure(self, trigger: str, user_id=None) -> Procedure | None: ...
-    async def update_procedure(self, procedure_id: str, **fields) -> None: ...
+  async def get_user_memories(
+    self,
+    user_id: str | None = None,
+    agent_id: str | None = None,
+    topics: list[str] | None = None,
+    limit: int | None = None,
+  ) -> list[UserMemory]:
+    """Retrieve memories with optional filters, ordered by updated_at descending."""
+    ...
 
-    # Topic Transitions
-    async def store_topic_transition(self, from_topic: str, to_topic: str, user_id=None) -> None: ...
-    async def get_topic_transitions(self, from_topic: str, user_id=None, min_count=3) -> list[TopicTransition]: ...
+  async def upsert_user_memory(self, memory: UserMemory) -> None:
+    """Insert or update a memory. If a memory with the same memory_id exists, replace it."""
+    ...
 
-    # Vector Search
-    async def search_episodes_by_embedding(self, embedding: list[float], *, user_id=None, top_k=20) -> list[Episode]: ...
-    async def search_atoms_by_embedding(self, embedding: list[float], *, user_id=None, top_k=20) -> list[KnowledgeAtom]: ...
+  async def delete_user_memory(
+    self,
+    memory_id: str,
+    user_id: str | None = None,
+  ) -> None:
+    """Delete a single memory by ID."""
+    ...
 
-    # Deletion
-    async def delete_user_data(self, user_id: str) -> None: ...
-    async def delete_session_data(self, session_id: str) -> None: ...
+  async def clear_user_memories(self, user_id: str | None = None) -> None:
+    """Delete all memories for a user. If user_id is None, delete ALL memories."""
+    ...
 ```
 
-## Data Types
+All stores also support `async with` (async context manager) for automatic initialization and cleanup:
 
-### Episode
+```python
+async with SQLiteStore("./memory.db") as store:
+  memories = await store.get_user_memories(user_id="alice")
+```
 
-A single conversation turn stored in memory.
+### Method Reference
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `id` | `str` | — | Unique identifier |
-| `user_id` | `str \| None` | — | Owner user ID |
-| `session_id` | `str` | — | Conversation session |
-| `role` | `str` | — | `"user"` or `"assistant"` |
-| `content` | `str` | — | Message text |
-| `embedding` | `list[float] \| None` | `None` | Vector embedding |
-| `topics` | `list[str]` | `[]` | Extracted topics |
-| `sentiment` | `float` | `0.0` | Sentiment score (-1.0 to 1.0) |
-| `token_count` | `int` | `0` | Token count of content |
-| `compression_stage` | `int` | `0` | 0=raw, 1=summary, 2=facts, 3=atoms |
-| `created_at` | `float` | `0.0` | Unix timestamp |
-| `last_accessed_at` | `float` | `0.0` | Last retrieval timestamp |
-| `access_count` | `int` | `0` | Number of times retrieved |
+| Method | Description |
+|--------|-------------|
+| `initialize()` | Prepare the store (create tables, open connections). Called automatically by `Memory` on first use. |
+| `close()` | Release resources. Called by `Memory.close()` or the agent's shutdown. |
+| `get_user_memory(memory_id, user_id=)` | Fetch a single memory by its UUID. Returns `None` if not found. |
+| `get_user_memories(user_id=, agent_id=, topics=, limit=)` | List memories with optional filters, ordered by most recently updated. |
+| `upsert_user_memory(memory)` | Insert or replace a `UserMemory`. Automatically updates `updated_at`. |
+| `delete_user_memory(memory_id, user_id=)` | Delete a single memory. The `user_id` parameter adds a safety scope. |
+| `clear_user_memories(user_id=)` | Delete all memories for a user, or all memories if `user_id` is `None`. |
 
-### KnowledgeAtom
+### Filter Parameters
 
-An extracted fact stored as a subject-predicate-object triple.
+The `get_user_memories()` method supports several filters:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `id` | `str` | — | Unique identifier |
-| `user_id` | `str \| None` | — | Owner user ID |
-| `subject` | `str` | — | Entity (e.g., "Alice") |
-| `predicate` | `str` | — | Relation (e.g., "works-at") |
-| `object` | `str` | — | Value (e.g., "Acme Corp") |
-| `content` | `str` | — | Full text representation |
-| `embedding` | `list[float] \| None` | `None` | Vector embedding |
-| `confidence` | `float` | `1.0` | Confidence score (0.0–1.0) |
-| `reinforcement_count` | `int` | `0` | Times this fact was reinforced |
-| `topics` | `list[str]` | `[]` | Related topics |
-| `source_episode_ids` | `list[str]` | `[]` | Episodes this fact was extracted from |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `user_id` | `str \| None` | Only return memories for this user |
+| `agent_id` | `str \| None` | Only return memories created by this agent |
+| `topics` | `list[str] \| None` | Only return memories matching any of these topics |
+| `limit` | `int \| None` | Maximum number of memories to return |
 
-### Procedure
+## UserMemory Data Type
 
-A learned behavioral pattern.
+Every store works with `UserMemory` objects:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `id` | `str` | — | Unique identifier |
-| `user_id` | `str \| None` | — | Owner user ID |
-| `trigger` | `str` | — | Condition that activates this procedure |
-| `action` | `str` | — | Action to take |
-| `confidence` | `float` | `0.5` | Confidence score |
-| `observation_count` | `int` | `1` | Times observed |
+| `memory` | `str` | — | The memory content (natural language fact) |
+| `memory_id` | `str` | Auto-generated UUID | Unique identifier |
+| `topics` | `list[str]` | `[]` | Topic tags for filtering |
+| `user_id` | `str \| None` | `None` | User this memory belongs to |
+| `agent_id` | `str \| None` | `None` | Agent that created this memory |
+| `input` | `str \| None` | `None` | Original user message that triggered this memory |
+| `created_at` | `float` | Auto-set | Unix timestamp |
+| `updated_at` | `float` | Auto-set | Unix timestamp |
+
+```python
+from definable.memory.types import UserMemory
+
+mem = UserMemory(
+  memory="Alice works at Acme Corp as a Senior Engineer",
+  topics=["work", "personal"],
+  user_id="alice",
+)
+
+# Serialize / deserialize
+data = mem.to_dict()
+restored = UserMemory.from_dict(data)
+```
+
+## Choosing a Backend
+
+| Scenario | Recommended Store |
+|----------|-------------------|
+| Unit tests, quick prototyping | `InMemoryStore` |
+| Local development, single-process apps | `SQLiteStore` |
+| Production, multi-process, horizontal scaling | `PostgresStore` |
+
+For most projects, start with `SQLiteStore` during development and switch to `PostgresStore` for production. The store is a constructor parameter, so swapping backends requires changing a single line:
+
+```python
+# Development
+memory = Memory(store=SQLiteStore("./memory.db"))
+
+# Production
+memory = Memory(store=PostgresStore(db_url=os.environ["DATABASE_URL"]))
+```

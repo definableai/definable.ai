@@ -10,9 +10,9 @@ icon: server
 ## Quick Start
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
-from definable.triggers import Webhook
+from definable.agent import Agent
+from definable.model import OpenAIChat
+from definable.agent.trigger import Webhook
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
@@ -73,7 +73,7 @@ await agent.aserve(port=8000)
 Register HTTP webhook handlers with the `Webhook` trigger:
 
 ```python
-from definable.triggers import Webhook
+from definable.agent.trigger import Webhook
 
 @agent.on(Webhook("/github"))
 async def handle_github(event):
@@ -123,7 +123,7 @@ Every trigger handler receives a `TriggerEvent`:
 Schedule tasks with standard cron expressions:
 
 ```python
-from definable.triggers import Cron
+from definable.agent.trigger import Cron
 
 @agent.on(Cron("0 9 * * *"))  # Every day at 9am UTC
 async def morning_briefing(event):
@@ -149,7 +149,7 @@ Requires `croniter`: `pip install croniter` or `pip install 'definable[cron]'`
 Fire triggers programmatically from anywhere in your code:
 
 ```python
-from definable.triggers import EventTrigger
+from definable.agent.trigger import EventTrigger
 
 @agent.on(EventTrigger("user_signup"))
 async def on_signup(event):
@@ -213,8 +213,8 @@ agent.serve(dev=True)
 Combine messaging interfaces, webhooks, cron, auth, and hooks in a single `serve()` call:
 
 ```python
-from definable.auth import APIKeyAuth
-from definable.triggers import Webhook, Cron, EventTrigger
+from definable.agent.auth import APIKeyAuth
+from definable.agent.trigger import Webhook, Cron, EventTrigger
 
 agent.auth = APIKeyAuth(keys={"my-api-key"})
 

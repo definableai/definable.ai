@@ -45,9 +45,9 @@ Definable supports all three MCP transport types:
 Connect to a filesystem MCP server and use it in an agent:
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
 
 config = MCPConfig(servers=[
     MCPServerConfig(

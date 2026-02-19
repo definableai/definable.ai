@@ -15,12 +15,12 @@ Requirements:
 
 import os
 
-from definable.models.message import Message
+from definable.model.message import Message
 
 
 def openai_example():
   """OpenAI GPT models."""
-  from definable.models.openai import OpenAIChat
+  from definable.model.openai import OpenAIChat
 
   print("OpenAI Example")
   print("-" * 40)
@@ -42,7 +42,7 @@ def openai_example():
 
 def deepseek_example():
   """DeepSeek models."""
-  from definable.models.deepseek import DeepSeekChat
+  from definable.model.deepseek import DeepSeekChat
 
   print("DeepSeek Example")
   print("-" * 40)
@@ -70,7 +70,7 @@ def deepseek_example():
 
 def moonshot_example():
   """Moonshot models."""
-  from definable.models.moonshot import MoonshotChat
+  from definable.model.moonshot import MoonshotChat
 
   print("Moonshot Example")
   print("-" * 40)
@@ -98,7 +98,7 @@ def moonshot_example():
 
 def xai_example():
   """xAI/Grok models with optional web search."""
-  from definable.models.xai import xAI
+  from definable.model.xai import xAI
 
   print("xAI (Grok) Example")
   print("-" * 40)
@@ -148,7 +148,7 @@ def provider_agnostic_function(model, prompt: str) -> str:
 
 def compare_providers():
   """Compare responses from different providers."""
-  from definable.models.openai import OpenAIChat
+  from definable.model.openai import OpenAIChat
 
   print("Provider-Agnostic Example")
   print("-" * 40)

@@ -24,8 +24,8 @@ The last middleware added is the outermost wrapper.
 Add middleware with the `.use()` method:
 
 ```python
-from definable.agents import Agent, LoggingMiddleware, RetryMiddleware, MetricsMiddleware
-from definable.models import OpenAIChat
+from definable.agent import Agent, LoggingMiddleware, RetryMiddleware, MetricsMiddleware
+from definable.model import OpenAIChat
 import logging
 
 logger = logging.getLogger("my_agent")
@@ -50,7 +50,7 @@ output = agent.run("Hello!")
 Logs the start, completion, and any errors for each run.
 
 ```python
-from definable.agents import LoggingMiddleware
+from definable.agent import LoggingMiddleware
 import logging
 
 logger = logging.getLogger("my_agent")
@@ -70,7 +70,7 @@ agent.use(LoggingMiddleware(logger, level=logging.INFO))
 Retries the entire run on transient errors with exponential backoff.
 
 ```python
-from definable.agents import RetryMiddleware
+from definable.agent import RetryMiddleware
 
 agent.use(RetryMiddleware(
     max_retries=3,
@@ -98,7 +98,7 @@ Retries are triggered for `ConnectionError`, `TimeoutError`, and `OSError`.
 Collects timing and count metrics across runs.
 
 ```python
-from definable.agents import MetricsMiddleware
+from definable.agent import MetricsMiddleware
 
 metrics_mw = MetricsMiddleware()
 agent.use(metrics_mw)
@@ -120,8 +120,9 @@ Automatically retrieves relevant documents from a knowledge base and injects the
 Implement the `Middleware` protocol — a callable that accepts `context` and `next_handler`:
 
 ```python
-from definable.agents import Middleware
-from definable.run import RunContext, RunOutput
+from definable.agent import Middleware
+from definable.agent.run import RunContext
+from definable.agent.events import RunOutput
 
 class TimingMiddleware:
     """Measures and prints execution time for each run."""

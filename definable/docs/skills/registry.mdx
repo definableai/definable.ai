@@ -10,9 +10,9 @@ The `SkillRegistry` manages collections of markdown-based skills and provides se
 ## Quick Example
 
 ```python
-from definable.agents import Agent
-from definable.models import OpenAIChat
-from definable.skills import SkillRegistry
+from definable.agent import Agent
+from definable.model import OpenAIChat
+from definable.skill import SkillRegistry
 
 # Load built-in library (8 markdown skills)
 registry = SkillRegistry()
@@ -84,7 +84,7 @@ When loaded, the markdown body is wrapped in `<skill name="...">` tags in the sy
 ### From a File
 
 ```python
-from definable.skills import SkillLoader
+from definable.skill import SkillLoader
 
 skill = SkillLoader.load_file(Path("my-skill.md"))
 ```
@@ -114,7 +114,7 @@ skills = SkillLoader.load_directory(Path("./my-skills/"))
 ## SkillRegistry Constructor
 
 ```python
-from definable.skills import SkillRegistry
+from definable.skill import SkillRegistry
 
 registry = SkillRegistry(
   skills=None,

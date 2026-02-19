@@ -20,10 +20,14 @@ Models are the foundation of Definable. The `Model` base class provides a consis
 ## Basic Usage
 
 ```python
-from definable.models import OpenAIChat
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -72,23 +76,43 @@ Every model supports four ways to call it:
 
 <CodeGroup>
 ```python Sync
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+from definable.model.message import Message
+
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
 ```python Async
-response = await model.ainvoke(messages=[{"role": "user", "content": "Hello!"}])
+from definable.model.message import Message
+
+response = await model.ainvoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
 ```python Streaming
-for chunk in model.invoke_stream(messages=[{"role": "user", "content": "Hello!"}]):
+from definable.model.message import Message
+
+for chunk in model.invoke_stream(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+):
     if chunk.content:
         print(chunk.content, end="", flush=True)
 ```
 
 ```python Async Streaming
-async for chunk in model.ainvoke_stream(messages=[{"role": "user", "content": "Hello!"}]):
+from definable.model.message import Message
+
+async for chunk in model.ainvoke_stream(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+):
     if chunk.content:
         print(chunk.content, end="", flush=True)
 ```
@@ -137,7 +161,7 @@ model = OpenAIChat(
 You can resolve a model from a `"provider:model-id"` string:
 
 ```python
-from definable.models.utils import get_model
+from definable.model.utils import get_model
 
 model = get_model("openai:gpt-4o")
 model = get_model("deepseek:deepseek-chat")

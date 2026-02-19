@@ -13,10 +13,14 @@ export MOONSHOT_API_KEY="sk-..."
 ## Basic Usage
 
 ```python
-from definable.models import MoonshotChat
+from definable.model import MoonshotChat
+from definable.model.message import Message
 
 model = MoonshotChat(id="kimi-k2-turbo-preview")
-response = model.invoke(messages=[{"role": "user", "content": "Hello!"}])
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
 print(response.content)
 ```
 
@@ -45,8 +49,11 @@ print(response.content)
 ## Streaming
 
 ```python
+from definable.model.message import Message
+
 for chunk in model.invoke_stream(
-    messages=[{"role": "user", "content": "Write a haiku about coding."}]
+    messages=[Message(role="user", content="Write a haiku about coding.")],
+    assistant_message=Message(role="assistant", content=""),
 ):
     if chunk.content:
         print(chunk.content, end="", flush=True)
@@ -55,8 +62,11 @@ for chunk in model.invoke_stream(
 ## Async Usage
 
 ```python
+from definable.model.message import Message
+
 response = await model.ainvoke(
-    messages=[{"role": "user", "content": "Hello!"}]
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
 )
 ```
 

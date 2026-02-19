@@ -58,7 +58,7 @@ History is automatically truncated to `max_session_history` (default: 50 message
 Use `session_state` to store custom per-user data that persists across messages:
 
 ```python
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool
 def set_language(language: str, _session_state: dict = None) -> str:
@@ -90,7 +90,7 @@ By default, sessions are:
 ### Custom SessionManager
 
 ```python
-from definable.interfaces import SessionManager, TelegramInterface
+from definable.agent.interface import SessionManager, TelegramInterface
 
 # Sessions expire after 2 hours
 session_manager = SessionManager(session_ttl_seconds=7200)

@@ -30,7 +30,7 @@ Definable is a Python framework for building AI-powered applications. It provide
     Connect agents to messaging platforms like Telegram, Discord, and Signal. Automatic session management, hooks, identity resolution, and multi-interface serving.
   </Card>
   <Card title="Memory" icon="brain" href="/memory/overview">
-    Persistent multi-tier memory with automatic recall, distillation, and cross-session context. Supports SQLite, PostgreSQL, Redis, Qdrant, Chroma, Pinecone, and MongoDB backends.
+    LLM-driven persistent memory with automatic recall and cross-session context. Supports SQLite, PostgreSQL, and in-memory backends.
   </Card>
   <Card title="Readers" icon="file-lines" href="/readers/overview">
     Extract text from files (PDF, DOCX, XLSX, audio) and inject into agent context automatically before LLM processing.
@@ -76,7 +76,7 @@ flowchart TD
 - **Testing**: Mock models, test agents without API calls, and assert on tool execution.
 - **Cost tracking**: Automatic token counting and cost calculation across providers.
 - **Interfaces**: Deploy agents to Telegram, Discord, and Signal with sessions, hooks, identity resolution, and multi-interface serving.
-- **Memory**: Persistent multi-tier cognitive memory with automatic recall, distillation, and 8 storage backends.
+- **Memory**: LLM-driven persistent memory with automatic recall and 3 storage backends (SQLite, PostgreSQL, in-memory).
 - **File readers**: Extract text from PDF, DOCX, XLSX, and audio files attached to agent messages.
 - **Type-safe**: Built on Pydantic with full type annotations and mypy support.
 

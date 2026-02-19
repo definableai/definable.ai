@@ -13,10 +13,10 @@ Usage:
 
 import os
 
-from definable.agents import Agent
-from definable.auth import APIKeyAuth
-from definable.models.openai import OpenAIChat
-from definable.triggers import Cron, EventTrigger, Webhook
+from definable.agent import Agent
+from definable.agent.auth import APIKeyAuth
+from definable.model.openai import OpenAIChat
+from definable.agent.trigger import Cron, EventTrigger, Webhook
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o-mini"),
@@ -65,8 +65,8 @@ def maybe_add_telegram():
   bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
   if not bot_token:
     return
-  from definable.auth import AllowlistAuth
-  from definable.interfaces.telegram import TelegramConfig, TelegramInterface
+  from definable.agent.auth import AllowlistAuth
+  from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
 
   # Only allow specific Telegram users (set via env var or hardcode)
   allowed = os.environ.get("TELEGRAM_ALLOWED_USERS", "")

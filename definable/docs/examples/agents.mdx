@@ -10,8 +10,8 @@ icon: robot
 Create an agent with just a model and instructions.
 
 ```python
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
@@ -32,9 +32,9 @@ python definable/examples/agents/01_simple_agent.py
 Give the agent tools to call during execution.
 
 ```python
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 @tool
 def add(a: int, b: int) -> int:
@@ -65,9 +65,9 @@ python definable/examples/agents/02_agent_with_tools.py
 Bundle related tools into a Toolkit class.
 
 ```python
-from definable.agents import Agent, Toolkit
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent, Toolkit
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 class MathToolkit(Toolkit):
     @tool
@@ -98,8 +98,8 @@ python definable/examples/agents/03_agent_with_toolkit.py
 Maintain context across multiple interactions.
 
 ```python
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
@@ -124,8 +124,8 @@ python definable/examples/agents/04_multi_turn.py
 Stream agent output in real time with typed events.
 
 ```python
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
@@ -151,8 +151,8 @@ Run agents asynchronously with `arun()` and `arun_stream()`.
 
 ```python
 import asyncio
-from definable.agents import Agent
-from definable.models.openai import OpenAIChat
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
 
 async def main():
     agent = Agent(

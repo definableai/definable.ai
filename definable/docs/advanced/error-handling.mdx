@@ -37,7 +37,7 @@ See [MCP Error Handling](/mcp/error-handling) for the full MCP error hierarchy.
 Configure retries directly on the agent:
 
 ```python
-from definable.agents import Agent, AgentConfig
+from definable.agent import Agent, AgentConfig
 
 agent = Agent(
     model=model,
@@ -55,7 +55,7 @@ This retries the entire agent run on transient errors (connection failures, time
 Configure retries on the model itself for finer control:
 
 ```python
-from definable.models import OpenAIChat
+from definable.model import OpenAIChat
 
 model = OpenAIChat(
     id="gpt-4o",
@@ -72,7 +72,7 @@ Model retries apply to individual API calls. Agent retries wrap the entire run.
 For the most control, use `RetryMiddleware`:
 
 ```python
-from definable.agents import Agent, RetryMiddleware
+from definable.agent import Agent, RetryMiddleware
 
 agent = Agent(model=model).use(
     RetryMiddleware(
@@ -90,7 +90,7 @@ The middleware retries on `ConnectionError`, `TimeoutError`, and `OSError` with 
 When a tool raises an exception, the error message is sent back to the model. The model can then decide to retry the call, try a different approach, or inform the user:
 
 ```python
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool
 def divide(a: float, b: float) -> str:
@@ -105,7 +105,7 @@ If the model calls `divide(10, 0)`, it receives the error `"Cannot divide by zer
 ## Catching Errors in Application Code
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 
 agent = Agent(model=model, tools=[my_tool])
 

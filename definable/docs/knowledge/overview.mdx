@@ -22,7 +22,7 @@ flowchart LR
 | Reader | PDF, text, URL |
 | Chunker | text, recursive |
 | Embedder | OpenAI, Voyage |
-| VectorDB | memory, pgvector |
+| VectorDB | InMemory, PgVector, Qdrant, ChromaDb, MongoDb, RedisDB, PineconeDb |
 
 **Retrieval (per query)**
 
@@ -34,7 +34,9 @@ flowchart LR
 ## Quick Start
 
 ```python
-from definable.knowledge import Knowledge, InMemoryVectorDB, OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 # Create a knowledge base
 knowledge = Knowledge(
@@ -112,7 +114,7 @@ Each step in the pipeline is pluggable:
     Rerank search results for higher relevance with Cohere.
   </Card>
   <Card title="Vector Databases" icon="database" href="/knowledge/vector-databases">
-    Store and search embeddings in memory or PostgreSQL.
+    Store and search embeddings with seven backends: InMemory, PgVector, Qdrant, ChromaDb, MongoDb, RedisDB, and PineconeDb.
   </Card>
   <Card title="Agent Integration" icon="robot" href="/knowledge/agent-integration">
     Connect knowledge to agents via middleware or toolkits.
@@ -134,7 +136,7 @@ Each step in the pipeline is pluggable:
 </ParamField>
 
 <ParamField path="chunker" type="Chunker">
-  Text chunker for splitting documents. Defaults to `RecursiveChunker`.
+  Text chunker for splitting documents. When `None` (default), documents are not chunked automatically. Pass a `RecursiveChunker` or `TextChunker` instance to enable chunking during `add()`.
 </ParamField>
 
 <ParamField path="readers" type="List[Reader]">

@@ -1,64 +1,44 @@
 ---
 title: Vector Databases
 sidebarTitle: Vector Databases
-description: Store and search document embeddings with in-memory or PostgreSQL backends.
+description: Store and search document embeddings with seven built-in backends.
 icon: database
 ---
 
-Vector databases store document embeddings and enable fast similarity search. Definable includes two implementations and a base class for building your own.
+Vector databases store document embeddings and enable fast similarity search. Definable includes seven implementations in the `definable.vectordb` module and a base class for custom backends.
+
+<Note>
+All vector DB classes are imported from `definable.vectordb`, not `definable.knowledge`. The `definable.knowledge` module re-exports `InMemoryVectorDB` for backward compatibility but will show a deprecation warning.
+</Note>
 
 ## InMemoryVectorDB
 
 Stores everything in memory. Great for development, testing, and small datasets.
 
 ```python
-from definable.knowledge import InMemoryVectorDB
+from definable.vectordb import InMemoryVectorDB
 
-vector_db = InMemoryVectorDB(
-    collection_name="my_docs",
-    dimensions=1536,
-)
+vector_db = InMemoryVectorDB(name="my_docs")
 ```
 
-<ParamField path="collection_name" type="str" default="default">
-  Name for this collection of documents.
-</ParamField>
-
-<ParamField path="dimensions" type="int" default="1536">
-  Vector dimensions. Must match your embedder output.
-</ParamField>
-
 **Characteristics:**
-- No external dependencies
+- No external dependencies (requires `numpy`)
 - Uses cosine similarity for search
-- Supports metadata filtering
 - Data is lost when the process exits
 
-## PgVectorDB
+## PgVector
 
 Uses PostgreSQL with the `pgvector` extension. Suitable for production workloads with persistent storage and scalable search.
 
 ```python
-from definable.knowledge import PgVectorDB
+from definable.vectordb import PgVector
 
-vector_db = PgVectorDB(
+vector_db = PgVector(
     connection_string="postgresql://user:pass@localhost:5432/mydb",
     table_name="documents",
     dimensions=1536,
 )
 ```
-
-<ParamField path="connection_string" type="str">
-  PostgreSQL connection string. Defaults to the `DATABASE_URL` environment variable.
-</ParamField>
-
-<ParamField path="table_name" type="str" default="documents">
-  Database table name for storing documents and embeddings.
-</ParamField>
-
-<ParamField path="dimensions" type="int" default="1536">
-  Vector dimensions. Must match your embedder.
-</ParamField>
 
 <Note>
 Requires `psycopg[binary]` and `pgvector`. Install with:
@@ -74,16 +54,83 @@ CREATE EXTENSION IF NOT EXISTS vector;
 ```
 </Note>
 
-**Characteristics:**
-- Persistent storage across restarts
-- Uses IVFFlat index for fast approximate nearest neighbor search
-- Supports metadata filtering
-- Scales to millions of documents
+## Qdrant
+
+High-performance vector search engine.
+
+```python
+from definable.vectordb import Qdrant
+
+vector_db = Qdrant(
+    url="localhost",
+    port=6333,
+    collection="my_docs",
+    dimensions=1536,
+)
+```
+
+## ChromaDb
+
+```python
+from definable.vectordb import ChromaDb
+
+vector_db = ChromaDb(
+    collection="my_docs",
+    path="./chroma_data",  # Omit for in-memory mode
+)
+```
+
+## MongoDb
+
+MongoDB Atlas vector search.
+
+```python
+from definable.vectordb import MongoDb
+
+vector_db = MongoDb(
+    connection_string="mongodb+srv://...",
+    database="mydb",
+    collection="documents",
+    dimensions=1536,
+)
+```
+
+## RedisDB
+
+Redis with RediSearch for vector similarity.
+
+```python
+from definable.vectordb import RedisDB
+
+vector_db = RedisDB(
+    url="redis://localhost:6379",
+    index_name="my_docs",
+    dimensions=1536,
+)
+```
+
+## PineconeDb
+
+Pinecone managed vector database.
+
+```python
+from definable.vectordb import PineconeDb
+
+vector_db = PineconeDb(
+    api_key="your-pinecone-api-key",
+    index_name="my_docs",
+    dimensions=1536,
+)
+```
 
 ## Using with Knowledge
 
+Pass any vector DB instance to `Knowledge`:
+
 ```python
-from definable.knowledge import Knowledge, OpenAIEmbedder, InMemoryVectorDB
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),
@@ -93,74 +140,109 @@ knowledge = Knowledge(
 
 ## VectorDB Interface
 
-Both implementations share the same interface:
+All implementations share the same base interface from `definable.vectordb.VectorDB`:
 
 | Method | Description |
 |--------|-------------|
-| `add(documents) -> List[str]` | Add documents, returns their IDs |
-| `aadd(documents) -> List[str]` | Async add |
-| `search(query_embedding, top_k, filter)` | Search by vector similarity |
-| `asearch(query_embedding, top_k, filter)` | Async search |
-| `delete(ids)` | Delete documents by ID |
-| `clear()` | Remove all documents |
+| `create()` | Create the collection / table if it doesn't exist |
+| `insert(content_hash, documents)` | Insert pre-embedded documents |
+| `upsert(content_hash, documents)` | Insert or update pre-embedded documents |
+| `search(query, limit, filters)` | Search by text query (backend embeds internally) |
 | `count() -> int` | Number of stored documents |
-
-## Metadata Filtering
-
-Filter search results by document metadata:
-
-```python
-results = knowledge.search(
-    "Python tutorials",
-    filter={"category": "tutorial", "language": "python"},
-)
-```
-
-The exact filter syntax depends on the vector database implementation.
+| `delete_by_id(id)` | Delete a document by its ID |
+| `delete()` | Delete the entire collection / table |
+| `drop()` | Drop the collection / table from the backend |
+| `ainsert(content_hash, documents)` | Async insert |
+| `asearch(query, limit, filters)` | Async search |
 
 ## Creating a Custom VectorDB
 
-Subclass `VectorDB` to integrate your preferred vector store:
+Subclass `VectorDB` from `definable.vectordb` to integrate any vector store. The key abstract methods to implement are:
 
 ```python
-from definable.knowledge.vector_dbs import VectorDB
+from definable.vectordb import VectorDB
 from definable.knowledge import Document
 
-class QdrantVectorDB(VectorDB):
-    collection_name: str = "default"
-    dimensions: int = 1536
-
-    def __init__(self, url: str = "localhost", port: int = 6333, **kwargs):
-        super().__init__(**kwargs)
-        from qdrant_client import QdrantClient
-        self.client = QdrantClient(url=url, port=port)
-
-    def add(self, documents: list[Document]) -> list[str]:
-        # Implementation: upsert points to Qdrant
+class MyVectorDB(VectorDB):
+    def create(self) -> None:
+        # Create collection/table if it doesn't exist
         ...
 
-    def search(self, query_embedding, top_k=10, filter=None) -> list[Document]:
-        # Implementation: search Qdrant collection
+    async def async_create(self) -> None:
+        self.create()
+
+    def insert(self, content_hash: str, documents: list[Document], filters=None) -> None:
+        # Store pre-embedded documents
         ...
 
-    def delete(self, ids: list[str]) -> None:
-        # Implementation: delete points from Qdrant
+    async def async_insert(self, content_hash: str, documents: list[Document], filters=None) -> None:
+        self.insert(content_hash, documents, filters)
+
+    def upsert(self, content_hash: str, documents: list[Document], filters=None) -> None:
+        self.insert(content_hash, documents, filters)
+
+    async def async_upsert(self, content_hash: str, documents: list[Document], filters=None) -> None:
+        self.upsert(content_hash, documents, filters)
+
+    def search(self, query: str, limit: int = 5, filters=None) -> list[Document]:
+        # Embed query and search
         ...
 
-    def clear(self) -> None:
-        # Implementation: delete and recreate collection
+    async def async_search(self, query: str, limit: int = 5, filters=None) -> list[Document]:
+        return self.search(query, limit, filters)
+
+    def get_count(self) -> int:
         ...
 
-    def count(self) -> int:
-        # Implementation: count points in collection
+    def delete(self) -> bool:
+        # Delete the entire collection
         ...
+
+    def delete_by_id(self, id: str) -> bool:
+        ...
+
+    def delete_by_name(self, name: str) -> bool:
+        ...
+
+    def delete_by_metadata(self, metadata: dict) -> bool:
+        ...
+
+    def delete_by_content_id(self, content_id: str) -> bool:
+        ...
+
+    def drop(self) -> None:
+        ...
+
+    async def async_drop(self) -> None:
+        self.drop()
+
+    def exists(self) -> bool:
+        ...
+
+    async def async_exists(self) -> bool:
+        return self.exists()
+
+    def name_exists(self, name: str) -> bool:
+        ...
+
+    def async_name_exists(self, name: str) -> bool:
+        ...
+
+    def id_exists(self, id: str) -> bool:
+        ...
+
+    def content_hash_exists(self, content_hash: str) -> bool:
+        ...
+
+    def get_supported_search_types(self) -> list[str]:
+        return ["vector"]
 ```
 
 ## Choosing a Vector Database
 
-| | InMemoryVectorDB | PgVectorDB |
-|---|---|---|
-| **Setup** | None | Requires PostgreSQL |
-| **Persistence** | No | Yes |
-| **Scale** | Thousands of docs | Millions of docs |
-| **Best for** | Development, testing, demos | Production |
+| | InMemoryVectorDB | PgVector | Qdrant | ChromaDb | MongoDb | RedisDB | PineconeDb |
+|---|---|---|---|---|---|---|---|
+| **Setup** | None | PostgreSQL + pgvector | Qdrant server | None (in-memory) or local dir | MongoDB Atlas | Redis + RediSearch | Managed |
+| **Persistence** | No | Yes | Yes | Optional | Yes | Yes | Yes |
+| **Scale** | Thousands | Millions | Millions | Thousands–millions | Millions | Millions | Billions |
+| **Best for** | Dev, testing | Existing PG infra | High performance | Local dev | Existing Mongo | Low latency | Serverless |

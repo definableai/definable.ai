@@ -13,7 +13,7 @@ Standard Python type hints are supported:
 
 ```python
 from typing import List, Optional
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 @tool
 def search(
@@ -107,7 +107,7 @@ For complex inputs, use Pydantic models:
 
 ```python
 from pydantic import BaseModel, Field
-from definable.tools import tool
+from definable.tool.decorator import tool
 
 class SearchFilter(BaseModel):
     category: str = Field(description="Document category to filter by")

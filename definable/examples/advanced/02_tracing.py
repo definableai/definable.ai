@@ -16,12 +16,13 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
-from definable.agents import Agent, AgentConfig, JSONLExporter, TracingConfig
-from definable.models.openai import OpenAIChat
-from definable.tools.decorator import tool
+from definable.agent import Agent, JSONLExporter
+from definable.agent.tracing import Tracing
+from definable.model.openai import OpenAIChat
+from definable.tool.decorator import tool
 
 if TYPE_CHECKING:
-  from definable.run.base import BaseRunOutputEvent
+  from definable.agent.events import BaseRunOutputEvent
 
 
 @tool
@@ -64,10 +65,8 @@ def basic_tracing():
     model=model,
     tools=[calculate, get_weather],
     instructions="You are a helpful assistant with calculation and weather tools.",
-    config=AgentConfig(
-      tracing=TracingConfig(
-        exporters=[exporter],  # Add trace exporter
-      ),
+    tracing=Tracing(
+      exporters=[exporter],  # Add trace exporter
     ),
   )
 
@@ -144,9 +143,7 @@ def trace_with_tool_execution():
     model=model,
     tools=[calculate, get_weather],
     instructions="Use tools to answer questions.",
-    config=AgentConfig(
-      tracing=TracingConfig(exporters=[exporter]),
-    ),
+    tracing=Tracing(exporters=[exporter]),
   )
 
   # Query that requires multiple tool calls
@@ -181,9 +178,7 @@ def analyze_traces():
     model=model,
     tools=[calculate],
     instructions="You are a calculator.",
-    config=AgentConfig(
-      tracing=TracingConfig(exporters=[exporter]),
-    ),
+    tracing=Tracing(exporters=[exporter]),
   )
 
   # Run multiple queries
@@ -240,10 +235,8 @@ Debugging with Traces:
 
 1. Enable tracing during development:
    ```python
-   config=AgentConfig(
-       tracing=TracingConfig(
-           exporters=[JSONLExporter("./traces")]
-       )
+   tracing=Tracing(
+       exporters=[JSONLExporter("./traces")]
    )
    ```
 
@@ -301,10 +294,8 @@ def custom_trace_export():
     model=model,
     tools=[calculate],
     instructions="Use calculate for math.",
-    config=AgentConfig(
-      tracing=TracingConfig(
-        exporters=[PrintExporter()],
-      ),
+    tracing=Tracing(
+      exporters=[PrintExporter()],
     ),
   )
 

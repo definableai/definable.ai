@@ -14,9 +14,9 @@ Usage:
 import asyncio
 import os
 
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.mcp import MCPConfig, MCPServerConfig, MCPToolkit
-from definable.models.openai import OpenAIChat
+from definable.model.openai import OpenAIChat
 
 
 async def main() -> None:

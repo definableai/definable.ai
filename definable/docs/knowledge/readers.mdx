@@ -7,7 +7,7 @@ icon: file-import
 Readers convert raw sources (files, URLs, strings) into `Document` objects that can be chunked, embedded, and stored. Definable includes readers for plain text, PDF, and web content.
 
 <Note>
-These are **Knowledge readers** (`definable.knowledge.readers`) for the RAG document ingestion pipeline. If you need to extract text from files attached to agent messages (PDF, DOCX, XLSX, audio) before LLM processing, see [File Readers](/readers/overview) instead.
+These are **Knowledge readers** (`definable.knowledge.reader`) for the RAG document ingestion pipeline. If you need to extract text from files attached to agent messages (PDF, DOCX, XLSX, audio) before LLM processing, see [File Readers](/readers/overview) instead.
 </Note>
 
 ## Auto-Detection
@@ -26,7 +26,7 @@ knowledge.add("https://example.com/page")   # URLReader
 Reads plain text files (`.txt`, `.md`, `.rst`, `.csv`, `.log`).
 
 ```python
-from definable.knowledge.readers import TextReader
+from definable.knowledge.reader import TextReader
 
 reader = TextReader()
 documents = reader.read("/path/to/notes.md")
@@ -43,7 +43,7 @@ documents = reader.read("This is plain text content.")
 Reads PDF files page by page.
 
 ```python
-from definable.knowledge.readers import PDFReader
+from definable.knowledge.reader import PDFReader
 
 reader = PDFReader()
 documents = reader.read("/path/to/report.pdf")
@@ -61,7 +61,7 @@ Requires the `pypdf` package. Install it with `pip install pypdf`.
 Fetches and extracts text content from web pages.
 
 ```python
-from definable.knowledge.readers import URLReader
+from definable.knowledge.reader import URLReader
 
 reader = URLReader()
 documents = reader.read("https://example.com/article")
@@ -78,7 +78,7 @@ Requires `httpx` (included) and `beautifulsoup4`. Install with `pip install beau
 Override auto-detection by passing a reader explicitly:
 
 ```python
-from definable.knowledge.readers import PDFReader
+from definable.knowledge.reader import PDFReader
 
 knowledge.add("/path/to/file.dat", reader=PDFReader())
 ```
@@ -96,7 +96,7 @@ documents = await reader.aread("/path/to/file.txt")
 Subclass `Reader` and implement `read()` and optionally `can_read()`:
 
 ```python
-from definable.knowledge.readers import Reader
+from definable.knowledge.reader import Reader
 from definable.knowledge import Document
 
 class CSVReader(Reader):
@@ -123,6 +123,11 @@ class CSVReader(Reader):
 Register it with your knowledge base:
 
 ```python
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.knowledge.reader import TextReader, PDFReader, URLReader
+from definable.vectordb import InMemoryVectorDB
+
 knowledge = Knowledge(
     vector_db=InMemoryVectorDB(),
     embedder=OpenAIEmbedder(),

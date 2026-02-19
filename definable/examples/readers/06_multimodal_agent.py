@@ -22,9 +22,10 @@ import zlib
 
 sys.path.append("/Users/hash/work/definable.ai/definable")
 
-from definable.agents import Agent, AgentConfig, MockModel, TracingConfig
+from definable.agent import Agent, MockModel
+from definable.agent.tracing import Tracing
 from definable.media import Audio, File, Image
-from definable.readers import BaseReader
+from definable.reader import BaseReader
 
 # ---------------------------------------------------------------------------
 # Synthetic test data (no external files needed)
@@ -142,10 +143,10 @@ def demo_mock_agent():
   model = MockModel(responses=["I analyzed the CSV, image, and audio you provided."])
 
   agent = Agent(
-    model=model,
+    model=model,  # type: ignore[arg-type]
     instructions="You are a multimodal assistant. Analyze all provided inputs.",
     readers=True,
-    config=AgentConfig(tracing=TracingConfig(enabled=False)),
+    tracing=Tracing(enabled=False),
   )
 
   # Documents go through readers (text extraction into context)
@@ -200,7 +201,7 @@ def demo_live_agent():
   print("Part 3: Live Model Agent — gpt-4o-mini")
   print("=" * 60)
 
-  from definable.models.openai import OpenAIChat
+  from definable.model.openai import OpenAIChat
 
   model = OpenAIChat(id="gpt-4o-mini")
 

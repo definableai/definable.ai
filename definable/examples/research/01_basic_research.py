@@ -3,9 +3,9 @@
 import asyncio
 import os
 
-from definable.models.openai import OpenAIChat
-from definable.research import DeepResearch, DeepResearchConfig
-from definable.research.search import create_search_provider
+from definable.model.openai import OpenAIChat
+from definable.agent.research import DeepResearch, DeepResearchConfig
+from definable.agent.research.search import create_search_provider
 
 
 async def main():
