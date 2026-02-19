@@ -179,7 +179,7 @@ class Agent:
             ``registry.as_eager()`` or ``registry.as_lazy()`` directly
             and passing the result to ``skills=``.
         instructions: System instructions for the agent.
-        memory: Optional MemoryManager instance for persistent memory.
+        memory: Optional Memory instance for session history.
         readers: File reader configuration. Accepts:
             - None: no file reading (default)
             - True: auto-create FileReaderRegistry with all available readers
@@ -1481,11 +1481,12 @@ class Agent:
     self._pending_memory_tasks = [t for t in self._pending_memory_tasks if not t.done()]
 
   async def _memory_recall(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
-    """Recall relevant memories, emit events, inject into context."""
+    """Recall session history, emit events, inject into context."""
     assert self.memory is not None
     await self._drain_memory_tasks()
     import time
 
+    session_id = context.session_id or "default"
     user_id = context.user_id or "default"
 
     events: List[RunOutputEvent] = []
@@ -1512,14 +1513,19 @@ class Agent:
     # Ensure store is initialized
     await self.memory._ensure_initialized()
 
-    # Get all memories for this user
-    memories = await self.memory.aget_user_memories(user_id=user_id)
+    # Get session history entries
+    entries = await self.memory.get_entries(session_id, user_id)
 
     elapsed = (time.perf_counter() - start_time) * 1000
 
-    if memories:
-      formatted = self.memory.format_memories_for_prompt(memories)
-      context.memory_context = f"<memories_from_previous_interactions>\n{formatted}\n</memories_from_previous_interactions>"
+    if entries:
+      lines = []
+      for e in entries:
+        if e.role == "summary":
+          lines.append(f"[Summary]: {e.content}")
+        else:
+          lines.append(f"{e.role}: {e.content}")
+      context.memory_context = "<conversation_history>\n" + "\n".join(lines) + "\n</conversation_history>"
       context.active_layers.add("memory")
 
     completed = MemoryRecallCompletedEvent(
@@ -1529,8 +1535,8 @@ class Agent:
       agent_name=self.agent_name,
       query=query or "",
       tokens_used=len(context.memory_context or "") // 4,
-      chunks_included=len(memories),
-      chunks_available=len(memories),
+      chunks_included=len(entries),
+      chunks_available=len(entries),
       duration_ms=elapsed,
     )
     self._emit(completed)
@@ -1538,11 +1544,11 @@ class Agent:
     return events
 
   def _memory_store(self, new_messages: List[Message], context: RunContext) -> List[RunOutputEvent]:
-    """Fire-and-forget LLM-based memory extraction from new messages, emit events."""
+    """Store new messages in session memory (fire-and-forget), emit events."""
     assert self.memory is not None
     import time
 
-    if not self.memory.update_on_run:
+    if not self.memory.enabled:
       return []
 
     events: List[RunOutputEvent] = []
@@ -1561,8 +1567,10 @@ class Agent:
     try:
       loop = asyncio.get_running_loop()
       memory = self.memory
+      session_id = context.session_id or "default"
+      user_id = context.user_id or "default"
 
-      # Ensure the memory manager has a model (use agent's model if not set)
+      # Ensure the memory has a model for auto-optimization
       if memory.model is None:
         memory.model = self.model
 
@@ -1572,14 +1580,8 @@ class Agent:
         start_time = time.perf_counter()
         try:
           await memory._ensure_initialized()
-          # Extract user messages for memory processing
-          # Pass all messages (user + assistant) so memory LLM has full conversational context
-          if new_messages:
-            await memory.acreate_user_memories(
-              messages=new_messages,
-              user_id=context.user_id or "default",
-              agent_id=self.agent_id,
-            )
+          for msg in new_messages:
+            await memory.add(msg, session_id=session_id, user_id=user_id)
         except Exception as e:
           log_warning(f"Memory store failed: {type(e).__name__}: {e}")
         finally:
@@ -2113,7 +2115,6 @@ class Agent:
     """
     from definable.agent.config import (
       DEFAULT_KNOWLEDGE_DESCRIPTION,
-      DEFAULT_MEMORY_DESCRIPTION,
       DEFAULT_RESEARCH_DESCRIPTION,
       DEFAULT_THINKING_DESCRIPTION,
     )
@@ -2122,14 +2123,11 @@ class Agent:
     items: List[str] = []
 
     # Memory layer
-    if self.memory:
-      needs_guide = bool(self.memory.description) or self.memory.trigger != "always"
-      if needs_guide:
-        desc = self.memory.description or DEFAULT_MEMORY_DESCRIPTION
+    if self.memory and self.memory.enabled:
+      if self.memory.description:
+        desc = self.memory.description
         if "memory" in active:
           items.append(f"- **Memory** [retrieved this turn]: {desc}")
-        elif self.memory.trigger == "auto":
-          items.append(f"- **Memory** [available, not retrieved this turn]: {desc}")
         else:
           items.append(f"- **Memory**: {desc}")
 
@@ -2204,14 +2202,10 @@ class Agent:
     return []
 
   def _should_store_memory(self) -> bool:
-    """Return True if memory store should run this turn.
-
-    Store fires on "always" and "auto" (we always persist what was said,
-    regardless of whether recall ran). Only "never" disables storage.
-    """
+    """Return True if memory store should run this turn."""
     if not self.memory:
       return False
-    return self.memory.trigger != "never"
+    return self.memory.enabled
 
   async def _thinking_should_run(self, messages: List[Message]) -> bool:
     """Return True if the thinking layer should execute this turn."""
@@ -2260,18 +2254,8 @@ class Agent:
     events.extend(await self._deep_research(context))
 
     # Memory recall
-    if self.memory:
-      events.extend(
-        await self._evaluate_layer_trigger(
-          trigger=self.memory.trigger,
-          callback=lambda: self._memory_recall(context, new_messages),
-          layer_name="memory",
-          query_messages=new_messages,
-          all_messages=all_messages,
-          decision_prompt=self.memory.decision_prompt,
-          routing_model=self.memory.routing_model,
-        )
-      )
+    if self.memory and self.memory.enabled:
+      events.extend(await self._memory_recall(context, new_messages))
 
     return events
 

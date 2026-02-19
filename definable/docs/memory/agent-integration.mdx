@@ -5,7 +5,7 @@ description: How memory integrates with the agent lifecycle.
 icon: link
 ---
 
-When you pass `memory=` to an `Agent`, the agent automatically injects stored memories before each model call and extracts new memories after each response. The model itself decides what to remember via tool calls.
+When you pass `memory=` to an `Agent`, the agent automatically injects stored conversation history before each model call and stores new messages after each response. When the session grows beyond `max_messages`, older messages are automatically summarized.
 
 ## Setup
 
@@ -21,10 +21,7 @@ from definable.model.openai import OpenAIChat
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
   instructions="You are a helpful assistant.",
-  memory=Memory(
-    store=SQLiteStore("./memory.db"),
-    trigger="always",
-  ),
+  memory=Memory(store=SQLiteStore("./memory.db")),
 )
 ```
 
@@ -49,128 +46,67 @@ sequenceDiagram
 
   User->>Agent: arun("Where do I work?", user_id="alice")
 
-  alt trigger="always"
-    Agent->>Store: get_user_memories(user_id="alice")
-    Store-->>Agent: list[UserMemory]
-    Agent->>Memory: format_memories_for_prompt(memories)
-    Memory-->>Agent: XML context string
-  else trigger="auto"
-    Agent->>Model: "Does this query need memory? YES/NO"
-    Model-->>Agent: YES / NO
-    opt YES
-      Agent->>Store: get_user_memories(user_id="alice")
-      Store-->>Agent: list[UserMemory]
-    end
-  else trigger="never"
-    Note over Agent: Skip recall entirely
-  end
+  Agent->>Store: get_entries(session_id, user_id="alice")
+  Store-->>Agent: list[MemoryEntry]
+  Agent->>Agent: Format entries as conversation history
+  Note over Agent: Inject into system prompt
 
-  Note over Agent: Build system prompt with memory context
   Agent->>Model: messages + system prompt
   Model-->>Agent: response
 
-  alt update_on_run=true and trigger != "never"
-    Agent->>Memory: acreate_user_memories(messages)
-    Memory->>Model: Analyze conversation with memory tools
-    Model->>Memory: add_memory / update_memory / delete_memory calls
-    Memory->>Store: upsert/delete operations
+  Agent->>Memory: add(user_message + assistant_response)
+  Memory->>Store: store entries
+  opt count > max_messages
+    Memory->>Model: Summarize older messages
+    Model-->>Memory: Summary text
+    Memory->>Store: Replace middle entries with summary
   end
 
   Agent-->>User: RunOutput
 ```
 
-1. **Recall** — Before calling the model, the agent loads the user's existing memories from the store and formats them as XML context in the system prompt. The `trigger` setting controls whether this always happens, is gated by a routing model, or is skipped.
+1. **Recall** — Before calling the model, the agent loads the session's conversation history from the store and injects it as context in the system prompt.
 2. **Model call** — The model receives the conversation plus any injected memory context.
-3. **Update** — After the response, the agent passes the conversation to the memory LLM (which may be the agent's own model). The memory LLM analyzes the conversation and calls `add_memory`, `update_memory`, or `delete_memory` tools to persist relevant facts. This runs as a background task and never blocks the response.
+3. **Store** — After the response, the agent stores the new user and assistant messages. If the total entry count exceeds `max_messages`, the `SummarizeStrategy` runs: it pins the first few messages, summarizes the middle section, and keeps the most recent messages intact. This runs as a background task.
 
-## Trigger Modes
+## Auto-Summarization
 
-The `trigger` parameter on `Memory` controls when memory recall and storage happen:
+When conversation history exceeds `max_messages`, the `SummarizeStrategy` compresses it:
 
-| Mode | Recall | Store | When to Use |
-|------|--------|-------|-------------|
-| `"always"` | Every call | Every call | Most conversational agents |
-| `"auto"` | Gated by routing model | Every call | Agents handling mixed queries where only some need personalization |
-| `"never"` | Skipped | Skipped | Temporarily disabling memory without removing the configuration |
-
-### `trigger="auto"` with a Routing Model
-
-Pass a cheap model to `routing_model` to avoid the main model performing the gate call:
-
-```python
-from definable.agent import Agent
-from definable.memory import Memory, SQLiteStore
-from definable.model.openai import OpenAIChat
-
-agent = Agent(
-  model=OpenAIChat(id="gpt-4o"),
-  memory=Memory(
-    store=SQLiteStore("./memory.db"),
-    trigger="auto",
-    routing_model=OpenAIChat(id="gpt-4o-mini"),  # cheap gate call
-  ),
-)
+```
+[pinned: first N messages] + [summary of middle messages] + [recent: last M messages]
 ```
 
-The routing model receives the conversation context and replies YES or NO. On failure (model error, timeout), the gate defaults to YES (fail-open).
-
-## Capability Flags
-
-Memory gives you fine-grained control over what the LLM can do with memories:
+Configure the summarization behavior:
 
 ```python
 memory = Memory(
   store=SQLiteStore("./memory.db"),
-  add_memories=True,       # LLM can create new memories (default: True)
-  update_memories=True,    # LLM can update existing memories (default: True)
-  delete_memories=False,   # LLM can delete memories (default: False)
-  clear_memories=False,    # LLM can clear ALL memories (default: False)
+  max_messages=100,   # Trigger summarization above this count
+  pin_count=2,        # Always keep the first 2 messages
+  recent_count=5,     # Always keep the last 5 messages
 )
 ```
 
-By default, `delete_memories` and `clear_memories` are disabled for safety. Enable them when you want the model to prune outdated or contradictory information:
-
-```python
-memory = Memory(
-  store=SQLiteStore("./memory.db"),
-  delete_memories=True,  # Allow pruning outdated facts
-)
-```
-
-## Custom Memory Instructions
-
-Control what the memory LLM focuses on:
-
-```python
-memory = Memory(
-  store=SQLiteStore("./memory.db"),
-  memory_capture_instructions=(
-    "Focus on the user's technical preferences, programming languages, "
-    "frameworks, and development workflow. Ignore general conversation."
-  ),
-  additional_instructions=(
-    "Always tag memories with the relevant programming language."
-  ),
-)
-```
+The summarization is tool-call-aware — it respects tool call boundaries so that tool requests and their results stay together in the same section.
 
 ## Multi-User Scoping
 
-Pass `user_id` to scope memories per user:
+Pass `user_id` to scope memory per user:
 
 ```python
 # Alice's conversation
 output = await agent.arun("I prefer dark mode.", user_id="alice")
 
-# Bob's conversation — will not see Alice's preferences
+# Bob's conversation — will not see Alice's history
 output = await agent.arun("What theme do I prefer?", user_id="bob")
 ```
 
-The `user_id` flows through `RunContext` and is used for both recall and storage. Each user's memories are fully isolated.
+The `user_id` flows through `RunContext` and is used for both recall and storage. Each user's conversation history is fully isolated.
 
 ## Multi-Turn Conversations
 
-Memory works alongside session-based multi-turn conversations. Pass previous messages to maintain conversation continuity, while memory handles long-term facts:
+Memory works alongside session-based multi-turn conversations. Pass previous messages to maintain conversation continuity, while memory handles long-term history:
 
 ```python
 # Turn 1
@@ -197,52 +133,32 @@ You can interact with the memory system directly, outside of agent runs:
 
 ```python
 from definable.memory import Memory, SQLiteStore
-from definable.model.openai import OpenAIChat
+from definable.model.message import Message
 
-memory = Memory(
-  store=SQLiteStore("./memory.db"),
-  model=OpenAIChat(id="gpt-4o-mini"),  # Required for direct use (no agent to borrow from)
-)
+memory = Memory(store=SQLiteStore("./memory.db"))
 
-# Read all memories for a user
-memories = await memory.aget_user_memories(user_id="alice")
+# Add messages
+await memory.add(Message(role="user", content="Hello!"), session_id="s1", user_id="alice")
+await memory.add(Message(role="assistant", content="Hi Alice!"), session_id="s1", user_id="alice")
 
-# Create memories from a message
-await memory.acreate_user_memories(
-  "Alice just got promoted to Staff Engineer at Acme Corp.",
-  user_id="alice",
-)
+# Read session history
+entries = await memory.get_entries("s1", user_id="alice")
 
-# Run an arbitrary memory task
-await memory.aupdate_memory_task(
-  "Delete any memories about Alice's old job title",
-  user_id="alice",
-)
+# Get as Message objects
+messages = await memory.get_context_messages("s1", user_id="alice")
 
-# Optimize/consolidate memories
-optimized = await memory.aoptimize_memories(user_id="alice", strategy="summarize")
+# Update a specific entry
+await memory.update(entries[0].memory_id, "Updated content")
+
+# Delete a specific entry
+await memory.delete(entries[0].memory_id)
+
+# Clear entire session
+await memory.clear("s1", user_id="alice")
 
 # Clean up
 await memory.close()
 ```
-
-<Warning>
-  When using Memory directly (outside an Agent), you must set the `model` parameter explicitly. Inside an Agent, the memory system borrows the agent's model automatically.
-</Warning>
-
-## Memory Optimization
-
-When a user accumulates many memories, you can consolidate them using optimization strategies:
-
-```python
-# Summarize: combines related memories into fewer, comprehensive ones
-optimized = await memory.aoptimize_memories(
-  user_id="alice",
-  strategy="summarize",
-)
-```
-
-The `summarize` strategy uses the LLM to merge related facts, remove duplicates, and produce a smaller set of comprehensive memories. This replaces all existing memories for the user with the consolidated set.
 
 ## Non-Fatal Behavior
 
@@ -252,16 +168,3 @@ All memory operations are designed to be non-fatal. If the memory store is unava
 # Even if the database is unreachable, the agent still works
 output = await agent.arun("Hello!")  # Works fine, just without memory context
 ```
-
-## Debug Mode
-
-Enable `debug_mode` to see what the memory LLM is doing:
-
-```python
-memory = Memory(
-  store=SQLiteStore("./memory.db"),
-  debug_mode=True,  # Logs tool calls, LLM responses, and round counts
-)
-```
-
-This logs each round of the memory tool loop, including which tools were called and their results, which is useful for understanding why certain facts are or are not being remembered.

@@ -110,7 +110,6 @@ agent = Agent(
     model=model,
     memory=Memory(
         store=SQLiteStore("./memory.db"),
-        trigger="always",  # "always", "auto", or "never"
     ),
 )
 ```

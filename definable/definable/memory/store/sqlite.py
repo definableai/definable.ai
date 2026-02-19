@@ -1,17 +1,16 @@
-"""SQLite-backed memory store using aiosqlite."""
+"""SQLite-backed session memory store using aiosqlite."""
 
 import json
-import time
 from typing import Any, List, Optional
 
-from definable.memory.types import UserMemory
+from definable.memory.types import MemoryEntry
 from definable.utils.log import log_debug
 
 
 class SQLiteStore:
-  """Async SQLite memory store.
+  """Async SQLite session memory store.
 
-  Single table ``memories`` with JSON-encoded topics.
+  Single table ``session_entries`` with JSON-encoded message_data.
   Tables are auto-created on first ``initialize()`` call.
   """
 
@@ -47,122 +46,96 @@ class SQLiteStore:
 
   async def _create_tables(self) -> None:
     await self._db.executescript("""
-      CREATE TABLE IF NOT EXISTS memories (
+      CREATE TABLE IF NOT EXISTS session_entries (
         memory_id TEXT PRIMARY KEY,
-        memory TEXT NOT NULL,
-        topics TEXT DEFAULT '[]',
-        user_id TEXT,
-        agent_id TEXT,
-        input TEXT,
+        session_id TEXT NOT NULL,
+        user_id TEXT NOT NULL DEFAULT 'default',
+        role TEXT NOT NULL DEFAULT 'user',
+        content TEXT NOT NULL DEFAULT '',
+        message_data TEXT,
         created_at REAL NOT NULL,
         updated_at REAL NOT NULL
       );
 
-      CREATE INDEX IF NOT EXISTS idx_memories_user_id ON memories(user_id);
-      CREATE INDEX IF NOT EXISTS idx_memories_agent_id ON memories(agent_id);
-      CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at);
+      CREATE INDEX IF NOT EXISTS idx_session_entries_session ON session_entries(session_id);
+      CREATE INDEX IF NOT EXISTS idx_session_entries_user ON session_entries(user_id);
+      CREATE INDEX IF NOT EXISTS idx_session_entries_created ON session_entries(created_at);
     """)
     await self._db.commit()
 
-  async def get_user_memory(self, memory_id: str, user_id: Optional[str] = None) -> Optional[UserMemory]:
+  async def add(self, entry: MemoryEntry) -> None:
     await self._ensure_initialized()
-    query = "SELECT * FROM memories WHERE memory_id = ?"
-    params: List[Any] = [memory_id]
-    if user_id is not None:
-      query += " AND user_id = ?"
-      params.append(user_id)
+    msg_data = json.dumps(entry.message_data) if entry.message_data else None
+    await self._db.execute(
+      """INSERT INTO session_entries (memory_id, session_id, user_id, role, content, message_data, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+      (entry.memory_id, entry.session_id, entry.user_id, entry.role, entry.content, msg_data, entry.created_at, entry.updated_at),
+    )
+    await self._db.commit()
 
-    cursor = await self._db.execute(query, params)
-    row = await cursor.fetchone()
-    return self._row_to_memory(row) if row else None
-
-  async def get_user_memories(
+  async def get_entries(
     self,
-    user_id: Optional[str] = None,
-    agent_id: Optional[str] = None,
-    topics: Optional[List[str]] = None,
+    session_id: str,
+    user_id: str = "default",
     limit: Optional[int] = None,
-  ) -> List[UserMemory]:
+  ) -> List[MemoryEntry]:
     await self._ensure_initialized()
-    query = "SELECT * FROM memories WHERE 1=1"
-    params: List[Any] = []
-
-    if user_id is not None:
-      query += " AND user_id = ?"
-      params.append(user_id)
-    if agent_id is not None:
-      query += " AND agent_id = ?"
-      params.append(agent_id)
-
-    query += " ORDER BY updated_at DESC"
-
+    query = "SELECT * FROM session_entries WHERE session_id = ? AND user_id = ? ORDER BY created_at ASC"
+    params: List[Any] = [session_id, user_id]
     if limit is not None:
       query += " LIMIT ?"
       params.append(limit)
 
     cursor = await self._db.execute(query, params)
     rows = await cursor.fetchall()
+    return [self._row_to_entry(row) for row in rows]
 
-    memories = [self._row_to_memory(row) for row in rows]
-
-    # Filter by topics in Python (JSON column)
-    if topics:
-      topic_set = set(topics)
-      memories = [m for m in memories if set(m.topics or []).intersection(topic_set)]
-
-    return memories
-
-  async def upsert_user_memory(self, memory: UserMemory) -> None:
+  async def get_entry(self, memory_id: str) -> Optional[MemoryEntry]:
     await self._ensure_initialized()
-    memory.updated_at = time.time()
-    topics_json = json.dumps(memory.topics or [])
+    cursor = await self._db.execute("SELECT * FROM session_entries WHERE memory_id = ?", (memory_id,))
+    row = await cursor.fetchone()
+    return self._row_to_entry(row) if row else None
 
+  async def update(self, entry: MemoryEntry) -> None:
+    await self._ensure_initialized()
+    msg_data = json.dumps(entry.message_data) if entry.message_data else None
     await self._db.execute(
-      """INSERT INTO memories (memory_id, memory, topics, user_id, agent_id, input, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(memory_id) DO UPDATE SET
-           memory = excluded.memory,
-           topics = excluded.topics,
-           updated_at = excluded.updated_at""",
-      (
-        memory.memory_id,
-        memory.memory,
-        topics_json,
-        memory.user_id,
-        memory.agent_id,
-        memory.input,
-        memory.created_at,
-        memory.updated_at,
-      ),
+      """UPDATE session_entries SET content = ?, role = ?, message_data = ?, updated_at = ?
+         WHERE memory_id = ?""",
+      (entry.content, entry.role, msg_data, entry.updated_at, entry.memory_id),
     )
     await self._db.commit()
 
-  async def delete_user_memory(self, memory_id: str, user_id: Optional[str] = None) -> None:
+  async def delete(self, memory_id: str) -> None:
     await self._ensure_initialized()
-    query = "DELETE FROM memories WHERE memory_id = ?"
-    params: List[Any] = [memory_id]
+    await self._db.execute("DELETE FROM session_entries WHERE memory_id = ?", (memory_id,))
+    await self._db.commit()
+
+  async def delete_session(self, session_id: str, user_id: Optional[str] = None) -> None:
+    await self._ensure_initialized()
     if user_id is not None:
-      query += " AND user_id = ?"
-      params.append(user_id)
-    await self._db.execute(query, params)
-    await self._db.commit()
-
-  async def clear_user_memories(self, user_id: Optional[str] = None) -> None:
-    await self._ensure_initialized()
-    if user_id is None:
-      await self._db.execute("DELETE FROM memories")
+      await self._db.execute("DELETE FROM session_entries WHERE session_id = ? AND user_id = ?", (session_id, user_id))
     else:
-      await self._db.execute("DELETE FROM memories WHERE user_id = ?", (user_id,))
+      await self._db.execute("DELETE FROM session_entries WHERE session_id = ?", (session_id,))
     await self._db.commit()
 
-  def _row_to_memory(self, row: Any) -> UserMemory:
-    return UserMemory(
+  async def count(self, session_id: str, user_id: str = "default") -> int:
+    await self._ensure_initialized()
+    cursor = await self._db.execute(
+      "SELECT COUNT(*) FROM session_entries WHERE session_id = ? AND user_id = ?",
+      (session_id, user_id),
+    )
+    row = await cursor.fetchone()
+    return row[0] if row else 0
+
+  def _row_to_entry(self, row: Any) -> MemoryEntry:
+    return MemoryEntry(
       memory_id=row[0],
-      memory=row[1],
-      topics=json.loads(row[2]) if row[2] else [],
-      user_id=row[3],
-      agent_id=row[4],
-      input=row[5],
+      session_id=row[1],
+      user_id=row[2],
+      role=row[3],
+      content=row[4],
+      message_data=json.loads(row[5]) if row[5] else None,
       created_at=row[6],
       updated_at=row[7],
     )

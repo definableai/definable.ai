@@ -1,269 +1,166 @@
-"""
-Unit tests for SQLiteStore memory store.
-
-Tests CRUD operations using a temp file. No external API calls.
-Uses aiosqlite (a lightweight async SQLite driver).
-
-Covers:
-  - SQLiteStore creation with db_path
-  - upsert_user_memory stores memory
-  - get_user_memories returns stored memories
-  - get_user_memory retrieves single memory by ID
-  - delete_user_memory removes memory
-  - clear_user_memories removes all
-  - Multi-user isolation (user A can't see user B's memories)
-  - Context manager protocol (__aenter__ / __aexit__)
-"""
+"""Tests for SQLiteStore — same contract as InMemory/File stores."""
 
 import pytest
 
 from definable.memory.store.sqlite import SQLiteStore
-from definable.memory.types import UserMemory
+from definable.memory.types import MemoryEntry
 
 
 @pytest.fixture
-def tmp_db_path(tmp_path):
-  """Return a temp SQLite DB path."""
-  return str(tmp_path / "test_memory.db")
+def store(tmp_path):
+  return SQLiteStore(db_path=str(tmp_path / "test_session.db"))
 
 
-@pytest.mark.unit
-class TestSQLiteStoreCreation:
-  """SQLiteStore creation and initialization."""
-
+class TestSQLiteStore:
   @pytest.mark.asyncio
-  async def test_create_with_db_path(self, tmp_db_path):
-    """SQLiteStore can be created with a db_path."""
-    store = SQLiteStore(db_path=tmp_db_path)
-    assert store.db_path == tmp_db_path
-    assert store._initialized is False
-
-  @pytest.mark.asyncio
-  async def test_initialize_creates_table(self, tmp_db_path):
-    """initialize() creates the memories table and sets _initialized."""
-    store = SQLiteStore(db_path=tmp_db_path)
+  async def test_lifecycle(self, store):
+    assert not store._initialized
     await store.initialize()
-    assert store._initialized is True
+    assert store._initialized
+    await store.close()
+    assert not store._initialized
+
+  @pytest.mark.asyncio
+  async def test_add_and_get_entries(self, store):
+    await store.initialize()
+    e1 = MemoryEntry(session_id="s1", role="user", content="Hello", created_at=1.0, updated_at=1.0)
+    e2 = MemoryEntry(session_id="s1", role="assistant", content="Hi!", created_at=2.0, updated_at=2.0)
+    await store.add(e1)
+    await store.add(e2)
+
+    entries = await store.get_entries("s1")
+    assert len(entries) == 2
+    assert entries[0].content == "Hello"
+    assert entries[1].content == "Hi!"
     await store.close()
 
   @pytest.mark.asyncio
-  async def test_double_initialize_is_idempotent(self, tmp_db_path):
-    """Calling initialize() twice does not error."""
-    store = SQLiteStore(db_path=tmp_db_path)
+  async def test_get_entries_ordered_by_created_at(self, store):
     await store.initialize()
-    await store.initialize()
-    assert store._initialized is True
+    e1 = MemoryEntry(session_id="s1", content="first", created_at=3.0, updated_at=3.0)
+    e2 = MemoryEntry(session_id="s1", content="second", created_at=1.0, updated_at=1.0)
+    await store.add(e1)
+    await store.add(e2)
+
+    entries = await store.get_entries("s1")
+    assert entries[0].content == "second"
+    assert entries[1].content == "first"
     await store.close()
 
   @pytest.mark.asyncio
-  async def test_close_resets_state(self, tmp_db_path):
-    """close() sets _initialized to False."""
-    store = SQLiteStore(db_path=tmp_db_path)
+  async def test_get_entries_with_limit(self, store):
     await store.initialize()
+    for i in range(5):
+      await store.add(MemoryEntry(session_id="s1", content=f"msg-{i}", created_at=float(i + 1), updated_at=float(i + 1)))
+
+    entries = await store.get_entries("s1", limit=3)
+    assert len(entries) == 3
+    assert entries[0].content == "msg-0"
     await store.close()
-    assert store._initialized is False
 
   @pytest.mark.asyncio
-  async def test_context_manager(self, tmp_db_path):
-    """SQLiteStore works as an async context manager."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      assert store._initialized is True
-    assert store._initialized is False
+  async def test_get_entries_filters_by_session_and_user(self, store):
+    await store.initialize()
+    await store.add(MemoryEntry(session_id="s1", user_id="alice", content="a1", created_at=1.0, updated_at=1.0))
+    await store.add(MemoryEntry(session_id="s1", user_id="bob", content="b1", created_at=2.0, updated_at=2.0))
+    await store.add(MemoryEntry(session_id="s2", user_id="alice", content="a2", created_at=3.0, updated_at=3.0))
 
-
-@pytest.mark.unit
-class TestSQLiteStoreUpsert:
-  """SQLiteStore.upsert_user_memory stores memories."""
-
-  @pytest.mark.asyncio
-  async def test_upsert_stores_memory(self, tmp_db_path):
-    """upsert_user_memory stores a memory that can be retrieved."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem = UserMemory(memory="User likes dark mode", user_id="u1")
-      await store.upsert_user_memory(mem)
-      results = await store.get_user_memories(user_id="u1")
-      assert len(results) == 1
-      assert results[0].memory == "User likes dark mode"
+    entries = await store.get_entries("s1", "alice")
+    assert len(entries) == 1
+    assert entries[0].content == "a1"
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_upsert_updates_existing(self, tmp_db_path):
-    """upsert_user_memory updates an existing memory with the same ID."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem = UserMemory(memory="Original text", memory_id="m1", user_id="u1")
-      await store.upsert_user_memory(mem)
-      mem.memory = "Updated text"
-      await store.upsert_user_memory(mem)
-      results = await store.get_user_memories(user_id="u1")
-      assert len(results) == 1
-      assert results[0].memory == "Updated text"
+  async def test_get_entry(self, store):
+    await store.initialize()
+    e = MemoryEntry(memory_id="m1", session_id="s1", content="test", created_at=1.0, updated_at=1.0)
+    await store.add(e)
+
+    result = await store.get_entry("m1")
+    assert result is not None
+    assert result.content == "test"
+    assert await store.get_entry("nonexistent") is None
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_upsert_preserves_topics(self, tmp_db_path):
-    """upsert_user_memory preserves topics as JSON."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem = UserMemory(memory="test", user_id="u1", topics=["work", "coding"])
-      await store.upsert_user_memory(mem)
-      results = await store.get_user_memories(user_id="u1")
-      assert results[0].topics == ["work", "coding"]
+  async def test_update(self, store):
+    await store.initialize()
+    e = MemoryEntry(memory_id="m1", session_id="s1", content="original", created_at=1.0, updated_at=1.0)
+    await store.add(e)
 
+    e.content = "updated"
+    await store.update(e)
 
-@pytest.mark.unit
-class TestSQLiteStoreGet:
-  """SQLiteStore.get_user_memories and get_user_memory retrieval."""
-
-  @pytest.mark.asyncio
-  async def test_get_user_memories_returns_all_for_user(self, tmp_db_path):
-    """get_user_memories returns all memories for a given user."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      for i in range(3):
-        mem = UserMemory(memory=f"Fact {i}", user_id="u1")
-        await store.upsert_user_memory(mem)
-      results = await store.get_user_memories(user_id="u1")
-      assert len(results) == 3
+    result = await store.get_entry("m1")
+    assert result is not None
+    assert result.content == "updated"
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_get_user_memories_empty_for_unknown_user(self, tmp_db_path):
-    """get_user_memories returns empty list for unknown user."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem = UserMemory(memory="test", user_id="u1")
-      await store.upsert_user_memory(mem)
-      results = await store.get_user_memories(user_id="u999")
-      assert results == []
+  async def test_delete(self, store):
+    await store.initialize()
+    e = MemoryEntry(memory_id="m1", session_id="s1", content="test", created_at=1.0, updated_at=1.0)
+    await store.add(e)
+    await store.delete("m1")
+
+    assert await store.get_entry("m1") is None
+    assert await store.count("s1") == 0
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_get_user_memory_by_id(self, tmp_db_path):
-    """get_user_memory retrieves a single memory by ID."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem = UserMemory(memory="specific", memory_id="target-id", user_id="u1")
-      await store.upsert_user_memory(mem)
-      result = await store.get_user_memory("target-id")
-      assert result is not None
-      assert result.memory == "specific"
+  async def test_delete_session(self, store):
+    await store.initialize()
+    await store.add(MemoryEntry(session_id="s1", content="a", created_at=1.0, updated_at=1.0))
+    await store.add(MemoryEntry(session_id="s1", content="b", created_at=2.0, updated_at=2.0))
+    await store.add(MemoryEntry(session_id="s2", content="c", created_at=3.0, updated_at=3.0))
+
+    await store.delete_session("s1")
+    assert await store.count("s1") == 0
+    assert await store.count("s2") == 1
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_get_user_memory_not_found(self, tmp_db_path):
-    """get_user_memory returns None for non-existent ID."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      result = await store.get_user_memory("nonexistent")
-      assert result is None
+  async def test_delete_session_with_user_id(self, store):
+    await store.initialize()
+    await store.add(MemoryEntry(session_id="s1", user_id="alice", content="a", created_at=1.0, updated_at=1.0))
+    await store.add(MemoryEntry(session_id="s1", user_id="bob", content="b", created_at=2.0, updated_at=2.0))
+
+    await store.delete_session("s1", user_id="alice")
+    assert await store.count("s1", "alice") == 0
+    assert await store.count("s1", "bob") == 1
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_get_user_memories_ordered_by_updated_at_desc(self, tmp_db_path):
-    """Memories are returned ordered by updated_at descending."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      # Insert in order: old first
-      for i in range(3):
-        mem = UserMemory(memory=f"Fact {i}", user_id="u1", created_at=float(i), updated_at=float(i))
-        await store.upsert_user_memory(mem)
-      results = await store.get_user_memories(user_id="u1")
-      # Most recently updated should come first
-      assert results[0].memory == "Fact 2"
+  async def test_count(self, store):
+    await store.initialize()
+    assert await store.count("s1") == 0
+    await store.add(MemoryEntry(session_id="s1", content="a", created_at=1.0, updated_at=1.0))
+    await store.add(MemoryEntry(session_id="s1", content="b", created_at=2.0, updated_at=2.0))
+    assert await store.count("s1") == 2
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_get_user_memories_with_limit(self, tmp_db_path):
-    """get_user_memories respects limit parameter."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      for i in range(5):
-        mem = UserMemory(memory=f"Fact {i}", user_id="u1")
-        await store.upsert_user_memory(mem)
-      results = await store.get_user_memories(user_id="u1", limit=2)
-      assert len(results) == 2
+  async def test_message_data_roundtrip(self, store):
+    """Ensure JSON message_data survives SQLite serialization."""
+    await store.initialize()
+    msg_data = {
+      "role": "assistant",
+      "content": "Hello",
+      "tool_calls": [{"id": "tc1", "function": {"name": "search", "arguments": '{"q":"test"}'}}],
+    }
+    e = MemoryEntry(memory_id="m1", session_id="s1", content="Hello", message_data=msg_data, created_at=1.0, updated_at=1.0)
+    await store.add(e)
 
-
-@pytest.mark.unit
-class TestSQLiteStoreDelete:
-  """SQLiteStore.delete_user_memory and clear_user_memories."""
-
-  @pytest.mark.asyncio
-  async def test_delete_user_memory(self, tmp_db_path):
-    """delete_user_memory removes a specific memory."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem = UserMemory(memory="to delete", memory_id="del-id", user_id="u1")
-      await store.upsert_user_memory(mem)
-      await store.delete_user_memory("del-id")
-      result = await store.get_user_memory("del-id")
-      assert result is None
+    result = await store.get_entry("m1")
+    assert result is not None
+    assert result.message_data == msg_data
+    assert result.message_data["tool_calls"][0]["function"]["name"] == "search"
+    await store.close()
 
   @pytest.mark.asyncio
-  async def test_delete_nonexistent_does_not_error(self, tmp_db_path):
-    """delete_user_memory with non-existent ID does not raise."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      await store.delete_user_memory("nonexistent")  # Should not raise
-
-  @pytest.mark.asyncio
-  async def test_clear_user_memories_removes_all_for_user(self, tmp_db_path):
-    """clear_user_memories removes all memories for a specific user."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      for i in range(3):
-        mem = UserMemory(memory=f"Fact {i}", user_id="u1")
-        await store.upsert_user_memory(mem)
-      await store.clear_user_memories(user_id="u1")
-      results = await store.get_user_memories(user_id="u1")
-      assert results == []
-
-  @pytest.mark.asyncio
-  async def test_clear_all_memories(self, tmp_db_path):
-    """clear_user_memories with no user_id removes all memories."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      for uid in ["u1", "u2", "u3"]:
-        mem = UserMemory(memory=f"Fact for {uid}", user_id=uid)
-        await store.upsert_user_memory(mem)
-      await store.clear_user_memories()
-      for uid in ["u1", "u2", "u3"]:
-        results = await store.get_user_memories(user_id=uid)
-        assert results == []
-
-
-@pytest.mark.unit
-class TestSQLiteStoreMultiUserIsolation:
-  """Multi-user isolation: user A cannot see user B's memories."""
-
-  @pytest.mark.asyncio
-  async def test_user_isolation(self, tmp_db_path):
-    """Memories from user A are not visible to user B."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem_a = UserMemory(memory="A's secret", user_id="userA")
-      mem_b = UserMemory(memory="B's secret", user_id="userB")
-      await store.upsert_user_memory(mem_a)
-      await store.upsert_user_memory(mem_b)
-
-      results_a = await store.get_user_memories(user_id="userA")
-      results_b = await store.get_user_memories(user_id="userB")
-
-      assert len(results_a) == 1
-      assert results_a[0].memory == "A's secret"
-      assert len(results_b) == 1
-      assert results_b[0].memory == "B's secret"
-
-  @pytest.mark.asyncio
-  async def test_clear_one_user_does_not_affect_other(self, tmp_db_path):
-    """Clearing user A's memories leaves user B's intact."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem_a = UserMemory(memory="A's fact", user_id="userA")
-      mem_b = UserMemory(memory="B's fact", user_id="userB")
-      await store.upsert_user_memory(mem_a)
-      await store.upsert_user_memory(mem_b)
-
-      await store.clear_user_memories(user_id="userA")
-
-      results_a = await store.get_user_memories(user_id="userA")
-      results_b = await store.get_user_memories(user_id="userB")
-      assert results_a == []
-      assert len(results_b) == 1
-
-  @pytest.mark.asyncio
-  async def test_delete_with_user_scope(self, tmp_db_path):
-    """delete_user_memory with user_id scope only deletes if user matches."""
-    async with SQLiteStore(db_path=tmp_db_path) as store:
-      mem = UserMemory(memory="owned by A", memory_id="shared-id", user_id="userA")
-      await store.upsert_user_memory(mem)
-
-      # Try deleting with wrong user_id
-      await store.delete_user_memory("shared-id", user_id="userB")
-      result = await store.get_user_memory("shared-id")
-      assert result is not None  # Still exists
-
-      # Delete with correct user_id
-      await store.delete_user_memory("shared-id", user_id="userA")
-      result = await store.get_user_memory("shared-id")
-      assert result is None
+  async def test_context_manager(self, tmp_path):
+    async with SQLiteStore(db_path=str(tmp_path / "cm_test.db")) as store:
+      assert store._initialized
+      await store.add(MemoryEntry(session_id="s1", content="test", created_at=1.0, updated_at=1.0))
+      assert await store.count("s1") == 1
+    assert not store._initialized

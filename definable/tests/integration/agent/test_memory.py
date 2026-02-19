@@ -1,20 +1,13 @@
 """
 Behavioral tests for memory integration with Agent.
 
-Migrated from:
-  - tests_e2e/behavioral/test_memory_agent.py (MockModel-based memory tests)
-  - tests_e2e/behavioral/test_memory_recall.py (real OpenAI memory recall tests)
-
 Covers (MockModel-based, no API calls):
-  - MemoryManager creates a memory when LLM calls add_memory tool
-  - MemoryManager creates no memories when LLM does not call tools
-  - MemoryManager updates a memory when LLM calls update_memory tool
-  - Memories are correctly formatted for system prompt injection
-  - Agent with Memory creates a MemoryManager internally
-  - Agent with memory=True creates a MemoryManager with InMemoryStore
+  - Memory stores and retrieves session entries
+  - Agent with Memory creates a Memory instance internally
+  - Agent with memory=True creates a Memory with InMemoryStore
   - Agent with memory=False has no memory
-  - Memory recall injects formatted memories into context
-  - CognitiveMemory import resolves to MemoryManager for backward compat
+  - Memory recall injects session history into context
+  - Multi-session isolation
 
 Covers (real OpenAI, marked @pytest.mark.openai):
   - Agent with memory recalls facts from previous turns
@@ -23,9 +16,6 @@ Covers (real OpenAI, marked @pytest.mark.openai):
   - Memory agent completes run successfully
 """
 
-import json
-from unittest.mock import MagicMock
-
 import pytest
 
 from definable.agent.agent import Agent
@@ -33,148 +23,66 @@ from definable.agent.config import AgentConfig
 from definable.agent.testing import MockModel
 from definable.agent.tracing import Tracing
 from definable.memory.manager import Memory
-from definable.memory.manager import MemoryManager
 from definable.memory.store.in_memory import InMemoryStore
-from definable.memory.types import UserMemory
+from definable.memory.types import MemoryEntry
+from definable.model.message import Message
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Unit: Memory with mock model
 # ---------------------------------------------------------------------------
 
 
-def make_mock_model_with_tool_calls(tool_calls=None, final_response="Done."):
-  """Create a MockModel that returns tool_calls on first call, then final response."""
-  call_count = 0
-
-  async def side_effect(messages, tools=None, **kwargs):
-    nonlocal call_count
-    call_count += 1
-    response = MagicMock()
-    response.response_usage = MagicMock(input_tokens=10, output_tokens=5, total_tokens=15)
-
-    if call_count == 1 and tool_calls:
-      response.content = ""
-      response.tool_calls = tool_calls
-    else:
-      response.content = final_response
-      response.tool_calls = []
-
-    response.tool_executions = []
-    response.reasoning_content = None
-    return response
-
-  model = MagicMock()
-  model.ainvoke = side_effect
-  model.id = "mock-model"
-  model.provider = "mock"
-  return model
-
-
-# ---------------------------------------------------------------------------
-# Unit: MemoryManager with mock model
-# ---------------------------------------------------------------------------
-
-
-class TestMemoryManagerWithMock:
-  async def test_add_memory_via_tool(self):
-    """MemoryManager creates a memory when LLM calls add_memory tool."""
+class TestMemoryWithMock:
+  async def test_add_and_get_entries(self):
+    """Memory stores entries and retrieves them."""
     store = InMemoryStore()
-    model = make_mock_model_with_tool_calls(
-      tool_calls=[
-        {
-          "id": "call_1",
-          "type": "function",
-          "function": {
-            "name": "add_memory",
-            "arguments": json.dumps({"memory": "User prefers dark mode", "topics": ["preferences"]}),
-          },
-        }
-      ],
-      final_response="Remembered user preference.",
-    )
+    mem = Memory(store=store)
 
-    mgr = MemoryManager(store=store, model=model)
-    result = await mgr.acreate_user_memories(message="I prefer dark mode", user_id="u1")
+    await mem.add(Message(role="user", content="Hello"), session_id="s1")
+    await mem.add(Message(role="assistant", content="Hi!"), session_id="s1")
 
-    assert result == "Remembered user preference."
+    entries = await mem.get_entries("s1")
+    assert len(entries) == 2
+    assert entries[0].role == "user"
+    assert entries[0].content == "Hello"
+    assert entries[1].role == "assistant"
+    assert entries[1].content == "Hi!"
 
-    memories = await store.get_user_memories(user_id="u1")
-    assert len(memories) == 1
-    assert memories[0].memory == "User prefers dark mode"
-    assert memories[0].topics == ["preferences"]
-    assert memories[0].user_id == "u1"
+    await mem.close()
 
-    await mgr.close()
-
-  async def test_no_tool_calls_no_memories(self):
-    """MemoryManager creates no memories when LLM doesn't call tools."""
+  async def test_get_context_messages(self):
+    """Memory converts entries back to Message objects."""
     store = InMemoryStore()
-    model = make_mock_model_with_tool_calls(
-      tool_calls=None,
-      final_response="Nothing worth remembering.",
-    )
+    mem = Memory(store=store)
 
-    mgr = MemoryManager(store=store, model=model)
-    result = await mgr.acreate_user_memories(message="Hello there!", user_id="u1")
+    await mem.add(Message(role="user", content="Hello"), session_id="s1")
+    await mem.add(Message(role="assistant", content="Hi!"), session_id="s1")
 
-    assert result == "Nothing worth remembering."
+    messages = await mem.get_context_messages("s1")
+    assert len(messages) == 2
+    assert isinstance(messages[0], Message)
+    assert messages[0].role == "user"
+    assert messages[1].role == "assistant"
 
-    memories = await store.get_user_memories(user_id="u1")
-    assert len(memories) == 0
+    await mem.close()
 
-    await mgr.close()
-
-  async def test_update_existing_memory(self):
-    """MemoryManager updates a memory when LLM calls update_memory tool."""
+  async def test_multi_session_isolation(self):
+    """Different sessions are isolated."""
     store = InMemoryStore()
-    # Pre-populate a memory
-    original = UserMemory(memory="User lives in NYC", memory_id="m1", user_id="u1")
-    await store.initialize()
-    await store.upsert_user_memory(original)
+    mem = Memory(store=store)
 
-    model = make_mock_model_with_tool_calls(
-      tool_calls=[
-        {
-          "id": "call_1",
-          "type": "function",
-          "function": {
-            "name": "update_memory",
-            "arguments": json.dumps({"memory_id": "m1", "memory": "User lives in SF"}),
-          },
-        }
-      ],
-      final_response="Updated location.",
-    )
+    await mem.add(Message(role="user", content="Session 1"), session_id="s1")
+    await mem.add(Message(role="user", content="Session 2"), session_id="s2")
 
-    mgr = MemoryManager(store=store, model=model)
-    mgr._initialized = True  # store already initialized
-    await mgr.acreate_user_memories(message="I moved to SF", user_id="u1")
+    s1 = await mem.get_entries("s1")
+    s2 = await mem.get_entries("s2")
+    assert len(s1) == 1
+    assert len(s2) == 1
+    assert s1[0].content == "Session 1"
+    assert s2[0].content == "Session 2"
 
-    memories = await store.get_user_memories(user_id="u1")
-    assert len(memories) == 1
-    assert memories[0].memory == "User lives in SF"
-
-    await mgr.close()
-
-  async def test_format_memories_injection(self):
-    """Memories are correctly formatted for system prompt injection."""
-    store = InMemoryStore()
-    await store.initialize()
-    await store.upsert_user_memory(UserMemory(memory="Likes Python", memory_id="m1", user_id="u1", topics=["lang"]))
-    await store.upsert_user_memory(UserMemory(memory="Lives in NYC", memory_id="m2", user_id="u1", topics=["location"]))
-
-    mgr = MemoryManager(store=store)
-    mgr._initialized = True
-
-    memories = await mgr.aget_user_memories(user_id="u1")
-    formatted = mgr.format_memories_for_prompt(memories)
-
-    assert "[m" in formatted  # Memory IDs present
-    assert "Likes Python" in formatted
-    assert "Lives in NYC" in formatted
-
-    await mgr.close()
+    await mem.close()
 
 
 # ---------------------------------------------------------------------------
@@ -184,26 +92,26 @@ class TestMemoryManagerWithMock:
 
 class TestAgentMemoryIntegration:
   async def test_agent_with_memory_config(self):
-    """Agent with Memory creates a MemoryManager internally."""
+    """Agent with Memory instance snaps in correctly."""
     store = InMemoryStore()
     mock_model = MockModel(responses=["Hello! Nice to meet you."])
 
     agent = Agent(
       model=mock_model,  # type: ignore[arg-type]
-      memory=Memory(store=store, update_on_run=False),
+      memory=Memory(store=store),
     )
 
     assert agent.memory is not None
-    assert isinstance(agent.memory, MemoryManager)
+    assert isinstance(agent.memory, Memory)
     assert agent.memory.store is store
 
   async def test_agent_memory_true(self):
-    """Agent with memory=True creates a MemoryManager with InMemoryStore."""
+    """Agent with memory=True creates a Memory with InMemoryStore."""
     mock_model = MockModel(responses=["Hi"])
     agent = Agent(model=mock_model, memory=True)  # type: ignore[arg-type]
 
     assert agent.memory is not None
-    assert isinstance(agent.memory, MemoryManager)
+    assert isinstance(agent.memory, Memory)
 
   async def test_agent_memory_false(self):
     """Agent with memory=False has no memory."""
@@ -212,28 +120,24 @@ class TestAgentMemoryIntegration:
     assert agent.memory is None
 
   async def test_agent_memory_recall_injects_context(self):
-    """Memory recall injects formatted memories into context."""
+    """Memory recall injects session history into context."""
     store = InMemoryStore()
+
+    # Pre-populate session history
     await store.initialize()
-    await store.upsert_user_memory(UserMemory(memory="User likes dark mode", memory_id="m1", user_id="default", topics=["ui"]))
+    await store.add(MemoryEntry(session_id="default", user_id="default", role="user", content="I like dark mode", created_at=1.0, updated_at=1.0))
 
     mock_model = MockModel(responses=["I remember you like dark mode!"])
 
     agent = Agent(
       model=mock_model,  # type: ignore[arg-type]
-      memory=Memory(store=store, update_on_run=False),
+      memory=Memory(store=store),
     )
 
     result = await agent.arun("What do you know about me?")
 
-    # Agent should have recalled memories and gotten a response
+    # Agent should have recalled history and gotten a response
     assert result.content is not None
-
-  async def test_backward_compat_cognitive_memory(self):
-    """CognitiveMemory import resolves to MemoryManager for backward compat."""
-    from definable import CognitiveMemory
-
-    assert CognitiveMemory is MemoryManager
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +153,7 @@ class TestMemoryRecall:
   async def test_agent_recalls_fact_from_memory_context(self, openai_model):
     """Agent should use facts stored in memory when answering questions."""
     store = InMemoryStore()
-    memory = MemoryManager(store=store)
+    memory = Memory(store=store)
     agent = Agent(
       model=openai_model,
       memory=memory,
@@ -269,7 +173,7 @@ class TestMemoryRecall:
   async def test_multi_turn_memory_accumulates(self, openai_model):
     """Agent can recall facts from earlier in a multi-turn conversation."""
     store = InMemoryStore()
-    memory = MemoryManager(store=store)
+    memory = Memory(store=store)
     agent = Agent(
       model=openai_model,
       memory=memory,
@@ -298,7 +202,7 @@ class TestMemoryRecall:
   async def test_memory_agent_completes_run_successfully(self, openai_model):
     """Agent with memory layer completes a basic run without error."""
     store = InMemoryStore()
-    memory = MemoryManager(store=store)
+    memory = Memory(store=store)
     agent = Agent(
       model=openai_model,
       memory=memory,

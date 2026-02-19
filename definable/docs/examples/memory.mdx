@@ -1,13 +1,13 @@
 ---
 title: Memory Examples
 sidebarTitle: Memory
-description: Examples for LLM-driven memory, store backends, and agent integration.
+description: Examples for session memory, store backends, and agent integration.
 icon: brain
 ---
 
 ## 01 — Basic Memory
 
-An agent with `SQLiteStore` that remembers across turns. Demonstrates the simplest memory setup.
+An agent with `SQLiteStore` that remembers conversation history across turns. Demonstrates the simplest memory setup.
 
 ```python
 from definable.agent import Agent
@@ -43,26 +43,28 @@ print(output.content)
 Exercises the `MemoryStore` protocol methods using `InMemoryStore`. Useful for understanding the data model without any external dependencies.
 
 ```python
-from definable.memory import InMemoryStore, UserMemory
+from definable.memory import InMemoryStore
+from definable.memory.types import MemoryEntry
 
 store = InMemoryStore()
 await store.initialize()
 
-# Store a memory
-mem = UserMemory(
-  memory="Alice works at Acme Corp as a software engineer.",
-  topics=["work", "personal"],
+# Store a conversation entry
+entry = MemoryEntry(
+  session_id="s1",
   user_id="alice",
+  role="user",
+  content="Hello, I'm Alice from San Francisco.",
 )
-await store.upsert_user_memory(mem)
+await store.add(entry)
 
-# Query memories
-memories = await store.get_user_memories(user_id="alice")
-for m in memories:
-  print(f"[{m.memory_id}] {m.memory}")
+# Query entries
+entries = await store.get_entries("s1", user_id="alice")
+for e in entries:
+  print(f"[{e.memory_id}] {e.role}: {e.content}")
 
 # Delete
-await store.delete_user_memory(mem.memory_id, user_id="alice")
+await store.delete(entry.memory_id)
 ```
 
 <Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/memory/02_store_protocol.py">
@@ -77,7 +79,7 @@ Smoke-tests all available memory store backends. Detects which optional dependen
 # Tests whichever backends are available:
 # - InMemoryStore (always)
 # - SQLiteStore (always, aiosqlite is a core dep)
-# - PostgresStore (if asyncpg installed)
+# - FileStore (JSONL-based, always available)
 ```
 
 <Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/memory/03_store_backends.py">

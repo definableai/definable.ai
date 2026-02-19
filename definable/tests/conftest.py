@@ -154,45 +154,45 @@ def mock_embedder():
 
 @pytest.fixture(scope="session")
 def openai_model():
-  """Real OpenAI model (gpt-4o-mini). Skips if OPENAI_API_KEY not set."""
+  """Real OpenAI model (gpt-4o-mini). FAILS if OPENAI_API_KEY not set."""
   from definable.model.openai import OpenAIChat
 
   api_key = os.getenv("OPENAI_API_KEY")
   if not api_key:
-    pytest.skip("OPENAI_API_KEY not set — skipping OpenAI tests")
+    pytest.fail("OPENAI_API_KEY not set — set it in .env.test or CI secrets")
   return OpenAIChat(api_key=api_key, id="gpt-4o-mini")
 
 
 @pytest.fixture(scope="session")
 def deepseek_model():
-  """Real DeepSeek model. Skips if DEEPSEEK_API_KEY not set."""
+  """Real DeepSeek model. FAILS if DEEPSEEK_API_KEY not set."""
   from definable.model.deepseek import DeepSeekChat
 
   api_key = os.getenv("DEEPSEEK_API_KEY")
   if not api_key:
-    pytest.skip("DEEPSEEK_API_KEY not set — skipping DeepSeek tests")
+    pytest.fail("DEEPSEEK_API_KEY not set — set it in .env.test or CI secrets")
   return DeepSeekChat(api_key=api_key)
 
 
 @pytest.fixture(scope="session")
 def moonshot_model():
-  """Real Moonshot model. Skips if MOONSHOT_API_KEY not set."""
+  """Real Moonshot model. FAILS if MOONSHOT_API_KEY not set."""
   from definable.model.moonshot import MoonshotChat
 
   api_key = os.getenv("MOONSHOT_API_KEY")
   if not api_key:
-    pytest.skip("MOONSHOT_API_KEY not set — skipping Moonshot tests")
+    pytest.fail("MOONSHOT_API_KEY not set — set it in .env.test or CI secrets")
   return MoonshotChat(api_key=api_key)
 
 
 @pytest.fixture(scope="session")
 def xai_model():
-  """Real xAI model. Skips if XAI_API_KEY not set."""
+  """Real xAI model. FAILS if XAI_API_KEY not set."""
   from definable.model.xai import xAI
 
   api_key = os.getenv("XAI_API_KEY")
   if not api_key:
-    pytest.skip("XAI_API_KEY not set — skipping xAI tests")
+    pytest.fail("XAI_API_KEY not set — set it in .env.test or CI secrets")
   return xAI(api_key=api_key, id="grok-3")
 
 
@@ -203,23 +203,23 @@ def xai_model():
 
 @pytest.fixture(scope="session")
 def openai_embedder():
-  """Real OpenAI embedder (text-embedding-3-small). Skips if OPENAI_API_KEY not set."""
+  """Real OpenAI embedder (text-embedding-3-small). FAILS if OPENAI_API_KEY not set."""
   from definable.knowledge.embedder.openai import OpenAIEmbedder
 
   api_key = os.getenv("OPENAI_API_KEY")
   if not api_key:
-    pytest.skip("OPENAI_API_KEY not set — skipping OpenAI tests")
+    pytest.fail("OPENAI_API_KEY not set — set it in .env.test or CI secrets")
   return OpenAIEmbedder(api_key=api_key, id="text-embedding-3-small", dimensions=1536)
 
 
 @pytest.fixture(scope="session")
 def voyage_embedder():
-  """Real VoyageAI embedder. Skips if VOYAGEAI_API_KEY not set."""
+  """Real VoyageAI embedder. FAILS if VOYAGEAI_API_KEY not set."""
   from definable.knowledge.embedder.voyageai import VoyageAIEmbedder
 
   api_key = os.getenv("VOYAGEAI_API_KEY")
   if not api_key:
-    pytest.skip("VOYAGEAI_API_KEY not set — skipping VoyageAI tests")
+    pytest.fail("VOYAGEAI_API_KEY not set — set it in .env.test or CI secrets")
   return VoyageAIEmbedder(api_key=api_key)
 
 

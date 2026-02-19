@@ -3,14 +3,14 @@
 from typing import TYPE_CHECKING, List, Optional, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-  from definable.memory.types import UserMemory
+  from definable.memory.types import MemoryEntry
 
 
 @runtime_checkable
 class MemoryStore(Protocol):
-  """Protocol for memory storage backends.
+  """Protocol for session memory storage backends.
 
-  All methods are async. Stores must implement all 7 methods.
+  All methods are async. Stores must implement all methods.
   Lifecycle: call ``initialize()`` before use, ``close()`` when done.
   """
 
@@ -22,60 +22,35 @@ class MemoryStore(Protocol):
     """Release resources (close connections, flush buffers, etc.)."""
     ...
 
-  async def get_user_memory(self, memory_id: str, user_id: Optional[str] = None) -> Optional["UserMemory"]:
-    """Retrieve a single memory by ID.
-
-    Args:
-      memory_id: The UUID of the memory to retrieve.
-      user_id: Optional user scope. If provided, the memory must belong to this user.
-
-    Returns:
-      The matching UserMemory, or None if not found.
-    """
+  async def add(self, entry: "MemoryEntry") -> None:
+    """Add a new entry to the store."""
     ...
 
-  async def get_user_memories(
+  async def get_entries(
     self,
-    user_id: Optional[str] = None,
-    agent_id: Optional[str] = None,
-    topics: Optional[List[str]] = None,
+    session_id: str,
+    user_id: str = "default",
     limit: Optional[int] = None,
-  ) -> List["UserMemory"]:
-    """Retrieve memories with optional filters.
-
-    Args:
-      user_id: Filter by user.
-      agent_id: Filter by agent.
-      topics: Filter by topics (any match).
-      limit: Maximum number of memories to return.
-
-    Returns:
-      List of matching UserMemory objects, ordered by updated_at descending.
-    """
+  ) -> List["MemoryEntry"]:
+    """Retrieve entries for a session, ordered by created_at ascending."""
     ...
 
-  async def upsert_user_memory(self, memory: "UserMemory") -> None:
-    """Insert or update a memory.
-
-    If a memory with the same ``memory_id`` exists, it is replaced.
-    Otherwise, a new record is inserted.
-    """
+  async def get_entry(self, memory_id: str) -> Optional["MemoryEntry"]:
+    """Retrieve a single entry by ID."""
     ...
 
-  async def delete_user_memory(self, memory_id: str, user_id: Optional[str] = None) -> None:
-    """Delete a single memory by ID.
-
-    Args:
-      memory_id: The UUID of the memory to delete.
-      user_id: Optional user scope for safety.
-    """
+  async def update(self, entry: "MemoryEntry") -> None:
+    """Update an existing entry (matched by memory_id)."""
     ...
 
-  async def clear_user_memories(self, user_id: Optional[str] = None) -> None:
-    """Delete all memories for a user.
+  async def delete(self, memory_id: str) -> None:
+    """Delete a single entry by ID."""
+    ...
 
-    Args:
-      user_id: The user whose memories should be cleared.
-        If None, deletes ALL memories (use with caution).
-    """
+  async def delete_session(self, session_id: str, user_id: Optional[str] = None) -> None:
+    """Delete all entries for a session (optionally scoped to a user)."""
+    ...
+
+  async def count(self, session_id: str, user_id: str = "default") -> int:
+    """Count entries for a session + user."""
     ...

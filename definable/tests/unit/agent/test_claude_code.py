@@ -268,18 +268,18 @@ class TestToolBridge:
 
   def test_bridge_tool_execution(self, sample_tool):
     bridge = ToolBridge(tools=[sample_tool])
-    result = asyncio.get_event_loop().run_until_complete(bridge.execute("mcp__definable__deploy", {"branch": "staging"}))
+    result = asyncio.run(bridge.execute("mcp__definable__deploy", {"branch": "staging"}))
     assert result["content"][0]["text"] == "Deployed staging"
     assert "isError" not in result
 
   def test_bridge_async_tool(self, async_tool):
     bridge = ToolBridge(tools=[async_tool])
-    result = asyncio.get_event_loop().run_until_complete(bridge.execute("mcp__definable__fetch_data", {"url": "https://example.com"}))
+    result = asyncio.run(bridge.execute("mcp__definable__fetch_data", {"url": "https://example.com"}))
     assert "Data from https://example.com" in result["content"][0]["text"]
 
   def test_bridge_unknown_tool(self):
     bridge = ToolBridge(tools=[])
-    result = asyncio.get_event_loop().run_until_complete(bridge.execute("nonexistent", {}))
+    result = asyncio.run(bridge.execute("nonexistent", {}))
     assert result["isError"] is True
     assert "Unknown tool" in result["content"][0]["text"]
 
@@ -290,7 +290,7 @@ class TestToolBridge:
 
     fn = Function.from_callable(bad_tool)
     bridge = ToolBridge(tools=[fn])
-    result = asyncio.get_event_loop().run_until_complete(bridge.execute("bad_tool", {}))
+    result = asyncio.run(bridge.execute("bad_tool", {}))
     assert result["isError"] is True
     assert "intentional error" in result["content"][0]["text"]
 
@@ -680,12 +680,12 @@ class TestAgentConfig:
     agent._ensure_initialized()
     assert agent._memory_manager is not None
 
-  def test_memory_resolution_manager(self):
+  def test_memory_resolution_instance(self):
     from definable.claude_code.agent import ClaudeCodeAgent
-    from definable.memory.manager import MemoryManager
+    from definable.memory.manager import Memory
     from definable.memory.store.in_memory import InMemoryStore
 
-    mm = MemoryManager(store=InMemoryStore())
-    agent = ClaudeCodeAgent(memory=mm)
+    mem = Memory(store=InMemoryStore())
+    agent = ClaudeCodeAgent(memory=mem)
     agent._ensure_initialized()
-    assert agent._memory_manager is mm
+    assert agent._memory_manager is mem

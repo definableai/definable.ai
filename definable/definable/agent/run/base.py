@@ -33,7 +33,7 @@ class RunContext:
   knowledge_context: Optional[str] = None  # Formatted context string for injection
   knowledge_documents: Optional[List[Any]] = None  # Retrieved Document objects
 
-  # Memory retrieval results (populated by MemoryManager)
+  # Memory retrieval results (populated by Memory)
   memory_context: Optional[str] = None  # Formatted memory payload for injection
 
   # Deep research results (populated by research pipeline)

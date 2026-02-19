@@ -1,11 +1,11 @@
 ---
 title: Memory Overview
 sidebarTitle: Overview
-description: LLM-driven persistent memory that lets agents decide what to remember about users across conversations.
+description: Session-scoped conversation memory with auto-summarization for agents.
 icon: brain
 ---
 
-Memory gives agents the ability to remember information about users across conversations. Instead of heuristic scoring or rigid extraction pipelines, the model itself decides what to remember, update, or forget by calling tools (`add_memory`, `update_memory`, `delete_memory`).
+Memory gives agents the ability to maintain conversation history across turns, with automatic summarization when history grows beyond a configurable limit. Instead of storing individual facts, Memory preserves the full conversation flow and intelligently compresses older messages to stay within token budgets.
 
 ## Quick Example
 
@@ -20,10 +20,10 @@ agent = Agent(
   memory=Memory(store=SQLiteStore("./memory.db")),
 )
 
-# First conversation — the model decides what to remember
+# First conversation — history is stored automatically
 output = await agent.arun("My name is Alice and I work at Acme Corp.", user_id="alice")
 
-# Later conversation — stored memories are injected into the prompt
+# Later conversation — previous history is injected into the prompt
 output = await agent.arun("Where do I work?", user_id="alice")
 print(output.content)  # "You work at Acme Corp."
 ```
@@ -34,34 +34,32 @@ print(output.content)  # "You work at Acme Corp."
 flowchart LR
   subgraph Before["Before Model Call"]
     direction TB
-    B1[Load user memories from store] --> B2[Format as XML context]
+    B1[Load session entries from store] --> B2[Format as conversation history]
     B2 --> B3[Inject into system prompt]
   end
 
   subgraph After["After Model Response"]
     direction TB
-    A1[Feed conversation to memory LLM] --> A2[LLM calls add/update/delete tools]
-    A2 --> A3[Store changes persisted]
+    A1[Store new messages in session] --> A2[Check if count > max_messages]
+    A2 --> A3[Auto-summarize if needed]
   end
 
   Agent -->|recall| Before
   Before --> Model
   Model --> Agent
-  Agent -->|update| After
+  Agent -->|store| After
 ```
 
-**Before each model call**, the agent loads the user's existing memories from the store and injects them into the system prompt. **After each response**, the agent passes the conversation to a memory LLM, which uses tool calls to add, update, or delete memories as needed.
+**Before each model call**, the agent loads the session's conversation entries and injects them as context. **After each response**, the agent stores the new messages. When the entry count exceeds `max_messages`, a summarization strategy runs automatically — pinning the first few messages, summarizing the middle, and keeping the most recent messages intact.
 
 ## Architecture
 
-Memory uses a simple, flat data model. Each memory is a natural-language statement with topic tags, managed entirely by the LLM:
-
 | Component | Description |
 |-----------|-------------|
-| **Memory** | Orchestrator that connects a store and an LLM. Controls when memory runs (trigger mode) and which operations the LLM can perform. |
-| **UserMemory** | A single fact about a user (e.g., "Alice works at Acme Corp") with topic tags, timestamps, and user/agent scoping. |
-| **MemoryStore** | Storage backend protocol. Three built-in implementations: InMemoryStore, SQLiteStore, PostgresStore. |
-| **Optimization Strategies** | LLM-driven consolidation of memories (e.g., summarize N memories into fewer comprehensive ones). |
+| **Memory** | Orchestrator that connects a store and optional model for summarization. Controls max message limits and summarization parameters. |
+| **MemoryEntry** | A single conversation entry with session/user scoping, role, content, and timestamps. |
+| **MemoryStore** | Storage backend protocol. Three built-in implementations: InMemoryStore, SQLiteStore, FileStore. |
+| **SummarizeStrategy** | Hybrid pin + summarize-middle + keep-recent strategy for compressing long conversations. |
 
 ## Memory Constructor
 
@@ -69,17 +67,13 @@ Memory uses a simple, flat data model. Each memory is a natural-language stateme
 from definable.memory import Memory
 
 memory = Memory(
-  store=store,                          # Storage backend (default: InMemoryStore)
-  model=None,                           # LLM for memory extraction (default: agent's model)
-  trigger="always",                     # "always", "auto", or "never"
-  update_on_run=True,                   # Process memories after each agent run
-  add_memories=True,                    # LLM can add new memories
-  update_memories=True,                 # LLM can update existing memories
-  delete_memories=False,                # LLM can delete memories (off by default)
-  clear_memories=False,                 # LLM can clear all memories (off by default)
-  debug_mode=False,                     # Log debug info during memory operations
-  memory_capture_instructions=None,     # What kind of information to capture
-  additional_instructions=None,         # Extra instructions for the memory LLM
+  store=store,              # Storage backend (default: InMemoryStore)
+  model=None,               # LLM for summarization (default: agent's model)
+  enabled=True,             # Whether memory is active
+  max_messages=100,         # Auto-summarize when entries exceed this count
+  pin_count=2,              # Number of earliest messages to always preserve
+  recent_count=5,           # Number of most recent messages to always preserve
+  description=None,         # Description for the agent layer guide
 )
 ```
 
@@ -88,125 +82,79 @@ memory = Memory(
 </ParamField>
 
 <ParamField path="model" type="Model" default="None">
-  The LLM used to extract memories from conversations. When `None`, the agent's own model is used at runtime.
+  The LLM used for summarization when entries exceed `max_messages`. When `None`, the agent's own model is used at runtime.
 </ParamField>
 
-<ParamField path="trigger" type="str" default="always">
-  When to activate memory recall and storage: `"always"` (every call), `"auto"` (gated by a routing model), or `"never"` (disabled).
+<ParamField path="enabled" type="bool" default={true}>
+  Whether memory recall and storage are active. Set to `False` to temporarily disable without removing the configuration.
 </ParamField>
 
-<ParamField path="update_on_run" type="bool" default={true}>
-  Whether to process and store new memories after each agent run.
+<ParamField path="max_messages" type="int" default={100}>
+  When the entry count exceeds this, the `SummarizeStrategy` runs automatically to compress older messages.
 </ParamField>
 
-<ParamField path="add_memories" type="bool" default={true}>
-  Whether the memory LLM can create new memories.
+<ParamField path="pin_count" type="int" default={2}>
+  Number of earliest messages to always preserve during summarization. These provide initial context.
 </ParamField>
 
-<ParamField path="update_memories" type="bool" default={true}>
-  Whether the memory LLM can update existing memories.
-</ParamField>
-
-<ParamField path="delete_memories" type="bool" default={false}>
-  Whether the memory LLM can delete memories. Off by default for safety.
-</ParamField>
-
-<ParamField path="clear_memories" type="bool" default={false}>
-  Whether the memory LLM can clear all memories for a user. Off by default for safety.
-</ParamField>
-
-<ParamField path="debug_mode" type="bool" default={false}>
-  When enabled, logs tool calls and LLM responses during memory processing.
-</ParamField>
-
-<ParamField path="memory_capture_instructions" type="str" default="None">
-  Custom instructions for what the memory LLM should capture. Defaults to "Remember important facts about the user."
-</ParamField>
-
-<ParamField path="additional_instructions" type="str" default="None">
-  Extra instructions appended to the memory LLM's system prompt.
+<ParamField path="recent_count" type="int" default={5}>
+  Number of most recent messages to always preserve during summarization. These provide current context.
 </ParamField>
 
 ## Public Methods
 
 | Method | Description |
 |--------|-------------|
-| `await aget_user_memories(user_id=None)` | Retrieve all memories for a user |
-| `await acreate_user_memories(message=None, *, messages=None, user_id=None, agent_id=None)` | Extract and store memories from a message or conversation using the LLM |
-| `await aupdate_memory_task(task, *, user_id=None, agent_id=None)` | Run an arbitrary memory task via natural language (e.g., "Forget the user's old address") |
-| `await aoptimize_memories(user_id=None, strategy=None)` | Consolidate memories using an optimization strategy |
-| `format_memories_for_prompt(memories)` | Format a list of `UserMemory` objects as an XML string for prompt injection |
+| `await add(message, session_id, user_id)` | Add a message to the session history |
+| `await get_entries(session_id, user_id)` | Retrieve all entries for a session |
+| `await get_context_messages(session_id, user_id)` | Get entries as `Message` objects for prompt injection |
+| `await update(memory_id, content)` | Update a specific entry's content |
+| `await delete(memory_id)` | Delete a specific entry |
+| `await clear(session_id, user_id)` | Clear all entries for a session |
 | `await close()` | Close the underlying store connection |
 
-### Reading Memories
+### Adding and Retrieving Entries
 
 ```python
-memories = await memory.aget_user_memories(user_id="alice")
-for m in memories:
-  print(f"[{m.memory_id}] {m.memory} (topics: {m.topics})")
+from definable.model.message import Message
+
+await memory.add(Message(role="user", content="Hello!"), session_id="s1")
+await memory.add(Message(role="assistant", content="Hi there!"), session_id="s1")
+
+entries = await memory.get_entries("s1")
+for e in entries:
+  print(f"[{e.role}] {e.content}")
 ```
 
-### Creating Memories from a Conversation
+### Getting Context Messages
 
 ```python
-# From a single message
-await memory.acreate_user_memories(
-  "I just moved to San Francisco and started a new job at Stripe.",
-  user_id="alice",
-)
-
-# From a list of Message objects
-await memory.acreate_user_memories(
-  messages=conversation_messages,
-  user_id="alice",
-)
+messages = await memory.get_context_messages("s1")
+# Returns list[Message] — ready for prompt injection
 ```
 
-### Running Arbitrary Memory Tasks
+## MemoryEntry
 
-```python
-await memory.aupdate_memory_task(
-  "Update Alice's job title to Senior Engineer",
-  user_id="alice",
-)
-```
-
-### Optimizing Memories
-
-When a user accumulates many memories, you can consolidate them:
-
-```python
-optimized = await memory.aoptimize_memories(
-  user_id="alice",
-  strategy="summarize",  # Combines related memories into fewer, comprehensive ones
-)
-print(f"Consolidated to {len(optimized)} memories")
-```
-
-## UserMemory
-
-Each memory is represented as a `UserMemory` dataclass:
+Each conversation entry is represented as a `MemoryEntry` dataclass:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `memory` | `str` | — | The memory content (natural language fact) |
-| `memory_id` | `str` | Auto-generated UUID | Unique identifier |
-| `topics` | `list[str]` | `[]` | LLM-assigned topic tags |
-| `user_id` | `str \| None` | `None` | User this memory belongs to |
-| `agent_id` | `str \| None` | `None` | Agent that created this memory |
-| `input` | `str \| None` | `None` | Original user message that triggered this memory |
-| `created_at` | `float` | Auto-set | Unix timestamp when created |
-| `updated_at` | `float` | Auto-set | Unix timestamp when last updated |
-
-`UserMemory` supports serialization via `to_dict()` and `UserMemory.from_dict(data)`.
+| `session_id` | `str` | — | Session this entry belongs to |
+| `memory_id` | `str \| None` | Auto-generated UUID | Unique identifier |
+| `user_id` | `str` | `"default"` | User this entry belongs to |
+| `role` | `str` | `"user"` | Message role: `"user"`, `"assistant"`, or `"summary"` |
+| `content` | `str` | `""` | The message content |
+| `message_data` | `dict \| None` | `None` | Optional structured data (e.g., tool calls) |
+| `created_at` | `float \| None` | Auto-set | Unix timestamp when created |
+| `updated_at` | `float \| None` | Auto-set | Unix timestamp when last updated |
 
 ## What's Next
 
 <CardGroup cols={2}>
   <Card title="Memory Stores" icon="database" href="/memory/stores">
-    Choose a storage backend: InMemory, SQLite, or PostgreSQL.
+    Choose a storage backend: InMemory, SQLite, or file-based.
   </Card>
   <Card title="Agent Integration" icon="link" href="/memory/agent-integration">
-    Learn how memory integrates with the agent lifecycle, trigger modes, and multi-user scoping.
+    Learn how memory integrates with the agent lifecycle and multi-user scoping.
   </Card>
 </CardGroup>

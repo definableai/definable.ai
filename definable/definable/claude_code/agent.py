@@ -60,7 +60,7 @@ if TYPE_CHECKING:
   from definable.agent.guardrail.base import Guardrails
   from definable.agent.tracing import Tracing
   from definable.knowledge.base import Knowledge
-  from definable.memory.manager import Memory, MemoryManager
+  from definable.memory.manager import Memory
   from pydantic import BaseModel
 
 
@@ -93,7 +93,7 @@ class ClaudeCodeAgent:
   agent_name: Optional[str] = None
 
   # --- Definable features ---
-  memory: Optional[Union["Memory", "MemoryManager", bool]] = None
+  memory: Optional[Union["Memory", bool]] = None
   knowledge: Optional["Knowledge"] = None
   guardrails: Optional["Guardrails"] = None
   middleware: Optional[List[Any]] = None
@@ -147,21 +147,21 @@ class ClaudeCodeAgent:
     self._initialized = True
 
   def _resolve_memory(self) -> None:
-    """Resolve memory config into a MemoryManager instance."""
+    """Resolve memory config into a Memory instance."""
     if self.memory is None or self.memory is False:
       return
 
     if self.memory is True:
-      from definable.memory.manager import MemoryManager
+      from definable.memory.manager import Memory
       from definable.memory.store.in_memory import InMemoryStore
 
-      self._memory_manager = MemoryManager(store=InMemoryStore())
+      self._memory_manager = Memory(store=InMemoryStore())
       return
 
-    # Check if it's already a Memory / MemoryManager instance
-    from definable.memory.manager import Memory, MemoryManager
+    # Check if it's already a Memory instance
+    from definable.memory.manager import Memory
 
-    if isinstance(self.memory, (Memory, MemoryManager)):
+    if isinstance(self.memory, Memory):
       self._memory_manager = self.memory
       return
 
@@ -369,41 +369,40 @@ class ClaudeCodeAgent:
       return None
 
   async def _memory_recall(self, context: RunContext, user_id: Optional[str]) -> Optional[str]:
-    """Recall user memories for context injection."""
+    """Recall session history for context injection."""
     if not self._memory_manager or not user_id:
       return None
 
     try:
-      store = getattr(self._memory_manager, "store", None)
-      if store is None:
-        return None
-
-      memories = await store.get_user_memories(user_id=user_id)
-      if not memories:
+      session_id = context.session_id or "default"
+      entries = await self._memory_manager.get_entries(session_id, user_id)
+      if not entries:
         return None
 
       parts = []
-      for mem in memories:
-        content = getattr(mem, "memory", str(mem))
-        parts.append(f"- {content}")
+      for entry in entries:
+        if entry.role == "summary":
+          parts.append(f"[Summary]: {entry.content}")
+        else:
+          parts.append(f"- {entry.content}")
       return "\n".join(parts)
     except Exception as exc:
       log_warning(f"Memory recall failed: {exc}")
       return None
 
   async def _memory_store(self, prompt: str, response: Optional[str], user_id: Optional[str]) -> None:
-    """Fire-and-forget memory storage after a run."""
+    """Store messages in session memory after a run."""
     if not self._memory_manager or not user_id:
       return
 
     try:
-      store = getattr(self._memory_manager, "store", None)
-      if store is None:
-        return
-      # MemoryManager's update logic is model-driven, but for Claude Code
-      # we do a simple store since the memory model may not be available.
-      # In practice, users would configure a full MemoryManager with a model.
-      log_debug("Memory store: skipping auto-update (no memory model configured for Claude Code agent)")
+      from definable.model.message import Message as DefMessage
+
+      session_id = "default"
+      await self._memory_manager._ensure_initialized()
+      await self._memory_manager.add(DefMessage(role="user", content=prompt), session_id=session_id, user_id=user_id)
+      if response:
+        await self._memory_manager.add(DefMessage(role="assistant", content=response), session_id=session_id, user_id=user_id)
     except Exception as exc:
       log_warning(f"Memory store failed: {exc}")
 

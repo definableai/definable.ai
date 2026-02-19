@@ -72,7 +72,7 @@ if TYPE_CHECKING:
   from definable.agent.guardrail import GuardrailResult, Guardrails
   from definable.agent.reasoning import Thinking
   from definable.mcp.toolkit import MCPToolkit
-  from definable.memory import Memory, MemoryManager
+  from definable.memory import Memory
   from definable.reader import BaseReader as FileReaderRegistry
   from definable.agent.replay import Replay, ReplayComparison
 
@@ -87,15 +87,6 @@ def __getattr__(name: str):
     from definable.memory import Memory
 
     return Memory
-  if name == "MemoryManager":
-    from definable.memory import MemoryManager
-
-    return MemoryManager
-  # Backward compat alias
-  if name == "CognitiveMemory":
-    from definable.memory import MemoryManager
-
-    return MemoryManager
   if name == "FileReaderRegistry":
     from definable.reader import BaseReader
 
@@ -139,7 +130,6 @@ __all__ = [
   "KnowledgeToolkit",
   "MCPToolkit",
   "Memory",
-  "MemoryManager",
   "Thinking",
   "Replay",
   "ReplayComparison",

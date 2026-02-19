@@ -5,21 +5,21 @@ from definable.memory.store.base import MemoryStore
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+  from definable.memory.store.file import FileStore
   from definable.memory.store.in_memory import InMemoryStore
-  from definable.memory.store.postgres import PostgresStore
   from definable.memory.store.sqlite import SQLiteStore
 
 __all__ = [
   "MemoryStore",
   "InMemoryStore",
   "SQLiteStore",
-  "PostgresStore",
+  "FileStore",
 ]
 
 _LAZY_IMPORTS = {
   "SQLiteStore": ("definable.memory.store.sqlite", "SQLiteStore"),
   "InMemoryStore": ("definable.memory.store.in_memory", "InMemoryStore"),
-  "PostgresStore": ("definable.memory.store.postgres", "PostgresStore"),
+  "FileStore": ("definable.memory.store.file", "FileStore"),
 }
 
 

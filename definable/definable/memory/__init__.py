@@ -1,8 +1,7 @@
-"""Agentic memory system for Definable AI agents.
+"""Session-history memory system for Definable AI agents.
 
-The memory system uses an LLM-driven approach: Memory calls the model
-with tools (add_memory, update_memory, delete_memory) and the model decides what
-facts about the user are worth remembering.
+The memory system stores conversation history per session with
+auto-summarization when history exceeds a configurable threshold.
 
 Quick Start:
     from definable.memory import Memory, SQLiteStore
@@ -13,34 +12,37 @@ Quick Start:
     agent = Agent(model=model, memory=memory)
 """
 
-from definable.memory.manager import Memory, MemoryManager
+from definable.memory.manager import Memory
 from definable.memory.store.base import MemoryStore
-from definable.memory.types import UserMemory
+from definable.memory.types import MemoryEntry
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+  from definable.memory.store.file import FileStore
   from definable.memory.store.in_memory import InMemoryStore
-  from definable.memory.store.postgres import PostgresStore
   from definable.memory.store.sqlite import SQLiteStore
+  from definable.memory.strategies.summarize import SummarizeStrategy
 
 __all__ = [
   # Core
   "Memory",
-  "MemoryManager",  # backward compat alias
-  "UserMemory",
+  "MemoryEntry",
   # Protocol
   "MemoryStore",
   # Store implementations (lazy-loaded)
   "InMemoryStore",
   "SQLiteStore",
-  "PostgresStore",
+  "FileStore",
+  # Strategies
+  "SummarizeStrategy",
 ]
 
 _LAZY_IMPORTS = {
   "SQLiteStore": ("definable.memory.store.sqlite", "SQLiteStore"),
   "InMemoryStore": ("definable.memory.store.in_memory", "InMemoryStore"),
-  "PostgresStore": ("definable.memory.store.postgres", "PostgresStore"),
+  "FileStore": ("definable.memory.store.file", "FileStore"),
+  "SummarizeStrategy": ("definable.memory.strategies.summarize", "SummarizeStrategy"),
 }
 
 

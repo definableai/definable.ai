@@ -132,14 +132,15 @@ class TestBasicRun:
 @pytest.mark.integration
 class TestMemoryIntegration:
   async def test_run_with_memory_injects_context(self):
-    """When memory is configured, memories are injected into system prompt."""
+    """When memory is configured, session history is injected into system prompt."""
+    from definable.memory.manager import Memory
     from definable.memory.store.in_memory import InMemoryStore
-    from definable.memory.types import UserMemory
+    from definable.model.message import Message as DefMessage
 
     store = InMemoryStore()
-    await store.upsert_user_memory(
-      UserMemory(memory_id="m1", user_id="user-1", memory="User prefers Python.", topics=["preferences"]),
-    )
+    memory = Memory(store=store)
+    await memory._ensure_initialized()
+    await memory.add(DefMessage(role="user", content="User prefers Python."), session_id="default", user_id="user-1")
 
     mock_transport = MockTransport([
       _make_assistant_text("Got it."),
@@ -148,16 +149,14 @@ class TestMemoryIntegration:
 
     agent = ClaudeCodeAgent(instructions="Help the user.", memory=True)
     # Manually set up the memory manager with pre-populated store
-    from definable.memory.manager import MemoryManager
-
-    agent._memory_manager = MemoryManager(store=store)
+    agent._memory_manager = memory
     agent._initialized = True
     agent._tool_bridge = MagicMock()
     agent._tool_bridge.tool_count = 0
     agent._tool_bridge.get_mcp_config.return_value = {}
 
     with patch("definable.claude_code.agent.SubprocessTransport", return_value=mock_transport):
-      await agent.arun("What do I like?", user_id="user-1")
+      await agent.arun("What do I like?", user_id="user-1", session_id="default")
 
     # Check that the system prompt sent to CLI includes memory
     connect_args = mock_transport._connect_args

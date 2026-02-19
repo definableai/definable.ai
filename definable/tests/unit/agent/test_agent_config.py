@@ -76,19 +76,19 @@ class TestMemory:
   def test_defaults(self):
     cfg = Memory()
     assert cfg.store is None
-    assert cfg.trigger == "always"
-    assert cfg.update_on_run is True
-    assert cfg.decision_prompt is None
+    assert cfg.enabled is True
+    assert cfg.max_messages == 100
+    assert cfg.pin_count == 2
+    assert cfg.recent_count == 5
     assert cfg.description is None
 
-  def test_trigger_values(self):
-    for trigger in ("always", "auto", "never"):
-      cfg = Memory(trigger=trigger)
-      assert cfg.trigger == trigger
+  def test_custom_max_messages(self):
+    cfg = Memory(max_messages=50)
+    assert cfg.max_messages == 50
 
-  def test_custom_update_on_run(self):
-    cfg = Memory(update_on_run=False)
-    assert cfg.update_on_run is False
+  def test_disabled(self):
+    cfg = Memory(enabled=False)
+    assert cfg.enabled is False
 
 
 @pytest.mark.unit

@@ -1,11 +1,11 @@
 ---
 title: Memory Stores
 sidebarTitle: Stores
-description: Storage backends for persistent agent memory.
+description: Storage backends for session conversation memory.
 icon: database
 ---
 
-A `MemoryStore` is the storage backend for `Memory`. Definable provides three built-in implementations, from ephemeral in-memory stores for testing to production-grade PostgreSQL.
+A `MemoryStore` is the storage backend for `Memory`. Definable provides three built-in implementations, from ephemeral in-memory stores for testing to file-based and SQLite backends for persistence.
 
 ## Available Backends
 
@@ -13,15 +13,7 @@ A `MemoryStore` is the storage backend for `Memory`. Definable provides three bu
 |---------|--------|------------|----------|
 | `InMemoryStore` | `definable.memory` | None | Testing, ephemeral sessions |
 | `SQLiteStore` | `definable.memory` | `aiosqlite` (core) | Local dev, single-process |
-| `PostgresStore` | `definable.memory` | `asyncpg` | Production, multi-process |
-
-## Installation
-
-The InMemory store requires no extra dependencies. SQLite uses `aiosqlite` (included as a core dependency). For PostgreSQL:
-
-```bash
-pip install 'definable[postgres-memory]'   # asyncpg
-```
+| `FileStore` | `definable.memory` | None | JSONL-based persistence, simple deployments |
 
 ## Backend Examples
 
@@ -60,42 +52,27 @@ memory = Memory(store=SQLiteStore("./memory.db"))
   Path to the SQLite database file. Created automatically if it does not exist.
 </ParamField>
 
-### PostgresStore
+### FileStore
 
-Production-ready backend with connection pooling. Requires a running PostgreSQL instance.
+JSONL-based file storage. Each session gets its own `.jsonl` file in the specified directory.
 
 ```python
-from definable.memory import Memory
-from definable.memory.store.postgres import PostgresStore
+from definable.memory import Memory, FileStore
 
-memory = Memory(
-  store=PostgresStore(
-    db_url="postgresql://user:pass@localhost:5432/mydb",
-    pool_size=5,
-    table_prefix="memory_",
-  )
-)
+memory = Memory(store=FileStore("./memory_data"))
 ```
 
-<ParamField path="db_url" type="str" default="">
-  PostgreSQL connection URL. Falls back to the `MEMORY_POSTGRES_URL` environment variable if not provided.
-</ParamField>
-
-<ParamField path="pool_size" type="int" default={5}>
-  Connection pool size.
-</ParamField>
-
-<ParamField path="table_prefix" type="str" default="memory_">
-  Prefix for database table names (e.g., `memory_memories`).
+<ParamField path="base_dir" type="str">
+  Directory where JSONL session files are stored. Created automatically if it does not exist.
 </ParamField>
 
 ## MemoryStore Protocol
 
-All backends implement the `MemoryStore` protocol. You can create custom stores by implementing these seven methods:
+All backends implement the `MemoryStore` protocol. You can create custom stores by implementing these methods:
 
 ```python
 from definable.memory.store.base import MemoryStore
-from definable.memory.types import UserMemory
+from definable.memory.types import MemoryEntry
 
 class MyStore:
   async def initialize(self) -> None:
@@ -106,46 +83,45 @@ class MyStore:
     """Release resources (close connections, flush buffers)."""
     ...
 
-  async def get_user_memory(
-    self,
-    memory_id: str,
-    user_id: str | None = None,
-  ) -> UserMemory | None:
-    """Retrieve a single memory by ID."""
+  async def add(self, entry: MemoryEntry) -> None:
+    """Add a conversation entry to the store."""
     ...
 
-  async def get_user_memories(
+  async def get_entries(
     self,
-    user_id: str | None = None,
-    agent_id: str | None = None,
-    topics: list[str] | None = None,
-    limit: int | None = None,
-  ) -> list[UserMemory]:
-    """Retrieve memories with optional filters, ordered by updated_at descending."""
+    session_id: str,
+    user_id: str = "default",
+  ) -> list[MemoryEntry]:
+    """Retrieve all entries for a session, ordered by created_at ascending."""
     ...
 
-  async def upsert_user_memory(self, memory: UserMemory) -> None:
-    """Insert or update a memory. If a memory with the same memory_id exists, replace it."""
+  async def get_entry(self, memory_id: str) -> MemoryEntry | None:
+    """Retrieve a single entry by its ID."""
     ...
 
-  async def delete_user_memory(
+  async def update(self, entry: MemoryEntry) -> None:
+    """Update an existing entry (matched by memory_id)."""
+    ...
+
+  async def delete(self, memory_id: str) -> None:
+    """Delete a single entry by ID."""
+    ...
+
+  async def delete_session(
     self,
-    memory_id: str,
-    user_id: str | None = None,
+    session_id: str,
+    user_id: str = "default",
   ) -> None:
-    """Delete a single memory by ID."""
+    """Delete all entries for a session."""
     ...
 
-  async def clear_user_memories(self, user_id: str | None = None) -> None:
-    """Delete all memories for a user. If user_id is None, delete ALL memories."""
+  async def count(
+    self,
+    session_id: str,
+    user_id: str = "default",
+  ) -> int:
+    """Count entries in a session."""
     ...
-```
-
-All stores also support `async with` (async context manager) for automatic initialization and cleanup:
-
-```python
-async with SQLiteStore("./memory.db") as store:
-  memories = await store.get_user_memories(user_id="alice")
 ```
 
 ### Method Reference
@@ -154,50 +130,38 @@ async with SQLiteStore("./memory.db") as store:
 |--------|-------------|
 | `initialize()` | Prepare the store (create tables, open connections). Called automatically by `Memory` on first use. |
 | `close()` | Release resources. Called by `Memory.close()` or the agent's shutdown. |
-| `get_user_memory(memory_id, user_id=)` | Fetch a single memory by its UUID. Returns `None` if not found. |
-| `get_user_memories(user_id=, agent_id=, topics=, limit=)` | List memories with optional filters, ordered by most recently updated. |
-| `upsert_user_memory(memory)` | Insert or replace a `UserMemory`. Automatically updates `updated_at`. |
-| `delete_user_memory(memory_id, user_id=)` | Delete a single memory. The `user_id` parameter adds a safety scope. |
-| `clear_user_memories(user_id=)` | Delete all memories for a user, or all memories if `user_id` is `None`. |
+| `add(entry)` | Add a `MemoryEntry` to the store. |
+| `get_entries(session_id, user_id)` | List entries for a session, ordered by creation time ascending. |
+| `get_entry(memory_id)` | Fetch a single entry by its UUID. Returns `None` if not found. |
+| `update(entry)` | Update an existing entry (matched by `memory_id`). |
+| `delete(memory_id)` | Delete a single entry. |
+| `delete_session(session_id, user_id)` | Delete all entries for a session. |
+| `count(session_id, user_id)` | Count the number of entries in a session. |
 
-### Filter Parameters
+## MemoryEntry Data Type
 
-The `get_user_memories()` method supports several filters:
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `user_id` | `str \| None` | Only return memories for this user |
-| `agent_id` | `str \| None` | Only return memories created by this agent |
-| `topics` | `list[str] \| None` | Only return memories matching any of these topics |
-| `limit` | `int \| None` | Maximum number of memories to return |
-
-## UserMemory Data Type
-
-Every store works with `UserMemory` objects:
+Every store works with `MemoryEntry` objects:
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `memory` | `str` | — | The memory content (natural language fact) |
-| `memory_id` | `str` | Auto-generated UUID | Unique identifier |
-| `topics` | `list[str]` | `[]` | Topic tags for filtering |
-| `user_id` | `str \| None` | `None` | User this memory belongs to |
-| `agent_id` | `str \| None` | `None` | Agent that created this memory |
-| `input` | `str \| None` | `None` | Original user message that triggered this memory |
-| `created_at` | `float` | Auto-set | Unix timestamp |
-| `updated_at` | `float` | Auto-set | Unix timestamp |
+| `session_id` | `str` | — | Session this entry belongs to |
+| `memory_id` | `str \| None` | Auto-generated UUID | Unique identifier |
+| `user_id` | `str` | `"default"` | User this entry belongs to |
+| `role` | `str` | `"user"` | Message role (`"user"`, `"assistant"`, `"summary"`) |
+| `content` | `str` | `""` | The message content |
+| `message_data` | `dict \| None` | `None` | Optional structured message data |
+| `created_at` | `float \| None` | Auto-set | Unix timestamp |
+| `updated_at` | `float \| None` | Auto-set | Unix timestamp |
 
 ```python
-from definable.memory.types import UserMemory
+from definable.memory.types import MemoryEntry
 
-mem = UserMemory(
-  memory="Alice works at Acme Corp as a Senior Engineer",
-  topics=["work", "personal"],
+entry = MemoryEntry(
+  session_id="session-1",
   user_id="alice",
+  role="user",
+  content="I prefer Python for backend work.",
 )
-
-# Serialize / deserialize
-data = mem.to_dict()
-restored = UserMemory.from_dict(data)
 ```
 
 ## Choosing a Backend
@@ -206,14 +170,14 @@ restored = UserMemory.from_dict(data)
 |----------|-------------------|
 | Unit tests, quick prototyping | `InMemoryStore` |
 | Local development, single-process apps | `SQLiteStore` |
-| Production, multi-process, horizontal scaling | `PostgresStore` |
+| Simple deployments, human-readable logs | `FileStore` |
 
-For most projects, start with `SQLiteStore` during development and switch to `PostgresStore` for production. The store is a constructor parameter, so swapping backends requires changing a single line:
+For most projects, start with `SQLiteStore` during development. The store is a constructor parameter, so swapping backends requires changing a single line:
 
 ```python
 # Development
 memory = Memory(store=SQLiteStore("./memory.db"))
 
-# Production
-memory = Memory(store=PostgresStore(db_url=os.environ["DATABASE_URL"]))
+# File-based
+memory = Memory(store=FileStore("./memory_data"))
 ```

@@ -138,7 +138,7 @@ for event in agent.run_stream("Tell me a short story about a robot."):
     elif event.event == "ToolCallStarted":
         print(f"\n[Calling {event.tool_name}...]")
     elif event.event == "RunCompleted":
-        print(f"\n\nDone. Tokens: {event.output.metrics.total_tokens}")
+        print(f"\n\nDone. Tokens: {event.metrics.total_tokens if event.metrics else 'N/A'}")
 ```
 
 ```bash

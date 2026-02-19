@@ -24,7 +24,8 @@ async def main():
   store = SQLiteStore("./example_memory.db")
 
   # 2. Create Memory with the store
-  #    - The LLM decides what to remember via tool calls (add/update/delete)
+  #    - Stores full conversation history per session
+  #    - Auto-summarizes when messages exceed max_messages
   #    - Store is initialized lazily on first use
   memory = Memory(store=store)
 

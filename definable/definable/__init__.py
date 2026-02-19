@@ -68,11 +68,17 @@ if TYPE_CHECKING:
   from definable.agent.tracing import Tracing
   from definable.knowledge import Document, Knowledge
   from definable.mcp import MCPConfig, MCPServerConfig, MCPToolkit
-  from definable.memory import Memory, MemoryManager
+  from definable.memory import Memory
   from definable.model.deepseek import DeepSeekChat
   from definable.model.moonshot import MoonshotChat
   from definable.model.openai import OpenAIChat, OpenAILike
   from definable.model.xai import xAI
+  from definable.model.anthropic import Claude
+  from definable.model.mistral import MistralChat
+  from definable.model.google import Gemini
+  from definable.model.perplexity import Perplexity
+  from definable.model.ollama import Ollama
+  from definable.model.openrouter import OpenRouter
   from definable.claude_code import ClaudeCodeAgent
   from definable.skill.registry import SkillRegistry
 
@@ -86,14 +92,18 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   "DeepSeekChat": ("definable.model.deepseek", "DeepSeekChat"),
   "MoonshotChat": ("definable.model.moonshot", "MoonshotChat"),
   "xAI": ("definable.model.xai", "xAI"),
+  "Claude": ("definable.model.anthropic", "Claude"),
+  "MistralChat": ("definable.model.mistral", "MistralChat"),
+  "Gemini": ("definable.model.google", "Gemini"),
+  "Perplexity": ("definable.model.perplexity", "Perplexity"),
+  "Ollama": ("definable.model.ollama", "Ollama"),
+  "OpenRouter": ("definable.model.openrouter", "OpenRouter"),
   # MCP
   "MCPToolkit": ("definable.mcp", "MCPToolkit"),
   "MCPConfig": ("definable.mcp", "MCPConfig"),
   "MCPServerConfig": ("definable.mcp", "MCPServerConfig"),
   # Memory
   "Memory": ("definable.memory", "Memory"),
-  "MemoryManager": ("definable.memory", "MemoryManager"),
-  "CognitiveMemory": ("definable.memory", "MemoryManager"),  # backward compat alias
   # Knowledge
   "Knowledge": ("definable.knowledge", "Knowledge"),
   "Document": ("definable.knowledge", "Document"),
@@ -149,13 +159,18 @@ __all__ = [
   "DeepSeekChat",
   "MoonshotChat",
   "xAI",
+  "Claude",
+  "MistralChat",
+  "Gemini",
+  "Perplexity",
+  "Ollama",
+  "OpenRouter",
   # Lazy — MCP
   "MCPToolkit",
   "MCPConfig",
   "MCPServerConfig",
   # Lazy — Memory
   "Memory",
-  "MemoryManager",
   # Lazy — Knowledge
   "Knowledge",
   "Document",
