@@ -15,29 +15,29 @@ These are the ACTUAL working imports (not what docs say):
 
 ```python
 # Agents
-from definable.agents import Agent, AgentConfig, Middleware, Toolkit, KnowledgeToolkit
-from definable.agents import ThinkingConfig, KnowledgeConfig, TracingConfig, DeepResearchConfig
-from definable.agents import MockModel, create_test_agent, AgentTestCase
+from definable.agent import Agent, AgentConfig, Middleware, Toolkit, KnowledgeToolkit
+from definable.agent import ThinkingConfig, KnowledgeConfig, TracingConfig, DeepResearchConfig
+from definable.agent import MockModel, create_test_agent, AgentTestCase
 
 # Models
-from definable.models import OpenAIChat, DeepSeekChat, MoonshotChat, xAI, OpenAILike
-from definable.models.message import Message
-from definable.models.response import ModelResponse
+from definable.model import OpenAIChat, DeepSeekChat, MoonshotChat, xAI, OpenAILike
+from definable.model.message import Message
+from definable.model.response import ModelResponse
 
 # Tools
-from definable.tools.decorator import tool  # Returns Function object
+from definable.tool.decorator import tool  # Returns Function object
 # Function.entrypoint is sync; Function.parameters returns OpenAI-format dict
 
 # Skills
-from definable.skills import Skill  # or from definable.skills.base import Skill
-from definable.skills.registry import SkillRegistry  # uses .get_skill(), .list_skills()
+from definable.skill import Skill  # or from definable.skill.base import Skill
+from definable.skill.registry import SkillRegistry  # uses .get_skill(), .list_skills()
 
 # Knowledge
 from definable.knowledge import Knowledge, Document
 from definable.knowledge.vector_dbs import InMemoryVectorDB  # .add(docs), .search(query_embedding, top_k)
-from definable.knowledge.embedders.voyageai import VoyageAIEmbedder  # NOT re-exported!
-from definable.knowledge.embedders.openai import OpenAIEmbedder  # NOT re-exported!
-from definable.knowledge.rerankers.cohere import CohereReranker  # NOT re-exported!
+from definable.knowledge.embedder.voyageai import VoyageAIEmbedder  # NOT re-exported!
+from definable.knowledge.embedder.openai import OpenAIEmbedder  # NOT re-exported!
+from definable.knowledge.reranker.cohere import CohereReranker  # NOT re-exported!
 # Document(content=str, meta_data=dict)  — note: meta_data, NOT metadata
 
 # Memory
@@ -46,37 +46,37 @@ from definable.memory.store import SQLiteMemoryStore, InMemoryStore
 # Store API: store_episode, get_episodes, store_atom, get_atoms (NOT add/recall)
 
 # Guardrails
-from definable.guardrails import Guardrails, max_tokens, pii_filter, block_topics
-from definable.guardrails import regex_filter, tool_allowlist, tool_blocklist
-from definable.guardrails import ALL, ANY, NOT, InputGuardrail, OutputGuardrail
+from definable.agent.guardrail import Guardrails, max_tokens, pii_filter, block_topics
+from definable.agent.guardrail import regex_filter, tool_allowlist, tool_blocklist
+from definable.agent.guardrail import ALL, ANY, NOT, InputGuardrail, OutputGuardrail
 
 # Auth
-from definable.auth import APIKeyAuth, JWTAuth, AllowlistAuth, CompositeAuth
+from definable.agent.auth import APIKeyAuth, JWTAuth, AllowlistAuth, CompositeAuth
 # APIKeyAuth(keys=set), AllowlistAuth(user_ids=set), JWTAuth(secret=str)
 
 # MCP
 from definable.mcp.toolkit import MCPToolkit  # MCPToolkit(config=MCPConfig)
 
 # Readers
-from definable.readers import FileReader  # .read(file: File), NOT .read(path: str)
+from definable.reader import FileReader  # .read(file: File), NOT .read(path: str)
 
 # Research
-from definable.research.engine import DeepResearch
-from definable.research.config import DeepResearchConfig
+from definable.agent.research.engine import DeepResearch
+from definable.agent.research.config import DeepResearchConfig
 
 # Reasoning
-from definable.reasoning.step import ReasoningStep, ThinkingOutput, thinking_output_to_reasoning_steps
+from definable.agent.reasoning.step import ReasoningStep, ThinkingOutput, thinking_output_to_reasoning_steps
 
 # Replay/Tracing
-from definable.replay import Replay, ReplayComparison
-from definable.agents.tracing import JSONLExporter  # NOT definable.tracing
+from definable.agent.replay import Replay, ReplayComparison
+from definable.agent.tracing import JSONLExporter  # NOT definable.tracing
 
 # Runtime
-from definable.runtime import AgentServer
+from definable.agent.runtime import AgentServer
 
 # Other
-from definable.compression import CompressionManager
-from definable.triggers import BaseTrigger, EventTrigger
+from definable.agent.compression import CompressionManager
+from definable.agent.trigger import BaseTrigger, EventTrigger
 from definable.filters import FilterExpr
 from definable.media import Image, Audio, Video, File
 ```

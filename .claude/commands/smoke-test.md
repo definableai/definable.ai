@@ -26,14 +26,15 @@ fi
 # 2. Import all modules
 echo "Importing modules..."
 python -c "
-from definable.agents import Agent, AgentConfig, MockModel, create_test_agent
-from definable.models import OpenAIChat
-from definable.tools.decorator import tool
-from definable.skills import Skill, Calculator, DateTime
-from definable.knowledge import Knowledge, Document, InMemoryVectorDB
-from definable.memory import CognitiveMemory, InMemoryStore
-from definable.guardrails import Guardrails, max_tokens, pii_filter
-from definable.run import RunContext, RunStatus
+from definable.agent import Agent, AgentConfig, MockModel, create_test_agent
+from definable.model import OpenAIChat
+from definable.tool.decorator import tool
+from definable.skill import Skill, Calculator, DateTime
+from definable.knowledge import Document, Knowledge
+from definable.vectordb import InMemoryVectorDB
+from definable.memory import Memory, InMemoryStore
+from definable.agent.guardrail import Guardrails, max_tokens, pii_filter
+from definable.agent.events import RunContext, RunStatus
 from definable.media import Image, Audio, Video
 print('✅ All imports succeeded')
 "

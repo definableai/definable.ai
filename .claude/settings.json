@@ -7,16 +7,19 @@
       "Bash(pip install*)",
       "Bash(pip show*)",
       "Bash(pytest*)",
+      "Bash(sed*)",
       "Bash(python -m pytest*)",
       "Bash(python -m mypy*)",
       "Bash(python -m ruff*)",
       "Bash(.venv/bin/python*)",
+      "Bash(.venv/bin/ruff*)",
       "Bash(python .workspace/*)",
       "Bash(python -c *)",
       "Bash(source .env.test*)",
       "Bash(source .venv/bin/activate*)",
       "Bash(timeout *)",
       "Bash(gh issue*)",
+      "Bash(gh pr *)",
       "Bash(gh auth status*)",
       "Bash(gh repo view*)",
       "Bash(cat *)",
@@ -27,10 +30,15 @@
       "Bash(head *)",
       "Bash(tail *)",
       "Bash(date *)",
-      "Bash(git status)",
+      "Bash(git status*)",
       "Bash(git log*)",
       "Bash(git diff*)",
       "Bash(git branch*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git stash*)",
       "Bash(python --version*)",
       "Bash(uname -a)",
       "Bash(cd *)",
@@ -38,40 +46,22 @@
       "Bash(sort *)",
       "Bash(rm -rf .workspace/*)",
       "Bash(find .workspace*)",
+      "Bash(chmod *)",
       "Write(.env.test)",
       "Write(.workspace/**)",
       "Write(.claude/reports/**)",
       "Write(.claude/memory/**)",
+      "Write(.claude/hooks/**)",
+      "Write(.claude/commands/**)",
+      "Write(definable/**)",
       "Edit(.env.test)",
       "Edit(.workspace/**)",
       "Edit(.claude/reports/**)",
       "Edit(.claude/memory/**)",
-      "Read(.claude/memory/**)"
-    ],
-    "deny": [
-      "Read(.env)",
-      "Read(.env.local)",
-      "Read(.env.production)",
-      "Read(**/credentials.json)",
-      "Read(**/secrets/**)",
-      "Write(definable/**)",
+      "Edit(.claude/hooks/**)",
+      "Edit(.claude/commands/**)",
       "Edit(definable/**)",
-      "Write(pyproject.toml)",
-      "Edit(pyproject.toml)",
-      "Write(CLAUDE.md)",
-      "Edit(CLAUDE.md)",
-      "Write(README.md)",
-      "Edit(README.md)",
-      "Bash(rm -rf /)",
-      "Bash(rm -rf .)",
-      "Bash(rm -rf definable*)",
-      "Bash(git push*)",
-      "Bash(git commit*)",
-      "Bash(git checkout*)",
-      "Bash(git reset*)",
-      "Bash(python -m build*)",
-      "Bash(pip publish*)",
-      "Bash(twine *)"
+      "Read(.claude/memory/**)"
     ]
   },
   "hooks": {
@@ -93,15 +83,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "input=$(cat); exit_code=$(echo \"$input\" | jq -r '.tool_result.exitCode // 0'); if [ \"$exit_code\" != \"0\" ]; then echo '{\"feedback\": \"⚠️  Non-zero exit. Check if this is a real failure.\"}'; fi",
+            "command": "input=$(cat); exit_code=$(echo \"$input\" | jq -r '.tool_result.exitCode // 0'); if [ \"$exit_code\" != \"0\" ]; then echo '{\"feedback\": \"Non-zero exit. Check if this is a real failure.\"}'; fi",
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); file=$(echo \"$input\" | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -q '\\.py$'; then cd /Users/hash/work/definable.ai && .venv/bin/ruff format \"$file\" 2>/dev/null && .venv/bin/ruff check --fix \"$file\" 2>/dev/null; fi; exit 0",
+            "timeout": 10
+          }
+        ]
       }
-    ]
+    ],
+    "Stop": []
   },
   "env": {
     "DEFINABLE_TEST_MODE": "true",
     "PYTHON_ENV": "test"
-  }
+  },
+  "skipDangerousModePermissionPrompt": true
 }

@@ -7,7 +7,7 @@
 | # | Title | Filed | Labels | Priority |
 |---|-------|-------|--------|----------|
 | #6 | ModelResponse.parsed never populated for structured output | 2026-02-17 run #1 | bug | P0 |
-| #7 | TracingConfig not re-exported from definable.agents.tracing | 2026-02-17 run #1 | bug | P2 |
+| #7 | TracingConfig not re-exported from definable.agent.tracing | 2026-02-17 run #1 | bug | P2 |
 | #8 | test_tool_with_pre_post_hooks fails: hook signature mismatch | 2026-02-17 run #1 | bug | P2 |
 | #9 | Deprecation warning: duckduckgo_search renamed to ddgs | 2026-02-17 run #1 | enhancement | P3 |
 | #10 | knowledge: Embedder and Reranker implementations not re-exported | 2026-02-17 run #2 | bug | P1 |
