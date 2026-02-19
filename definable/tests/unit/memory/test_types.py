@@ -15,6 +15,8 @@ class TestMemoryEntry:
     before = time.time()
     entry = MemoryEntry(session_id="s1")
     after = time.time()
+    assert entry.created_at is not None
+    assert entry.updated_at is not None
     assert before <= entry.created_at <= after
     assert before <= entry.updated_at <= after
 
