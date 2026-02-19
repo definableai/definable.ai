@@ -21,7 +21,7 @@ from definable.vectordb import InMemoryVectorDB
 class MockEmbedder(Embedder):
   """Simple mock embedder for demonstration."""
 
-  dimensions: int = 64
+  dimensions: int = 32
 
   def get_embedding(self, text: str) -> List[float]:
     import hashlib
@@ -43,7 +43,7 @@ class MockEmbedder(Embedder):
 def setup_knowledge_base():
   """Set up a knowledge base."""
   embedder = MockEmbedder()
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
   return Knowledge(vector_db=vector_db, embedder=embedder)
 
 

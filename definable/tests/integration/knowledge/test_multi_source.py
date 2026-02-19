@@ -25,7 +25,7 @@ from definable.agent.config import AgentConfig
 from definable.agent.tracing import Tracing
 from definable.knowledge import Knowledge
 from definable.knowledge.document import Document
-from definable.memory import MemoryManager as CognitiveMemory
+from definable.memory import Memory
 from definable.memory.store.in_memory import InMemoryStore
 from definable.tool.decorator import tool
 
@@ -77,7 +77,7 @@ def memory_store():
 @pytest.fixture
 def full_agent(openai_model, knowledge_base, memory_store, no_trace):
   """Agent with memory, knowledge, and tools — the full stack."""
-  memory = CognitiveMemory(store=memory_store)
+  memory = Memory(store=memory_store)
   knowledge_base.top_k = 3
   return Agent(
     model=openai_model,

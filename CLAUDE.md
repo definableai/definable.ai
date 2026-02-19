@@ -113,7 +113,7 @@ class MyMiddleware:
 
 **Multi-turn** — `session_id` alone does NOT maintain history:
 ```python
-# Need messages=r1.messages OR CognitiveMemory for history
+# Need messages=r1.messages OR Memory for history
 r2 = await agent.arun("follow-up", messages=r1.messages)
 ```
 
@@ -161,7 +161,7 @@ definable/docs/          — Mintlify documentation
 ```
 Agent ──┬── Model (lazy client, global HTTP pool) — or string shorthand "gpt-4o"
         ├── Thinking (trigger: always|auto|never)
-        ├── Memory (trigger: always|auto|never, store: SQLite/Postgres/InMemory)
+        ├── Memory (session history with auto-summarization, store: SQLite/File/InMemory)
         ├── Knowledge (top_k, trigger, context_format — wraps VectorDB)
         ├── DeepResearch → DeepResearchConfig
         ├── Tracing (exporters: JSONLExporter, etc.)
@@ -229,3 +229,32 @@ Stored in `.claude/memory/`: `credentials.md`, `project-profile.md`, `evaluation
 
 ### Credential Source
 All API keys in `.env.test` (gitignored). Source with `source .env.test`.
+
+---
+
+## Snippet Validation Task
+
+When asked to validate documentation snippets, follow this workflow:
+
+### Tools available in `/tmp/definable-validation/`:
+- `snippet_extractor.py` — Scans all .md files and examples/, outputs `snippets.json`
+- `test_snippet.py` — Runs individual snippets or all snippets against the manifest
+
+### Quick start:
+```bash
+mkdir -p /tmp/definable-validation
+cd /tmp/definable-validation
+DEFINABLE_ROOT="$(pwd)" python snippet_extractor.py
+python test_snippet.py --manifest snippets.json --all --save
+```
+
+### Subagent delegation pattern:
+For parallel execution, spawn subagents with:
+```
+claude -p "Test these snippets against the definable library. For each: run it, if it fails fix it (max 3 tries), report JSON results. PYTHONPATH=/Users/hash/work/definable.ai/definable/definable. Snippets: <json>"
+```
+
+### After validation:
+1. Generate a markdown report of all results
+2. For fixable failures, prepare minimal diffs
+3. Ask before applying any changes to source files

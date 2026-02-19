@@ -34,9 +34,8 @@ Uses PostgreSQL with the `pgvector` extension. Suitable for production workloads
 from definable.vectordb import PgVector
 
 vector_db = PgVector(
-    connection_string="postgresql://user:pass@localhost:5432/mydb",
+    db_url="postgresql://user:pass@localhost:5432/mydb",
     table_name="documents",
-    dimensions=1536,
 )
 ```
 

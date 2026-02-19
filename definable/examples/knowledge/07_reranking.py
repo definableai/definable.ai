@@ -24,7 +24,7 @@ from definable.vectordb import InMemoryVectorDB
 class MockEmbedder(Embedder):
   """Simple mock embedder."""
 
-  dimensions: int = 64
+  dimensions: int = 32
 
   def get_embedding(self, text: str) -> List[float]:
     import hashlib
@@ -137,7 +137,7 @@ def compare_with_without_reranking():
   ]
 
   # Create knowledge base
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
   kb = Knowledge(vector_db=vector_db, embedder=embedder)
 
   for doc in documents:
@@ -173,7 +173,7 @@ def reranking_workflow():
 
   # Step 1: Initial vector search (retrieve more candidates)
   print("\n1. Initial Vector Search (broad retrieval):")
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
 
   docs = [
     Document(content="How to train machine learning models with Python"),
@@ -188,10 +188,9 @@ def reranking_workflow():
   vector_db.add(docs)
 
   query = "machine learning Python tutorial"
-  query_embedding = embedder.get_embedding(query)
 
   # Get more results than needed
-  initial_results = vector_db.search(query_embedding, top_k=5)  # type: ignore[arg-type, call-arg]
+  initial_results = vector_db.search(query, limit=5)
   print(f"   Retrieved {len(initial_results)} candidates")
 
   # Step 2: Rerank
@@ -251,7 +250,7 @@ def knowledge_with_reranker():
 
   embedder = MockEmbedder()
   reranker = MockReranker()
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
 
   # Create knowledge base with reranker
   kb = Knowledge(

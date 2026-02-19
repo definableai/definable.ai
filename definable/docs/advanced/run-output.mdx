@@ -68,12 +68,13 @@ output = agent.run("Summarize this document.")
 from definable.agent.run import RunStatus
 
 # Possible values:
-RunStatus.PENDING      # Not yet started
-RunStatus.RUNNING      # Currently executing
-RunStatus.COMPLETED    # Finished successfully
-RunStatus.PAUSED       # Waiting for user action
-RunStatus.CANCELLED    # Cancelled by user or system
-RunStatus.ERROR        # Failed with an error
+RunStatus.pending      # Not yet started
+RunStatus.running      # Currently executing
+RunStatus.completed    # Finished successfully
+RunStatus.paused       # Waiting for user action
+RunStatus.cancelled    # Cancelled by user or system
+RunStatus.blocked      # Blocked by guardrail
+RunStatus.error        # Failed with an error
 ```
 
 ## Stream Events

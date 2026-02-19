@@ -1,7 +1,7 @@
 """Scenario: Agent with tools and memory integration.
 
 Tests:
-- Agent creation with tools and CognitiveMemory
+- Agent creation with tools and Memory
 - Tool execution in conversation
 - Memory recall across turns
 - Proper cleanup
@@ -28,10 +28,10 @@ def check(condition: bool, description: str):
 
 
 async def main():
-  from definable.agents import Agent
-  from definable.memory import CognitiveMemory, SQLiteMemoryStore
-  from definable.models.openai import OpenAIChat
-  from definable.tools.decorator import tool
+  from definable.agent import Agent
+  from definable.memory import Memory, SQLiteStore
+  from definable.model.openai import OpenAIChat
+  from definable.tool.decorator import tool
 
   if not os.environ.get("OPENAI_API_KEY"):
     print("SKIP: OPENAI_API_KEY not set")
@@ -49,8 +49,8 @@ async def main():
     return a * b
 
   db_path = "/tmp/scenario_memory_test.db"
-  store = SQLiteMemoryStore(db_path)
-  memory = CognitiveMemory(store=store, token_budget=500)
+  store = SQLiteStore(db_path)
+  memory = Memory(store=store)
   model = OpenAIChat(id="gpt-4o-mini")
 
   agent = Agent(

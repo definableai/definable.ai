@@ -213,7 +213,7 @@ from definable.tools.decorator import tool
 from definable.knowledge import Knowledge, Document
 
 # Memory
-from definable.memory import CognitiveMemory, SQLiteMemoryStore
+from definable.memory import Memory, SQLiteStore
 
 # Interfaces
 from definable.interfaces.telegram import TelegramInterface, TelegramConfig

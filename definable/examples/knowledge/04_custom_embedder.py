@@ -183,7 +183,7 @@ def embedder_with_knowledge_base():
   embedder = CustomEmbedder()
 
   # Create knowledge base
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
   kb = Knowledge(vector_db=vector_db, embedder=embedder)
 
   # Add documents

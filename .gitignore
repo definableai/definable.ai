@@ -177,6 +177,7 @@ junk/
 traces/
 *.db
 definable_runs.db
+.build
 
 # For pgAdmin
 *pgadmin*

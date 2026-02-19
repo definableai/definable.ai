@@ -22,7 +22,7 @@ from definable.vectordb import InMemoryVectorDB
 class MockEmbedder(Embedder):
   """Simple mock embedder for demonstration."""
 
-  dimensions: int = 64
+  dimensions: int = 32
 
   def get_embedding(self, text: str) -> List[float]:
     import hashlib
@@ -201,7 +201,7 @@ def chunking_with_knowledge_base():
   print("=" * 50)
 
   embedder = MockEmbedder()
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
   chunker = RecursiveChunker(chunk_size=300, chunk_overlap=30)
 
   # Create knowledge base with chunker
