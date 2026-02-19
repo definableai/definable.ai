@@ -59,6 +59,7 @@ class TestGuardrailResult:
   def test_metadata_can_be_set(self):
     """GuardrailResult metadata can be initialized."""
     r = GuardrailResult(action="allow", metadata={"latency_ms": 5.0})
+    assert r.metadata is not None
     assert r.metadata["latency_ms"] == 5.0
 
 
@@ -140,7 +141,7 @@ class TestGuardrailsRunChecks:
   async def test_run_input_checks_empty(self):
     """run_input_checks with no guardrails returns empty list."""
     g = Guardrails()
-    results = await g.run_input_checks("hello", context=None)
+    results = await g.run_input_checks("hello", context=None)  # type: ignore[arg-type]
     assert results == []
 
   @pytest.mark.asyncio
@@ -154,7 +155,7 @@ class TestGuardrailsRunChecks:
         return GuardrailResult.allow()
 
     g = Guardrails(input=[AllowAll()])
-    results = await g.run_input_checks("hello", context=None)
+    results = await g.run_input_checks("hello", context=None)  # type: ignore[arg-type]
     assert len(results) == 1
     assert results[0].action == "allow"
 
@@ -175,7 +176,7 @@ class TestGuardrailsRunChecks:
         raise AssertionError("Should not be reached")
 
     g = Guardrails(input=[Blocker(), NeverReached()], mode="fail_fast")
-    results = await g.run_input_checks("test", context=None)
+    results = await g.run_input_checks("test", context=None)  # type: ignore[arg-type]
     assert len(results) == 1
     assert results[0].action == "block"
 
@@ -183,14 +184,14 @@ class TestGuardrailsRunChecks:
   async def test_run_output_checks_empty(self):
     """run_output_checks with no guardrails returns empty list."""
     g = Guardrails()
-    results = await g.run_output_checks("response", context=None)
+    results = await g.run_output_checks("response", context=None)  # type: ignore[arg-type]
     assert results == []
 
   @pytest.mark.asyncio
   async def test_run_tool_checks_empty(self):
     """run_tool_checks with no guardrails returns empty list."""
     g = Guardrails()
-    results = await g.run_tool_checks("my_tool", {"arg": "val"}, context=None)
+    results = await g.run_tool_checks("my_tool", {"arg": "val"}, context=None)  # type: ignore[arg-type]
     assert results == []
 
   @pytest.mark.asyncio
@@ -206,7 +207,7 @@ class TestGuardrailsRunChecks:
         return GuardrailResult.allow()
 
     g = Guardrails(tool=[ToolBlocker()])
-    results = await g.run_tool_checks("dangerous", {}, context=None)
+    results = await g.run_tool_checks("dangerous", {}, context=None)  # type: ignore[arg-type]
     assert len(results) == 1
     assert results[0].action == "block"
 
@@ -221,7 +222,8 @@ class TestGuardrailsRunChecks:
         raise RuntimeError("kaboom")
 
     g = Guardrails(input=[RaisesError()])
-    results = await g.run_input_checks("test", context=None)
+    results = await g.run_input_checks("test", context=None)  # type: ignore[arg-type]
     assert len(results) == 1
     assert results[0].action == "block"
+    assert results[0].message is not None
     assert "kaboom" in results[0].message

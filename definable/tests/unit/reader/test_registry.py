@@ -30,7 +30,7 @@ def _make_parser(name="mock", can_parse_result=True):
   """Build a mock BaseParser."""
   parser = MagicMock()
   parser.can_parse = MagicMock(return_value=can_parse_result)
-  parser.__repr__ = lambda self: f"<MockParser {name}>"
+  parser.__repr__ = lambda self: f"<MockParser {name}>"  # type: ignore[assignment,misc]
   return parser
 
 

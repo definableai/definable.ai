@@ -161,9 +161,9 @@ class TestMemoryManagerInit:
     mgr = Memory()
     assert mgr.store is None
     await mgr._ensure_initialized()
-    assert mgr.store is not None
-    assert mgr._initialized is True
-    await mgr.close()
+    assert mgr.store is not None  # type: ignore[unreachable]  # mypy can't track mutation through async
+    assert mgr._initialized is True  # type: ignore[unreachable]
+    await mgr.close()  # type: ignore[unreachable]
 
   @pytest.mark.asyncio
   async def test_close_resets_state(self):

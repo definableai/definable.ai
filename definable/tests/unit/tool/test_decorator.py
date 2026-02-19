@@ -298,7 +298,7 @@ class TestToolDecoratorInvalidKwargs:
   def test_invalid_kwarg_raises(self):
     with pytest.raises(ValueError, match="Invalid tool configuration arguments"):
 
-      @tool(nonexistent_param=True)
+      @tool(nonexistent_param=True)  # type: ignore[call-overload]
       def bad_tool() -> str:
         """Bad."""
         return "oops"
@@ -306,7 +306,7 @@ class TestToolDecoratorInvalidKwargs:
   def test_multiple_invalid_kwargs(self):
     with pytest.raises(ValueError, match="Invalid tool configuration arguments"):
 
-      @tool(foo="bar", baz=123)
+      @tool(foo="bar", baz=123)  # type: ignore[call-overload]
       def another_bad() -> str:
         """Also bad."""
         return "oops"

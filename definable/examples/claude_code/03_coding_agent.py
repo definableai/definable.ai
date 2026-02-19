@@ -97,12 +97,12 @@ def run_type_check(path: str = ".") -> str:
 def search_github_issues(query: str, repo: str = "myorg/myapp") -> str:
   """Search GitHub issues for context on known bugs or feature requests."""
   # In a real app, this would call the GitHub API
-  issues = [
+  issues: list[dict[str, str | int]] = [
     {"number": 142, "title": "Auth tokens not refreshing on mobile", "state": "open"},
     {"number": 138, "title": "Rate limiter not respecting per-user quotas", "state": "open"},
     {"number": 127, "title": "Alembic migration fails on Postgres 16", "state": "closed"},
   ]
-  matches = [i for i in issues if query.lower() in i["title"].lower()]
+  matches = [i for i in issues if query.lower() in str(i["title"]).lower()]
   if not matches:
     return f"No issues matching '{query}' in {repo}."
   lines = [f"#{i['number']} [{i['state']}] {i['title']}" for i in matches]

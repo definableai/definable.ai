@@ -134,7 +134,7 @@ class TestStringModelErrors:
     from definable.agent import Agent
 
     with pytest.raises(TypeError, match="Agent requires a 'model' argument"):
-      Agent(model=None)
+      Agent(model=None)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

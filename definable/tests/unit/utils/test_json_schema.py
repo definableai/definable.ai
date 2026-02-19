@@ -192,32 +192,39 @@ class TestGetJsonSchemaForArg:
 
   def test_str_type(self):
     schema = get_json_schema_for_arg(str)
+    assert schema is not None
     assert schema["type"] == "string"
 
   def test_int_type(self):
     schema = get_json_schema_for_arg(int)
+    assert schema is not None
     assert schema["type"] == "number"
 
   def test_bool_type(self):
     schema = get_json_schema_for_arg(bool)
+    assert schema is not None
     assert schema["type"] == "boolean"
 
   def test_list_of_str(self):
     schema = get_json_schema_for_arg(List[str])
+    assert schema is not None
     assert schema["type"] == "array"
     assert schema["items"]["type"] == "string"
 
   def test_list_of_int(self):
     schema = get_json_schema_for_arg(List[int])
+    assert schema is not None
     assert schema["type"] == "array"
     assert schema["items"]["type"] == "number"
 
   def test_dict_type(self):
     schema = get_json_schema_for_arg(Dict[str, int])
+    assert schema is not None
     assert schema["type"] == "object"
 
   def test_union_type_produces_any_of(self):
     schema = get_json_schema_for_arg(Union[str, int])
+    assert schema is not None
     assert "anyOf" in schema
     types = [s["type"] for s in schema["anyOf"]]
     assert "string" in types
@@ -225,6 +232,7 @@ class TestGetJsonSchemaForArg:
 
   def test_optional_type_produces_any_of(self):
     schema = get_json_schema_for_arg(Optional[str])
+    assert schema is not None
     assert "anyOf" in schema
     types = [s["type"] for s in schema["anyOf"]]
     assert "string" in types
@@ -232,6 +240,7 @@ class TestGetJsonSchemaForArg:
 
   def test_nested_list(self):
     schema = get_json_schema_for_arg(List[List[str]])
+    assert schema is not None
     assert schema["type"] == "array"
     assert schema["items"]["type"] == "array"
     assert schema["items"]["items"]["type"] == "string"
@@ -245,6 +254,7 @@ class TestGetJsonSchemaForArg:
       BLUE = "blue"
 
     schema = get_json_schema_for_arg(Color)
+    assert schema is not None
     assert schema["type"] == "string"
     assert "enum" in schema
     assert set(schema["enum"]) == {"red", "green", "blue"}
@@ -257,6 +267,7 @@ class TestGetJsonSchemaForArg:
       city: str
 
     schema = get_json_schema_for_arg(Address)
+    assert schema is not None
     assert "properties" in schema
     assert "street" in schema["properties"]
     assert "city" in schema["properties"]

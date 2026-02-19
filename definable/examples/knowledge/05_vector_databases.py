@@ -45,18 +45,18 @@ def in_memory_vector_db():
   print("InMemoryVectorDB Example")
   print("=" * 50)
 
-  # Create in-memory vector database
+  # Create embedder
+  embedder = MockEmbedder()
+
+  # Create in-memory vector database with embedder
+  # The embedder is used internally for search query embedding.
   vector_db = InMemoryVectorDB(
-    dimensions=64,  # Must match embedder dimensions
-    collection_name="my_collection",  # Optional: name for the collection
+    name="my_collection",
+    embedder=embedder,
   )
 
   print("Created InMemoryVectorDB")
-  print(f"  Collection: {vector_db.collection_name}")
-  print(f"  Dimensions: {vector_db.dimensions}")
-
-  # Create embedder
-  embedder = MockEmbedder()
+  print(f"  Name: {vector_db.name}")
 
   # Create documents with embeddings
   documents = [
@@ -65,20 +65,17 @@ def in_memory_vector_db():
     Document(content="Rust offers memory safety guarantees."),
   ]
 
-  # Generate embeddings and add to vector DB
+  # Generate embeddings for documents
   for doc in documents:
     doc.embedding = embedder.get_embedding(doc.content)
 
-  # Add documents
-  ids = vector_db.add(documents)
-  print(f"\nAdded {len(ids)} documents")
-  print(f"  IDs: {ids}")
+  # Insert documents (embeddings must be pre-computed)
+  vector_db.insert(documents)
+  print(f"\nInserted {len(documents)} documents")
 
-  # Search
+  # Search — query is a string; the embedder embeds it internally
   query = "What language is good for data analysis?"
-  query_embedding = embedder.get_embedding(query)
-
-  results = vector_db.search(query_embedding, top_k=2)
+  results = vector_db.search(query, limit=2)
   print(f"\nSearch results for: {query}")
   for i, doc in enumerate(results, 1):
     print(f"  {i}. {doc.content}")
@@ -87,9 +84,9 @@ def in_memory_vector_db():
   count = vector_db.count()
   print(f"\nTotal documents: {count}")
 
-  # Clear
-  vector_db.clear()
-  print(f"After clear: {vector_db.count()} documents")
+  # Drop all data
+  vector_db.drop()
+  print(f"After drop: {vector_db.count()} documents")
 
 
 def pgvector_db_example():
@@ -120,8 +117,6 @@ def pgvector_db_example():
     )
 
     print("Connected to PostgreSQL")
-    print(f"  Collection: {vector_db.collection_name}")  # type: ignore[attr-defined]
-    print(f"  Dimensions: {vector_db.dimensions}")
 
     # Use with knowledge base
     embedder = MockEmbedder()
@@ -136,8 +131,8 @@ def pgvector_db_example():
     print(f"Search found: {len(results)} results")
 
     # Clean up
-    vector_db.clear()  # type: ignore[attr-defined]
-    print("Cleared test data")
+    vector_db.drop()
+    print("Dropped test data")
 
   except ImportError:
     print("PgVectorDB not available. Install with: pip install pgvector")
@@ -152,7 +147,7 @@ def vector_db_operations():
   print("=" * 50)
 
   embedder = MockEmbedder()
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
 
   # 1. Add documents
   print("\n1. Adding documents:")
@@ -165,28 +160,26 @@ def vector_db_operations():
   for doc in docs:
     doc.embedding = embedder.get_embedding(doc.content)
 
-  ids = vector_db.add(docs)
-  print(f"   Added documents: {ids}")
+  vector_db.insert(docs)
+  print(f"   Inserted {len(docs)} documents")
 
-  # 2. Search with different top_k
-  print("\n2. Search with different top_k:")
-  query_embedding = embedder.get_embedding("artificial intelligence")
-
+  # 2. Search with different limits
+  print("\n2. Search with different limits:")
   for k in [1, 2, 3]:
-    results = vector_db.search(query_embedding, top_k=k)
-    print(f"   top_k={k}: Found {len(results)} results")
+    results = vector_db.search("artificial intelligence", limit=k)
+    print(f"   limit={k}: Found {len(results)} results")
 
   # 3. Delete specific documents
   print("\n3. Delete operations:")
   print(f"   Before delete: {vector_db.count()} documents")
 
-  vector_db.delete(["doc-2"])  # Delete by ID
+  vector_db.delete_by_id("doc-2")
   print(f"   After deleting doc-2: {vector_db.count()} documents")
 
-  # 4. Clear all
-  print("\n4. Clear all:")
-  vector_db.clear()
-  print(f"   After clear: {vector_db.count()} documents")
+  # 4. Drop all
+  print("\n4. Drop all:")
+  vector_db.drop()
+  print(f"   After drop: {vector_db.count()} documents")
 
 
 def vector_db_with_filters():
@@ -196,7 +189,7 @@ def vector_db_with_filters():
   print("=" * 50)
 
   embedder = MockEmbedder()
-  vector_db = InMemoryVectorDB(dimensions=embedder.dimensions)
+  vector_db = InMemoryVectorDB(embedder=embedder)
 
   # Add documents with metadata
   docs = [
@@ -220,17 +213,13 @@ def vector_db_with_filters():
 
   for doc in docs:
     doc.embedding = embedder.get_embedding(doc.content)
-  vector_db.add(docs)
+  vector_db.insert(docs)
 
   print(f"Added {len(docs)} documents with metadata")
 
-  # Search with filter
-  query_embedding = embedder.get_embedding("programming tutorial")
-
-  # Note: Filter support depends on vector DB implementation
-  # InMemoryVectorDB may have limited filter support
-  print("\nSearch for tutorials:")
-  results = vector_db.search(query_embedding, top_k=3)
+  # Search with metadata filter
+  print("\nSearch for tutorials (with category filter):")
+  results = vector_db.search("programming tutorial", limit=3, filters={"category": "tutorial"})
   for doc in results:
     print(f"  - {doc.content}")
     print(f"    Meta: {doc.meta_data}")
@@ -244,21 +233,21 @@ def choosing_vector_db():
 
   print("""
 InMemoryVectorDB:
-  ✓ Zero configuration required
-  ✓ Perfect for development and testing
-  ✓ Fast for small datasets
-  ✗ Data lost on restart
-  ✗ Limited by available memory
-  ✗ Single process only
+  + Zero configuration required
+  + Perfect for development and testing
+  + Fast for small datasets
+  - Data lost on restart
+  - Limited by available memory
+  - Single process only
 
 PgVectorDB:
-  ✓ Persistent storage
-  ✓ Scales to millions of vectors
-  ✓ ACID transactions
-  ✓ Combines with relational queries
-  ✓ Production-ready
-  ✗ Requires PostgreSQL setup
-  ✗ Needs pgvector extension
+  + Persistent storage
+  + Scales to millions of vectors
+  + ACID transactions
+  + Combines with relational queries
+  + Production-ready
+  - Requires PostgreSQL setup
+  - Needs pgvector extension
 
 Recommendation:
   - Development/Testing: InMemoryVectorDB

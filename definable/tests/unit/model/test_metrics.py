@@ -287,7 +287,7 @@ class TestMetricsRadd:
       Metrics(input_tokens=20, output_tokens=10),
       Metrics(input_tokens=30, output_tokens=15),
     ]
-    total = sum(metrics_list)
+    total = sum(metrics_list, Metrics())
     assert total.input_tokens == 60
     assert total.output_tokens == 30
 

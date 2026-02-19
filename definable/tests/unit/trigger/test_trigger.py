@@ -53,10 +53,12 @@ class TestTriggerEvent:
 
   def test_custom_body(self):
     event = TriggerEvent(body={"action": "push"})
+    assert event.body is not None
     assert event.body["action"] == "push"
 
   def test_custom_headers(self):
     event = TriggerEvent(headers={"Content-Type": "application/json"})
+    assert event.headers is not None
     assert event.headers["Content-Type"] == "application/json"
 
   def test_custom_source(self):
@@ -218,8 +220,12 @@ class TestTriggerExecutor:
   @pytest.mark.asyncio
   async def test_handler_receives_event(self, executor):
     trigger = EventTrigger("test")
-    received = []
-    trigger.handler = lambda event: received.append(event) or None
+    received: list[TriggerEvent] = []
+
+    def _capture(event: TriggerEvent) -> None:
+      received.append(event)
+
+    trigger.handler = _capture
     event = TriggerEvent(body={"key": "value"})
     await executor.execute(trigger, event)
     assert len(received) == 1

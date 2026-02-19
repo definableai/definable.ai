@@ -65,6 +65,7 @@ class TestAgentBasicResponses:
       instructions="You are a pirate. Always mention ships in your response.",
     )
     output = await agent.arun("Tell me about yourself.")
+    assert output.content is not None
     content = output.content.lower()
     assert any(kw in content for kw in ["ship", "sea", "sail", "pirate", "arr", "vessel"])
 
@@ -107,6 +108,7 @@ class TestAgentSyncRun:
     """Sync run() should return RunOutput with content and completed status."""
     agent = Agent(model=openai_model)
     output = agent.run("What is 2+2? Reply with just the number.")
+    assert output.content is not None
     assert "4" in output.content
     assert output.status == RunStatus.completed
 

@@ -6,6 +6,8 @@ agent events are used; lightweight stubs are substituted.
 """
 
 import json
+from typing import Any
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -17,11 +19,16 @@ class _StubEvent:
   """Minimal stub that mimics BaseRunOutputEvent for export."""
 
   def __init__(self, session_id: str = "default", data: dict | None = None):
-    self.session_id = session_id
+    self.session_id: str | None = session_id
     self._data = data or {"event": "TestEvent", "run_id": "r1"}
 
-  def to_json(self, indent=None):
+  def to_json(self, indent: int | None = None) -> str:
     return json.dumps(self._data)
+
+
+def _stub(session_id: str = "default", data: dict | None = None) -> Any:
+  """Create a _StubEvent typed as Any to satisfy export/write signatures."""
+  return _StubEvent(session_id=session_id, data=data)
 
 
 @pytest.mark.unit
@@ -58,7 +65,7 @@ class TestJSONLExporterWrite:
     trace_dir = tmp_path / "traces"
     exporter = JSONLExporter(str(trace_dir))
 
-    event = _StubEvent(session_id="sess1", data={"event": "RunStarted", "run_id": "abc"})
+    event = _stub(session_id="sess1", data={"event": "RunStarted", "run_id": "abc"})
     exporter.export(event)
     exporter.shutdown()
 
@@ -76,7 +83,7 @@ class TestJSONLExporterWrite:
     exporter = JSONLExporter(str(trace_dir))
 
     for i in range(3):
-      event = _StubEvent(session_id="multi", data={"event": f"Event{i}", "run_id": "r"})
+      event = _stub(session_id="multi", data={"event": f"Event{i}", "run_id": "r"})
       exporter.export(event)
     exporter.shutdown()
 
@@ -88,7 +95,7 @@ class TestJSONLExporterWrite:
     trace_dir = tmp_path / "traces"
     exporter = JSONLExporter(str(trace_dir))
 
-    event = _StubEvent(session_id=None)
+    event = _stub()
     # Simulate missing session_id via attribute override
     event.session_id = None
     exporter.export(event)
@@ -101,8 +108,8 @@ class TestJSONLExporterWrite:
     trace_dir = tmp_path / "traces"
     exporter = JSONLExporter(str(trace_dir))
 
-    exporter.export(_StubEvent(session_id="a"))
-    exporter.export(_StubEvent(session_id="b"))
+    exporter.export(_stub(session_id="a"))
+    exporter.export(_stub(session_id="b"))
     exporter.shutdown()
 
     assert (trace_dir / "a.jsonl").exists()
@@ -123,7 +130,7 @@ class TestJSONLExporterLifecycle:
   def test_shutdown_closes_handles(self, tmp_path):
     """shutdown() closes all file handles."""
     exporter = JSONLExporter(str(tmp_path / "t"))
-    exporter.export(_StubEvent(session_id="s1"))
+    exporter.export(_stub(session_id="s1"))
     assert exporter.open_sessions == 1
     exporter.shutdown()
     assert exporter.open_sessions == 0
@@ -132,7 +139,7 @@ class TestJSONLExporterLifecycle:
     """Using as context manager calls shutdown on exit."""
     trace_dir = tmp_path / "traces"
     with JSONLExporter(str(trace_dir)) as exporter:
-      exporter.export(_StubEvent(session_id="ctx"))
+      exporter.export(_stub(session_id="ctx"))
       assert exporter.open_sessions == 1
     # After exit, handles should be closed
     assert exporter.open_sessions == 0
@@ -185,7 +192,7 @@ class TestTraceWriter:
 
     config = Tracing(exporters=[mock_exporter])
     writer = TraceWriter(config)
-    event = _StubEvent()
+    event = _stub()
     writer.write(event)
 
     mock_exporter.export.assert_called_once_with(event)
@@ -195,7 +202,7 @@ class TestTraceWriter:
     mock_exporter = MagicMock()
     config = Tracing(enabled=False, exporters=[mock_exporter])
     writer = TraceWriter(config)
-    writer.write(_StubEvent())
+    writer.write(_stub())
 
     mock_exporter.export.assert_not_called()
 
@@ -207,7 +214,7 @@ class TestTraceWriter:
       event_filter=lambda e: False,
     )
     writer = TraceWriter(config)
-    writer.write(_StubEvent())
+    writer.write(_stub())
 
     mock_exporter.export.assert_not_called()
 
@@ -219,7 +226,7 @@ class TestTraceWriter:
       event_filter=lambda e: True,
     )
     writer = TraceWriter(config)
-    writer.write(_StubEvent())
+    writer.write(_stub())
 
     mock_exporter.export.assert_called_once()
 
@@ -269,7 +276,7 @@ class TestNoOpExporter:
   def test_export_does_not_raise(self):
     """NoOpExporter.export() silently discards the event."""
     noop = NoOpExporter()
-    noop.export(_StubEvent())
+    noop.export(_stub())
 
   def test_flush_does_not_raise(self):
     """NoOpExporter.flush() is a no-op."""

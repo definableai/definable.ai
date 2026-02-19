@@ -305,6 +305,7 @@ class TestFunctionCallExecuteSync:
     fc = FunctionCall(function=fn, arguments={})
     result = fc.execute()
     assert result.status == "failure"
+    assert result.error is not None
     assert "Entrypoint is not set" in result.error
 
   def test_execute_stores_result_on_function_call(self):

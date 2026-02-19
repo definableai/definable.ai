@@ -327,6 +327,7 @@ class TestModelResponseFields:
   def test_tool_executions_list(self):
     te = ToolExecution(tool_name="search", result="found")
     resp = ModelResponse(tool_executions=[te])
+    assert resp.tool_executions is not None
     assert len(resp.tool_executions) == 1
     assert resp.tool_executions[0].tool_name == "search"
 
@@ -336,11 +337,13 @@ class TestModelResponseFields:
 
   def test_provider_data_stored(self):
     resp = ModelResponse(provider_data={"model": "gpt-4o"})
+    assert resp.provider_data is not None
     assert resp.provider_data["model"] == "gpt-4o"
 
   def test_response_usage_stored(self):
     m = Metrics(input_tokens=100, output_tokens=50)
     resp = ModelResponse(response_usage=m)
+    assert resp.response_usage is not None
     assert resp.response_usage.input_tokens == 100
 
   def test_extra_stored(self):

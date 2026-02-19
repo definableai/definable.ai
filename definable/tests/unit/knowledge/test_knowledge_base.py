@@ -15,7 +15,7 @@ Covers:
   - Knowledge creates InMemoryVectorDB when no vector_db is provided
 """
 
-from typing import List
+from typing import Any, List
 from unittest.mock import MagicMock
 
 import pytest
@@ -29,18 +29,18 @@ from definable.knowledge.document import Document
 # ---------------------------------------------------------------------------
 
 
-class MockVectorDB:
+class _MockVectorDB:
   """Minimal VectorDB stub for unit testing Knowledge."""
 
-  def __init__(self, embedder=None):
+  def __init__(self, embedder: Any = None):
     self.embedder = embedder
     self._docs: List[Document] = []
     self._created = False
 
-  def create(self):
+  def create(self) -> None:
     self._created = True
 
-  async def async_create(self):
+  async def async_create(self) -> None:
     self._created = True
 
   def content_hash_exists(self, content_hash: str) -> bool:
@@ -49,26 +49,31 @@ class MockVectorDB:
   def upsert_available(self) -> bool:
     return False
 
-  def insert(self, content_hash: str, documents: List[Document]):
+  def insert(self, content_hash: str, documents: List[Document]) -> None:
     self._docs.extend(documents)
 
-  async def ainsert(self, content_hash: str, documents: List[Document]):
+  async def ainsert(self, content_hash: str, documents: List[Document]) -> None:
     self._docs.extend(documents)
 
-  def search(self, query: str, limit: int = 10, filters=None) -> List[Document]:
+  def search(self, query: str, limit: int = 10, filters: Any = None) -> List[Document]:
     return self._docs[:limit]
 
-  async def asearch(self, query: str, limit: int = 10, filters=None) -> List[Document]:
+  async def asearch(self, query: str, limit: int = 10, filters: Any = None) -> List[Document]:
     return self._docs[:limit]
 
-  def delete_by_id(self, doc_id: str):
+  def delete_by_id(self, doc_id: str) -> None:
     self._docs = [d for d in self._docs if d.id != doc_id]
 
-  def delete(self):
+  def delete(self) -> None:
     self._docs.clear()
 
   def count(self) -> int:
     return len(self._docs)
+
+
+def MockVectorDB(embedder: Any = None) -> Any:
+  """Factory that returns a mock VectorDB typed as Any for test flexibility."""
+  return _MockVectorDB(embedder=embedder)
 
 
 # ---------------------------------------------------------------------------

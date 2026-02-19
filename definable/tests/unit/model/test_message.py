@@ -156,6 +156,7 @@ class TestMessageToolCalls:
       {"id": "call_2", "type": "function", "function": {"name": "tool_b", "arguments": "{}"}},
     ]
     msg = Message(role="assistant", content=None, tool_calls=calls)
+    assert msg.tool_calls is not None
     assert len(msg.tool_calls) == 2
 
 
@@ -370,6 +371,7 @@ class TestMessageReferences:
 
   def test_references_with_list(self):
     refs = MessageReferences(query="test", references=[{"source": "doc1"}, "raw ref"])
+    assert refs.references is not None
     assert len(refs.references) == 2
 
   def test_time_default_none(self):
@@ -436,16 +438,19 @@ class TestCitations:
   def test_creation_with_urls(self):
     url_cite = UrlCitation(url="https://example.com", title="Test")
     cit = Citations(urls=[url_cite])
+    assert cit.urls is not None
     assert len(cit.urls) == 1
     assert cit.urls[0].url == "https://example.com"
 
   def test_creation_with_search_queries(self):
     cit = Citations(search_queries=["what is AI", "machine learning"])
+    assert cit.search_queries is not None
     assert len(cit.search_queries) == 2
 
   def test_creation_with_documents(self):
     doc = DocumentCitation(document_title="Test Doc")
     cit = Citations(documents=[doc])
+    assert cit.documents is not None
     assert len(cit.documents) == 1
     assert cit.documents[0].document_title == "Test Doc"
 
