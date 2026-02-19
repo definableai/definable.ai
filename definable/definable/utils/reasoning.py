@@ -1,11 +1,11 @@
 from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
-from definable.models.message import Message
-from definable.models.metrics import Metrics
-from definable.reasoning.step import ReasoningStep
+from definable.model.message import Message
+from definable.model.metrics import Metrics
+from definable.agent.reasoning.step import ReasoningStep
 
 if TYPE_CHECKING:
-  from definable.run.agent import RunOutput
+  from definable.agent.events import RunOutput
 
 
 def extract_thinking_content(content: str) -> Tuple[Optional[str], str]:

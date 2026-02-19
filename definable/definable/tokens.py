@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 from definable.media import Audio, File, Image, Video
-from definable.models.message import Message
-from definable.tools.function import Function
+from definable.model.message import Message
+from definable.tool.function import Function
 from definable.utils.log import log_warning
 from pydantic import BaseModel
 
@@ -596,7 +596,7 @@ def _count_message_tokens(message: Message, model_id: str = "gpt-4o") -> int:
           else:
             text_parts.append(json.dumps(item))
     else:
-      text_parts.append(str(content))
+      text_parts.append(str(content))  # type: ignore[unreachable]
 
   # Collect tool call arguments
   if message.tool_calls:

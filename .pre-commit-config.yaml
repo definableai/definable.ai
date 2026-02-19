@@ -30,8 +30,6 @@ repos:
         pass_filenames: false
         types: [python]
         args:
-          # Example Mypy flags—tailor these to your needs:
-          - definable/
           - --strict-equality
           - --pretty
           - --show-error-codes

@@ -5,7 +5,7 @@ Model Context Protocol (MCP) client — connect to MCP servers to access tools, 
 ## Quick Start
 
 ```python
-from definable.agents import Agent
+from definable.agent import Agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
 
 config = MCPConfig(servers=[

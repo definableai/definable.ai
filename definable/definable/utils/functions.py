@@ -1,7 +1,7 @@
 import json
 from typing import Any, Callable, Dict, Optional, TypeVar
 
-from definable.tools.function import Function, FunctionCall
+from definable.tool.function import Function, FunctionCall
 from definable.utils.log import log_debug, log_error
 
 T = TypeVar("T")

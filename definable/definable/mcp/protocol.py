@@ -35,7 +35,7 @@ def encode_request(
     msg = JSONRPCNotification(method=method, params=params)
   else:
     # Request (expects response)
-    msg = JSONRPCRequest(method=method, params=params, id=request_id)
+    msg = JSONRPCRequest(method=method, params=params, id=request_id)  # type: ignore[assignment]
 
   return msg.model_dump_json(exclude_none=True)
 

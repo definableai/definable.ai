@@ -1,120 +1,81 @@
-"""MemoryStore protocol — structural subtyping for memory backends."""
+"""Base protocol for memory stores."""
 
-from typing import List, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, List, Optional, Protocol, runtime_checkable
 
-from definable.memory.types import Episode, KnowledgeAtom, Procedure, TopicTransition
+if TYPE_CHECKING:
+  from definable.memory.types import UserMemory
 
 
 @runtime_checkable
 class MemoryStore(Protocol):
   """Protocol for memory storage backends.
 
-  Implementations must provide async methods for storing and retrieving
-  episodes, knowledge atoms, procedures, and topic transitions.
+  All methods are async. Stores must implement all 7 methods.
+  Lifecycle: call ``initialize()`` before use, ``close()`` when done.
   """
 
-  # Lifecycle
+  async def initialize(self) -> None:
+    """Prepare the store (create tables, open connections, etc.)."""
+    ...
 
-  async def initialize(self) -> None: ...
+  async def close(self) -> None:
+    """Release resources (close connections, flush buffers, etc.)."""
+    ...
 
-  async def close(self) -> None: ...
+  async def get_user_memory(self, memory_id: str, user_id: Optional[str] = None) -> Optional["UserMemory"]:
+    """Retrieve a single memory by ID.
 
-  # Episodes
+    Args:
+      memory_id: The UUID of the memory to retrieve.
+      user_id: Optional user scope. If provided, the memory must belong to this user.
 
-  async def store_episode(self, episode: Episode) -> str: ...
+    Returns:
+      The matching UserMemory, or None if not found.
+    """
+    ...
 
-  async def get_episodes(
+  async def get_user_memories(
     self,
-    *,
     user_id: Optional[str] = None,
-    session_id: Optional[str] = None,
-    limit: int = 50,
-    min_stage: Optional[int] = None,
-    max_stage: Optional[int] = None,
-  ) -> List[Episode]: ...
+    agent_id: Optional[str] = None,
+    topics: Optional[List[str]] = None,
+    limit: Optional[int] = None,
+  ) -> List["UserMemory"]:
+    """Retrieve memories with optional filters.
 
-  async def update_episode(self, episode_id: str, **fields) -> None: ...
+    Args:
+      user_id: Filter by user.
+      agent_id: Filter by agent.
+      topics: Filter by topics (any match).
+      limit: Maximum number of memories to return.
 
-  async def get_episodes_for_distillation(self, stage: int, older_than: float) -> List[Episode]: ...
+    Returns:
+      List of matching UserMemory objects, ordered by updated_at descending.
+    """
+    ...
 
-  # Knowledge Atoms
+  async def upsert_user_memory(self, memory: "UserMemory") -> None:
+    """Insert or update a memory.
 
-  async def store_atom(self, atom: KnowledgeAtom) -> str: ...
+    If a memory with the same ``memory_id`` exists, it is replaced.
+    Otherwise, a new record is inserted.
+    """
+    ...
 
-  async def get_atoms(
-    self,
-    *,
-    user_id: Optional[str] = None,
-    min_confidence: float = 0.1,
-    limit: int = 50,
-  ) -> List[KnowledgeAtom]: ...
+  async def delete_user_memory(self, memory_id: str, user_id: Optional[str] = None) -> None:
+    """Delete a single memory by ID.
 
-  async def find_similar_atom(
-    self,
-    subject: str,
-    predicate: str,
-    user_id: Optional[str] = None,
-  ) -> Optional[KnowledgeAtom]: ...
+    Args:
+      memory_id: The UUID of the memory to delete.
+      user_id: Optional user scope for safety.
+    """
+    ...
 
-  async def update_atom(self, atom_id: str, **fields) -> None: ...
+  async def clear_user_memories(self, user_id: Optional[str] = None) -> None:
+    """Delete all memories for a user.
 
-  async def prune_atoms(self, min_confidence: float) -> int: ...
-
-  # Procedures
-
-  async def store_procedure(self, procedure: Procedure) -> str: ...
-
-  async def get_procedures(
-    self,
-    *,
-    user_id: Optional[str] = None,
-    min_confidence: float = 0.3,
-  ) -> List[Procedure]: ...
-
-  async def find_similar_procedure(
-    self,
-    trigger: str,
-    user_id: Optional[str] = None,
-  ) -> Optional[Procedure]: ...
-
-  async def update_procedure(self, procedure_id: str, **fields) -> None: ...
-
-  # Topics
-
-  async def store_topic_transition(
-    self,
-    from_topic: str,
-    to_topic: str,
-    user_id: Optional[str] = None,
-  ) -> None: ...
-
-  async def get_topic_transitions(
-    self,
-    from_topic: str,
-    user_id: Optional[str] = None,
-    min_count: int = 3,
-  ) -> List[TopicTransition]: ...
-
-  # Vector search
-
-  async def search_episodes_by_embedding(
-    self,
-    embedding: List[float],
-    *,
-    user_id: Optional[str] = None,
-    top_k: int = 20,
-  ) -> List[Episode]: ...
-
-  async def search_atoms_by_embedding(
-    self,
-    embedding: List[float],
-    *,
-    user_id: Optional[str] = None,
-    top_k: int = 20,
-  ) -> List[KnowledgeAtom]: ...
-
-  # Deletion
-
-  async def delete_user_data(self, user_id: str) -> None: ...
-
-  async def delete_session_data(self, session_id: str) -> None: ...
+    Args:
+      user_id: The user whose memories should be cleared.
+        If None, deletes ALL memories (use with caution).
+    """
+    ...

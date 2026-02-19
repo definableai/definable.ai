@@ -5,9 +5,11 @@ RAG (Retrieval-Augmented Generation) pipeline — documents, chunkers, embedders
 ## Quick Start
 
 ```python
-from definable.agents import Agent
-from definable.knowledge import Knowledge, InMemoryVectorDB, TextChunker
-from definable.knowledge import OpenAIEmbedder
+from definable.agent import Agent
+from definable.chunker import TextChunker
+from definable.embedder import OpenAIEmbedder
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
   vector_db=InMemoryVectorDB(),
@@ -107,7 +109,7 @@ Multimodal document with embedding and metadata.
 ### Chunkers
 
 ```python
-from definable.knowledge import Chunker, TextChunker, RecursiveChunker
+from definable.chunker import Chunker, RecursiveChunker, TextChunker
 ```
 
 | Class | Description |
@@ -119,7 +121,7 @@ from definable.knowledge import Chunker, TextChunker, RecursiveChunker
 ### Embedders
 
 ```python
-from definable.knowledge import Embedder, OpenAIEmbedder, VoyageAIEmbedder
+from definable.embedder import Embedder, OpenAIEmbedder, VoyageAIEmbedder
 ```
 
 | Class | Default Model | Env Var |
@@ -144,7 +146,7 @@ from definable.knowledge import Reader, TextReader, PDFReader, URLReader
 ### Rerankers
 
 ```python
-from definable.knowledge import Reranker, CohereReranker
+from definable.reranker import CohereReranker, Reranker
 ```
 
 | Class | Default Model | Env Var |
@@ -154,7 +156,7 @@ from definable.knowledge import Reranker, CohereReranker
 ### Vector Databases
 
 ```python
-from definable.knowledge import VectorDB, InMemoryVectorDB, PgVectorDB
+from definable.vectordb import InMemoryVectorDB, PgVector, VectorDB
 ```
 
 | Class | Description | Dependencies |
@@ -178,7 +180,7 @@ agent = Agent(model=model, knowledge=knowledge)
 **Explicit toolkit** (agent decides when to search):
 
 ```python
-from definable.agents import KnowledgeToolkit
+from definable.agent import KnowledgeToolkit
 
 agent = Agent(
   model=model,

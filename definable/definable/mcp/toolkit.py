@@ -7,14 +7,14 @@ with the Agent's tool system.
 import asyncio
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from definable.agents.toolkit import Toolkit
+from definable.agent.toolkit import Toolkit
 from definable.mcp.client import MCPClient
 from definable.mcp.config import MCPConfig
 from definable.mcp.types import MCPToolDefinition
 from definable.utils.log import log_debug, log_error, log_info
 
 if TYPE_CHECKING:
-  from definable.tools.function import Function
+  from definable.tool.function import Function
 
 
 class MCPToolkit(Toolkit):
@@ -208,7 +208,7 @@ class MCPToolkit(Toolkit):
     Returns:
         Function object with async entrypoint.
     """
-    from definable.tools.function import Function
+    from definable.tool.function import Function
 
     # Build parameters from MCP tool input schema
     parameters: Dict[str, Any] = {

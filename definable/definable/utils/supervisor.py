@@ -6,11 +6,11 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Dict, Optional, Tuple
 
-from definable.interfaces.base import BaseInterface
+from definable.agent.interface.base import BaseInterface
 from definable.utils.log import log_error, log_info, log_warning
 
 if TYPE_CHECKING:
-  from definable.interfaces.identity import IdentityResolver
+  from definable.agent.interface.identity import IdentityResolver
 
 _STABILITY_THRESHOLD = 60.0  # seconds before backoff resets
 _MAX_BACKOFF = 60.0  # maximum backoff delay in seconds

@@ -1,135 +1,229 @@
-# CLAUDE.md — Production‑Grade Project Memory
+# CLAUDE.md — Definable AI Framework
 
-## Operating Principles
-- Treat this repo as production software: correctness, safety, and stability first.
-- Never ship breaking changes without explicit justification and clear migration guidance.
-- Prefer explicit, predictable behavior over cleverness.
-- Keep `CLAUDE.md` up to date; when Claude Code changes behavior, architecture, or run steps, it should update this memory.
+## STOP — Read Before Every Action
 
-## Quality Gates (Every Change)
-- All tests must pass (unit + integration + e2e where applicable).
-- Type checks must pass (mypy, ruff, any configured checks).
-- Lints/formatters must pass with zero warnings (ruff, etc.).
-- If a change adds a new feature, add or update tests covering it.
-- If a change fixes a bug, add a regression test.
+### Code Style (ENFORCED BY HOOKS — ruff auto-formats on every save)
+- **2-space indentation** (NOT 4-space) — ruff.toml is the authority
+- 150 character line length
+- Double quotes for strings
+- Python: `.venv/bin/python` (3.12.10) — never use system `python`
+- Run `.venv/bin/ruff format <file>` on every file you touch
+- Logging: `from definable.utils.log import log_debug, log_info, log_warning, log_error`
 
-## Functional on Every Change
-- Changes must be incremental and non‑breaking.
-- Avoid partial refactors or “follow‑ups later.” Ship complete, working slices only.
-- If there’s risk, guard with feature flags or safe defaults.
+### Git Rules
+- NEVER add "Co-Authored-By" lines to commits
+- NEVER amend without explicit user request
+- NEVER push without explicit user request
+- NEVER force-push to main
 
-## Build & Run Expectations
-- Code should run locally with the documented setup only.
-- No hidden environment dependencies; document any new env vars.
-- Keep setup scripts, examples, and tests in sync with actual behavior.
+### Important Rules
+- EVERYTIME you do a deep-reasearch, you solutions muste be backed by solid research
+- EVERYTIME you do any type of research store in memory folder.
+- ALWAYS check in the memory folder if related memory is present.
+- ALWAYS validate and invalidate the memory
+- ALWYAS do a in-depth research while planning
+- ALWAYS give new innovative ideas to make this lib more good while planning.
 
-## Code Style & Architecture
-- Small, cohesive functions; no hidden side effects.
-- Prefer pure functions and explicit inputs/outputs.
-- Use clear naming; avoid abbreviations unless common in the domain.
-- Keep modules focused; avoid cyclic imports.
-- Favor composition over inheritance.
+### API Surface — Use These Exact Signatures
 
-## Error Handling & Safety
-- Fail fast on invalid inputs and misconfigurations.
-- Provide actionable error messages.
-- Never swallow exceptions unless logging and handling explicitly.
-- Validate all external inputs (files, network, user data).
+**Models** — instantiate or use string shorthand:
+```python
+from definable.model.openai import OpenAIChat
+model = OpenAIChat(id="gpt-4o-mini")
+# invoke: model.invoke(messages=[Message(...)], assistant_message=Message(role="assistant", content=""))
+# assistant_message is REQUIRED second positional arg
+```
 
-## Logging & Observability
-- Log at meaningful levels (debug/info/warn/error).
-- Avoid logging secrets or PII.
-- Ensure tracing/metrics remain consistent and don’t regress.
+**Agents** — lego-style composition:
+```python
+from definable.agent import Agent
+agent = Agent(model=OpenAIChat(id="gpt-4o-mini"), tools=[...], instructions="...")
+# Or string model shorthand:
+agent = Agent(model="gpt-4o-mini", instructions="...")
+result = await agent.arun("prompt")  # result.content has the text
+# Structured output: await agent.arun("prompt", output_schema=MyModel) — NOT response_model
+```
 
-## Performance & Scalability
-- Prefer efficient data structures; avoid O(n²) where unnecessary.
-- Be mindful of memory use, especially with large documents/embeddings.
-- Profile before premature optimization.
+**Tools** — decorator-based:
+```python
+from definable.tool.decorator import tool
+@tool
+def my_tool(arg: str) -> str:
+  """Tool description."""
+  return result
+```
 
-## Dependencies
-- Add dependencies only when necessary.
-- Prefer stable, widely used packages.
-- Document why each new dependency is required.
+**Knowledge** — Document uses `meta_data` (NOT `metadata`):
+```python
+from definable.knowledge import Document, Knowledge
+doc = Document(content="...", meta_data={"source": "file.pdf"})
+```
 
-## Examples & Documentation
-- Keep examples runnable and aligned with the public API.
-- Update README and examples when APIs change.
-- Add docstrings for public functions/classes.
+**VectorDB** — import from `definable.vectordb` (NOT from knowledge):
+```python
+from definable.vectordb import InMemoryVectorDB  # or PgVector, Qdrant, ChromaDb, etc.
+db = InMemoryVectorDB()
+db.insert(docs)  # or db.insert(content_hash, docs)
+results = db.search("query", limit=5)
+```
 
-## Security
-- Never commit secrets or tokens.
-- Validate and sanitize URLs, file paths, and inputs.
-- Avoid unsafe deserialization or shell execution.
+**Memory** — snap directly into Agent (no config wrapper needed):
+```python
+from definable.memory import Memory, SQLiteStore
+agent = Agent(model=model, memory=Memory(store=SQLiteStore("./memory.db")))
+# Or for quick testing:
+agent = Agent(model=model, memory=True)  # uses InMemoryStore
+```
 
-## Testing Strategy
-- Unit tests for core logic, integration tests for workflows, e2e for critical flows.
-- Tests must be deterministic and fast; isolate external services.
-- Prefer fixtures/mocks for providers (OpenAI/Voyage/Cohere, etc.).
+**Knowledge** — snap directly into Agent (no config wrapper needed):
+```python
+from definable.knowledge import Knowledge
+from definable.vectordb import InMemoryVectorDB
+agent = Agent(model=model, knowledge=Knowledge(vector_db=InMemoryVectorDB(), top_k=5))
+```
 
-## Release Discipline
-- Changelogs or release notes should reflect behavior changes.
-- Avoid breaking API changes unless absolutely necessary and documented.
+**Embedders** — import from top-level or deep path:
+```python
+from definable.embedder import OpenAIEmbedder, VoyageAIEmbedder
+# Or deep: from definable.knowledge.embedder.voyageai import VoyageAIEmbedder
+```
 
-## Project Architecture (High Level)
-- Core package is in `definable/definable/` with examples in `definable/examples/` and e2e tests in `definable/tests_e2e/`.
-- `agents/` orchestrates model calls, tools, middleware, tracing, and agent configuration.
-- `models/` provides provider-specific chat model implementations and shared message/response types.
-- `tools/` and `agents/toolkits/` define the tool decorator, tool wrappers, and toolkit composition.
-- `knowledge/` implements RAG: documents, chunkers, embedders, rerankers, and vector DB interfaces/implementations.
-- `tracing/` and `utils/` provide JSONL tracing exporters and shared utilities; `run/` contains runtime helpers.
+**Auth** — use correct param names:
+```python
+from definable.agent.auth import APIKeyAuth, AllowlistAuth
+auth = APIKeyAuth(keys={"key1", "key2"})  # NOT api_keys
+auth = AllowlistAuth(user_ids={"user1"})   # NOT allowed_ids
+```
 
-## Local Development & Running
-- Use the existing uv-managed virtualenv and activate it: `source .venv/bin/activate`.
-- Install locally for development: `pip install -e .`
-- Set API keys as env vars when needed (examples use `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`, `MOONSHOT_API_KEY`, `XAI_API_KEY`, `VOYAGE_API_KEY`, `COHERE_API_KEY`).
-- Run an example from repo root, e.g. `python definable/examples/models/01_basic_invoke.py`.
-- E2E tests live in `definable/tests_e2e/` and some require API keys (see markers in `definable/tests_e2e/pytest.ini`).
+**MCPToolkit** — config object, not individual params:
+```python
+from definable.mcp import MCPToolkit, MCPConfig
+toolkit = MCPToolkit(config=MCPConfig(...))
+```
+
+**Middleware** — `__call__` protocol:
+```python
+class MyMiddleware:
+  async def __call__(self, context, next_handler):  # NOT before_run/after_run
+    result = await next_handler(context)
+    return result
+```
+
+**Multi-turn** — `session_id` alone does NOT maintain history:
+```python
+# Need messages=r1.messages OR CognitiveMemory for history
+r2 = await agent.arun("follow-up", messages=r1.messages)
+```
+
+---
+
+## Project Architecture
+
+### Layout
+```
+definable/definable/     — core library package
+definable/examples/      — runnable examples per module
+definable/tests_e2e/     — test suites (unit/, contract/, behavioral/, integration/, regression/)
+definable/docs/          — Mintlify documentation
+```
+
+### Module Map (post-restructure — singular names, agent-scoped nesting)
+| Module | Purpose | Key Types |
+|--------|---------|-----------|
+| `agent/` | Orchestration + agent-scoped features | Agent, AgentConfig, RunOutput |
+| `agent/tracing/` | Tracing | Tracing, JSONLExporter |
+| `agent/guardrail/` | Input/output/tool checks | Guardrails |
+| `agent/interface/` | Chat platforms | TelegramInterface, DiscordInterface |
+| `agent/research/` | Deep research | DeepResearch |
+| `agent/reasoning/` | Thinking layer | Thinking |
+| `agent/replay/` | Replay system | Replay |
+| `agent/auth/` | Authentication | APIKeyAuth, JWTAuth, AllowlistAuth |
+| `agent/run/` | Run events/output | RunOutput, RunContext |
+| `agent/trigger/` | Triggers | cron, interval |
+| `model/` | LLM providers | OpenAIChat, DeepSeek, Moonshot, xAI |
+| `tool/` | Tool system | `@tool` decorator → Function |
+| `toolkit/` | Toolkit base class | Toolkit |
+| `skill/` | Skill registry | Skill, SkillRegistry |
+| `knowledge/` | RAG pipeline | Knowledge, Document |
+| `knowledge/embedder/` | Embedders | OpenAIEmbedder, VoyageAIEmbedder |
+| `knowledge/chunker/` | Chunkers | RecursiveChunker |
+| `knowledge/reranker/` | Rerankers | CohereReranker |
+| `knowledge/reader/` | Knowledge readers | PDFReader, TextReader |
+| `vectordb/` | Vector storage | InMemoryVectorDB, PgVector, Qdrant, etc. |
+| `memory/` | Conversation memory | Memory, SQLiteStore |
+| `mcp/` | MCP protocol | MCPToolkit, MCPClient, MCPConfig |
+| `browser/` | Browser automation | BrowserToolkit |
+| `reader/` | File parsers | BaseReader |
+
+### Dependency Graph
+```
+Agent ──┬── Model (lazy client, global HTTP pool) — or string shorthand "gpt-4o"
+        ├── Thinking (trigger: always|auto|never)
+        ├── Memory (trigger: always|auto|never, store: SQLite/Postgres/InMemory)
+        ├── Knowledge (top_k, trigger, context_format — wraps VectorDB)
+        ├── DeepResearch → DeepResearchConfig
+        ├── Tracing (exporters: JSONLExporter, etc.)
+        ├── Toolkits[] → MCPToolkit | BrowserToolkit
+        ├── Tools[] → Function (decorator-based)
+        ├── Skills[] → Skill (instructions + tools)
+        ├── Guardrails → input/output/tool checks
+        ├── Middleware[] → chain (skipped in streaming)
+        └── Interfaces[] → Telegram, Discord, Signal, Desktop
+              └── Auth → APIKeyAuth, JWTAuth, AllowlistAuth
+```
+
+---
+
+## Development Standards
+
+### Quality Gates (Every Change)
+- All tests must pass: `.venv/bin/python -m pytest definable/tests_e2e/<module>/`
+- Lint: `.venv/bin/ruff check definable/definable/`
+- Format: `.venv/bin/ruff format definable/definable/`
+- Type check: `.venv/bin/python -m mypy definable/definable/`
+- If adding a feature → add tests. If fixing a bug → add regression test.
+
+### Build & Run
+- Virtualenv: `source .venv/bin/activate`
+- Install: `pip install -e .` (or with extras: `pip install -e ".[mem0-memory,readers,runtime,research]"`)
+- API keys: in `.env.test` (gitignored). Source with `source .env.test`
+- Run example: `.venv/bin/python definable/examples/models/01_basic_invoke.py`
+
+### Code Principles
+- Small, cohesive functions; no hidden side effects
+- Composition over inheritance
+- Fail fast on invalid inputs with actionable error messages
+- Never swallow exceptions silently
+- Never commit secrets or tokens
+- Incremental, non-breaking changes only
+
+### Testing Strategy
+- Unit tests for core logic, integration tests for workflows, e2e for critical flows
+- Tests must be deterministic and fast; isolate external services with mocks
+- MockModel gotcha: `call_count` is NOT incremented with `side_effect` — use `len(mock_model.call_history)`
+- `Agent(knowledge=True)` raises ValueError (unlike other bool params)
 
 ---
 
 ## Evaluator Agent System
 
-This repo includes an autonomous evaluator agent that stress-tests the framework.
-
 ### Commands
 | Command | Purpose | Interactive? |
 |---------|---------|-------------|
-| `/setup` | One-time credential & preference collection | ✅ Yes (once) |
-| `/evaluate` | Full autonomous evaluation | ❌ No |
-| `/smoke-test` | Quick import check | ❌ No |
-| `/memory` | View/manage stored memory | ✅ Yes |
-| `/file-issue` | File a single bug manually | ✅ Yes |
+| `/setup` | One-time credential & preference collection | Yes (once) |
+| `/evaluate` | Full autonomous evaluation | No |
+| `/smoke-test` | Quick import check | No |
+| `/memory` | View/manage stored memory | Yes |
+| `/file-issue` | File a single bug manually | Yes |
 
-### Autonomy Rules (for all agents)
-- **Never ask the user anything during /evaluate** — use stored credentials or skip.
-- If credentials missing → skip that feature, log in report.
-- If unsure whether something is a bug → file with `needs-triage` label.
-- If `gh` CLI unavailable → write issues to `reports/unfiled-issues.md`.
-- **Always write memory files** after every run. All 5 files in `.claude/memory/`.
+### Autonomy Rules
+- Never ask the user anything during `/evaluate` — use stored credentials or skip
+- If credentials missing → skip that feature, log in report
+- If unsure whether something is a bug → file with `needs-triage` label
+- Always write memory files after every run (all 5 files in `.claude/memory/`)
 
 ### Persistent Memory
-Stored in `.claude/memory/`:
-- `credentials.md` — which API keys are in `.env.test`
-- `project-profile.md` — framework structure, deps, versions
-- `evaluation-history.md` — append-only run results
-- `known-issues.md` — filed issues (prevents duplicates)
-- `user-preferences.md` — timeout, skip providers, etc.
-
-### Reports
-Every `/evaluate` run saves a full report to `reports/eval-<YYYY-MM-DD>-<HHMMSS>.md` with:
-- Pass/fail counts and details for every eval script
-- Robustness / Reliability / Scalability / Extensibility scores (X/10)
-- mypy and ruff results
-- Issues filed with links
-- Recommendations
-
-### Evaluation Focus
-The evaluator tests four dimensions:
-1. **Robustness** — null inputs, type mismatches, missing fields, malformed data
-2. **Reliability** — idempotency, error recovery, resource cleanup, import chains
-3. **Scalability** — large prompts, many tools, deep conversations, bulk documents
-4. **Extensibility** — custom tools, custom providers, middleware hooks
+Stored in `.claude/memory/`: `credentials.md`, `project-profile.md`, `evaluation-history.md`, `known-issues.md`, `user-preferences.md`
 
 ### Credential Source
-All API keys are in `.env.test` (gitignored). Source with `source .env.test`.
-
+All API keys in `.env.test` (gitignored). Source with `source .env.test`.

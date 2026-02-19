@@ -1,13 +1,4 @@
-from enum import Enum
+"""Backward compatibility — enums moved to definable.vectordb."""
 
-
-class Distance(str, Enum):
-  cosine = "cosine"
-  l2 = "l2"
-  max_inner_product = "max_inner_product"
-
-
-class SearchType(str, Enum):
-  vector = "vector"
-  keyword = "keyword"
-  hybrid = "hybrid"
+from definable.vectordb.distance import Distance  # noqa: F401
+from definable.vectordb.search import SearchType  # noqa: F401

@@ -1,73 +1,46 @@
-"""Cognitive memory system for Definable AI agents.
+"""Agentic memory system for Definable AI agents.
 
-Provides multi-tier memory with token-budget-aware retrieval,
-progressive distillation, and predictive pre-loading.
+The memory system uses an LLM-driven approach: Memory calls the model
+with tools (add_memory, update_memory, delete_memory) and the model decides what
+facts about the user are worth remembering.
 
 Quick Start:
-    from definable.memory import CognitiveMemory, SQLiteMemoryStore
+    from definable.memory import Memory, SQLiteStore
 
-    memory = CognitiveMemory(
-        store=SQLiteMemoryStore("./memory.db"),
-        token_budget=500,
-    )
+    memory = Memory(store=SQLiteStore("./memory.db"))
 
-    # Use with Agent:
+    # Use with Agent — snaps in directly, no config wrapper needed:
     agent = Agent(model=model, memory=memory)
 """
 
-from definable.memory.config import MemoryConfig, ScoringWeights
-from definable.memory.memory import CognitiveMemory
+from definable.memory.manager import Memory, MemoryManager
 from definable.memory.store.base import MemoryStore
-from definable.memory.types import Episode, KnowledgeAtom, MemoryPayload, Procedure, TopicTransition
+from definable.memory.types import UserMemory
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-  from definable.memory.store.chroma import ChromaMemoryStore
   from definable.memory.store.in_memory import InMemoryStore
-  from definable.memory.store.mem0 import Mem0MemoryStore
-  from definable.memory.store.mongodb import MongoMemoryStore
-  from definable.memory.store.pinecone import PineconeMemoryStore
-  from definable.memory.store.postgres import PostgresMemoryStore
-  from definable.memory.store.qdrant import QdrantMemoryStore
-  from definable.memory.store.redis import RedisMemoryStore
-  from definable.memory.store.sqlite import SQLiteMemoryStore
+  from definable.memory.store.postgres import PostgresStore
+  from definable.memory.store.sqlite import SQLiteStore
 
 __all__ = [
   # Core
-  "CognitiveMemory",
-  "MemoryConfig",
-  "ScoringWeights",
+  "Memory",
+  "MemoryManager",  # backward compat alias
+  "UserMemory",
   # Protocol
   "MemoryStore",
-  # Types
-  "Episode",
-  "KnowledgeAtom",
-  "Procedure",
-  "TopicTransition",
-  "MemoryPayload",
   # Store implementations (lazy-loaded)
-  "ChromaMemoryStore",
   "InMemoryStore",
-  "Mem0MemoryStore",
-  "MongoMemoryStore",
-  "PineconeMemoryStore",
-  "PostgresMemoryStore",
-  "QdrantMemoryStore",
-  "RedisMemoryStore",
-  "SQLiteMemoryStore",
+  "SQLiteStore",
+  "PostgresStore",
 ]
 
 _LAZY_IMPORTS = {
-  "SQLiteMemoryStore": ("definable.memory.store.sqlite", "SQLiteMemoryStore"),
+  "SQLiteStore": ("definable.memory.store.sqlite", "SQLiteStore"),
   "InMemoryStore": ("definable.memory.store.in_memory", "InMemoryStore"),
-  "PostgresMemoryStore": ("definable.memory.store.postgres", "PostgresMemoryStore"),
-  "RedisMemoryStore": ("definable.memory.store.redis", "RedisMemoryStore"),
-  "QdrantMemoryStore": ("definable.memory.store.qdrant", "QdrantMemoryStore"),
-  "ChromaMemoryStore": ("definable.memory.store.chroma", "ChromaMemoryStore"),
-  "MongoMemoryStore": ("definable.memory.store.mongodb", "MongoMemoryStore"),
-  "PineconeMemoryStore": ("definable.memory.store.pinecone", "PineconeMemoryStore"),
-  "Mem0MemoryStore": ("definable.memory.store.mem0", "Mem0MemoryStore"),
+  "PostgresStore": ("definable.memory.store.postgres", "PostgresStore"),
 }
 
 

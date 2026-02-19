@@ -251,11 +251,11 @@ def reconstruct_file_from_dict(file_data):
       if "content" in file_data and isinstance(file_data["content"], str):
         file_obj = File.from_base64(
           file_data["content"],
-          id=file_data.get("id"),
+          id_=file_data.get("id"),
           mime_type=file_data.get("mime_type"),
           filename=file_data.get("filename"),
           name=file_data.get("name"),
-          format=file_data.get("format"),
+          format_=file_data.get("format"),
         )
         # Preserve additional fields that from_base64 doesn't handle
         if file_data.get("size") is not None:

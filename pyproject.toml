@@ -48,6 +48,15 @@ mem0-memory = ["mem0ai>=0.1.0"]
 mistral-ocr = ["mistralai>=1.0.0"]
 mistral-ocr-images = ["mistralai>=1.0.0", "Pillow>=10.0.0"]
 research = ["duckduckgo-search>=6.0.0", "curl-cffi>=0.7.0"]
+# Vector DB backends
+qdrant = ["qdrant-client>=1.9.0"]
+chroma = ["chromadb>=0.5.0"]
+pinecone = ["pinecone>=5.0.0"]
+pgvector = ["psycopg[binary]>=3.1.0", "pgvector>=0.3.0"]
+mongodb = ["pymongo>=4.0.0"]
+redis = ["redis>=5.0.0", "redisvl>=0.3.0"]
+browser = ["seleniumbase>=4.32.0"]
+desktop = ["websockets>=12.0"]
 
 [tool.setuptools.package-data]
 definable = ["skills/library/*.md"]
@@ -58,3 +67,35 @@ where = ["definable"]
 [tool.ruff]
 # Extend the ruff.toml file in the same directory
 extend = "ruff.toml"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--strict-markers --tb=short -q"
+markers = [
+  "unit: Pure logic tests — no external calls, always run",
+  "integration: Real API tests — require API keys and/or running services",
+  "behavioral: Agent-level behavior tests — assert on outcomes not internals",
+  "contract: ABC contract compliance — every implementation must pass",
+  "regression: Snapshot-based regression tests — lock in known-good behavior",
+  "slow: Tests that take >10 seconds",
+  "openai: Tests requiring OPENAI_API_KEY",
+  "deepseek: Tests requiring DEEPSEEK_API_KEY",
+  "moonshot: Tests requiring MOONSHOT_API_KEY",
+  "xai: Tests requiring XAI_API_KEY",
+  "voyageai: Tests requiring VOYAGEAI_API_KEY",
+  "cohere: Tests requiring COHERE_API_KEY",
+  "telegram: Tests requiring TELEGRAM_BOT_TOKEN",
+  "discord: Tests requiring DISCORD_BOT_TOKEN",
+  "signal: Tests requiring SIGNAL_PHONE_NUMBER and SIGNAL_API_URL",
+  "postgres: Tests requiring PostgreSQL with pgvector",
+  "redis: Tests requiring Redis server",
+  "qdrant: Tests requiring Qdrant server",
+  "chroma: Tests requiring ChromaDB",
+  "mongodb: Tests requiring MongoDB server",
+  "pinecone: Tests requiring PINECONE_API_KEY",
+  "mem0: Tests requiring MEM0_API_KEY",
+  "mistral: Tests requiring MISTRAL_API_KEY",
+  "playwright: Tests requiring a real browser via Playwright",
+  "desktop: Tests requiring the macOS Desktop Bridge app running",
+]

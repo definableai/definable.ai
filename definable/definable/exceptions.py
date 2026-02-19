@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from definable.models.message import Message
+from definable.model.message import Message
 
 
 class AgentRunException(Exception):
