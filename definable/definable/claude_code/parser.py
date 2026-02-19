@@ -27,6 +27,7 @@ from definable.agent.events import (
   RunContext,
   RunOutput,
   RunStatus,
+  ToolCallCompletedEvent,
   ToolCallStartedEvent,
 )
 
@@ -134,15 +135,16 @@ def parse_to_run_output(
   )
 
 
-def message_to_event(
+def message_to_events(
   msg: Message,
   context: RunContext,
   agent_id: str = "",
   agent_name: str = "",
-) -> Optional[BaseAgentRunEvent]:
-  """Convert a single CLI message to a Definable tracing event.
+) -> List[BaseAgentRunEvent]:
+  """Convert a single CLI message to a list of Definable tracing events.
 
-  Returns None for messages that don't map to events (e.g. SystemMessage).
+  Returns an empty list for messages that don't map to events (e.g. SystemMessage, UserMessage).
+  Emits one event per content block in AssistantMessages (not just the first).
   """
   base_kwargs: Dict[str, Any] = {
     "agent_id": agent_id,
@@ -151,23 +153,39 @@ def message_to_event(
     "session_id": context.session_id,
   }
 
+  events: List[BaseAgentRunEvent] = []
+
   if isinstance(msg, AssistantMessage):
-    # Emit event for the first text block found
     for block in msg.content:
       if isinstance(block, TextBlock) and block.text:
-        return RunContentEvent(content=block.text, **base_kwargs)
-      if isinstance(block, ThinkingBlock) and block.thinking:
-        return ReasoningContentDeltaEvent(reasoning_content=block.thinking, **base_kwargs)
-      if isinstance(block, ToolUseBlock):
-        return ToolCallStartedEvent(
-          tool=ToolExecution(
-            tool_name=block.name,
-            tool_args=block.input,
-            tool_call_id=block.id,
-          ),
-          **base_kwargs,
+        events.append(RunContentEvent(content=block.text, **base_kwargs))
+      elif isinstance(block, ThinkingBlock) and block.thinking:
+        events.append(ReasoningContentDeltaEvent(reasoning_content=block.thinking, **base_kwargs))
+      elif isinstance(block, ToolUseBlock):
+        events.append(
+          ToolCallStartedEvent(
+            tool=ToolExecution(
+              tool_name=block.name,
+              tool_args=block.input,
+              tool_call_id=block.id,
+            ),
+            **base_kwargs,
+          )
         )
-    return None
+      elif isinstance(block, ToolResultBlock):
+        # Match result back to a tool execution
+        result_text = block.content if isinstance(block.content, str) else json.dumps(block.content) if block.content else ""
+        events.append(
+          ToolCallCompletedEvent(
+            tool=ToolExecution(
+              tool_call_id=block.tool_use_id,
+              result=result_text,
+              tool_call_error=block.is_error or None,
+            ),
+            content=result_text,
+            **base_kwargs,
+          )
+        )
 
   elif isinstance(msg, ResultMessage):
     metrics = Metrics(
@@ -179,17 +197,28 @@ def message_to_event(
       metrics.duration = msg.duration_ms / 1000.0
     if msg.total_cost_usd is not None:
       metrics.cost = msg.total_cost_usd
-    return RunCompletedEvent(metrics=metrics, **base_kwargs)
+    events.append(RunCompletedEvent(metrics=metrics, content=msg.result, **base_kwargs))
 
   elif isinstance(msg, StreamEvent):
     event_data = msg.event
     if event_data.get("type") == "content_block_delta":
       delta = event_data.get("delta", {})
       if delta.get("type") == "text_delta":
-        return RunContentEvent(content=delta.get("text", ""), **base_kwargs)
-      if delta.get("type") == "thinking_delta":
-        return ReasoningContentDeltaEvent(reasoning_content=delta.get("thinking", ""), **base_kwargs)
-    return None
+        events.append(RunContentEvent(content=delta.get("text", ""), **base_kwargs))
+      elif delta.get("type") == "thinking_delta":
+        events.append(ReasoningContentDeltaEvent(reasoning_content=delta.get("thinking", ""), **base_kwargs))
 
-  # SystemMessage, ControlRequest, etc. don't map to events
-  return None
+  # SystemMessage, ControlRequest, UserMessage don't map to events
+  return events
+
+
+# Backward compat alias — returns first event or None
+def message_to_event(
+  msg: Message,
+  context: RunContext,
+  agent_id: str = "",
+  agent_name: str = "",
+) -> Optional[BaseAgentRunEvent]:
+  """Convert a single CLI message to the first matching Definable event (legacy)."""
+  events = message_to_events(msg, context, agent_id=agent_id, agent_name=agent_name)
+  return events[0] if events else None

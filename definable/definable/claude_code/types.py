@@ -105,7 +105,14 @@ class ControlRequest:
   input: Optional[Dict[str, Any]] = None
 
 
-Message = Union[AssistantMessage, SystemMessage, ResultMessage, StreamEvent, ControlRequest]
+@dataclass
+class UserMessage:
+  """Echo of user input from the CLI."""
+
+  content: str = ""
+
+
+Message = Union[AssistantMessage, SystemMessage, ResultMessage, StreamEvent, ControlRequest, UserMessage]
 
 
 # ---------------------------------------------------------------------------
@@ -200,6 +207,16 @@ def _parse_control_request(data: dict) -> ControlRequest:
   )
 
 
+def _parse_user(data: dict) -> UserMessage:
+  msg = data.get("message", {})
+  content = msg.get("content", "")
+  if isinstance(content, list):
+    # Content may be a list of blocks — extract text
+    parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+    content = "".join(parts)
+  return UserMessage(content=content if isinstance(content, str) else str(content))
+
+
 def parse_message(data: dict) -> Message:
   """Parse a raw JSONL dict into a typed Message.
 
@@ -216,5 +233,7 @@ def parse_message(data: dict) -> Message:
     return _parse_stream_event(data)
   elif msg_type == "control_request":
     return _parse_control_request(data)
+  elif msg_type == "user":
+    return _parse_user(data)
   log_warning(f"Unknown CLI message type: {msg_type}")
   raise ValueError(f"Unknown message type: {msg_type}")

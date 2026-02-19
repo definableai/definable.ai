@@ -34,7 +34,7 @@ from typing import (
 from uuid import uuid4
 
 from definable.claude_code.bridge import ToolBridge
-from definable.claude_code.parser import message_to_event, parse_to_run_output
+from definable.claude_code.parser import message_to_events, parse_to_run_output
 from definable.claude_code.tool_server import ToolServer
 from definable.claude_code.transport import SubprocessTransport
 from definable.claude_code.types import (
@@ -116,7 +116,6 @@ class ClaudeCodeAgent:
   _tool_server: Optional[ToolServer] = field(default=None, repr=False)
   _memory_manager: Optional[Any] = field(default=None, repr=False)
   _knowledge_instance: Optional[Any] = field(default=None, repr=False)
-  _knowledge_config: Optional[Any] = field(default=None, repr=False)
   _tracing_config: Optional[Any] = field(default=None, repr=False)
   _event_handlers: List[Any] = field(default_factory=list, repr=False)
   _initialized: bool = field(default=False, repr=False)
@@ -237,11 +236,20 @@ class ClaudeCodeAgent:
     session_id: Optional[str] = None,
   ) -> List[str]:
     """Build the CLI command-line arguments."""
+    # Determine output format upfront — structured output overrides default
+    output_format = "stream-json"
+    schema_json: Optional[str] = None
+    if output_schema is not None:
+      schema = self._resolve_output_schema(output_schema)
+      if schema:
+        output_format = "json"
+        schema_json = json.dumps(schema)
+
     args = [
       "-p",  # Required for --input-format and --output-format to work
       "--verbose",  # Required for stream-json output with --print
       "--output-format",
-      "stream-json",
+      output_format,
       "--input-format",
       "stream-json",
       "--model",
@@ -249,6 +257,9 @@ class ClaudeCodeAgent:
       "--permission-mode",
       self.permission_mode,
     ]
+
+    if schema_json:
+      args.extend(["--json-schema", schema_json])
 
     if system_prompt:
       args.extend(["--system-prompt", system_prompt])
@@ -262,14 +273,8 @@ class ClaudeCodeAgent:
     if self.thinking_budget_tokens is not None:
       args.extend(["--max-thinking-tokens", str(self.thinking_budget_tokens)])
 
-    # Structured output via JSON schema
-    if output_schema is not None:
-      schema = self._resolve_output_schema(output_schema)
-      if schema:
-        args.extend(["--output-format", "json", "--json-schema", json.dumps(schema)])
-
-    # Session resume
-    if session_id and self.continue_conversation:
+    # Session resume — passing session_id implies intent to resume
+    if session_id:
       args.extend(["--resume", session_id])
 
     # MCP tool server config
@@ -348,10 +353,7 @@ class ClaudeCodeAgent:
       return None
 
     try:
-      top_k = 5
-      if self._knowledge_config:
-        top_k = getattr(self._knowledge_config, "top_k", 5)
-
+      top_k = getattr(self._knowledge_instance, "top_k", 5)
       results = self._knowledge_instance.search(prompt, top_k=top_k)
       if not results:
         return None
@@ -418,14 +420,14 @@ class ClaudeCodeAgent:
         log_warning(f"Event handler error: {exc}")
 
   def _emit_for(self, msg: Message, context: RunContext) -> None:
-    """Convert a CLI message to a Definable event and emit it."""
-    event = message_to_event(
+    """Convert a CLI message to Definable events and emit them."""
+    events = message_to_events(
       msg,
       context,
       agent_id=self.agent_id or "",
       agent_name=self.agent_name or "",
     )
-    if event:
+    for event in events:
       self._emit(event)
 
   # ---------------------------------------------------------------------------
@@ -658,10 +660,13 @@ class ClaudeCodeAgent:
           continue
 
         sdk_messages.append(msg)
-        self._emit_for(msg, context)
 
+        # Skip _emit_for on ResultMessage — the explicit RunCompletedEvent
+        # below (after guardrails) has richer data (content + metrics).
         if isinstance(msg, ResultMessage):
           break
+
+        self._emit_for(msg, context)
 
       # 8. Parse into RunOutput
       result = parse_to_run_output(
@@ -679,7 +684,7 @@ class ClaudeCodeAgent:
 
       # 10. Memory store (fire-and-forget)
       if self._memory_manager and user_id:
-        asyncio.get_event_loop().create_task(self._memory_store(prompt, result.content if isinstance(result.content, str) else None, user_id))
+        asyncio.create_task(self._memory_store(prompt, result.content if isinstance(result.content, str) else None, user_id))
 
       self._emit(
         RunCompletedEvent(
@@ -813,17 +818,39 @@ class ClaudeCodeAgent:
           await transport.send(response)
           continue
 
-        event = message_to_event(
+        if isinstance(msg, ResultMessage):
+          # Emit a single RunCompletedEvent with full metrics
+          metrics = None
+          if msg.input_tokens or msg.output_tokens:
+            from definable.model.metrics import Metrics
+
+            metrics = Metrics(
+              input_tokens=msg.input_tokens,
+              output_tokens=msg.output_tokens,
+              total_tokens=msg.input_tokens + msg.output_tokens,
+            )
+            if msg.duration_ms:
+              metrics.duration = msg.duration_ms / 1000.0
+            if msg.total_cost_usd is not None:
+              metrics.cost = msg.total_cost_usd
+          yield RunCompletedEvent(  # type: ignore[misc]
+            agent_id=self.agent_id or "",
+            agent_name=self.agent_name or "",
+            run_id=context.run_id,
+            session_id=context.session_id,
+            content=msg.result,
+            metrics=metrics,
+          )
+          break
+
+        events = message_to_events(
           msg,
           context,
           agent_id=self.agent_id or "",
           agent_name=self.agent_name or "",
         )
-        if event:
+        for event in events:
           yield event  # type: ignore[misc]
-
-        if isinstance(msg, ResultMessage):
-          break
 
     except Exception as exc:
       log_error(f"Claude Code stream failed: {exc}")

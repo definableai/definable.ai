@@ -31,6 +31,7 @@ class ToolServer:
     self._bridge = bridge
     self._socket_path: Optional[str] = None
     self._script_path: Optional[str] = None
+    self._config_path: Optional[str] = None
     self._server_task: Optional[asyncio.Task] = None
     self._socket_server: Optional[asyncio.AbstractServer] = None
 
@@ -56,28 +57,76 @@ class ToolServer:
     self._write_server_script()
     log_debug(f"MCP server script written to {self._script_path}")
 
+  # JSON Schema type → Python type hint string
+  _TYPE_MAP = {
+    "string": "str",
+    "integer": "int",
+    "number": "float",
+    "boolean": "bool",
+    "array": "list",
+    "object": "dict",
+  }
+
+  def _generate_tool_function(self, name: str, description: str, parameters: dict) -> str:
+    """Generate a typed async tool function from JSON Schema parameters."""
+    props = parameters.get("properties", {})
+    required = set(parameters.get("required", []))
+
+    # Build parameter list with types and defaults
+    params: list[str] = []
+    args_dict_parts: list[str] = []
+
+    for param_name, prop in props.items():
+      py_type = self._TYPE_MAP.get(prop.get("type", "string"), "str")
+      default = prop.get("default")
+      is_required = param_name in required
+
+      if is_required:
+        params.append(f"{param_name}: {py_type}")
+      elif default is not None:
+        params.append(f"{param_name}: {py_type} = {default!r}")
+      else:
+        params.append(f"{param_name}: {py_type} = None")
+
+      args_dict_parts.append(f"    {param_name!r}: {param_name},")
+
+    params_str = ", ".join(params)
+    args_dict = "{\n" + "\n".join(args_dict_parts) + "\n  }"
+
+    # Escape description for docstring
+    safe_desc = description.replace("\\", "\\\\").replace('"""', '\\"\\"\\"')
+
+    # Filter None values so the original function's defaults apply for omitted params
+    return (
+      f"async def {name}({params_str}) -> str:\n"
+      f'  """{safe_desc}"""\n'
+      f"  return await call_bridge({name!r}, {{k: v for k, v in {args_dict}.items() if v is not None}})\n"
+      f"mcp.tool()({name})\n"
+    )
+
   def _write_server_script(self) -> None:
-    """Generate a standalone FastMCP server script."""
-    tools_json = json.dumps([
-      {
-        "name": fn.name,
-        "description": fn.description or fn.name,
-        "parameters": fn.parameters,
-      }
-      for fn in self._bridge._tools.values()
-    ])
+    """Generate a standalone FastMCP server script with typed tool functions."""
+    # Generate typed function source for each tool
+    tool_funcs: list[str] = []
+    for fn in self._bridge._tools.values():
+      func_src = self._generate_tool_function(
+        fn.name,
+        fn.description or fn.name,
+        fn.parameters,
+      )
+      tool_funcs.append(func_src)
+
+    tool_functions_block = "\n\n".join(tool_funcs)
 
     script = f'''#!/usr/bin/env python3
 """Auto-generated MCP server for Definable tools. Do not edit."""
 import asyncio
 import json
-import socket
 import sys
 
 from mcp.server.fastmcp import FastMCP
 
 SOCKET_PATH = {self._socket_path!r}
-TOOLS = {tools_json}
 
 mcp = FastMCP("definable")
 
@@ -97,24 +146,7 @@ async def call_bridge(tool_name: str, args: dict) -> str:
   return result.get("result", "")
 
 
-# Dynamically register tools
-for _tool_def in TOOLS:
-  _name = _tool_def["name"]
-  _desc = _tool_def["description"]
-  _params = _tool_def.get("parameters", {{}})
-  _props = _params.get("properties", {{}})
-  _required = _params.get("required", [])
-
-  # Build parameter annotations for FastMCP
-  _param_names = list(_props.keys())
-
-  # Create the tool function dynamically
-  exec(f"""
-async def {{_name}}(**kwargs) -> str:
-  \\"\\"\\"{{_desc}}\\"\\"\\"
-  return await call_bridge({{_name!r}}, kwargs)
-mcp.tool()({{_name}})
-""", {{"call_bridge": call_bridge, "mcp": mcp, "__builtins__": __builtins__}})
+{tool_functions_block}
 
 
 if __name__ == "__main__":
@@ -163,7 +195,11 @@ if __name__ == "__main__":
       await writer.wait_closed()
 
   def get_mcp_config_path(self) -> Optional[str]:
-    """Get the --mcp-config JSON string for the CLI."""
+    """Get the --mcp-config file path for the CLI.
+
+    Writes the MCP server config JSON to a temp file and returns the file path.
+    The Claude CLI expects a file path, not a raw JSON string.
+    """
     if not self._script_path or not self._socket_path:
       return None
 
@@ -177,7 +213,14 @@ if __name__ == "__main__":
         }
       }
     }
-    return json.dumps(config)
+
+    # Write config to a file in the same temp dir — CLI expects a file path
+    tmp_dir = os.path.dirname(self._socket_path)
+    self._config_path = os.path.join(tmp_dir, "mcp_config.json")
+    with open(self._config_path, "w") as f:
+      json.dump(config, f)
+
+    return self._config_path
 
   async def stop(self) -> None:
     """Stop the socket server and clean up temp files."""
@@ -189,7 +232,7 @@ if __name__ == "__main__":
     # Clean up temp files
     import contextlib
 
-    for path in [self._script_path, self._socket_path]:
+    for path in [self._script_path, self._socket_path, self._config_path]:
       if path and os.path.exists(path):
         with contextlib.suppress(OSError):
           os.unlink(path)
@@ -202,4 +245,5 @@ if __name__ == "__main__":
 
     self._script_path = None
     self._socket_path = None
+    self._config_path = None
     log_debug("Tool server stopped")
