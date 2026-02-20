@@ -18,7 +18,7 @@ class TestAgentModelInit:
     """Agent(model=MockModel()) stores the model instance."""
     model = MockModel()
     agent = Agent(model=model)  # type: ignore[arg-type]
-    assert agent.model is model
+    assert agent.model is model  # type: ignore[comparison-overlap]
 
   def test_agent_with_openai_model_object(self):
     """Agent(model=OpenAIChat(...)) stores the OpenAI model directly."""
