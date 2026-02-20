@@ -65,6 +65,7 @@ output = agent.run("What is the capital of Japan?")
 ## Add Tools
 
 ```python
+from definable.agent import Agent
 from definable.tool.decorator import tool
 
 @tool
@@ -87,6 +88,13 @@ The agent calls tools automatically. No manual function routing.
 
 ```python
 from pydantic import BaseModel
+from definable.agent import Agent
+from definable.tool.decorator import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    return f"Sunny, 72°F in {city}"
 
 class WeatherReport(BaseModel):
     city: str
@@ -104,6 +112,8 @@ Pass any Pydantic model to `output_schema` and get validated, typed results back
 ## Streaming
 
 ```python
+from definable.agent import Agent
+
 agent = Agent(model="gpt-4o-mini", instructions="You are a helpful assistant.")
 
 for event in agent.run_stream("Write a haiku about Python."):
@@ -116,6 +126,10 @@ for event in agent.run_stream("Write a haiku about Python."):
 ## Multi-Turn Conversations
 
 ```python
+from definable.agent import Agent
+
+agent = Agent(model="gpt-4o-mini", instructions="You are a helpful assistant.")
+
 output1 = agent.run("My name is Alice.")
 output2 = agent.run("What's my name?", messages=output1.messages)
 print(output2.content)  # "Your name is Alice."
@@ -171,7 +185,14 @@ The agent retrieves relevant documents before responding. Supports embedders (Op
 ## Guardrails
 
 ```python
+from definable.agent import Agent
 from definable.agent.guardrail import Guardrails, max_tokens, pii_filter, tool_blocklist
+from definable.tool.decorator import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    return f"Sunny, 72°F in {city}"
 
 agent = Agent(
     model="gpt-4o-mini",
@@ -192,6 +213,7 @@ Guardrails check, modify, or block content at input, output, and tool-call check
 ## Skills
 
 ```python
+from definable.agent import Agent
 from definable.skill import Calculator, WebSearch, DateTime
 
 agent = Agent(
@@ -230,6 +252,7 @@ Connect to any MCP server. Use the same tools as Claude Desktop.
 ## File Readers
 
 ```python
+from definable.agent import Agent
 from definable.media import File
 
 agent = Agent(
@@ -246,6 +269,7 @@ Pass `readers=True` to enable automatic parsing. Supports PDF, DOCX, PPTX, XLSX,
 ## Deploy It
 
 ```python
+from definable.agent import Agent
 from definable.agent.trigger import Webhook, Cron
 from definable.agent.auth import APIKeyAuth
 
@@ -262,6 +286,7 @@ agent.serve(host="0.0.0.0", port=8000, dev=True)
 ## Connect to Platforms
 
 ```python
+from definable.agent import Agent
 from definable.agent.interface.telegram import TelegramInterface, TelegramConfig
 
 telegram = TelegramInterface(
@@ -293,6 +318,7 @@ The thinking layer adds chain-of-thought reasoning before the final response.
 ## Tracing
 
 ```python
+from definable.agent import Agent
 from definable.agent.tracing import Tracing, JSONLExporter
 
 agent = Agent(
@@ -310,7 +336,10 @@ Or use `tracing=True` for default console tracing.
 ## Replay & Compare
 
 ```python
-from definable.agent.testing import MockModel
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat
+
+agent = Agent(model="gpt-4o-mini", instructions="You are a helpful assistant.")
 
 # Inspect a past run
 output = agent.run("Explain quantum computing.")
