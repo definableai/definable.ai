@@ -47,7 +47,7 @@ jobs:
       - name: Run tests
         run: |
           pytest definable/tests/ \
-            -m "not openai and not deepseek and not moonshot and not xai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" \
+            -m "not openai and not deepseek and not moonshot and not xai and not voyageai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" \
             -v --tb=short
 
   integration-test:
