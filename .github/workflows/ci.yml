@@ -108,7 +108,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e ".[mem0-memory,readers,runtime,research,serve,cron,jwt,discord]"
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio pytest-timeout
       - name: Run integration tests
         run: |
           pytest definable/tests/ \
