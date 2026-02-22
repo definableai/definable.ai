@@ -30,7 +30,7 @@ import asyncio
 import os
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from definable.browser.base import BaseBrowser
 from definable.browser.config import BrowserConfig
@@ -66,7 +66,7 @@ class SeleniumBaseBrowser(BaseBrowser):
   # Internal helpers
   # ---------------------------------------------------------------------------
 
-  async def _run(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+  async def _run(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     """Run a synchronous callable in the dedicated browser thread."""
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(self._executor, lambda: fn(*args, **kwargs))

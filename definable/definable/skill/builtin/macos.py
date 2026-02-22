@@ -19,10 +19,14 @@ Example::
 """
 
 import base64
-from typing import Any, List, Optional, Set
+from typing import TYPE_CHECKING, List, Optional, Set
 
 from definable.skill.base import Skill
 from definable.tool.decorator import tool
+from definable.tool.function import Function
+
+if TYPE_CHECKING:
+  from definable.agent.interface.desktop.bridge_client import BridgeClient
 
 
 class MacOS(Skill):
@@ -75,7 +79,7 @@ class MacOS(Skill):
     self._enable_applescript = enable_applescript
     self._enable_file_write = enable_file_write
     self._enable_input = enable_input
-    self._client: Any = None  # BridgeClient, lazy
+    self._client: Optional["BridgeClient"] = None
 
   @property
   def instructions(self) -> str:  # type: ignore[override]
@@ -95,7 +99,7 @@ class MacOS(Skill):
     parts.append("If the bridge is not running, tools will return a friendly error — tell the user to start the Definable Desktop Bridge app.")
     return " ".join(parts)
 
-  def _get_client(self) -> Any:
+  def _get_client(self) -> "BridgeClient":
     """Lazily create and return the BridgeClient."""
     if self._client is None:
       from definable.agent.interface.desktop.bridge_client import BridgeClient
@@ -119,10 +123,10 @@ class MacOS(Skill):
     return f"Bridge is not running. Please start the Definable Desktop Bridge app at http://{host}:{port} and try again."
 
   @property
-  def tools(self) -> list:  # noqa: C901
+  def tools(self) -> List[Function]:  # noqa: C901
     skill = self
 
-    all_tools: List[Any] = []
+    all_tools: List[Function] = []
 
     # ── Screen ─────────────────────────────────────────────────────────────
 
@@ -172,7 +176,7 @@ class MacOS(Skill):
         if all(v is not None for v in [region_x, region_y, region_w, region_h]):
           region = {"x": region_x, "y": region_y, "width": region_w, "height": region_h}
         client = skill._get_client()
-        result = await client.ocr_screen(region=region)
+        result = await client.ocr_screen(region=region)  # type: ignore[arg-type]
         return result.get("text", "(no text found)")
       except Exception as exc:
         if "connect" in str(exc).lower() or "connection" in str(exc).lower():

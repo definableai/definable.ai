@@ -5,6 +5,9 @@ user's memory is unified across platforms while sessions remain
 platform-scoped.
 """
 
+from __future__ import annotations
+
+from types import TracebackType
 import time
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Protocol, runtime_checkable
@@ -193,5 +196,5 @@ class SQLiteIdentityResolver:
     await self.initialize()
     return self
 
-  async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     await self.close()

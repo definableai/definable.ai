@@ -6,13 +6,13 @@ from definable.utils.log import log_error, log_warning
 
 try:
   # TODO: Adapt these imports to the new Mistral SDK versions
-  from mistralai.models import (  # type: ignore
-    AssistantMessage,  # type: ignore
-    ImageURLChunk,  # type: ignore
-    SystemMessage,  # type: ignore
-    TextChunk,  # type: ignore
-    ToolMessage,  # type: ignore
-    UserMessage,  # type: ignore
+  from mistralai.models import (
+    AssistantMessage,
+    ImageURLChunk,
+    SystemMessage,
+    TextChunk,
+    ToolMessage,
+    UserMessage,
   )
 
   MistralMessage = Union[UserMessage, AssistantMessage, SystemMessage, ToolMessage]

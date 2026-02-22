@@ -602,7 +602,7 @@ class ChromaDb(VectorDB):
         ranked: List[Tuple[str, float]] = []
         if results.get("ids") and results["ids"][0]:
           for i, doc_id in enumerate(results["ids"][0]):
-            distance = results["distances"][0][i] if results.get("distances") else 0  # type: ignore
+            distance = results["distances"][0][i] if results.get("distances") else 0
             # Convert distance to similarity score (lower distance = higher score)
             score = 1.0 / (1.0 + distance)
             ranked.append((doc_id, score))
@@ -633,7 +633,7 @@ class ChromaDb(VectorDB):
         if results.get("ids") and results["ids"][0]:
           for i, doc_id in enumerate(results["ids"][0]):
             # Score based on term overlap (simple BM25-like scoring)
-            doc = results["documents"][0][i] if results.get("documents") else ""  # type: ignore
+            doc = results["documents"][0][i] if results.get("documents") else ""
             query_terms = set(query.lower().split())
             doc_terms = set(doc.lower().split()) if doc else set()
             overlap = len(query_terms & doc_terms)
@@ -750,11 +750,11 @@ class ChromaDb(VectorDB):
     """
     search_results: List[Document] = []
 
-    ids_list = result.get("ids", [[]])  # type: ignore
-    metadata_list = result.get("metadatas", [[{}]])  # type: ignore
-    documents_list = result.get("documents", [[]])  # type: ignore
-    embeddings_list = result.get("embeddings")  # type: ignore
-    distances_list = result.get("distances", [[]])  # type: ignore
+    ids_list = result.get("ids", [[]])
+    metadata_list = result.get("metadatas", [[{}]])
+    documents_list = result.get("documents", [[]])
+    embeddings_list = result.get("embeddings")
+    distances_list = result.get("distances", [[]])
 
     # Check if we have valid results - handle numpy arrays carefully
     if ids_list is None or len(ids_list) == 0:
@@ -1232,7 +1232,7 @@ class ChromaDb(VectorDB):
         # Convert to the expected type for ChromaDB
         chroma_metadatas = cast(List[Mapping[str, Union[str, int, float, bool]]], updated_metadatas)
         chroma_metadatas = [{k: v for k, v in m.items() if k and v} for m in chroma_metadatas]
-        collection.update(ids=ids, metadatas=chroma_metadatas)  # type: ignore
+        collection.update(ids=ids, metadatas=chroma_metadatas)
         log_debug(f"Updated metadata for {len(ids)} documents with content_id: {content_id}")
 
       except TypeError as te:

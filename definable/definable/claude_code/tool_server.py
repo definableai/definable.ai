@@ -98,10 +98,10 @@ class ToolServer:
 
     # Filter None values so the original function's defaults apply for omitted params
     return (
+      f"@mcp.tool()\n"
       f"async def {name}({params_str}) -> str:\n"
       f'  """{safe_desc}"""\n'
       f"  return await call_bridge({name!r}, {{k: v for k, v in {args_dict}.items() if v is not None}})\n"
-      f"mcp.tool()({name})\n"
     )
 
   def _write_server_script(self) -> None:

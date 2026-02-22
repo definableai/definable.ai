@@ -127,7 +127,7 @@ def format_image_for_message(image: Image) -> Optional[Dict[str, Any]]:
   # Case 1: Image is a URL
   # Download the image from the URL and add it as base64 encoded data
   if image.url is not None:
-    content_bytes = image.get_content_bytes()  # type: ignore
+    content_bytes = image.get_content_bytes()
     if content_bytes is not None:
       try:
         import base64
@@ -296,7 +296,7 @@ def convert_schema(schema_dict: Dict[str, Any], root_schema: Optional[Dict[str, 
           )
         }
         if value_type == "ARRAY":
-          placeholder_properties["example_key"].items = {}  # type: ignore
+          placeholder_properties["example_key"].items = {}
 
         return Schema(
           type=GeminiType.OBJECT,
@@ -369,7 +369,7 @@ def convert_schema(schema_dict: Dict[str, Any], root_schema: Optional[Dict[str, 
       else:
         filtered_any_of.append(schema)
 
-    any_of = filtered_any_of  # type: ignore
+    any_of = filtered_any_of
     if len(any_of) == 1 and any_of[0] is not None:
       any_of[0].nullable = is_nullable
       return any_of[0]

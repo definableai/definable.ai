@@ -7,7 +7,7 @@ No external dependencies — only stdlib + dataclasses.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
-from definable.utils.log import log_warning
+from definable.utils.log import log_debug, log_warning
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +82,7 @@ class ResultMessage:
   input_tokens: int = 0
   output_tokens: int = 0
   result: Optional[str] = None
-  structured_output: Any = None
+  structured_output: Optional[object] = None
 
 
 @dataclass
@@ -113,6 +113,52 @@ class UserMessage:
 
 
 Message = Union[AssistantMessage, SystemMessage, ResultMessage, StreamEvent, ControlRequest, UserMessage]
+
+
+# ---------------------------------------------------------------------------
+# AskUserQuestion types (for interactive CLI support)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AskUserOption:
+  """A single option within an AskUserQuestion."""
+
+  label: str = ""
+  description: str = ""
+
+
+@dataclass
+class AskUserQuestionItem:
+  """A single question within an AskUserQuestion tool call."""
+
+  question: str = ""
+  header: str = ""
+  options: List[AskUserOption] = field(default_factory=list)
+  multi_select: bool = False
+
+
+@dataclass
+class AskUserQuestionInput:
+  """Parsed input for the AskUserQuestion tool."""
+
+  questions: List[AskUserQuestionItem] = field(default_factory=list)
+
+
+def parse_ask_user_input(raw: Dict[str, Any]) -> AskUserQuestionInput:
+  """Parse raw AskUserQuestion tool input into typed structure."""
+  questions: List[AskUserQuestionItem] = []
+  for q in raw.get("questions", []):
+    options = [AskUserOption(label=o.get("label", ""), description=o.get("description", "")) for o in q.get("options", [])]
+    questions.append(
+      AskUserQuestionItem(
+        question=q.get("question", ""),
+        header=q.get("header", ""),
+        options=options,
+        multi_select=q.get("multiSelect", False),
+      )
+    )
+  return AskUserQuestionInput(questions=questions)
 
 
 # ---------------------------------------------------------------------------
@@ -235,5 +281,10 @@ def parse_message(data: dict) -> Message:
     return _parse_control_request(data)
   elif msg_type == "user":
     return _parse_user(data)
+  # Operational messages (rate limits, progress, etc.) — skip silently
+  _IGNORABLE_TYPES = {"rate_limit_event", "progress"}
+  if msg_type in _IGNORABLE_TYPES:
+    log_debug(f"Skipping CLI message type: {msg_type}")
+    raise ValueError(f"Ignorable message type: {msg_type}")
   log_warning(f"Unknown CLI message type: {msg_type}")
   raise ValueError(f"Unknown message type: {msg_type}")

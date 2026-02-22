@@ -6,6 +6,7 @@ from definable.agent.tracing.base import (
   TraceExporter,
   TraceWriter,
 )
+from definable.agent.tracing.debug import DebugExporter
 from definable.agent.tracing.jsonl import (
   JSONLExporter,
   read_trace_events,
@@ -21,6 +22,7 @@ __all__ = [
   "NoOpExporter",
   # Exporters
   "JSONLExporter",
+  "DebugExporter",
   # Utilities
   "read_trace_file",
   "read_trace_events",

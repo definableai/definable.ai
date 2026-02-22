@@ -24,6 +24,7 @@ try:
     SDKError,
     SystemMessage,
     ToolMessage,
+    UsageInfo,
     UserMessage,
   )
   from mistralai.models.chatcompletionresponse import (
@@ -304,7 +305,7 @@ class MistralChat(Model):
     if response.choices is not None and len(response.choices) > 0:
       response_message: AssistantMessage = response.choices[0].message
 
-      model_response.content = response_message.content  # type: ignore
+      model_response.content = response_message.content
       model_response.role = response_message.role
 
       if isinstance(response_message.tool_calls, list) and len(response_message.tool_calls) > 0:
@@ -321,12 +322,12 @@ class MistralChat(Model):
 
     return model_response
 
-  def _parse_provider_response_delta(self, response_delta: CompletionEvent) -> ModelResponse:
+  def _parse_provider_response_delta(self, response_delta: CompletionEvent) -> ModelResponse:  # type: ignore[override]
     model_response = ModelResponse()
 
     delta_message: DeltaMessage = response_delta.data.choices[0].delta
     if delta_message.role is not None and not isinstance(delta_message.role, Unset):
-      model_response.role = delta_message.role  # type: ignore
+      model_response.role = delta_message.role
 
     if delta_message.content is not None and not isinstance(delta_message.content, Unset) and isinstance(delta_message.content, str):
       model_response.content = delta_message.content
@@ -348,7 +349,7 @@ class MistralChat(Model):
 
     return model_response
 
-  def _get_metrics(self, response_usage: Any) -> Metrics:
+  def _get_metrics(self, response_usage: UsageInfo) -> Metrics:
     metrics = Metrics()
 
     metrics.input_tokens = response_usage.prompt_tokens or 0

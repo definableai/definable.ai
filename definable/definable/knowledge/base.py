@@ -13,6 +13,7 @@ from definable.knowledge.reranker import Reranker
 if TYPE_CHECKING:
   from definable.knowledge.chunker.base import Chunker
   from definable.knowledge.reader.base import Reader
+  from definable.model.base import Model
   from definable.model.message import Message
   from definable.vectordb.base import VectorDB
 
@@ -77,7 +78,7 @@ class Knowledge:
   trigger: Literal["always", "auto", "never"] = "always"
   decision_prompt: Optional[str] = None
   description: Optional[str] = None
-  routing_model: Optional[Any] = None
+  routing_model: Optional["Model"] = None
 
   def __post_init__(self) -> None:
     # Default to in-memory if no vector_db provided
@@ -186,6 +187,7 @@ class Knowledge:
     top_k: int = 10,
     rerank: bool = True,
     filter: Optional[Dict[str, Any]] = None,  # noqa: A002
+    limit: Optional[int] = None,
   ) -> List[Document]:
     """
     Search the knowledge base.
@@ -195,10 +197,13 @@ class Knowledge:
       top_k: Number of results to return
       rerank: Whether to rerank results
       filter: Optional metadata filter
+      limit: Alias for top_k (for consistency with VectorDB.search)
 
     Returns:
       List of relevant documents
     """
+    if limit is not None:
+      top_k = limit
     # 1. VectorDB handles embedding + search
     fetch_k = top_k * 2 if rerank and self.reranker else top_k
     vector_db = self._require_vector_db()
@@ -216,8 +221,22 @@ class Knowledge:
     top_k: int = 10,
     rerank: bool = True,
     filter: Optional[Dict[str, Any]] = None,  # noqa: A002
+    limit: Optional[int] = None,
   ) -> List[Document]:
-    """Async version of search."""
+    """Async version of search.
+
+    Args:
+      query: Search query text
+      top_k: Number of results to return
+      rerank: Whether to rerank results
+      filter: Optional metadata filter
+      limit: Alias for top_k (for consistency with VectorDB.search)
+
+    Returns:
+      List of relevant documents
+    """
+    if limit is not None:
+      top_k = limit
     # 1. VectorDB handles embedding + search
     fetch_k = top_k * 2 if rerank and self.reranker else top_k
     vector_db = self._require_vector_db()

@@ -36,7 +36,9 @@ Example:
 
 from __future__ import annotations
 
-from typing import Any, List
+from typing import List, Union
+
+FilterValue = Union[int, float, str, bool]
 
 # ============================================================
 # Base Expression
@@ -98,7 +100,7 @@ class EQ(FilterExpr):
       >>> filter = EQ("author_id", 123)
   """
 
-  def __init__(self, key: str, value: Any):
+  def __init__(self, key: str, value: FilterValue):
     self.key = key
     self.value = value
 
@@ -121,7 +123,7 @@ class IN(FilterExpr):
       >>> filter = IN("status", ["draft", "published"])
   """
 
-  def __init__(self, key: str, values: List[Any]):
+  def __init__(self, key: str, values: List[FilterValue]):
     self.key = key
     self.values = values
 
@@ -147,7 +149,7 @@ class GT(FilterExpr):
       >>> filter = GT("created_at", 1234567890)
   """
 
-  def __init__(self, key: str, value: Any):
+  def __init__(self, key: str, value: FilterValue):
     self.key = key
     self.value = value
 
@@ -173,7 +175,7 @@ class LT(FilterExpr):
       >>> filter = LT("created_at", 1234567890)
   """
 
-  def __init__(self, key: str, value: Any):
+  def __init__(self, key: str, value: FilterValue):
     self.key = key
     self.value = value
 

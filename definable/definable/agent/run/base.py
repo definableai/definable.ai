@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type, Union
 
 from definable.filters import FilterExpr
 from definable.media import Audio, Image, Video
@@ -9,6 +11,9 @@ from definable.model.metrics import Metrics
 from definable.agent.reasoning.step import ReasoningStep
 from definable.utils.log import log_error
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+  from definable.knowledge.document import Document
 
 
 @dataclass
@@ -31,14 +36,14 @@ class RunContext:
 
   # Knowledge retrieval results (populated by KnowledgeMiddleware)
   knowledge_context: Optional[str] = None  # Formatted context string for injection
-  knowledge_documents: Optional[List[Any]] = None  # Retrieved Document objects
+  knowledge_documents: Optional[List[Document]] = None  # Retrieved Document objects
 
   # Memory retrieval results (populated by Memory)
   memory_context: Optional[str] = None  # Formatted memory payload for injection
 
   # Deep research results (populated by research pipeline)
   research_context: Optional[str] = None  # Formatted research for system prompt injection
-  research_result: Optional[Any] = None  # Full ResearchResult (for inspection)
+  research_result: Optional[object] = None  # Full ResearchResult (for inspection)
 
   # File reader results (populated by readers module)
   readers_context: Optional[str] = None  # Extracted file content for injection

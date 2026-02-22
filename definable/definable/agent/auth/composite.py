@@ -1,8 +1,8 @@
 """Composite authentication provider that chains multiple providers."""
 
-from typing import Any, Optional
+from typing import Optional, Union
 
-from definable.agent.auth.base import AuthContext, resolve_auth
+from definable.agent.auth.base import AuthContext, AuthProvider, AuthRequest, resolve_auth
 
 
 class CompositeAuth:
@@ -27,12 +27,12 @@ class CompositeAuth:
     )
   """
 
-  def __init__(self, *providers: Any) -> None:
+  def __init__(self, *providers: AuthProvider) -> None:
     if not providers:
       raise ValueError("CompositeAuth requires at least one provider")
     self._providers = list(providers)
 
-  async def authenticate(self, request: Any) -> Optional[AuthContext]:
+  async def authenticate(self, request: Union[AuthRequest, object]) -> Optional[AuthContext]:
     """Try each provider in order, return first success.
 
     Args:

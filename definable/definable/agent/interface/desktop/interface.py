@@ -6,11 +6,11 @@ For production remote access, use TelegramInterface or DiscordInterface.
 
 Example::
 
-    from definable.agent.interface.desktop import DesktopInterface, DesktopConfig
+    from definable.agent.interface.desktop import DesktopInterface
 
     interface = DesktopInterface(
         agent=agent,
-        config=DesktopConfig(websocket_port=8765),
+        websocket_port=8765,
     )
     async with interface:
         await interface.serve_forever()
@@ -18,12 +18,22 @@ Example::
 
 import contextlib
 import json
-from typing import Any, Optional, Set
+import warnings
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from definable.agent.interface.base import BaseInterface
 from definable.agent.interface.desktop.config import DesktopConfig
+from definable.agent.interface.hooks import InterfaceHook
 from definable.agent.interface.message import InterfaceMessage, InterfaceResponse
+from definable.agent.interface.session import SessionManager
 from definable.utils.log import log_error, log_info, log_warning
+
+if TYPE_CHECKING:
+  from websockets.legacy.server import WebSocketServerProtocol
+  from websockets.server import Server as WebSocketServer  # type: ignore[attr-defined]
+
+  from definable.agent.agent import Agent
+  from definable.agent.interface.identity import IdentityResolver
 
 
 class DesktopInterface(BaseInterface):
@@ -43,17 +53,72 @@ class DesktopInterface(BaseInterface):
   If ``websocket_port`` is ``0`` (default), no server is started — useful when
   the agent is driven entirely through the MacOS skill from another interface.
 
-  Args:
-    agent: Agent instance to connect.
-    config: :class:`DesktopConfig` instance.
-    **kwargs: Forwarded to :class:`BaseInterface`.
+  Example::
+
+      interface = DesktopInterface(agent=agent, websocket_port=8765)
   """
 
-  def __init__(self, *, agent: Any = None, config: DesktopConfig, **kwargs: Any) -> None:
-    super().__init__(agent=agent, config=config, **kwargs)
-    self._config: DesktopConfig = config
-    self._server: Any = None  # websockets.WebSocketServer
-    self._connected: Set[Any] = set()
+  def __init__(
+    self,
+    *,
+    # Desktop-specific
+    bridge_host: str = "127.0.0.1",
+    bridge_port: int = 7777,
+    bridge_token: Optional[str] = None,
+    auto_screenshot: bool = False,
+    screenshot_on_error: bool = True,
+    websocket_port: int = 0,
+    # Base config
+    max_session_history: int = 50,
+    session_ttl_seconds: int = 3600,
+    max_concurrent_requests: int = 10,
+    error_message: str = "Sorry, something went wrong. Please try again.",
+    typing_indicator: bool = True,
+    max_message_length: int = 100_000,
+    rate_limit_messages_per_minute: int = 30,
+    # BaseInterface params
+    agent: Optional["Agent"] = None,
+    session_manager: Optional[SessionManager] = None,
+    hooks: Optional[List[InterfaceHook]] = None,
+    identity_resolver: Optional["IdentityResolver"] = None,
+    auth: Optional[object] = None,
+    # Deprecated
+    config: Optional[DesktopConfig] = None,
+  ) -> None:
+    if config is not None:
+      warnings.warn(
+        "Passing config= to DesktopInterface is deprecated. Pass bridge_host, websocket_port, and other params directly as keyword arguments.",
+        DeprecationWarning,
+        stacklevel=2,
+      )
+      resolved_config = config
+    else:
+      resolved_config = DesktopConfig(
+        bridge_host=bridge_host,
+        bridge_port=bridge_port,
+        bridge_token=bridge_token,
+        auto_screenshot=auto_screenshot,
+        screenshot_on_error=screenshot_on_error,
+        websocket_port=websocket_port,
+        max_session_history=max_session_history,
+        session_ttl_seconds=session_ttl_seconds,
+        max_concurrent_requests=max_concurrent_requests,
+        error_message=error_message,
+        typing_indicator=typing_indicator,
+        max_message_length=max_message_length,
+        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+      )
+    super().__init__(
+      agent=agent,
+      config=resolved_config,
+      session_manager=session_manager,
+      hooks=hooks,
+      identity_resolver=identity_resolver,
+      auth=auth,
+    )
+    self._config: DesktopConfig = resolved_config
+    self._server: Optional["WebSocketServer"] = None
+    self._connected: Set["WebSocketServerProtocol"] = set()
 
   async def _start_receiver(self) -> None:
     port = self._config.websocket_port
@@ -62,12 +127,12 @@ class DesktopInterface(BaseInterface):
       return
 
     try:
-      import websockets  # type: ignore[import-not-found]
+      import websockets
     except ImportError as exc:
       raise ImportError("DesktopInterface requires 'websockets'. Install with: pip install 'definable[desktop]'") from exc
 
     self._server = await websockets.serve(
-      self._handle_ws_connection,
+      self._handle_ws_connection,  # type: ignore[arg-type]
       self._config.bridge_host,
       port,
     )
@@ -104,7 +169,7 @@ class DesktopInterface(BaseInterface):
     websocket = raw_message.get("_ws")
     if websocket is None:
       return
-    payload: dict[str, Any] = {"content": response.content or ""}
+    payload: Dict[str, Any] = {"content": response.content or ""}
     if response.images:
       payload["images"] = response.images
     try:
@@ -112,7 +177,7 @@ class DesktopInterface(BaseInterface):
     except Exception as e:
       log_warning(f"[desktop] Failed to send WebSocket response: {e}")
 
-  async def _handle_ws_connection(self, websocket: Any) -> None:
+  async def _handle_ws_connection(self, websocket: "WebSocketServerProtocol") -> None:
     """Handle a single WebSocket client connection."""
     self._connected.add(websocket)
     log_info(f"[desktop] Client connected (total: {len(self._connected)})")

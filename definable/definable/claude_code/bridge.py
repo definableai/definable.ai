@@ -4,6 +4,7 @@ Handles registration, MCP config generation, name prefixing, and async/sync disp
 """
 
 import asyncio
+import contextlib
 from inspect import iscoroutinefunction
 from typing import Any, Dict, List, Optional
 
@@ -39,12 +40,21 @@ class ToolBridge:
       log_debug(f"Registered MCP tool: {fn.name}")
 
   def _register_skill_tools(self, skills: List[Any]) -> None:
-    """Extract and register tools from Skill objects."""
+    """Extract and register tools from Skill objects, injecting skill dependencies."""
     for skill in skills:
       skill_tools = getattr(skill, "tools", None)
       if skill_tools:
+        # Get skill dependencies for injection
+        skill_deps = {}
+        if hasattr(skill, "dependencies"):
+          with contextlib.suppress(Exception):
+            skill_deps = skill.dependencies
+
         for fn in skill_tools:
           if isinstance(fn, Function):
+            # Inject skill dependencies into the tool
+            if skill_deps and hasattr(fn, "_dependencies"):
+              fn._dependencies = {**skill_deps, **(fn._dependencies or {})}
             self._tools[fn.name] = fn
             log_debug(f"Registered skill tool: {fn.name} (from {getattr(skill, 'name', 'unknown')})")
 

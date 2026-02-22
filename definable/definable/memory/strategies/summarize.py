@@ -6,7 +6,10 @@ tool result entries at boundaries are pulled into adjacent sections
 to avoid orphaned tool calls.
 """
 
-from typing import Any, List
+from typing import TYPE_CHECKING, List
+
+if TYPE_CHECKING:
+  from definable.model.base import Model
 
 from definable.memory.strategies.base import MemoryStrategy
 from definable.memory.types import MemoryEntry
@@ -35,7 +38,7 @@ class SummarizeStrategy(MemoryStrategy):
     self.pin_count = pin_count
     self.recent_count = recent_count
 
-  async def optimize(self, entries: List[MemoryEntry], model: Any) -> List[MemoryEntry]:
+  async def optimize(self, entries: List[MemoryEntry], model: "Model") -> List[MemoryEntry]:
     """Optimize entries by summarizing the middle section.
 
     Args:

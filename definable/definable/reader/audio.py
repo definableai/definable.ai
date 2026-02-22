@@ -84,7 +84,7 @@ class AudioFileReader(FileReader):
   """
 
   config: Optional[FileReaderConfig] = None
-  transcriber: Any = None  # AudioTranscriber — set in __post_init__
+  transcriber: Any = None  # set in __post_init__
 
   def __post_init__(self) -> None:
     if self.transcriber is None:

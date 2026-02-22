@@ -2,7 +2,7 @@ import json
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass
 from os import getenv
-from typing import Any, Dict, List, Optional, Sequence, Type, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Type, Union
 
 import httpx
 from pydantic import BaseModel, ValidationError
@@ -534,20 +534,20 @@ class Claude(Model):
         assistant_message.metrics.start_timer()
         provider_response = self.get_client().beta.messages.create(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         )
       else:
         assistant_message.metrics.start_timer()
         provider_response = self.get_client().messages.create(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         )
 
       assistant_message.metrics.stop_timer()
 
-      model_response = self._parse_provider_response(provider_response, response_format=response_format)  # type: ignore
+      model_response = self._parse_provider_response(provider_response, response_format=response_format)
 
       return model_response
 
@@ -573,7 +573,7 @@ class Claude(Model):
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
     run_response: Optional[RunOutput] = None,
     compress_tool_results: bool = False,
-  ) -> Any:
+  ) -> Iterator[ModelResponse]:
     """
     Stream a response from the Anthropic API.
     """
@@ -589,20 +589,20 @@ class Claude(Model):
         assistant_message.metrics.start_timer()
         with self.get_client().beta.messages.stream(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         ) as stream:
           for chunk in stream:
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)  # type: ignore
+            yield self._parse_provider_response_delta(chunk, response_format=response_format)
       else:
         assistant_message.metrics.start_timer()
         with self.get_client().messages.stream(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         ) as stream:
-          for chunk in stream:  # type: ignore
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)  # type: ignore
+          for chunk in stream:
+            yield self._parse_provider_response_delta(chunk, response_format=response_format)
 
       assistant_message.metrics.stop_timer()
 
@@ -643,20 +643,20 @@ class Claude(Model):
         assistant_message.metrics.start_timer()
         provider_response = await self.get_async_client().beta.messages.create(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         )
       else:
         assistant_message.metrics.start_timer()
         provider_response = await self.get_async_client().messages.create(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         )
 
       assistant_message.metrics.stop_timer()
 
-      model_response = self._parse_provider_response(provider_response, response_format=response_format)  # type: ignore
+      model_response = self._parse_provider_response(provider_response, response_format=response_format)
 
       return model_response
 
@@ -697,20 +697,20 @@ class Claude(Model):
         assistant_message.metrics.start_timer()
         async with self.get_async_client().beta.messages.stream(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         ) as stream:
           async for chunk in stream:
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)  # type: ignore
+            yield self._parse_provider_response_delta(chunk, response_format=response_format)
       else:
         assistant_message.metrics.start_timer()
         async with self.get_async_client().messages.stream(
           model=self.id,
-          messages=chat_messages,  # type: ignore
+          messages=chat_messages,
           **request_kwargs,
         ) as stream:
-          async for chunk in stream:  # type: ignore
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)  # type: ignore
+          async for chunk in stream:
+            yield self._parse_provider_response_delta(chunk, response_format=response_format)
 
       assistant_message.metrics.stop_timer()
 
@@ -820,12 +820,12 @@ class Claude(Model):
 
     # Capture context management information if present
     if self.context_management is not None and hasattr(response, "context_management"):
-      if response.context_management is not None:  # type: ignore
+      if response.context_management is not None:
         model_response.provider_data = model_response.provider_data or {}
         if hasattr(response.context_management, "model_dump"):
-          model_response.provider_data["context_management"] = response.context_management.model_dump()  # type: ignore
+          model_response.provider_data["context_management"] = response.context_management.model_dump()
         else:
-          model_response.provider_data["context_management"] = response.context_management  # type: ignore
+          model_response.provider_data["context_management"] = response.context_management
     # Extract file IDs if skills are enabled
     if self.skills and response.content:
       file_ids: List[str] = []
@@ -844,7 +844,7 @@ class Claude(Model):
 
     return model_response
 
-  def _parse_provider_response_delta(
+  def _parse_provider_response_delta(  # type: ignore[override]
     self,
     response: Union[
       ContentBlockStartEvent,
@@ -878,10 +878,10 @@ class Claude(Model):
         }
 
     elif isinstance(response, (ContentBlockStopEvent, ParsedBetaContentBlockStopEvent)):
-      if response.content_block.type == "tool_use":  # type: ignore
-        tool_use = response.content_block  # type: ignore
-        tool_name = tool_use.name  # type: ignore
-        tool_input = tool_use.input  # type: ignore
+      if response.content_block.type == "tool_use":
+        tool_use = response.content_block
+        tool_name = tool_use.name
+        tool_input = tool_use.input
 
         function_def = {"name": tool_name}
         if tool_input:
@@ -891,7 +891,7 @@ class Claude(Model):
 
         model_response.tool_calls = [
           {
-            "id": tool_use.id,  # type: ignore
+            "id": tool_use.id,
             "type": "function",
             "function": function_def,
           }
@@ -904,9 +904,9 @@ class Claude(Model):
 
       accumulated_text = ""
 
-      for block in response.message.content:  # type: ignore
+      for block in response.message.content:
         if block.type == "text":
-          accumulated_text += block.text  # type: ignore
+          accumulated_text += block.text
 
         citations = getattr(block, "citations", None)
         if not citations:
@@ -935,8 +935,8 @@ class Claude(Model):
             log_warning(f"Unexpected error parsing structured output in stream: {e}")
 
       # Capture context management information if present
-      if self.context_management is not None and hasattr(response.message, "context_management"):  # type: ignore
-        context_mgmt = response.message.context_management  # type: ignore
+      if self.context_management is not None and hasattr(response.message, "context_management"):
+        context_mgmt = response.message.context_management
         if context_mgmt is not None:
           model_response.provider_data = model_response.provider_data or {}
           if hasattr(context_mgmt, "model_dump"):
@@ -948,9 +948,9 @@ class Claude(Model):
       isinstance(response, (MessageStopEvent, ParsedBetaMessageStopEvent))
       and hasattr(response, "message")
       and hasattr(response.message, "usage")
-      and response.message.usage is not None  # type: ignore
+      and response.message.usage is not None
     ):
-      model_response.response_usage = self._get_metrics(response.message.usage)  # type: ignore
+      model_response.response_usage = self._get_metrics(response.message.usage)
 
     # Capture the Beta response
     try:

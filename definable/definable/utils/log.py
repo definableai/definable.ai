@@ -1,7 +1,7 @@
 import logging
 from functools import lru_cache
 from os import getenv
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 
 from rich.logging import RichHandler
 from rich.text import Text
@@ -64,7 +64,7 @@ class DefinableLogger(logging.Logger):
     super().info(msg, *args, **kwargs)
 
 
-def build_logger(logger_name: str, source_type: Optional[str] = None) -> Any:
+def build_logger(logger_name: str, source_type: Optional[str] = None) -> logging.Logger:
   # If a logger with the name "definable.{source_type}" is already set, we want to use that one
   _logger = logging.getLogger(f"definable.{logger_name}")
   if _logger.handlers or _logger.level != logging.NOTSET:
@@ -101,12 +101,12 @@ def build_logger(logger_name: str, source_type: Optional[str] = None) -> Any:
   return _logger
 
 
-agent_logger: DefinableLogger = build_logger(LOGGER_NAME, source_type="agent")
-team_logger: DefinableLogger = build_logger(TEAM_LOGGER_NAME, source_type="team")
-workflow_logger: DefinableLogger = build_logger(WORKFLOW_LOGGER_NAME, source_type="workflow")
+agent_logger: logging.Logger = build_logger(LOGGER_NAME, source_type="agent")
+team_logger: logging.Logger = build_logger(TEAM_LOGGER_NAME, source_type="team")
+workflow_logger: logging.Logger = build_logger(WORKFLOW_LOGGER_NAME, source_type="workflow")
 
 # Set the default logger to the agent logger
-logger: DefinableLogger = agent_logger
+logger: logging.Logger = agent_logger
 
 
 debug_on: bool = False
@@ -182,7 +182,7 @@ def use_workflow_logger():
 
 
 @lru_cache(maxsize=128)
-def _using_default_logger(logger_instance: Any) -> bool:
+def _using_default_logger(logger_instance: logging.Logger) -> bool:
   """Return True if the currently active logger is our default DefinableLogger"""
   return isinstance(logger_instance, DefinableLogger)
 
@@ -224,10 +224,10 @@ def log_exception(msg, *args, **kwargs):
 
 
 def configure_definable_logging(
-  custom_default_logger: Optional[Any] = None,
-  custom_agent_logger: Optional[Any] = None,
-  custom_team_logger: Optional[Any] = None,
-  custom_workflow_logger: Optional[Any] = None,
+  custom_default_logger: Optional[logging.Logger] = None,
+  custom_agent_logger: Optional[logging.Logger] = None,
+  custom_team_logger: Optional[logging.Logger] = None,
+  custom_workflow_logger: Optional[logging.Logger] = None,
 ) -> None:
   """
   Util to set custom loggers. These will be used everywhere across the Definable library.

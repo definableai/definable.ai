@@ -91,19 +91,19 @@ class xAI(OpenAILike):
     """
     model_response = super()._parse_provider_response(response, response_format)
 
-    if hasattr(response, "citations") and response.citations:  # type: ignore
+    if hasattr(response, "citations") and response.citations:
       citations = Citations()
       url_citations = []
-      for citation_url in response.citations:  # type: ignore
+      for citation_url in response.citations:
         url_citations.append(UrlCitation(url=str(citation_url)))
 
       citations.urls = url_citations
-      citations.raw = response.citations  # type: ignore
+      citations.raw = response.citations
       model_response.citations = citations
 
     return model_response
 
-  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:
+  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:  # type: ignore[override]
     """
     Parse the xAI streaming response.
 
@@ -115,14 +115,14 @@ class xAI(OpenAILike):
     """
     model_response = super()._parse_provider_response_delta(response_delta)
 
-    if hasattr(response_delta, "citations") and response_delta.citations:  # type: ignore
+    if hasattr(response_delta, "citations") and response_delta.citations:
       citations = Citations()
       url_citations = []
-      for citation_url in response_delta.citations:  # type: ignore
+      for citation_url in response_delta.citations:
         url_citations.append(UrlCitation(url=str(citation_url)))
 
       citations.urls = url_citations
-      citations.raw = response_delta.citations  # type: ignore
+      citations.raw = response_delta.citations
       model_response.citations = citations
 
     return model_response

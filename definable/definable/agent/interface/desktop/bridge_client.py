@@ -168,7 +168,7 @@ class BridgeClient:
   async def __aenter__(self) -> "BridgeClient":
     return self
 
-  async def __aexit__(self, *args: Any) -> None:
+  async def __aexit__(self, *args: object) -> None:
     await self.close()
 
   # --- Internal helper ---
@@ -183,7 +183,7 @@ class BridgeClient:
     client = self._get_client()
     response = await client.post(path, json=data or {})
     response.raise_for_status()
-    return response.json()  # type: ignore[no-any-return]
+    return response.json()
 
   # --- Health ---
 
@@ -528,7 +528,7 @@ class BridgeClient:
       List of dicts with ``name``, ``path``, ``kind``, ``size``.
     """
     result = await self._post("/files/list", {"path": path, "recursive": recursive})
-    return result.get("files", [])  # type: ignore[no-any-return]
+    return result.get("files", [])
 
   async def read_file(self, path: str) -> str:
     """Read a file as text.

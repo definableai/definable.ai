@@ -2,7 +2,10 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import TYPE_CHECKING, Any, List, Optional, Union
+
+if TYPE_CHECKING:
+  from definable.agent.events import RunOutput
 
 from definable.agent.replay.types import (
   KnowledgeRetrievalRecord,
@@ -249,7 +252,7 @@ class Replay:
     return replay
 
   @classmethod
-  def from_run_output(cls, run_output: Any) -> "Replay":
+  def from_run_output(cls, run_output: "RunOutput") -> "Replay":
     """Build a Replay from a RunOutput object.
 
     Args:

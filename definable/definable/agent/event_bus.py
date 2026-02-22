@@ -1,7 +1,7 @@
 """User-registerable event callbacks for agent runs."""
 
 import asyncio
-from typing import Any, Callable, Dict, List
+from typing import Callable, Dict, List
 
 from definable.utils.log import log_warning
 
@@ -54,7 +54,7 @@ class EventBus:
     if handler in handlers:
       handlers.remove(handler)
 
-  async def emit(self, event: Any) -> None:
+  async def emit(self, event: object) -> None:
     """Dispatch *event* to all matching handlers (non-fatal).
 
     Handlers whose signature is a coroutine are awaited; sync handlers

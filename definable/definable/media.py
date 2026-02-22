@@ -383,6 +383,7 @@ class File(BaseModel):
       "text/html",
       "text/css",
       "text/md",
+      "text/markdown",
       "text/csv",
       "text/xml",
       "text/rtf",

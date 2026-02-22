@@ -31,22 +31,22 @@ def create_search_provider(
     A SearchProvider instance.
   """
   if search_fn is not None:
-    return CallableSearchProvider(search_fn)  # type: ignore[return-value]
+    return CallableSearchProvider(search_fn)
 
   if provider == "duckduckgo":
     from definable.agent.research.search.duckduckgo import DuckDuckGoSearchProvider
 
-    return DuckDuckGoSearchProvider()  # type: ignore[return-value]
+    return DuckDuckGoSearchProvider()
 
   if provider == "google":
     from definable.agent.research.search.google import create_google_provider
 
-    return create_google_provider(config)  # type: ignore[return-value]
+    return create_google_provider(config)
 
   if provider == "serpapi":
     from definable.agent.research.search.serpapi import create_serpapi_provider
 
-    return create_serpapi_provider(config)  # type: ignore[return-value]
+    return create_serpapi_provider(config)
 
   raise ValueError(f"Unknown search provider: {provider!r}. Use 'duckduckgo', 'google', or 'serpapi'.")
 

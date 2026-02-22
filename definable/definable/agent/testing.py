@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, List, Optional
 from unittest.mock import MagicMock
 
 from definable.agent.config import AgentConfig
+from definable.types import ToolCallDict
 from definable.agent.tracing import Tracing
 from definable.model.metrics import Metrics
 from definable.agent.events import RunStatus
@@ -34,7 +35,7 @@ class MockModel:
   def __init__(
     self,
     responses: Optional[List[str]] = None,
-    tool_calls: Optional[List[Dict[str, Any]]] = None,
+    tool_calls: Optional[list[ToolCallDict]] = None,
     side_effect: Optional[Callable] = None,
     reasoning_content: Optional[str] = None,
     structured_responses: Optional[List[str]] = None,

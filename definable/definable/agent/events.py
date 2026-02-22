@@ -21,10 +21,14 @@ from definable.agent.run.agent import (
   MemoryRecallStartedEvent,
   MemoryUpdateCompletedEvent,
   MemoryUpdateStartedEvent,
+  ModelCallCompletedEvent,
+  ModelCallStartedEvent,
   OutputModelResponseCompletedEvent,
   OutputModelResponseStartedEvent,
   ParserModelResponseCompletedEvent,
   ParserModelResponseStartedEvent,
+  PhaseCompletedEvent,
+  PhaseStartedEvent,
   PostHookCompletedEvent,
   PostHookStartedEvent,
   PreHookCompletedEvent,
@@ -47,6 +51,10 @@ from definable.agent.run.agent import (
   RunStartedEvent,
   SessionSummaryCompletedEvent,
   SessionSummaryStartedEvent,
+  SubAgentCompletedEvent,
+  SubAgentFailedEvent,
+  SubAgentKilledEvent,
+  SubAgentSpawnedEvent,
   ToolCallCompletedEvent,
   ToolCallErrorEvent,
   ToolCallStartedEvent,
@@ -90,6 +98,9 @@ __all__ = [
   "MemoryRecallCompletedEvent",
   "MemoryUpdateStartedEvent",
   "MemoryUpdateCompletedEvent",
+  # Model calls
+  "ModelCallStartedEvent",
+  "ModelCallCompletedEvent",
   # File reads
   "FileReadStartedEvent",
   "FileReadCompletedEvent",
@@ -110,6 +121,14 @@ __all__ = [
   "ParserModelResponseCompletedEvent",
   "OutputModelResponseStartedEvent",
   "OutputModelResponseCompletedEvent",
+  # Pipeline phases
+  "PhaseStartedEvent",
+  "PhaseCompletedEvent",
+  # Sub-agent
+  "SubAgentSpawnedEvent",
+  "SubAgentCompletedEvent",
+  "SubAgentFailedEvent",
+  "SubAgentKilledEvent",
   # Custom
   "CustomEvent",
 ]

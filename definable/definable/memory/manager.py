@@ -11,8 +11,14 @@ Quick Start:
     agent = Agent(model=model, memory=memory)
 """
 
+from types import TracebackType
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+  from definable.memory.store.base import MemoryStore
+  from definable.model.base import Model
+  from definable.model.message import Message
 
 from definable.memory.types import MemoryEntry
 from definable.utils.log import log_debug
@@ -39,8 +45,8 @@ class Memory:
     description: Description shown in the agent layer guide.
   """
 
-  store: Optional[Any] = None
-  model: Optional[Any] = None
+  store: Optional["MemoryStore"] = None
+  model: Optional["Model"] = None
   enabled: bool = True
   max_messages: int = 100
   pin_count: int = 2
@@ -68,7 +74,7 @@ class Memory:
 
   # --- Public API ---
 
-  async def add(self, message: Any, session_id: str = "default", user_id: str = "default") -> None:
+  async def add(self, message: "Message", session_id: str = "default", user_id: str = "default") -> None:
     """Add a message to session memory.
 
     Converts the Message to a MemoryEntry and stores it.
@@ -114,13 +120,16 @@ class Memory:
     # Auto-optimize if threshold exceeded
     await self._optimize_if_needed(session_id, user_id)
 
-  async def get_entries(self, session_id: str, user_id: str = "default") -> List[MemoryEntry]:
-    """Get all entries for a session."""
+  async def get_entries(self, session_id: str, user_id: str = "default", limit: Optional[int] = None) -> List[MemoryEntry]:
+    """Get all entries for a session, optionally limited to the last N."""
     await self._ensure_initialized()
     assert self.store is not None
-    return await self.store.get_entries(session_id, user_id)
+    entries = await self.store.get_entries(session_id, user_id)
+    if limit is not None:
+      return entries[-limit:]
+    return entries
 
-  async def get_context_messages(self, session_id: str, user_id: str = "default") -> List[Any]:
+  async def get_context_messages(self, session_id: str, user_id: str = "default") -> list["Message"]:
     """Get entries as Message objects for injection into a conversation.
 
     Summary entries are converted to system messages.
@@ -201,5 +210,5 @@ class Memory:
     await self._ensure_initialized()
     return self
 
-  async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     await self.close()

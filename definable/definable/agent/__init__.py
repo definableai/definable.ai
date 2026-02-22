@@ -59,6 +59,7 @@ from definable.agent.testing import AgentTestCase, MockModel, create_test_agent
 from definable.agent.toolkit import Toolkit
 from definable.agent.toolkits import KnowledgeToolkit
 from definable.agent.tracing import (
+  DebugExporter,
   JSONLExporter,
   NoOpExporter,
   Tracing,
@@ -70,6 +71,16 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
   from definable.agent.guardrail import GuardrailResult, Guardrails
+  from definable.agent.pipeline import (
+    BasePhase,
+    DebugConfig,
+    LoopState,
+    LoopStatus,
+    Phase,
+    Pipeline,
+    SubAgentPolicy,
+    ToolRetry,
+  )
   from definable.agent.reasoning import Thinking
   from definable.mcp.toolkit import MCPToolkit
   from definable.memory import Memory
@@ -111,6 +122,10 @@ def __getattr__(name: str):
     from definable.agent.reasoning import Thinking
 
     return Thinking
+  if name in ("Pipeline", "Phase", "BasePhase", "LoopState", "LoopStatus", "ToolRetry", "DebugConfig", "SubAgentPolicy"):
+    from definable.agent import pipeline as _pipeline
+
+    return getattr(_pipeline, name)
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -147,8 +162,18 @@ __all__ = [
   "TraceWriter",
   "JSONLExporter",
   "NoOpExporter",
+  "DebugExporter",
   # Testing
   "MockModel",
   "AgentTestCase",
   "create_test_agent",
+  # Pipeline
+  "Pipeline",
+  "Phase",
+  "BasePhase",
+  "LoopState",
+  "LoopStatus",
+  "ToolRetry",
+  "DebugConfig",
+  "SubAgentPolicy",
 ]

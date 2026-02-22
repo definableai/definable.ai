@@ -12,6 +12,7 @@ from definable.utils.log import log_error, log_info
 if TYPE_CHECKING:
   from definable.agent.agent import Agent
   from definable.agent.interface.base import BaseInterface
+  from definable.agent.interface.gateway import InterfaceGateway
 
 
 class AgentRuntime:
@@ -40,6 +41,7 @@ class AgentRuntime:
     enable_server: Optional[bool] = None,
     name: Optional[str] = None,
     dev: bool = False,
+    gateway: Optional["InterfaceGateway"] = None,
   ) -> None:
     self.agent = agent
     self.interfaces = interfaces or []
@@ -47,6 +49,7 @@ class AgentRuntime:
     self.port = port
     self.name = name or agent.agent_name
     self.dev = dev
+    self.gateway = gateway
     self._shutdown_event = asyncio.Event()
 
     # Auto-detect server need
@@ -69,8 +72,9 @@ class AgentRuntime:
     if self.enable_server:
       tasks.append(asyncio.create_task(self._run_server()))
 
-    # 2. Interface supervisor (if any interfaces)
-    if self.interfaces:
+    # 2. Interface supervisor (gateway or direct interfaces)
+    has_interfaces = bool(self.interfaces) or (self.gateway is not None and bool(self.gateway.interfaces))
+    if has_interfaces:
       tasks.append(asyncio.create_task(self._run_interfaces()))
 
     # 3. Cron scheduler (if any cron triggers)
@@ -135,15 +139,18 @@ class AgentRuntime:
       self._shutdown_event.set()
       await original_shutdown()
 
-    uv_server.handle_exit = lambda *_: self._shutdown_event.set()  # type: ignore[assignment]
+    uv_server.handle_exit = lambda *_: self._shutdown_event.set()  # type: ignore[method-assign]
 
     await uv_server.serve()
 
   async def _run_interfaces(self) -> None:
-    """Run the interface supervisor."""
-    from definable.utils.supervisor import supervise_interfaces
+    """Run the interface supervisor (or gateway if configured)."""
+    if self.gateway is not None:
+      await self.gateway.aserve(name=self.name)
+    else:
+      from definable.utils.supervisor import supervise_interfaces
 
-    await supervise_interfaces(*self.interfaces, name=self.name)
+      await supervise_interfaces(*self.interfaces, name=self.name)
 
   async def _run_cron_scheduler(self, cron_triggers: list) -> None:
     """Run the cron scheduler loop.
@@ -207,9 +214,12 @@ class AgentRuntime:
     if self.dev:
       lines.append("  Mode: development (hot reload)")
 
-    if self.interfaces:
-      iface_names = [i.config.platform or type(i).__name__ for i in self.interfaces]
-      lines.append(f"  Interfaces: {', '.join(iface_names)}")
+    # Show interfaces from gateway or direct list
+    all_ifaces = self.gateway.interfaces if self.gateway else self.interfaces
+    if all_ifaces:
+      iface_names = [i.config.platform or type(i).__name__ for i in all_ifaces]
+      label = "Interfaces (gateway)" if self.gateway else "Interfaces"
+      lines.append(f"  {label}: {', '.join(iface_names)}")
 
     webhooks = [t for t in self.agent._triggers if isinstance(t, Webhook)]
     if webhooks:

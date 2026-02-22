@@ -2,10 +2,12 @@
 
 from datetime import date, datetime, time
 from enum import Enum
-from typing import Any
+from typing import Union
+
+JsonPrimitive = Union[str, int, float, bool, None]
 
 
-def json_serializer(obj: Any) -> Any:
+def json_serializer(obj: object) -> JsonPrimitive:
   """Custom JSON serializer for objects not serializable by default json module.
 
   Handles:

@@ -1,5 +1,6 @@
 """Base transport interface for MCP protocol."""
 
+from types import TracebackType
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
@@ -95,6 +96,6 @@ class BaseTransport(ABC):
     await self.connect()
     return self
 
-  async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     """Async context manager exit."""
     await self.disconnect()

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 from uuid import uuid4
 
 from definable.exceptions import AgentRunException, ModelProviderError, RetryableModelProviderError
+from definable.types import ToolCallDict
 from definable.media import Audio, File, Image, Video
 from definable.model.message import Citations, Message
 from definable.model.metrics import Metrics
@@ -44,11 +45,11 @@ from pydantic import BaseModel
 @dataclass
 class MessageData:
   response_role: Optional[Literal["system", "user", "assistant", "tool"]] = None
-  response_content: Any = ""
-  response_reasoning_content: Any = ""
-  response_redacted_reasoning_content: Any = ""
+  response_content: str = ""
+  response_reasoning_content: str = ""
+  response_redacted_reasoning_content: str = ""
   response_citations: Optional[Citations] = None
-  response_tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+  response_tool_calls: list[ToolCallDict] = field(default_factory=list)
 
   response_audio: Optional[Audio] = None
   response_image: Optional[Image] = None
@@ -521,7 +522,7 @@ class Model(ABC):
     pass
 
   @abstractmethod
-  def _parse_provider_response(self, response: Any, **kwargs) -> ModelResponse:
+  def _parse_provider_response(self, response: Any, **kwargs: Any) -> ModelResponse:
     """
     Parse the raw response from the model provider into a ModelResponse.
 
@@ -534,7 +535,7 @@ class Model(ABC):
     pass
 
   @abstractmethod
-  def _parse_provider_response_delta(self, response: Any) -> ModelResponse:
+  def _parse_provider_response_delta(self, response: Any, **kwargs: Any) -> ModelResponse:
     """
     Parse the streaming response from the model provider into ModelResponse objects.
 
@@ -734,7 +735,7 @@ class Model(ABC):
                 ModelResponseEvent.tool_call_completed.value,
               ]:
                 if function_call_response.content:
-                  model_response.content += function_call_response.content  # type: ignore
+                  model_response.content += function_call_response.content
 
           # Add a function call for each successful execution
           function_call_count += len(function_call_results)
@@ -788,7 +789,7 @@ class Model(ABC):
     finally:
       # Close the Gemini client
       if self.__class__.__name__ == "Gemini" and self.client is not None:  # type: ignore
-        try:  # type: ignore[unreachable]
+        try:
           self.client.close()  # type: ignore
           self.client = None
         except AttributeError:
@@ -931,7 +932,7 @@ class Model(ABC):
                 ModelResponseEvent.tool_call_completed.value,
               ]:
                 if function_call_response.content:
-                  model_response.content += function_call_response.content  # type: ignore
+                  model_response.content += function_call_response.content
 
           # Add a function call for each successful execution
           function_call_count += len(function_call_results)
@@ -986,7 +987,7 @@ class Model(ABC):
       # Close the Gemini client
       if self.__class__.__name__ == "Gemini" and self.client is not None:
         try:  # type: ignore[unreachable]
-          await self.client.aio.aclose()  # type: ignore
+          await self.client.aio.aclose()
           self.client = None
         except AttributeError:
           log_warning(
@@ -1427,7 +1428,7 @@ class Model(ABC):
       # Close the Gemini client
       if self.__class__.__name__ == "Gemini" and self.client is not None:
         try:  # type: ignore[unreachable]
-          self.client.close()  # type: ignore
+          self.client.close()
           self.client = None
         except AttributeError:
           log_warning(
@@ -1670,7 +1671,7 @@ class Model(ABC):
       # Close the Gemini client
       if self.__class__.__name__ == "Gemini" and self.client is not None:
         try:  # type: ignore[unreachable]
-          await self.client.aio.aclose()  # type: ignore
+          await self.client.aio.aclose()
           self.client = None
         except AttributeError:
           log_warning(
@@ -1761,7 +1762,7 @@ class Model(ABC):
 
       # Update the stream data with audio information
       if audio_response.id is not None:
-        stream_data.response_audio.id = audio_response.id  # type: ignore
+        stream_data.response_audio.id = audio_response.id
       if audio_response.content is not None:
         stream_data.response_audio.content += audio_response.content  # type: ignore
       if audio_response.transcript is not None:
@@ -1799,7 +1800,7 @@ class Model(ABC):
     if should_yield:
       yield model_response_delta
 
-  def parse_tool_calls(self, tool_calls_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+  def parse_tool_calls(self, tool_calls_data: list[ToolCallDict]) -> list[ToolCallDict]:
     """
     Parse the tool calls from the model provider into a list of tool calls.
     """

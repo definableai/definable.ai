@@ -158,7 +158,7 @@ def get_error_message(response: JSONRPCResponse) -> Optional[str]:
   return None
 
 
-def validate_response(response: JSONRPCResponse, server_name: Optional[str] = None) -> Any:
+def validate_response(response: JSONRPCResponse, server_name: Optional[str] = None) -> object:
   """Validate response and extract result, raising on error.
 
   Args:

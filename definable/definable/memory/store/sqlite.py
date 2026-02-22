@@ -1,5 +1,8 @@
 """SQLite-backed session memory store using aiosqlite."""
 
+from __future__ import annotations
+
+from types import TracebackType
 import json
 from typing import Any, List, Optional
 
@@ -81,7 +84,7 @@ class SQLiteStore:
   ) -> List[MemoryEntry]:
     await self._ensure_initialized()
     query = "SELECT * FROM session_entries WHERE session_id = ? AND user_id = ? ORDER BY created_at ASC"
-    params: List[Any] = [session_id, user_id]
+    params: list[object] = [session_id, user_id]
     if limit is not None:
       query += " LIMIT ?"
       params.append(limit)
@@ -128,7 +131,7 @@ class SQLiteStore:
     row = await cursor.fetchone()
     return row[0] if row else 0
 
-  def _row_to_entry(self, row: Any) -> MemoryEntry:
+  def _row_to_entry(self, row: tuple[Any, ...]) -> MemoryEntry:
     return MemoryEntry(
       memory_id=row[0],
       session_id=row[1],
@@ -144,5 +147,5 @@ class SQLiteStore:
     await self.initialize()
     return self
 
-  async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     await self.close()

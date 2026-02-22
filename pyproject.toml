@@ -23,6 +23,7 @@ dependencies = [
     "openai>=2.15.0",
     "packaging>=23.0",
     "pydantic>=2.12.5",
+    "prompt-toolkit>=3.0.0",
     "rich>=14.2.0",
     "ruff>=0.15.0",
     "tiktoken>=0.12.0",

@@ -163,12 +163,12 @@ class MongoDb(VectorDB):
 
           with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning, message=".*connected to a CosmosDB cluster.*")
-            self._client = MongoClient(self.connection_string, **cosmos_kwargs, driver=DRIVER_METADATA)  # type: ignore
+            self._client = MongoClient(self.connection_string, **cosmos_kwargs, driver=DRIVER_METADATA)
 
             self._client.admin.command("ping")
 
           log_info("Connected to Azure Cosmos DB successfully.")
-          self._db = self._client.get_database(self.database)  # type: ignore
+          self._db = self._client.get_database(self.database)
           log_info(f"Using database: {self.database}")
 
         except errors.ConnectionFailure as e:
@@ -179,11 +179,11 @@ class MongoDb(VectorDB):
       else:
         try:
           log_debug("Creating MongoDB Client")
-          self._client = MongoClient(self.connection_string, **self.kwargs, driver=DRIVER_METADATA)  # type: ignore
+          self._client = MongoClient(self.connection_string, **self.kwargs, driver=DRIVER_METADATA)
           # Trigger a connection to verify the client
           self._client.admin.command("ping")
           log_info("Connected to MongoDB successfully.")
-          self._db = self._client[self.database]  # type: ignore
+          self._db = self._client[self.database]
         except errors.ConnectionFailure as e:
           logger.error(f"Failed to connect to MongoDB: {e}")
           raise ConnectionError(f"Failed to connect to MongoDB: {e}")
@@ -231,7 +231,7 @@ class MongoDb(VectorDB):
           self._wait_for_index_ready()
       else:
         log_info("Using existing vector search index.")
-    return self._collection  # type: ignore
+    return self._collection
 
   def _get_collection(self) -> Collection:
     """Get or create the MongoDB collection."""
@@ -246,7 +246,7 @@ class MongoDb(VectorDB):
     """Get or create the async MongoDB collection."""
     if self._async_collection is None:
       client = await self._get_async_client()
-      self._async_db = client[self.database]  # type: ignore
+      self._async_db = client[self.database]
       self._async_collection = self._async_db[self.collection_name]  # type: ignore
     return self._async_collection
 
@@ -416,8 +416,8 @@ class MongoDb(VectorDB):
     else:
       try:
         collection = self._get_collection()
-        indexes = list(collection.list_search_indexes())  # type: ignore
-        exists = any(index["name"] == index_name for index in indexes)  # type: ignore
+        indexes = list(collection.list_search_indexes())
+        exists = any(index["name"] == index_name for index in indexes)
         return exists
       except Exception as e:
         logger.error(f"Error checking search index existence: {e}")
@@ -674,7 +674,7 @@ class MongoDb(VectorDB):
 
         pipeline.append({"$project": {"embedding": 0}})
 
-        results = list(collection.aggregate(pipeline))  # type: ignore
+        results = list(collection.aggregate(pipeline))
 
         docs = []
         for doc in results:

@@ -2,17 +2,26 @@
 
 import asyncio
 import contextlib
-from typing import Any, List, Optional
+import warnings
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from definable.agent.interface.base import BaseInterface
 from definable.agent.interface.errors import (
   InterfaceConnectionError,
   InterfaceMessageError,
 )
+from definable.agent.interface.hooks import InterfaceHook
 from definable.agent.interface.message import InterfaceMessage, InterfaceResponse
+from definable.agent.interface.session import SessionManager
 from definable.agent.interface.discord.config import DiscordConfig
 from definable.media import Audio, File, Image
 from definable.utils.log import log_debug, log_info
+
+if TYPE_CHECKING:
+  import discord
+
+  from definable.agent.agent import Agent
+  from definable.agent.interface.identity import IdentityResolver
 
 
 class DiscordInterface(BaseInterface):
@@ -22,25 +31,78 @@ class DiscordInterface(BaseInterface):
   receive messages in real time. Requires the MESSAGE_CONTENT privileged
   intent to be enabled in the Discord Developer Portal.
 
-  Args:
-    agent: The Agent instance.
-    config: DiscordConfig with bot token and settings.
-    session_manager: Optional session manager.
-    hooks: Optional list of hooks.
+  Example::
 
-  Example:
-    interface = DiscordInterface(
-      agent=agent,
-      config=DiscordConfig(bot_token="BOT_TOKEN"),
-    )
-    async with interface:
-      await interface.serve_forever()
+      interface = DiscordInterface(
+        agent=agent,
+        bot_token="BOT_TOKEN",
+      )
+      async with interface:
+        await interface.serve_forever()
   """
 
-  def __init__(self, **kwargs: Any) -> None:
-    super().__init__(**kwargs)
+  def __init__(
+    self,
+    *,
+    # Discord-specific
+    bot_token: str = "",
+    intents_message_content: bool = True,
+    allowed_guild_ids: Optional[List[int]] = None,
+    allowed_channel_ids: Optional[List[int]] = None,
+    respond_to_bots: bool = False,
+    command_prefix: Optional[str] = None,
+    connect_timeout: float = 30.0,
+    # Base config
+    max_session_history: int = 50,
+    session_ttl_seconds: int = 3600,
+    max_concurrent_requests: int = 10,
+    error_message: str = "Sorry, something went wrong. Please try again.",
+    typing_indicator: bool = True,
+    max_message_length: int = 2000,
+    rate_limit_messages_per_minute: int = 30,
+    # BaseInterface params
+    agent: Optional["Agent"] = None,
+    session_manager: Optional[SessionManager] = None,
+    hooks: Optional[List[InterfaceHook]] = None,
+    identity_resolver: Optional["IdentityResolver"] = None,
+    auth: Optional[object] = None,
+    # Deprecated
+    config: Optional[DiscordConfig] = None,
+  ) -> None:
+    if config is not None:
+      warnings.warn(
+        "Passing config= to DiscordInterface is deprecated. Pass bot_token and other params directly as keyword arguments.",
+        DeprecationWarning,
+        stacklevel=2,
+      )
+      resolved_config = config
+    else:
+      resolved_config = DiscordConfig(
+        bot_token=bot_token,
+        intents_message_content=intents_message_content,
+        allowed_guild_ids=allowed_guild_ids,
+        allowed_channel_ids=allowed_channel_ids,
+        respond_to_bots=respond_to_bots,
+        command_prefix=command_prefix,
+        connect_timeout=connect_timeout,
+        max_session_history=max_session_history,
+        session_ttl_seconds=session_ttl_seconds,
+        max_concurrent_requests=max_concurrent_requests,
+        error_message=error_message,
+        typing_indicator=typing_indicator,
+        max_message_length=max_message_length,
+        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+      )
+    super().__init__(
+      agent=agent,
+      config=resolved_config,
+      session_manager=session_manager,
+      hooks=hooks,
+      identity_resolver=identity_resolver,
+      auth=auth,
+    )
     self._dc_config: DiscordConfig = self.config  # type: ignore[assignment]
-    self._client: Any = None  # discord.Client, typed as Any to avoid import at module level
+    self._client: Optional["discord.Client"] = None
     self._bot_task: Optional[asyncio.Task[None]] = None
     self._ready_event: Optional[asyncio.Event] = None
 
@@ -74,7 +136,7 @@ class DiscordInterface(BaseInterface):
       self._ready_event.set()
 
     @self._client.event
-    async def on_message(message: Any) -> None:
+    async def on_message(message: "discord.Message") -> None:
       await self.handle_platform_message(message)
 
     # Start the bot in a background task
@@ -235,7 +297,7 @@ class DiscordInterface(BaseInterface):
       for file in response.files:
         await self._send_file(channel, file)
 
-  async def _send_image(self, channel: Any, image: Image) -> None:
+  async def _send_image(self, channel: "discord.abc.Messageable", image: Image) -> None:
     """Send an image to a Discord channel."""
     import discord as discord_lib
 
@@ -253,7 +315,7 @@ class DiscordInterface(BaseInterface):
       filename = f"image.{image.format or 'png'}"
       await channel.send(file=discord_lib.File(fp, filename=filename))
 
-  async def _send_file(self, channel: Any, file: File) -> None:
+  async def _send_file(self, channel: "discord.abc.Messageable", file: File) -> None:
     """Send a file to a Discord channel."""
     import discord as discord_lib
 

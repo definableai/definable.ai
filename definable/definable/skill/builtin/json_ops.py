@@ -15,13 +15,15 @@ Example:
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Dict, List, Union
+
+JsonValue = Union[str, int, float, bool, None, List["JsonValue"], Dict[str, "JsonValue"]]
 
 from definable.skill.base import Skill
 from definable.tool.decorator import tool
 
 
-def _query_path(data: Any, path: str) -> Any:
+def _query_path(data: object, path: str) -> object:
   """Simple dot-notation path query (e.g. 'users.0.name')."""
   parts = path.split(".")
   current = data
@@ -130,9 +132,9 @@ def transform_json(json_text: str, operation: str) -> str:
     if not isinstance(data, dict):
       return f"Error: 'flatten' requires a JSON object, got {type(data).__name__}"
 
-    flat: Dict[str, Any] = {}
+    flat: Dict[str, object] = {}
 
-    def _flatten(obj: Any, prefix: str = "") -> None:
+    def _flatten(obj: object, prefix: str = "") -> None:
       if isinstance(obj, dict):
         for k, v in obj.items():
           new_key = f"{prefix}.{k}" if prefix else k

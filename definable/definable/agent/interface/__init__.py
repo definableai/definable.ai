@@ -8,7 +8,7 @@ Slack, WhatsApp, and custom web UIs.
 Quick Start (Telegram):
   from definable.agent import Agent
   from definable.model.openai import OpenAIChat
-  from definable.agent.interface.telegram import TelegramInterface, TelegramConfig
+  from definable.agent.interface.telegram import TelegramInterface
 
   agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
@@ -16,7 +16,7 @@ Quick Start (Telegram):
   )
   interface = TelegramInterface(
     agent=agent,
-    config=TelegramConfig(bot_token="YOUR_BOT_TOKEN"),
+    bot_token="YOUR_BOT_TOKEN",
   )
   async with interface:
     await interface.serve_forever()
@@ -45,13 +45,21 @@ from definable.agent.interface.session import InterfaceSession, SessionManager
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+  from definable.agent.interface.cli.config import CLIConfig
+  from definable.agent.interface.cli.interface import CLIInterface
   from definable.agent.interface.desktop.config import DesktopConfig
   from definable.agent.interface.desktop.interface import DesktopInterface
   from definable.agent.interface.discord.config import DiscordConfig
   from definable.agent.interface.discord.interface import DiscordInterface
+  from definable.agent.interface.gateway import (
+    InterfaceErrorEvent,
+    InterfaceGateway,
+    InterfaceRestartedEvent,
+    InterfaceStartedEvent,
+    InterfaceStatus,
+    InterfaceStoppedEvent,
+  )
   from definable.agent.interface.identity import IdentityResolver, PlatformIdentity, SQLiteIdentityResolver
-  from definable.agent.interface.signal.config import SignalConfig
-  from definable.agent.interface.signal.interface import SignalInterface
   from definable.agent.interface.telegram.config import TelegramConfig
   from definable.agent.interface.telegram.interface import TelegramInterface
 
@@ -82,18 +90,29 @@ def __getattr__(name: str):
     from definable.agent.interface.discord.config import DiscordConfig
 
     return DiscordConfig
-  if name == "SignalInterface":
-    from definable.agent.interface.signal.interface import SignalInterface
+  if name == "CLIInterface":
+    from definable.agent.interface.cli.interface import CLIInterface
 
-    return SignalInterface
-  if name == "SignalConfig":
-    from definable.agent.interface.signal.config import SignalConfig
+    return CLIInterface
+  if name == "CLIConfig":
+    from definable.agent.interface.cli.config import CLIConfig
 
-    return SignalConfig
+    return CLIConfig
   if name in ("IdentityResolver", "SQLiteIdentityResolver", "PlatformIdentity"):
     from definable.agent.interface import identity as _identity_mod
 
     return getattr(_identity_mod, name)
+  if name in (
+    "InterfaceGateway",
+    "InterfaceStatus",
+    "InterfaceStartedEvent",
+    "InterfaceStoppedEvent",
+    "InterfaceRestartedEvent",
+    "InterfaceErrorEvent",
+  ):
+    from definable.agent.interface import gateway as _gateway_mod
+
+    return getattr(_gateway_mod, name)
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -117,16 +136,23 @@ __all__ = [
   "InterfaceRateLimitError",
   "InterfaceMessageError",
   # Platform implementations (lazy-loaded)
+  "CLIInterface",
+  "CLIConfig",
   "DesktopInterface",
   "DesktopConfig",
   "TelegramInterface",
   "TelegramConfig",
   "DiscordInterface",
   "DiscordConfig",
-  "SignalInterface",
-  "SignalConfig",
   # Identity resolution (lazy-loaded)
   "IdentityResolver",
   "SQLiteIdentityResolver",
   "PlatformIdentity",
+  # Gateway (lazy-loaded)
+  "InterfaceGateway",
+  "InterfaceStatus",
+  "InterfaceStartedEvent",
+  "InterfaceStoppedEvent",
+  "InterfaceRestartedEvent",
+  "InterfaceErrorEvent",
 ]

@@ -1,6 +1,6 @@
 """User-ID-based allowlist authentication provider for messaging interfaces."""
 
-from typing import Any, Optional, Set
+from typing import Optional, Set, Union
 
 from definable.agent.auth.base import AuthContext, AuthRequest
 
@@ -8,7 +8,7 @@ from definable.agent.auth.base import AuthContext, AuthRequest
 class AllowlistAuth:
   """Validates requests against a set of allowed user IDs.
 
-  Designed for messaging interfaces (Telegram, Discord, Signal) where
+  Designed for messaging interfaces (Telegram, Discord) where
   user identity is provided by the platform rather than by HTTP headers.
 
   Args:
@@ -22,7 +22,7 @@ class AllowlistAuth:
     from definable.agent.auth import AllowlistAuth
 
     telegram = TelegramInterface(
-      config=TelegramConfig(bot_token=token),
+      bot_token=token,
       auth=AllowlistAuth(user_ids={"12345", "67890"}),
     )
   """
@@ -38,7 +38,7 @@ class AllowlistAuth:
     self.chat_ids = set[str](chat_ids) if chat_ids is not None else None
     self.platforms = set[str](platforms) if platforms is not None else None
 
-  def authenticate(self, request: Any) -> Optional[AuthContext]:
+  def authenticate(self, request: Union[AuthRequest, object]) -> Optional[AuthContext]:
     """Check if the request's user ID is in the allowlist.
 
     Only applies to :class:`AuthRequest` instances. Returns None for

@@ -3,6 +3,8 @@ from functools import partial
 from importlib.metadata import version
 from typing import Any, Callable, Dict, List, Literal, Mapping, Optional, Sequence, Type, TypeVar, get_type_hints
 
+from definable.types import JsonSchema
+
 from definable.exceptions import AgentRunException
 from definable.media import Audio, File, Image, Video
 from definable.agent.run import RunContext
@@ -79,7 +81,7 @@ class Function(BaseModel):
   description: Optional[str] = None
   # The parameters the functions accepts, described as a JSON Schema object.
   # To describe a function that accepts no parameters, provide the value {"type": "object", "properties": {}}.
-  parameters: Dict[str, Any] = Field(
+  parameters: JsonSchema = Field(
     default_factory=lambda: {"type": "object", "properties": {}, "required": []},
     description="JSON Schema object describing function parameters",
   )
@@ -253,7 +255,7 @@ class Function(BaseModel):
       }
 
       # Parse docstring for parameters
-      param_descriptions: Dict[str, Any] = {}
+      param_descriptions: Dict[str, str] = {}
       if docstring := getdoc(c):
         parsed_doc = parse(docstring)
         param_docs = parsed_doc.params
@@ -263,9 +265,9 @@ class Function(BaseModel):
             param_name = param.arg_name
             param_type = param.type_name
             if param_type is None:
-              param_descriptions[param_name] = param.description
+              param_descriptions[param_name] = param.description or ""
             else:
-              param_descriptions[param_name] = f"({param_type}) {param.description}"
+              param_descriptions[param_name] = f"({param_type}) {param.description or ''}"
 
       # Get JSON schema for parameters only
       parameters = get_json_schema(type_hints=param_type_hints, param_descriptions=param_descriptions, strict=strict)
@@ -397,8 +399,8 @@ class Function(BaseModel):
       param_type_hints = {name: type_hints.get(name) for name in sig.parameters if name not in excluded_params}
 
       # Parse docstring for parameters
-      param_descriptions = {}
-      param_descriptions_clean = {}
+      param_descriptions: Dict[str, str] = {}
+      param_descriptions_clean: Dict[str, str] = {}
       if docstring := getdoc(self.entrypoint):
         parsed_doc = parse(docstring)
         param_docs = parsed_doc.params
@@ -410,8 +412,8 @@ class Function(BaseModel):
 
             # TODO: We should use type hints first, then map param types in docs to json schema types.
             # This is temporary to not lose information
-            param_descriptions[param_name] = f"({param_type}) {param.description}"
-            param_descriptions_clean[param_name] = param.description
+            param_descriptions[param_name] = f"({param_type}) {param.description or ''}"
+            param_descriptions_clean[param_name] = param.description or ""
 
       # If the function requires user input, we should set the user_input_schema to all parameters.
       # The arguments provided by the model are filled in later.
@@ -622,7 +624,7 @@ class Function(BaseModel):
 
     return None
 
-  def _save_to_cache(self, cache_file: str, result: Any):
+  def _save_to_cache(self, cache_file: str, result: object) -> None:
     """Save result to cache."""
     import json
     from time import time

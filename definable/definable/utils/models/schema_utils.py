@@ -3,12 +3,13 @@ Utility functions for handling JSON schemas across different model providers.
 This module provides model-agnostic schema transformations and validations.
 """
 
-from typing import Any, Dict, Type
+from typing import Type
 
+from definable.types import JsonSchema
 from pydantic import BaseModel
 
 
-def is_dict_field(schema: Dict[str, Any]) -> bool:
+def is_dict_field(schema: JsonSchema) -> bool:
   """
   Check if a schema represents a Dict[str, T] field.
 
@@ -27,7 +28,7 @@ def is_dict_field(schema: Dict[str, Any]) -> bool:
   )
 
 
-def get_dict_value_type(schema: Dict[str, Any]) -> str:
+def get_dict_value_type(schema: JsonSchema) -> str:
   """
   Extract the value type from a Dict field schema.
 
@@ -42,7 +43,7 @@ def get_dict_value_type(schema: Dict[str, Any]) -> str:
   return "string"
 
 
-def normalize_schema_for_provider(schema: Dict[str, Any], provider: str) -> Dict[str, Any]:
+def normalize_schema_for_provider(schema: JsonSchema, provider: str) -> JsonSchema:
   """
   Normalize a Pydantic-generated schema for a specific model provider.
 
@@ -51,7 +52,7 @@ def normalize_schema_for_provider(schema: Dict[str, Any], provider: str) -> Dict
       provider: Model provider name ("openai", "gemini", "anthropic", etc.)
 
   Returns:
-      Dict[str, Any]: Normalized schema for the provider
+      JsonSchema: Normalized schema for the provider
   """
   # Make a deep copy to avoid modifying the original
   import copy
@@ -67,7 +68,7 @@ def normalize_schema_for_provider(schema: Dict[str, Any], provider: str) -> Dict
     return _normalize_generic(normalized)
 
 
-def _normalize_for_openai(schema: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_for_openai(schema: JsonSchema) -> JsonSchema:
   """Normalize schema for OpenAI structured outputs."""
   from definable.utils.models.openai_responses import sanitize_response_schema
 
@@ -75,14 +76,14 @@ def _normalize_for_openai(schema: Dict[str, Any]) -> Dict[str, Any]:
   return schema
 
 
-def _normalize_for_gemini(schema: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_for_gemini(schema: JsonSchema) -> JsonSchema:
   """
   Normalize schema for Gemini.
   Gemini has specific requirements for object types and doesn't support
   additionalProperties in the same way as JSON Schema.
   """
 
-  def _process_schema(s: Dict[str, Any]) -> None:
+  def _process_schema(s: JsonSchema) -> None:
     if isinstance(s, dict):
       # Handle Dict fields - preserve additionalProperties info for convert_schema
       if is_dict_field(s):
@@ -113,10 +114,10 @@ def _normalize_for_gemini(schema: Dict[str, Any]) -> Dict[str, Any]:
   return schema
 
 
-def _normalize_generic(schema: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_generic(schema: JsonSchema) -> JsonSchema:
   """Generic normalization for other providers."""
 
-  def _process_schema(s: Dict[str, Any]) -> None:
+  def _process_schema(s: JsonSchema) -> None:
     if isinstance(s, dict):
       # Remove null defaults
       if "default" in s and s["default"] is None:
@@ -135,7 +136,7 @@ def _normalize_generic(schema: Dict[str, Any]) -> Dict[str, Any]:
   return schema
 
 
-def get_response_schema_for_provider(output_schema: Type[BaseModel], provider: str) -> Dict[str, Any]:
+def get_response_schema_for_provider(output_schema: Type[BaseModel], provider: str) -> JsonSchema:
   """
   Get a properly formatted response schema for a specific model provider.
 
@@ -144,7 +145,7 @@ def get_response_schema_for_provider(output_schema: Type[BaseModel], provider: s
       provider: Model provider name
 
   Returns:
-      Dict[str, Any]: Provider-specific schema
+      JsonSchema: Provider-specific schema
   """
   # Generate the base schema
   base_schema = output_schema.model_json_schema()

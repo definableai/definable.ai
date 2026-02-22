@@ -26,9 +26,9 @@ await agent.aserve(host="0.0.0.0", port=8000)
 With interfaces and dev mode:
 
 ```python
-from definable.agent.interface import TelegramInterface, TelegramConfig
+from definable.agent.interface import TelegramInterface
 
-telegram = TelegramInterface(config=TelegramConfig(bot_token="..."))
+telegram = TelegramInterface(bot_token="...")
 
 agent.serve(telegram, port=8000, dev=True)
 ```

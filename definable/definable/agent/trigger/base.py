@@ -27,7 +27,7 @@ class TriggerEvent:
   headers: Optional[Dict[str, str]] = None
   source: str = ""
   timestamp: float = field(default_factory=time)
-  raw: Any = None
+  raw: object = None
 
 
 class BaseTrigger(ABC):
@@ -39,7 +39,7 @@ class BaseTrigger(ABC):
 
   handler: Optional[Callable] = None
   agent: Optional["Agent"] = None
-  auth: Optional[Any] = None  # Per-trigger auth override (None = use agent default)
+  auth: Optional[object] = None  # Per-trigger auth override (None = use agent default)
 
   @property
   @abstractmethod

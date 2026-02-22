@@ -70,6 +70,7 @@ if TYPE_CHECKING:
   from definable.agent.compression import CompressionManager
   from definable.agent.guardrail.base import Guardrails
   from definable.agent.interface.base import BaseInterface
+  from definable.agent.interface.gateway import InterfaceGateway
   from definable.agent.pipeline.debug import DebugConfig
   from definable.agent.pipeline.pipeline import Pipeline
   from definable.agent.pipeline.state import LoopState
@@ -86,6 +87,10 @@ if TYPE_CHECKING:
   from definable.agent.trigger.base import BaseTrigger
   from definable.reader.base import BaseReader
   from definable.skill.registry import SkillRegistry
+
+_REJECTED_MSG = (
+  "[REJECTED] The user rejected this tool call. Do NOT retry this tool. Respond to the user explaining that the action was not performed."
+)
 
 
 @runtime_checkable
@@ -317,6 +322,7 @@ class Agent:
     self._compression_manager: Optional["CompressionManager"] = self._init_compression()
     self._middleware: List[Middleware] = []
     self._interfaces: List["BaseInterface"] = []
+    self._gateway: Optional["InterfaceGateway"] = None
     self._triggers: List[Any] = []
     self._before_hooks: List[Callable] = []
     self._after_hooks: List[Callable] = []
@@ -1089,7 +1095,7 @@ class Agent:
         messages.append(
           Message(
             role="tool",
-            content="[REJECTED] The user rejected this tool call. Do NOT retry this tool. Respond to the user explaining that the action was not performed.",
+            content=_REJECTED_MSG,
             tool_call_id=te.tool_call_id,
             name=te.tool_name,
           )
@@ -1177,7 +1183,7 @@ class Agent:
         messages.append(
           Message(
             role="tool",
-            content="[REJECTED] The user rejected this tool call. Do NOT retry this tool. Respond to the user explaining that the action was not performed.",
+            content=_REJECTED_MSG,
             tool_call_id=te.tool_call_id,
             name=te.tool_name,
           )
@@ -3006,6 +3012,36 @@ class Agent:
 
   # --- Interfaces ---
 
+  @property
+  def gateway(self) -> Optional["InterfaceGateway"]:
+    """Return the InterfaceGateway, or None if not created."""
+    return self._gateway
+
+  def create_gateway(self, **kwargs: Any) -> "InterfaceGateway":
+    """Create an InterfaceGateway for this agent.
+
+    Migrates any already-registered interfaces into the gateway.
+    The gateway is stored on ``self._gateway`` for use by ``aserve()``
+    and ``AgentRuntime``.
+
+    Args:
+      **kwargs: Passed to ``InterfaceGateway.__init__`` (e.g. shared_sessions,
+          identity_resolver, hooks, enable_identity_linking).
+
+    Returns:
+      The newly created InterfaceGateway.
+    """
+    from definable.agent.interface.gateway import InterfaceGateway
+
+    gw = InterfaceGateway(self, **kwargs)
+
+    # Migrate pre-registered interfaces
+    for iface in self._interfaces:
+      gw.add(iface)
+
+    self._gateway = gw
+    return gw
+
   def add_interface(self, interface: "BaseInterface") -> "Agent":
     """Register an interface with this agent.
 
@@ -3024,6 +3060,7 @@ class Agent:
   async def aserve(
     self,
     *interfaces: "BaseInterface",
+    gateway: Optional["InterfaceGateway"] = None,
     name: Optional[str] = None,
     host: str = "0.0.0.0",
     port: int = 8000,
@@ -3038,6 +3075,9 @@ class Agent:
 
     Args:
       *interfaces: Additional interfaces to run (merged with registered ones).
+      gateway: Optional InterfaceGateway.  When provided, the runtime
+        delegates interface supervision to the gateway instead of using
+        the default supervisor.
       name: Optional prefix for log messages (defaults to agent_name).
       host: Host to bind the HTTP server to.
       port: Port for the HTTP server.
@@ -3046,6 +3086,9 @@ class Agent:
       dev: Enable development mode with Swagger docs and info-level logging.
     """
     from definable.agent.runtime.runner import AgentRuntime
+
+    # Resolve gateway: explicit param > agent's gateway > None
+    resolved_gateway = gateway or self._gateway
 
     # Merge passed interfaces with registered ones
     all_interfaces = list(self._interfaces)
@@ -3063,12 +3106,14 @@ class Agent:
       enable_server=enable_server,
       name=name,
       dev=dev,
+      gateway=resolved_gateway,
     )
     await runtime.start()
 
   def serve(
     self,
     *interfaces: "BaseInterface",
+    gateway: Optional["InterfaceGateway"] = None,
     name: Optional[str] = None,
     host: str = "0.0.0.0",
     port: int = 8000,
@@ -3086,6 +3131,7 @@ class Agent:
 
     Args:
       *interfaces: Additional interfaces to run (merged with registered ones).
+      gateway: Optional InterfaceGateway for centralized interface coordination.
       name: Optional prefix for log messages (defaults to agent_name).
       host: Host to bind the HTTP server to.
       port: Port for the HTTP server.
@@ -3103,6 +3149,7 @@ class Agent:
     asyncio.run(
       self.aserve(
         *interfaces,
+        gateway=gateway,
         name=name,
         host=host,
         port=port,

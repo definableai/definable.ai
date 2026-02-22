@@ -49,7 +49,7 @@ def parse_to_run_output(
   reasoning_content: Optional[str] = None
   metrics = Metrics()
   session_id: Optional[str] = None
-  structured_output: Any = None
+  structured_output: Optional[object] = None
   is_error = False
 
   for msg in messages:

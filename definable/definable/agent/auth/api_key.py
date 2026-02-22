@@ -1,11 +1,11 @@
 """API key authentication provider."""
 
-from typing import Any, Mapping, Optional, Set, Union
+from typing import Mapping, Optional, Set, Union
 
-from definable.agent.auth.base import AuthContext
+from definable.agent.auth.base import AuthContext, AuthRequest
 
 
-def _get_header(headers: Any, name: str) -> str:
+def _get_header(headers: Mapping[str, str], name: str) -> str:
   """Case-insensitive header lookup.
 
   Starlette Headers are natively case-insensitive, but plain dicts
@@ -49,7 +49,7 @@ class APIKeyAuth:
     self.keys: Set[str] = {keys} if isinstance(keys, str) else set(keys)
     self.header = header
 
-  def authenticate(self, request: Any) -> Optional[AuthContext]:
+  def authenticate(self, request: Union[AuthRequest, object]) -> Optional[AuthContext]:
     """Check the request header for a valid API key.
 
     Args:

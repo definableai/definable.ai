@@ -96,7 +96,7 @@ class OpenRouter(OpenAILike):
 
     return model_response
 
-  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:
+  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:  # type: ignore[override]
     model_response = super()._parse_provider_response_delta(response_delta)
 
     if response_delta.choices and len(response_delta.choices) > 0:

@@ -1,7 +1,12 @@
 """Replay module types — structured representations of past agent runs."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+  from definable.agent.replay.replay import Replay
 
 
 @dataclass
@@ -74,8 +79,8 @@ class ToolCallsDiff:
 class ReplayComparison:
   """Side-by-side comparison of two runs."""
 
-  original: Any = None  # Replay (forward ref to avoid circular import)
-  replayed: Any = None  # Replay
+  original: Optional[Replay] = None
+  replayed: Optional[Replay] = None
   content_diff: Optional[str] = None
   cost_diff: Optional[float] = None
   token_diff: int = 0

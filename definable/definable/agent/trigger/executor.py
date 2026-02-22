@@ -1,7 +1,7 @@
 """Trigger executor — calls handlers and processes return values."""
 
 import inspect
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from definable.agent.trigger.base import BaseTrigger, TriggerEvent
 from definable.utils.log import log_error
@@ -23,7 +23,7 @@ class TriggerExecutor:
   def __init__(self, agent: "Agent") -> None:
     self.agent = agent
 
-  async def execute(self, trigger: BaseTrigger, event: TriggerEvent) -> Any:
+  async def execute(self, trigger: BaseTrigger, event: TriggerEvent) -> object:
     """Execute a trigger's handler and process the return value.
 
     Args:
@@ -48,7 +48,7 @@ class TriggerExecutor:
       log_error(f"Trigger {trigger.name} handler failed: {e}")
       return None
 
-  async def _process_result(self, result: Any) -> Any:
+  async def _process_result(self, result: object) -> object:
     """Process the handler's return value.
 
     Args:

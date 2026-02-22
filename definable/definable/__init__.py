@@ -116,6 +116,11 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   # New blocks
   "Thinking": ("definable.agent.reasoning", "Thinking"),
   "Tracing": ("definable.agent.tracing", "Tracing"),
+  # Pipeline
+  "Pipeline": ("definable.agent.pipeline", "Pipeline"),
+  "ToolRetry": ("definable.agent.pipeline", "ToolRetry"),
+  "DebugConfig": ("definable.agent.pipeline", "DebugConfig"),
+  "SubAgentPolicy": ("definable.agent.pipeline", "SubAgentPolicy"),
 }
 
 

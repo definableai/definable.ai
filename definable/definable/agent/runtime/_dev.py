@@ -31,7 +31,7 @@ def _dev_target(script_path: str) -> None:
   runpy.run_path(script_path, run_name="__main__")
 
 
-def _on_reload(changes: set) -> None:  # type: ignore[type-arg]
+def _on_reload(changes: set) -> None:
   """Log changed files on each reload cycle."""
   paths = [str(c[1]) for c in changes]
   log_info(f"[dev] Reloading — changed files: {', '.join(paths)}")

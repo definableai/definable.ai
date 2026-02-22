@@ -20,19 +20,34 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from dataclasses import dataclass, field
 from typing import (
   TYPE_CHECKING,
   Any,
   AsyncIterator,
+  Callable,
   Dict,
   List,
   Optional,
   Type,
   Union,
+  cast,
 )
 from uuid import uuid4
 
+from definable.agent.events import (
+  RunCompletedEvent,
+  RunContext,
+  RunErrorEvent,
+  RunOutput,
+  RunOutputEvent,
+  RunPausedEvent,
+  RunStartedEvent,
+  RunStatus,
+)
+from definable.agent.run.requirement import RunRequirement
+from definable.model.response import ToolExecution
 from definable.claude_code.bridge import ToolBridge
 from definable.claude_code.parser import message_to_events, parse_to_run_output
 from definable.claude_code.tool_server import ToolServer
@@ -43,25 +58,44 @@ from definable.claude_code.types import (
   ResultMessage,
   parse_message,
 )
-from definable.agent.events import (
-  RunCompletedEvent,
-  RunContext,
-  RunErrorEvent,
-  RunOutput,
-  RunOutputEvent,
-  RunStartedEvent,
-  RunStatus,
-)
 from definable.tool.function import Function
 from definable.utils.log import log_debug, log_error, log_warning
 
 if TYPE_CHECKING:
+  from pydantic import BaseModel
+
   from definable.agent.config import AgentConfig
   from definable.agent.guardrail.base import Guardrails
+  from definable.agent.middleware import Middleware
   from definable.agent.tracing import Tracing
   from definable.knowledge.base import Knowledge
   from definable.memory.manager import Memory
-  from pydantic import BaseModel
+  from definable.skill.base import Skill
+  from definable.toolkit import Toolkit
+
+# Tools the framework needs regardless of user config.
+# AskUserQuestion for HITL questioning, task tools for CLI sticky panel.
+_FRAMEWORK_TOOLS = frozenset({
+  "AskUserQuestion",
+  "TodoWrite",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskGet",
+  "TaskList",
+})
+
+
+@dataclass
+class _HitlState:
+  """Internal state for a paused HITL run — holds transport + context across pause."""
+
+  transport: SubprocessTransport
+  control_request_id: str
+  context: RunContext
+  sdk_messages: List["Message"]
+  prompt: str
+  mcp_passthrough_paths: List[str] = field(default_factory=list)
+  ask_user_input: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -91,16 +125,20 @@ class ClaudeCodeAgent:
   # --- Agent identity ---
   agent_id: Optional[str] = None
   agent_name: Optional[str] = None
+  session_id: Optional[str] = None
 
   # --- Definable features ---
   memory: Optional[Union["Memory", bool]] = None
   knowledge: Optional["Knowledge"] = None
   guardrails: Optional["Guardrails"] = None
-  middleware: Optional[List[Any]] = None
+  middleware: Optional[List["Middleware"]] = None
   tools: Optional[List[Function]] = None
-  toolkits: Optional[List[Any]] = None
-  skills: Optional[List[Any]] = None
+  toolkits: Optional[List["Toolkit"]] = None
+  skills: Optional[List["Skill"]] = None
   tracing: Optional[Union["Tracing", bool]] = None
+
+  # --- HITL ---
+  confirm_tools: Optional[List[str]] = None
 
   # --- Extended thinking ---
   thinking_budget_tokens: Optional[int] = None
@@ -114,22 +152,31 @@ class ClaudeCodeAgent:
   # --- Internal state ---
   _tool_bridge: Optional[ToolBridge] = field(default=None, repr=False)
   _tool_server: Optional[ToolServer] = field(default=None, repr=False)
-  _memory_manager: Optional[Any] = field(default=None, repr=False)
-  _knowledge_instance: Optional[Any] = field(default=None, repr=False)
-  _tracing_config: Optional[Any] = field(default=None, repr=False)
-  _event_handlers: List[Any] = field(default_factory=list, repr=False)
+  _memory_manager: Optional["Memory"] = field(default=None, repr=False)
+  _knowledge_instance: Optional["Knowledge"] = field(default=None, repr=False)
+  _tracing_config: Optional["Tracing"] = field(default=None, repr=False)
+  _event_handlers: List[Callable[[object], None]] = field(default_factory=list, repr=False)
   _initialized: bool = field(default=False, repr=False)
+  _pending_tasks: list[asyncio.Task[object]] = field(default_factory=list, repr=False)
+  _agent_owned_toolkits: list[Any] = field(default_factory=list, repr=False)
+  _mcp_config_temps: list[str] = field(default_factory=list, repr=False)
+  _hitl_states: Dict[str, _HitlState] = field(default_factory=dict, repr=False)
 
   def __post_init__(self) -> None:
     if not self.agent_id:
       self.agent_id = f"claude-code-{uuid4().hex[:8]}"
     if not self.agent_name:
       self.agent_name = "ClaudeCodeAgent"
+    if not self.session_id:
+      self.session_id = str(uuid4())
 
   def _ensure_initialized(self) -> None:
     """Lazy initialization of internal components."""
     if self._initialized:
       return
+
+    # Skill setup (must happen before ToolBridge so skill tools are available)
+    self._init_skills()
 
     # Tool bridge
     all_tools = list(self.tools or [])
@@ -145,6 +192,16 @@ class ClaudeCodeAgent:
     self._resolve_tracing()
 
     self._initialized = True
+
+  def _init_skills(self) -> None:
+    """Call setup() on each skill, log errors but don't block."""
+    if not self.skills:
+      return
+    for skill in self.skills:
+      try:
+        skill.setup()
+      except Exception as exc:
+        log_warning(f"Skill '{getattr(skill, 'name', 'unknown')}' setup failed: {exc}")
 
   def _resolve_memory(self) -> None:
     """Resolve memory config into a Memory instance."""
@@ -192,6 +249,106 @@ class ClaudeCodeAgent:
 
     self._tracing_config = self.tracing
 
+  async def _ensure_toolkits_initialized(self) -> None:
+    """Initialize AsyncLifecycleToolkit instances and merge their tools into the bridge.
+
+    MCPToolkit instances are skipped here — they are passed through to the CLI
+    via ``--mcp-config`` instead of being double-proxied through ToolBridge.
+    See ``_collect_mcp_configs()``.
+    """
+    if not self.toolkits:
+      return
+
+    from definable.mcp.toolkit import MCPToolkit
+
+    for toolkit in self.toolkits:
+      # MCPToolkit goes through passthrough (--mcp-config), not ToolBridge
+      if isinstance(toolkit, MCPToolkit):
+        continue
+
+      try:
+        # Check for AsyncLifecycleToolkit protocol
+        if hasattr(toolkit, "initialize") and hasattr(toolkit, "_initialized"):
+          if not toolkit._initialized:
+            await toolkit.initialize()
+            self._agent_owned_toolkits.append(toolkit)
+
+        # Merge toolkit tools into the bridge
+        toolkit_tools = getattr(toolkit, "tools", None)
+        if toolkit_tools and self._tool_bridge:
+          tools_to_add = [t for t in toolkit_tools if isinstance(t, Function)]
+          if tools_to_add:
+            self._tool_bridge._register_tools(tools_to_add)
+      except Exception as exc:
+        log_warning(f"Toolkit initialization failed: {exc}")
+
+  # ---------------------------------------------------------------------------
+  # MCP passthrough (MCPToolkit → --mcp-config)
+  # ---------------------------------------------------------------------------
+
+  def _collect_mcp_configs(self) -> list[str]:
+    """Convert MCPToolkit server configs into Claude CLI ``--mcp-config`` files.
+
+    For each MCPToolkit in ``self.toolkits``, extracts server definitions and
+    writes them to a temp JSON file in the format the Claude CLI expects::
+
+        {"mcpServers": {"name": {"command": ..., "args": ..., "env": ...}}}
+
+    Returns a list of temp file paths (tracked for cleanup).
+    """
+    if not self.toolkits:
+      return []
+
+    import tempfile
+
+    from definable.mcp.toolkit import MCPToolkit
+
+    paths: list[str] = []
+    for toolkit in self.toolkits:
+      if not isinstance(toolkit, MCPToolkit):
+        continue
+
+      servers: Dict[str, Any] = {}
+      for server in toolkit.config.servers:
+        entry: Dict[str, Any] = {}
+        if server.transport == "stdio":
+          entry["command"] = server.command or ""
+          if server.args:
+            entry["args"] = server.args
+          if server.env:
+            entry["env"] = server.env
+        elif server.transport in ("sse", "http"):
+          entry["type"] = server.transport
+          entry["url"] = server.url or ""
+          if server.headers:
+            entry["headers"] = server.headers
+        servers[server.name] = entry
+
+      if not servers:
+        continue
+
+      # Write to temp file
+      fd, path = tempfile.mkstemp(prefix="definable_mcp_", suffix=".json")
+      try:
+        with os.fdopen(fd, "w") as f:
+          json.dump({"mcpServers": servers}, f)
+      except Exception:
+        os.close(fd)
+        raise
+      paths.append(path)
+      self._mcp_config_temps.append(path)
+
+    return paths
+
+  def _cleanup_mcp_temps(self) -> None:
+    """Remove temporary MCP config files created by ``_collect_mcp_configs``."""
+    import contextlib
+
+    for path in self._mcp_config_temps:
+      with contextlib.suppress(OSError):
+        os.remove(path)
+    self._mcp_config_temps.clear()
+
   # ---------------------------------------------------------------------------
   # System prompt construction
   # ---------------------------------------------------------------------------
@@ -211,7 +368,10 @@ class ClaudeCodeAgent:
     # Skill instructions
     if self.skills:
       for skill in self.skills:
-        skill_instructions = getattr(skill, "instructions", None)
+        try:
+          skill_instructions = skill.get_instructions()
+        except Exception:
+          skill_instructions = getattr(skill, "instructions", None)  # type: ignore[assignment]
         if skill_instructions:
           parts.append(f"\n## Skill: {getattr(skill, 'name', 'unnamed')}\n{skill_instructions}")
 
@@ -234,6 +394,7 @@ class ClaudeCodeAgent:
     system_prompt: str,
     output_schema: Optional[Union[Type["BaseModel"], Dict[str, Any]]] = None,
     session_id: Optional[str] = None,
+    mcp_config_paths: Optional[List[str]] = None,
   ) -> List[str]:
     """Build the CLI command-line arguments."""
     # Determine output format upfront — structured output overrides default
@@ -277,17 +438,27 @@ class ClaudeCodeAgent:
     if session_id:
       args.extend(["--resume", session_id])
 
-    # MCP tool server config
+    # MCP tool server config (custom @tool functions via ToolBridge)
     if self._tool_server and self._tool_server.is_running:
       mcp_config = self._tool_server.get_mcp_config_path()
       if mcp_config:
         args.extend(["--mcp-config", mcp_config])
+
+    # MCP passthrough configs (MCPToolkit servers passed directly to CLI)
+    for path in mcp_config_paths or []:
+      args.extend(["--mcp-config", path])
 
     # Tool allowlist / blocklist
     all_allowed = list(self.allowed_tools or [])
     if self._tool_bridge and self._tool_bridge.tool_count > 0:
       all_allowed.extend(self._tool_bridge.get_tool_names())
     if all_allowed:
+      # Inject framework-required tools (AskUserQuestion for HITL, task tools
+      # for CLI panel).  Deduplicate in case user already listed them.
+      existing = set(all_allowed)
+      for fw_tool in _FRAMEWORK_TOOLS:
+        if fw_tool not in existing:
+          all_allowed.append(fw_tool)
       args.extend(["--allowedTools", ",".join(all_allowed)])
 
     if self.disallowed_tools:
@@ -354,11 +525,15 @@ class ClaudeCodeAgent:
 
     try:
       top_k = getattr(self._knowledge_instance, "top_k", 5)
-      results = self._knowledge_instance.search(prompt, top_k=top_k)
+      results = await self._knowledge_instance.asearch(prompt, top_k=top_k)
       if not results:
         return None
 
-      # Format results
+      # Use Knowledge's own formatter (respects context_format setting)
+      if hasattr(self._knowledge_instance, "format_context"):
+        return self._knowledge_instance.format_context(results)
+
+      # Fallback for custom knowledge implementations
       parts = []
       for i, doc in enumerate(results, 1):
         content = getattr(doc, "content", str(doc))
@@ -368,14 +543,16 @@ class ClaudeCodeAgent:
       log_warning(f"Knowledge retrieval failed: {exc}")
       return None
 
-  async def _memory_recall(self, context: RunContext, user_id: Optional[str]) -> Optional[str]:
+  async def _memory_recall(self, context: RunContext) -> Optional[str]:
     """Recall session history for context injection."""
-    if not self._memory_manager or not user_id:
+    if not self._memory_manager:
       return None
 
     try:
       session_id = context.session_id or "default"
-      entries = await self._memory_manager.get_entries(session_id, user_id)
+      user_id = context.user_id or "default"
+      await self._memory_manager._optimize_if_needed(session_id, user_id)
+      entries = await self._memory_manager.get_entries(session_id, user_id, limit=50)
       if not entries:
         return None
 
@@ -384,21 +561,22 @@ class ClaudeCodeAgent:
         if entry.role == "summary":
           parts.append(f"[Summary]: {entry.content}")
         else:
-          parts.append(f"- {entry.content}")
-      return "\n".join(parts)
+          parts.append(f"{entry.role}: {entry.content}")
+      return "<conversation_history>\n" + "\n".join(parts) + "\n</conversation_history>"
     except Exception as exc:
       log_warning(f"Memory recall failed: {exc}")
       return None
 
-  async def _memory_store(self, prompt: str, response: Optional[str], user_id: Optional[str]) -> None:
+  async def _memory_store(self, context: RunContext, prompt: str, response: Optional[str]) -> None:
     """Store messages in session memory after a run."""
-    if not self._memory_manager or not user_id:
+    if not self._memory_manager:
       return
 
     try:
       from definable.model.message import Message as DefMessage
 
-      session_id = "default"
+      session_id = context.session_id or "default"
+      user_id = context.user_id or "default"
       await self._memory_manager._ensure_initialized()
       await self._memory_manager.add(DefMessage(role="user", content=prompt), session_id=session_id, user_id=user_id)
       if response:
@@ -410,7 +588,7 @@ class ClaudeCodeAgent:
   # Event emission
   # ---------------------------------------------------------------------------
 
-  def _emit(self, event: Any) -> None:
+  def _emit(self, event: object) -> None:
     """Emit a tracing/lifecycle event."""
     for handler in self._event_handlers:
       try:
@@ -475,11 +653,43 @@ class ClaudeCodeAgent:
   # Control protocol handler
   # ---------------------------------------------------------------------------
 
-  async def _handle_control(self, request: ControlRequest, context: RunContext) -> dict:
-    """Handle control requests from CLI (permissions, hooks, MCP tools)."""
+  async def _handle_control(self, request: ControlRequest, context: RunContext) -> Union[dict, RunPausedEvent]:
+    """Handle control requests from CLI (permissions, hooks, MCP tools).
+
+    Returns a dict control response to send back to the CLI, or a
+    ``RunPausedEvent`` when HITL confirmation is required (``confirm_tools``).
+    """
+    log_debug(f"ControlRequest: subtype={request.subtype}, tool={request.tool_name}, id={request.id}")
 
     if request.subtype == "can_use_tool":
-      # Check tool guardrails
+      # 0. AskUserQuestion — pause for interactive user input
+      if request.tool_name == "AskUserQuestion":
+        raw_input = request.input or {}
+        questions = raw_input.get("questions", [])
+        if not questions:
+          # Empty questions — auto-allow with empty answers
+          return {
+            "type": "control_response",
+            "id": request.id,
+            "behavior": "allow",
+            "updatedInput": {"questions": [], "answers": {}},
+          }
+        tool_exec = ToolExecution(
+          tool_name="AskUserQuestion",
+          tool_args=raw_input,
+          requires_user_input=True,
+        )
+        requirement = RunRequirement(tool_exec)
+        return RunPausedEvent(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id or "",
+          agent_name=self.agent_name or "",
+          tools=[tool_exec],
+          requirements=[requirement],
+        )
+
+      # 1. Guardrails take precedence — can block outright
       if self.guardrails and self.guardrails.tool:
         results = await self.guardrails.run_tool_checks(
           request.tool_name or "",
@@ -494,6 +704,25 @@ class ClaudeCodeAgent:
               "behavior": "deny",
               "message": result.message or "Blocked by guardrail",
             }
+
+      # 2. HITL check — pause for user confirmation
+      if self.confirm_tools and (request.tool_name or "") in self.confirm_tools:
+        tool_exec = ToolExecution(
+          tool_name=request.tool_name or "",
+          tool_args=request.input or {},
+          requires_confirmation=True,
+        )
+        requirement = RunRequirement(tool_exec)
+        return RunPausedEvent(
+          run_id=context.run_id,
+          session_id=context.session_id,
+          agent_id=self.agent_id or "",
+          agent_name=self.agent_name or "",
+          tools=[tool_exec],
+          requirements=[requirement],
+        )
+
+      # 3. Auto-allow
       return {"type": "control_response", "id": request.id, "behavior": "allow"}
 
     elif request.subtype == "tool_call":
@@ -542,7 +771,7 @@ class ClaudeCodeAgent:
     # 1. Build RunContext
     context = RunContext(
       run_id=str(uuid4()),
-      session_id=session_id or str(uuid4()),
+      session_id=session_id or self.session_id or str(uuid4()),
       user_id=user_id,
       output_schema=output_schema,
     )
@@ -598,16 +827,20 @@ class ClaudeCodeAgent:
 
     # 1. Pre-pipeline: knowledge + memory
     knowledge_ctx = await self._knowledge_retrieve(context, prompt)
-    memory_ctx = await self._memory_recall(context, user_id)
+    memory_ctx = await self._memory_recall(context)
 
     # 2. Build system prompt
     system_prompt = self._build_system_prompt(knowledge_ctx, memory_ctx)
 
-    # 3. Start MCP tool server (if custom tools registered)
+    # 3. Initialize toolkits + start MCP tool server
+    await self._ensure_toolkits_initialized()
     await self._start_tool_server()
 
+    # 3b. Collect MCP passthrough configs (MCPToolkit → --mcp-config)
+    mcp_passthrough_paths = self._collect_mcp_configs()
+
     # 4. Build CLI args (must be after tool server start for --mcp-config)
-    cli_args = self._build_cli_args(system_prompt, output_schema, session_id)
+    cli_args = self._build_cli_args(system_prompt, output_schema, session_id, mcp_passthrough_paths)
 
     # 5. Create transport and connect
     transport = SubprocessTransport(
@@ -640,6 +873,7 @@ class ClaudeCodeAgent:
         model_provider="Anthropic",
       )
 
+    paused = False
     try:
       # 6. Send user prompt
       user_msg = self._build_user_message(prompt, messages)
@@ -655,6 +889,31 @@ class ClaudeCodeAgent:
 
         if isinstance(msg, ControlRequest):
           response = await self._handle_control(msg, context)
+
+          # HITL: _handle_control returned a pause event
+          if isinstance(response, RunPausedEvent):
+            self._hitl_states[context.run_id] = _HitlState(
+              transport=transport,
+              control_request_id=msg.id,
+              context=context,
+              sdk_messages=sdk_messages,
+              prompt=prompt,
+              mcp_passthrough_paths=mcp_passthrough_paths,
+              ask_user_input=msg.input if msg.tool_name == "AskUserQuestion" else None,
+            )
+            result = parse_to_run_output(
+              sdk_messages,
+              context,
+              self.model,
+              agent_id=self.agent_id,
+              agent_name=self.agent_name,
+            )
+            result.status = RunStatus.paused
+            result.requirements = response.requirements
+            self._emit(response)
+            paused = True
+            return result
+
           await transport.send(response)
           continue
 
@@ -681,9 +940,11 @@ class ClaudeCodeAgent:
       if modified:
         result = modified
 
-      # 10. Memory store (fire-and-forget)
-      if self._memory_manager and user_id:
-        asyncio.create_task(self._memory_store(prompt, result.content if isinstance(result.content, str) else None, user_id))
+      # 10. Memory store (fire-and-forget with tracking)
+      if self._memory_manager:
+        task = asyncio.create_task(self._memory_store(context, prompt, result.content if isinstance(result.content, str) else None))
+        self._pending_tasks.append(task)
+        task.add_done_callback(lambda t: self._pending_tasks.remove(t) if t in self._pending_tasks else None)
 
       self._emit(
         RunCompletedEvent(
@@ -720,11 +981,13 @@ class ClaudeCodeAgent:
         model_provider="Anthropic",
       )
     finally:
-      await transport.close()
-      await self._stop_tool_server()
+      if not paused:
+        await transport.close()
+        await self._stop_tool_server()
+        self._cleanup_mcp_temps()
 
   # ---------------------------------------------------------------------------
-  # Streaming
+  # Streaming execution
   # ---------------------------------------------------------------------------
 
   async def arun_stream(
@@ -737,16 +1000,23 @@ class ClaudeCodeAgent:
     messages: Optional[List[Any]] = None,
     **kwargs: Any,
   ) -> AsyncIterator[RunOutputEvent]:
-    """Stream events from a Claude Code agent run.
+    """Stream events from a Claude Code CLI run.
 
-    Yields RunOutputEvent instances as the CLI produces output.
-    Control requests are handled inline (not yielded).
+    Yields ``RunOutputEvent`` instances (``RunContentEvent``,
+    ``ToolCallStartedEvent``, ``RunPausedEvent``, ``RunCompletedEvent``, etc.)
+    as they arrive from the CLI subprocess.
+
+    No middleware wrapping — matches the regular Agent streaming contract.
+
+    When ``confirm_tools`` is set and the CLI asks permission for a matching
+    tool, a ``RunPausedEvent`` is yielded and the generator returns.  Call
+    ``continue_run_stream()`` to resume.
     """
     self._ensure_initialized()
 
     context = RunContext(
       run_id=str(uuid4()),
-      session_id=session_id or str(uuid4()),
+      session_id=session_id or self.session_id or str(uuid4()),
       user_id=user_id,
       output_schema=output_schema,
     )
@@ -754,7 +1024,7 @@ class ClaudeCodeAgent:
     # Input guardrails
     block = await self._run_input_guardrails(context, prompt)
     if block:
-      yield RunErrorEvent(
+      yield RunCompletedEvent(
         agent_id=self.agent_id or "",
         agent_name=self.agent_name or "",
         run_id=context.run_id,
@@ -763,16 +1033,26 @@ class ClaudeCodeAgent:
       )
       return
 
+    self._emit(
+      RunStartedEvent(
+        agent_id=self.agent_id or "",
+        agent_name=self.agent_name or "",
+        run_id=context.run_id,
+        session_id=context.session_id,
+        model=self.model,
+        model_provider="Anthropic",
+      )
+    )
+
     # Pre-pipeline
     knowledge_ctx = await self._knowledge_retrieve(context, prompt)
-    memory_ctx = await self._memory_recall(context, user_id)
-
+    memory_ctx = await self._memory_recall(context)
     system_prompt = self._build_system_prompt(knowledge_ctx, memory_ctx)
 
-    # Start MCP tool server
+    await self._ensure_toolkits_initialized()
     await self._start_tool_server()
-
-    cli_args = self._build_cli_args(system_prompt, output_schema, session_id)
+    mcp_passthrough_paths = self._collect_mcp_configs()
+    cli_args = self._build_cli_args(system_prompt, output_schema, session_id, mcp_passthrough_paths)
 
     transport = SubprocessTransport(
       cli_path=self.cli_path,
@@ -793,19 +1073,12 @@ class ClaudeCodeAgent:
       )
       return
 
+    paused = False
     try:
-      yield RunStartedEvent(
-        agent_id=self.agent_id or "",
-        agent_name=self.agent_name or "",
-        run_id=context.run_id,
-        session_id=context.session_id,
-        model=self.model,
-        model_provider="Anthropic",
-      )
-
       user_msg = self._build_user_message(prompt, messages)
       await transport.send(user_msg)
 
+      sdk_messages: List[Message] = []
       async for raw_msg in transport.receive():
         try:
           msg = parse_message(raw_msg)
@@ -814,55 +1087,373 @@ class ClaudeCodeAgent:
 
         if isinstance(msg, ControlRequest):
           response = await self._handle_control(msg, context)
+
+          if isinstance(response, RunPausedEvent):
+            self._hitl_states[context.run_id] = _HitlState(
+              transport=transport,
+              control_request_id=msg.id,
+              context=context,
+              sdk_messages=sdk_messages,
+              prompt=prompt,
+              mcp_passthrough_paths=mcp_passthrough_paths,
+              ask_user_input=msg.input if msg.tool_name == "AskUserQuestion" else None,
+            )
+            self._emit(response)
+            paused = True
+            yield response
+            return
+
           await transport.send(response)
           continue
 
-        if isinstance(msg, ResultMessage):
-          # Emit a single RunCompletedEvent with full metrics
-          metrics = None
-          if msg.input_tokens or msg.output_tokens:
-            from definable.model.metrics import Metrics
+        sdk_messages.append(msg)
 
-            metrics = Metrics(
-              input_tokens=msg.input_tokens,
-              output_tokens=msg.output_tokens,
-              total_tokens=msg.input_tokens + msg.output_tokens,
-            )
-            if msg.duration_ms:
-              metrics.duration = msg.duration_ms / 1000.0
-            if msg.total_cost_usd is not None:
-              metrics.cost = msg.total_cost_usd
-          yield RunCompletedEvent(  # type: ignore[misc]
-            agent_id=self.agent_id or "",
-            agent_name=self.agent_name or "",
-            run_id=context.run_id,
-            session_id=context.session_id,
-            content=msg.result,
-            metrics=metrics,
-          )
+        if isinstance(msg, ResultMessage):
           break
 
-        events = message_to_events(
-          msg,
-          context,
-          agent_id=self.agent_id or "",
-          agent_name=self.agent_name or "",
-        )
+        # Yield events to caller
+        events = message_to_events(msg, context, agent_id=self.agent_id or "", agent_name=self.agent_name or "")
         for event in events:
-          yield event  # type: ignore[misc]
+          self._emit(event)
+          yield cast(RunOutputEvent, event)
+
+      # Final: parse RunOutput for guardrails + memory + completion event
+      result = parse_to_run_output(
+        sdk_messages,
+        context,
+        self.model,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+      )
+
+      modified = await self._run_output_guardrails(context, result)
+      if modified:
+        result = modified
+
+      if self._memory_manager:
+        task = asyncio.create_task(self._memory_store(context, prompt, result.content if isinstance(result.content, str) else None))
+        self._pending_tasks.append(task)
+        task.add_done_callback(lambda t: self._pending_tasks.remove(t) if t in self._pending_tasks else None)
+
+      completed_event = RunCompletedEvent(
+        agent_id=self.agent_id or "",
+        agent_name=self.agent_name or "",
+        run_id=context.run_id,
+        session_id=context.session_id,
+        content=result.content,
+        metrics=result.metrics,
+      )
+      self._emit(completed_event)
+      yield completed_event
 
     except Exception as exc:
-      log_error(f"Claude Code stream failed: {exc}")
-      yield RunErrorEvent(
+      log_error(f"Claude Code agent stream failed: {exc}")
+      error_event = RunErrorEvent(
         agent_id=self.agent_id or "",
         agent_name=self.agent_name or "",
         run_id=context.run_id,
         session_id=context.session_id,
         content=str(exc),
       )
+      self._emit(error_event)
+      yield error_event
     finally:
-      await transport.close()
-      await self._stop_tool_server()
+      if not paused:
+        await transport.close()
+        await self._stop_tool_server()
+        self._cleanup_mcp_temps()
+
+  # ---------------------------------------------------------------------------
+  # HITL continue methods
+  # ---------------------------------------------------------------------------
+
+  async def continue_run(self, *, run_output: RunOutput) -> RunOutput:
+    """Resume a paused HITL run after user has confirmed/rejected requirements.
+
+    Args:
+      run_output: The paused ``RunOutput`` (``is_paused`` must be ``True``).
+
+    Returns:
+      A new ``RunOutput`` — may be paused again if another tool needs confirmation.
+    """
+    if not run_output.is_paused:
+      raise ValueError("RunOutput is not paused — nothing to continue")
+
+    run_id = run_output.run_id or ""
+    state = self._hitl_states.pop(run_id, None)
+    if state is None:
+      raise ValueError(f"No HITL state found for run_id={run_id}")
+
+    # Build control response — AskUserQuestion gets updatedInput with answers
+    if state.ask_user_input is not None:
+      # Extract answers from the resolved requirement's tool_args
+      answers: Dict[str, str] = {}
+      if run_output.requirements:
+        for req in run_output.requirements:
+          if req.tool_execution and req.tool_execution.tool_args:
+            answers = req.tool_execution.tool_args.get("_answers", {})
+            break
+      control_response = {
+        "type": "control_response",
+        "id": state.control_request_id,
+        "behavior": "allow",
+        "updatedInput": {
+          "questions": state.ask_user_input.get("questions", []),
+          "answers": answers,
+        },
+      }
+    else:
+      # Determine allow/deny from resolved requirements
+      behavior = "allow"
+      if run_output.requirements:
+        for req in run_output.requirements:
+          if req.confirmation is False:
+            behavior = "deny"
+            break
+      control_response = {
+        "type": "control_response",
+        "id": state.control_request_id,
+        "behavior": behavior,
+      }
+
+    paused = False
+    try:
+      await state.transport.send(control_response)
+
+      # Continue reading from the same transport
+      async for raw_msg in state.transport.receive():
+        try:
+          msg = parse_message(raw_msg)
+        except ValueError:
+          continue
+
+        if isinstance(msg, ControlRequest):
+          response = await self._handle_control(msg, state.context)
+
+          if isinstance(response, RunPausedEvent):
+            self._hitl_states[run_id] = _HitlState(
+              transport=state.transport,
+              control_request_id=msg.id,
+              context=state.context,
+              sdk_messages=state.sdk_messages,
+              prompt=state.prompt,
+              mcp_passthrough_paths=state.mcp_passthrough_paths,
+              ask_user_input=msg.input if msg.tool_name == "AskUserQuestion" else None,
+            )
+            result = parse_to_run_output(
+              state.sdk_messages,
+              state.context,
+              self.model,
+              agent_id=self.agent_id,
+              agent_name=self.agent_name,
+            )
+            result.status = RunStatus.paused
+            result.requirements = response.requirements
+            self._emit(response)
+            paused = True
+            return result
+
+          await state.transport.send(response)
+          continue
+
+        state.sdk_messages.append(msg)
+        if isinstance(msg, ResultMessage):
+          break
+        self._emit_for(msg, state.context)
+
+      result = parse_to_run_output(
+        state.sdk_messages,
+        state.context,
+        self.model,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+      )
+
+      modified = await self._run_output_guardrails(state.context, result)
+      if modified:
+        result = modified
+
+      if self._memory_manager:
+        task = asyncio.create_task(self._memory_store(state.context, state.prompt, result.content if isinstance(result.content, str) else None))
+        self._pending_tasks.append(task)
+        task.add_done_callback(lambda t: self._pending_tasks.remove(t) if t in self._pending_tasks else None)
+
+      self._emit(
+        RunCompletedEvent(
+          agent_id=self.agent_id or "",
+          agent_name=self.agent_name or "",
+          run_id=state.context.run_id,
+          session_id=state.context.session_id,
+          content=result.content,
+          metrics=result.metrics,
+        )
+      )
+      return result
+
+    except Exception as exc:
+      log_error(f"Claude Code agent continue_run failed: {exc}")
+      self._emit(
+        RunErrorEvent(
+          agent_id=self.agent_id or "",
+          agent_name=self.agent_name or "",
+          run_id=state.context.run_id,
+          session_id=state.context.session_id,
+          content=str(exc),
+        )
+      )
+      return RunOutput(
+        run_id=state.context.run_id,
+        session_id=state.context.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        content=f"Error: {exc}",
+        status=RunStatus.error,
+        model=self.model,
+        model_provider="Anthropic",
+      )
+    finally:
+      if not paused:
+        await state.transport.close()
+        await self._stop_tool_server()
+        self._cleanup_mcp_temps()
+
+  async def continue_run_stream(self, *, run_output: Union[RunOutput, RunPausedEvent]) -> AsyncIterator[RunOutputEvent]:
+    """Resume a paused HITL run as a streaming generator.
+
+    Args:
+      run_output: The paused ``RunOutput`` or ``RunPausedEvent``.
+
+    Yields:
+      ``RunOutputEvent`` instances until completion or another pause.
+    """
+    # Extract run_id from either RunOutput or RunPausedEvent
+    if isinstance(run_output, RunPausedEvent):
+      run_id = run_output.run_id or ""
+      requirements = run_output.requirements
+    else:
+      if not run_output.is_paused:
+        raise ValueError("RunOutput is not paused — nothing to continue")
+      run_id = run_output.run_id or ""
+      requirements = run_output.requirements
+
+    state = self._hitl_states.pop(run_id, None)
+    if state is None:
+      raise ValueError(f"No HITL state found for run_id={run_id}")
+
+    # Build control response — AskUserQuestion gets updatedInput with answers
+    if state.ask_user_input is not None:
+      answers_dict: Dict[str, str] = {}
+      if requirements:
+        for req in requirements:
+          if req.tool_execution and req.tool_execution.tool_args:
+            answers_dict = req.tool_execution.tool_args.get("_answers", {})
+            break
+      control_response = {
+        "type": "control_response",
+        "id": state.control_request_id,
+        "behavior": "allow",
+        "updatedInput": {
+          "questions": state.ask_user_input.get("questions", []),
+          "answers": answers_dict,
+        },
+      }
+    else:
+      behavior = "allow"
+      if requirements:
+        for req in requirements:
+          if req.confirmation is False:
+            behavior = "deny"
+            break
+      control_response = {
+        "type": "control_response",
+        "id": state.control_request_id,
+        "behavior": behavior,
+      }
+
+    paused = False
+    try:
+      await state.transport.send(control_response)
+
+      async for raw_msg in state.transport.receive():
+        try:
+          msg = parse_message(raw_msg)
+        except ValueError:
+          continue
+
+        if isinstance(msg, ControlRequest):
+          response = await self._handle_control(msg, state.context)
+
+          if isinstance(response, RunPausedEvent):
+            self._hitl_states[run_id] = _HitlState(
+              transport=state.transport,
+              control_request_id=msg.id,
+              context=state.context,
+              sdk_messages=state.sdk_messages,
+              prompt=state.prompt,
+              mcp_passthrough_paths=state.mcp_passthrough_paths,
+              ask_user_input=msg.input if msg.tool_name == "AskUserQuestion" else None,
+            )
+            self._emit(response)
+            paused = True
+            yield response
+            return
+
+          await state.transport.send(response)
+          continue
+
+        state.sdk_messages.append(msg)
+        if isinstance(msg, ResultMessage):
+          break
+
+        events = message_to_events(msg, state.context, agent_id=self.agent_id or "", agent_name=self.agent_name or "")
+        for event in events:
+          self._emit(event)
+          yield cast(RunOutputEvent, event)
+
+      result = parse_to_run_output(
+        state.sdk_messages,
+        state.context,
+        self.model,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+      )
+
+      modified = await self._run_output_guardrails(state.context, result)
+      if modified:
+        result = modified
+
+      if self._memory_manager:
+        task = asyncio.create_task(self._memory_store(state.context, state.prompt, result.content if isinstance(result.content, str) else None))
+        self._pending_tasks.append(task)
+        task.add_done_callback(lambda t: self._pending_tasks.remove(t) if t in self._pending_tasks else None)
+
+      completed_event = RunCompletedEvent(
+        agent_id=self.agent_id or "",
+        agent_name=self.agent_name or "",
+        run_id=state.context.run_id,
+        session_id=state.context.session_id,
+        content=result.content,
+        metrics=result.metrics,
+      )
+      self._emit(completed_event)
+      yield completed_event
+
+    except Exception as exc:
+      log_error(f"Claude Code agent continue_run_stream failed: {exc}")
+      error_event = RunErrorEvent(
+        agent_id=self.agent_id or "",
+        agent_name=self.agent_name or "",
+        run_id=state.context.run_id,
+        session_id=state.context.session_id,
+        content=str(exc),
+      )
+      self._emit(error_event)
+      yield error_event
+    finally:
+      if not paused:
+        await state.transport.close()
+        await self._stop_tool_server()
+        self._cleanup_mcp_temps()
 
   # ---------------------------------------------------------------------------
   # Lifecycle
@@ -872,9 +1463,53 @@ class ClaudeCodeAgent:
     self._ensure_initialized()
     return self
 
-  async def __aexit__(self, *args: Any) -> None:
+  async def __aexit__(self, *args: object) -> None:
+    # Close any dangling HITL transports (abandoned paused runs)
+    for state in self._hitl_states.values():
+      try:
+        await state.transport.close()
+      except Exception as exc:
+        log_warning(f"HITL transport cleanup failed: {exc}")
+    self._hitl_states.clear()
+
+    # Drain pending memory tasks
+    await self._drain_pending_tasks()
+
+    # Stop tool server
     await self._stop_tool_server()
 
-  def on_event(self, handler: Any) -> None:
+    # Clean up MCP passthrough temp files
+    self._cleanup_mcp_temps()
+
+    # Shutdown agent-owned toolkits
+    for toolkit in self._agent_owned_toolkits:
+      try:
+        await toolkit.shutdown()
+      except Exception as exc:
+        log_warning(f"Toolkit shutdown failed: {exc}")
+    self._agent_owned_toolkits.clear()
+
+    # Close memory store
+    if self._memory_manager:
+      try:
+        await self._memory_manager.close()
+      except Exception as exc:
+        log_warning(f"Memory close failed: {exc}")
+
+    # Teardown skills
+    if self.skills:
+      for skill in self.skills:
+        try:
+          skill.teardown()
+        except Exception as exc:
+          log_warning(f"Skill '{getattr(skill, 'name', 'unknown')}' teardown failed: {exc}")
+
+  async def _drain_pending_tasks(self) -> None:
+    """Wait for all pending fire-and-forget tasks to complete."""
+    if self._pending_tasks:
+      await asyncio.gather(*self._pending_tasks, return_exceptions=True)
+      self._pending_tasks.clear()
+
+  def on_event(self, handler: Callable[[object], None]) -> None:
     """Register an event handler for tracing/lifecycle events."""
     self._event_handlers.append(handler)

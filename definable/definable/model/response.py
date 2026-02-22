@@ -3,6 +3,8 @@ from enum import Enum
 from time import time
 from typing import Any, Dict, List, Optional
 
+from definable.types import ToolCallDict
+
 from definable.media import Audio, File, Image, Video
 from definable.model.message import Citations
 from definable.model.metrics import Metrics
@@ -100,7 +102,7 @@ class ModelResponse:
   files: Optional[List[File]] = None
 
   # Model tool calls
-  tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+  tool_calls: list[ToolCallDict] = field(default_factory=list)
 
   # Actual tool executions
   tool_executions: Optional[List[ToolExecution]] = field(default_factory=list)

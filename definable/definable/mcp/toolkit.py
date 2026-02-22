@@ -4,6 +4,7 @@ Exposes MCP server tools as standard Function objects compatible
 with the Agent's tool system.
 """
 
+from types import TracebackType
 import asyncio
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -353,7 +354,7 @@ class MCPToolkit(Toolkit):
     await self.initialize()
     return self
 
-  async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     """Async context manager exit."""
     await self.shutdown()
 
@@ -362,7 +363,7 @@ class MCPToolkit(Toolkit):
     self.initialize_sync()
     return self
 
-  def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  def __exit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     """Sync context manager exit."""
     self.shutdown_sync()
 

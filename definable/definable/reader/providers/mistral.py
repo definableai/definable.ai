@@ -10,7 +10,7 @@ Requires optional dependency: ``mistralai>=1.0.0``
 import asyncio
 import base64
 import os
-from typing import Any, List, Optional, Set
+from typing import TYPE_CHECKING, Any, List, Optional, Set
 
 from definable.media import File
 from definable.reader.models import ContentBlock, ReaderConfig, ReaderOutput
@@ -21,6 +21,10 @@ from definable.reader.utils import (
   get_filename,
 )
 from definable.utils.log import log_debug, log_warning
+
+if TYPE_CHECKING:
+  from mistralai import Mistral
+  from definable.reader.registry import ParserRegistry
 
 # Mistral's hard limit for file uploads
 _MISTRAL_MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
@@ -92,7 +96,7 @@ class MistralReader:
     self.preprocessor = preprocessor
     self.local_fallback = local_fallback
     self._resolved_preprocessor: Any = self._resolve_preprocessor()
-    self._fallback_registry: Any = self._build_fallback_registry() if local_fallback else None
+    self._fallback_registry: Optional["ParserRegistry"] = self._build_fallback_registry() if local_fallback else None
 
   def _resolve_preprocessor(self) -> Any:
     """Resolve the preprocessor setting to an actual instance or None."""
@@ -110,7 +114,7 @@ class MistralReader:
       log_debug("MistralReader: Pillow not available, preprocessing disabled")
       return None
 
-  def _build_fallback_registry(self) -> Any:
+  def _build_fallback_registry(self) -> "ParserRegistry":
     """Build a ParserRegistry for unsupported-format fallback."""
     from definable.reader.registry import ParserRegistry
 
@@ -239,7 +243,7 @@ class MistralReader:
 
   # ── Client factory ────────────────────────────────────────────────────
 
-  def _create_client(self) -> Any:
+  def _create_client(self) -> "Mistral":
     """Create a Mistral client instance."""
     api_key = self._get_api_key()
     from mistralai import Mistral
@@ -268,24 +272,24 @@ class MistralReader:
     else:
       return self._make_error_output(file, f"Unknown classification: {classification}")
 
-  def _read_url_native(self, client: Any, file: File) -> ReaderOutput:
+  def _read_url_native(self, client: "Mistral", file: File) -> ReaderOutput:
     ext = extract_extension(file)
     ocr_kwargs = self._ocr_kwargs(file)
     if ext in _NATIVE_DOCUMENT_EXTENSIONS:
       response = client.ocr.process(
         model=self.model,
-        document={"type": "document_url", "document_url": file.url},
+        document={"type": "document_url", "document_url": file.url},  # type: ignore[arg-type]
         **ocr_kwargs,
       )
     else:
       response = client.ocr.process(
         model=self.model,
-        document={"type": "image_url", "image_url": file.url},
+        document={"type": "image_url", "image_url": file.url},  # type: ignore[arg-type]
         **ocr_kwargs,
       )
     return self._build_result(file, response, preprocessed=False)
 
-  def _read_upload_document(self, client: Any, file: File, raw: bytes) -> ReaderOutput:
+  def _read_upload_document(self, client: "Mistral", file: File, raw: bytes) -> ReaderOutput:
     filename = get_filename(file)
     uploaded = client.files.upload(
       file={"file_name": filename, "content": raw},
@@ -306,7 +310,7 @@ class MistralReader:
       except Exception as exc:
         log_warning(f"Failed to delete uploaded file {uploaded.id}: {exc}")
 
-  def _read_base64_image(self, client: Any, file: File, raw: bytes) -> ReaderOutput:
+  def _read_base64_image(self, client: "Mistral", file: File, raw: bytes) -> ReaderOutput:
     ext = extract_extension(file)
     mime = _EXTENSION_TO_MIME.get(ext or "", "image/png")
     data_uri = self._make_data_uri(raw, mime)
@@ -318,7 +322,7 @@ class MistralReader:
     )
     return self._build_result(file, response, preprocessed=False)
 
-  def _read_preprocess(self, client: Any, file: File, raw: bytes) -> ReaderOutput:
+  def _read_preprocess(self, client: "Mistral", file: File, raw: bytes) -> ReaderOutput:
     images = self._resolved_preprocessor.to_images(raw, file)
     ocr_kwargs = self._ocr_kwargs(file)
     all_pages: List[str] = []
@@ -372,24 +376,24 @@ class MistralReader:
     else:
       return self._make_error_output(file, f"Unknown classification: {classification}")
 
-  async def _aread_url_native(self, client: Any, file: File) -> ReaderOutput:
+  async def _aread_url_native(self, client: "Mistral", file: File) -> ReaderOutput:
     ext = extract_extension(file)
     ocr_kwargs = self._ocr_kwargs(file)
     if ext in _NATIVE_DOCUMENT_EXTENSIONS:
       response = await client.ocr.process_async(
         model=self.model,
-        document={"type": "document_url", "document_url": file.url},
+        document={"type": "document_url", "document_url": file.url},  # type: ignore[arg-type]
         **ocr_kwargs,
       )
     else:
       response = await client.ocr.process_async(
         model=self.model,
-        document={"type": "image_url", "image_url": file.url},
+        document={"type": "image_url", "image_url": file.url},  # type: ignore[arg-type]
         **ocr_kwargs,
       )
     return self._build_result(file, response, preprocessed=False)
 
-  async def _aread_upload_document(self, client: Any, file: File, raw: bytes) -> ReaderOutput:
+  async def _aread_upload_document(self, client: "Mistral", file: File, raw: bytes) -> ReaderOutput:
     filename = get_filename(file)
     loop = asyncio.get_running_loop()
     uploaded = await loop.run_in_executor(
@@ -420,7 +424,7 @@ class MistralReader:
       except Exception as exc:
         log_warning(f"Failed to delete uploaded file {uploaded.id}: {exc}")
 
-  async def _aread_base64_image(self, client: Any, file: File, raw: bytes) -> ReaderOutput:
+  async def _aread_base64_image(self, client: "Mistral", file: File, raw: bytes) -> ReaderOutput:
     ext = extract_extension(file)
     mime = _EXTENSION_TO_MIME.get(ext or "", "image/png")
     data_uri = self._make_data_uri(raw, mime)
@@ -432,7 +436,7 @@ class MistralReader:
     )
     return self._build_result(file, response, preprocessed=False)
 
-  async def _aread_preprocess(self, client: Any, file: File, raw: bytes) -> ReaderOutput:
+  async def _aread_preprocess(self, client: "Mistral", file: File, raw: bytes) -> ReaderOutput:
     images = await self._resolved_preprocessor.ato_images(raw, file)
     ocr_kwargs = self._ocr_kwargs(file)
     all_pages: List[str] = []
@@ -496,7 +500,7 @@ class MistralReader:
     b64 = base64.b64encode(raw).decode("ascii")
     return f"data:{mime};base64,{b64}"
 
-  def _build_result(self, file: File, response: Any, *, preprocessed: bool) -> ReaderOutput:
+  def _build_result(self, file: File, response: object, *, preprocessed: bool) -> ReaderOutput:
     """Convert a Mistral OCR response to a ReaderOutput."""
     pages = self._extract_pages(response)
     content = self.page_separator.join(pages)

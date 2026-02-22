@@ -1,9 +1,9 @@
 """JWT authentication provider."""
 
-from typing import Any, Optional
+from typing import Optional, Union
 
 from definable.agent.auth.api_key import _get_header
-from definable.agent.auth.base import AuthContext
+from definable.agent.auth.base import AuthContext, AuthRequest
 
 
 class JWTAuth:
@@ -36,7 +36,7 @@ class JWTAuth:
     self.audience = audience
     self.issuer = issuer
 
-  def authenticate(self, request: Any) -> Optional[AuthContext]:
+  def authenticate(self, request: Union[AuthRequest, object]) -> Optional[AuthContext]:
     """Validate a JWT Bearer token from the Authorization header.
 
     Extracts ``user_id`` from the ``sub``, ``user_id``, or ``id``

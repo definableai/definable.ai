@@ -2,7 +2,7 @@
 
 import inspect
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Protocol, runtime_checkable
+from typing import Any, Dict, Optional, Protocol, Union, runtime_checkable
 
 
 @dataclass
@@ -54,7 +54,7 @@ class AuthProvider(Protocol):
   may be sync or async.
   """
 
-  def authenticate(self, request: Any) -> Optional[AuthContext]:
+  def authenticate(self, request: Union[AuthRequest, object]) -> Optional[AuthContext]:
     """Authenticate an incoming request.
 
     Args:
@@ -66,7 +66,7 @@ class AuthProvider(Protocol):
     ...
 
 
-async def resolve_auth(auth_provider: Any, request: Any) -> Optional[AuthContext]:
+async def resolve_auth(auth_provider: AuthProvider, request: Union[AuthRequest, object]) -> Optional[AuthContext]:
   """Call an auth provider's ``authenticate`` method.
 
   Handles both sync and async providers transparently.
@@ -80,5 +80,5 @@ async def resolve_auth(auth_provider: Any, request: Any) -> Optional[AuthContext
   """
   result = auth_provider.authenticate(request)
   if inspect.isawaitable(result):
-    return await result
+    return await result  # type: ignore[unreachable]
   return result

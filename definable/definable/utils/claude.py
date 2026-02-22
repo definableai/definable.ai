@@ -122,7 +122,7 @@ def _format_image_for_message(image: Image) -> Optional[Dict[str, Any]]:
 
         img_type = kind.extension
       else:
-        img_type = imghdr.what(None, h=content_bytes)  # type: ignore
+        img_type = imghdr.what(None, h=content_bytes)
 
     if not img_type:
       log_error("Unable to determine image type")
@@ -138,7 +138,7 @@ def _format_image_for_message(image: Image) -> Optional[Dict[str, Any]]:
       "source": {
         "type": "base64",
         "media_type": media_type,
-        "data": base64.b64encode(content_bytes).decode("utf-8"),  # type: ignore
+        "data": base64.b64encode(content_bytes).decode("utf-8"),
       },
     }
 
@@ -353,7 +353,7 @@ def format_messages(messages: List[Message], compress_tool_results: bool = False
     if message.role == "assistant" and not content:
       continue
 
-    chat_messages.append({"role": ROLE_MAP[message.role], "content": content})  # type: ignore
+    chat_messages.append({"role": ROLE_MAP[message.role], "content": content})
   return chat_messages, " ".join(system_messages)
 
 

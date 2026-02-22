@@ -1,9 +1,12 @@
 """Base class for memory optimization strategies."""
 
 from abc import ABC, abstractmethod
-from typing import Any, List
+from typing import TYPE_CHECKING, List
 
 from definable.memory.types import MemoryEntry
+
+if TYPE_CHECKING:
+  from definable.model.base import Model
 
 
 class MemoryStrategy(ABC):
@@ -14,7 +17,7 @@ class MemoryStrategy(ABC):
   """
 
   @abstractmethod
-  async def optimize(self, entries: List[MemoryEntry], model: Any) -> List[MemoryEntry]:
+  async def optimize(self, entries: List[MemoryEntry], model: "Model") -> List[MemoryEntry]:
     """Optimize a list of memory entries using the provided model.
 
     Args:

@@ -22,15 +22,18 @@ Tools exposed (all use CSS selectors):
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 from definable.agent.toolkit import Toolkit
 from definable.browser.config import BrowserConfig
 from definable.tool.function import Function
 from definable.utils.log import log_debug, log_info
 
+if TYPE_CHECKING:
+  from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
 
-def _make_tools(browser: Any) -> list[Function]:
+
+def _make_tools(browser: "SeleniumBaseBrowser") -> list[Function]:
   """Build all browser tool Function objects as closures over ``browser``."""
 
   # -------------------------------------------------------------------------
@@ -428,7 +431,7 @@ class BrowserToolkit(Toolkit):
   def __init__(
     self,
     config: Optional[BrowserConfig] = None,
-    browser: Optional[Any] = None,
+    browser: Optional["SeleniumBaseBrowser"] = None,
   ) -> None:
     """
     Args:
@@ -457,6 +460,7 @@ class BrowserToolkit(Toolkit):
         self._browser = SeleniumBaseBrowser(self._config)
       await self._browser.start()
 
+    assert self._browser is not None
     self._tools = _make_tools(self._browser)
     self._initialized = True
     log_info(f"BrowserToolkit: initialized ({len(self._tools)} tools)")
@@ -473,7 +477,7 @@ class BrowserToolkit(Toolkit):
     await self.initialize()
     return self
 
-  async def __aexit__(self, *_: Any) -> None:
+  async def __aexit__(self, *_: object) -> None:
     await self.shutdown()
 
   def __repr__(self) -> str:

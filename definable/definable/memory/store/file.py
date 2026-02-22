@@ -11,10 +11,11 @@ Directory structure:
 Each line in the .jsonl file is one JSON-serialized MemoryEntry.
 """
 
+from types import TracebackType
 import json
 import shutil
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from definable.memory.types import MemoryEntry
 from definable.utils.log import log_debug
@@ -166,5 +167,5 @@ class FileStore:
     await self.initialize()
     return self
 
-  async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     await self.close()

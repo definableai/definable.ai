@@ -16,14 +16,15 @@ Example:
 import ast
 import math
 import operator
-from typing import Any, Dict
+from collections.abc import Callable
+from typing import Dict
 
 from definable.skill.base import Skill
 from definable.tool.decorator import tool
 
 
 # Safe math operators and functions
-_SAFE_OPERATORS: Dict[type, Any] = {
+_SAFE_OPERATORS: Dict[type, Callable] = {
   ast.Add: operator.add,
   ast.Sub: operator.sub,
   ast.Mult: operator.mul,
@@ -61,7 +62,7 @@ _SAFE_FUNCTIONS = {
 }
 
 
-def _safe_eval(node: ast.AST) -> Any:
+def _safe_eval(node: ast.AST) -> object:
   """Recursively evaluate an AST node using only safe operations."""
   if isinstance(node, ast.Expression):
     return _safe_eval(node.body)

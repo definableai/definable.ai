@@ -4,6 +4,7 @@ from time import time
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
 
 from definable.media import Audio, File, Image, Video
+from definable.types import ToolCallDict
 from definable.model.message import Citations, Message
 from definable.model.metrics import Metrics
 from definable.model.response import ToolExecution
@@ -16,6 +17,13 @@ from pydantic import BaseModel
 
 if TYPE_CHECKING:
   from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
+  from definable.agent.interface.gateway import (
+    InterfaceErrorEvent,
+    InterfaceRestartedEvent,
+    InterfaceStartedEvent,
+    InterfaceStoppedEvent,
+  )
+  from definable.agent.pipeline.state import PhaseMetric
 
 
 @dataclass
@@ -171,7 +179,26 @@ class RunEvent(str, Enum):
   guardrail_checked = "GuardrailChecked"
   guardrail_blocked = "GuardrailBlocked"
 
+  model_call_started = "ModelCallStarted"
+  model_call_completed = "ModelCallCompleted"
+
   custom_event = "CustomEvent"
+
+  # Sub-agent events
+  sub_agent_spawned = "SubAgentSpawned"
+  sub_agent_completed = "SubAgentCompleted"
+  sub_agent_failed = "SubAgentFailed"
+  sub_agent_killed = "SubAgentKilled"
+
+  # Pipeline phase events
+  phase_started = "PhaseStarted"
+  phase_completed = "PhaseCompleted"
+
+  # Interface gateway events
+  interface_started = "InterfaceStarted"
+  interface_stopped = "InterfaceStopped"
+  interface_restarted = "InterfaceRestarted"
+  interface_error = "InterfaceError"
 
 
 @dataclass
@@ -510,6 +537,87 @@ class OutputModelResponseCompletedEvent(BaseAgentRunEvent):
 
 
 @dataclass
+class ModelCallStartedEvent(BaseAgentRunEvent):
+  """Emitted immediately before each model.ainvoke() call."""
+
+  event: str = RunEvent.model_call_started.value
+  turn: int = 0
+  messages: Optional[List[Message]] = None
+  tool_definitions: Optional[List[Dict[str, Any]]] = None
+  response_format: Optional[Any] = None
+  model_id: str = ""
+  model_provider: str = ""
+
+
+@dataclass
+class ModelCallCompletedEvent(BaseAgentRunEvent):
+  """Emitted immediately after each model.ainvoke() returns."""
+
+  event: str = RunEvent.model_call_completed.value
+  turn: int = 0
+  content: Optional[str] = None
+  tool_calls: Optional[list[ToolCallDict]] = None
+  metrics: Optional[Metrics] = None
+  model_id: str = ""
+
+
+@dataclass
+class SubAgentSpawnedEvent(BaseAgentRunEvent):
+  """Emitted when a sub-agent is spawned by the parent."""
+
+  event: str = RunEvent.sub_agent_spawned.value
+  thread_id: Optional[str] = None
+  goal: Optional[str] = None
+  instructions: Optional[str] = None
+
+
+@dataclass
+class SubAgentCompletedEvent(BaseAgentRunEvent):
+  """Emitted when a sub-agent completes successfully."""
+
+  event: str = RunEvent.sub_agent_completed.value
+  thread_id: Optional[str] = None
+  result: Optional[str] = None
+  metrics: Optional[Metrics] = None
+
+
+@dataclass
+class SubAgentFailedEvent(BaseAgentRunEvent):
+  """Emitted when a sub-agent fails."""
+
+  event: str = RunEvent.sub_agent_failed.value
+  thread_id: Optional[str] = None
+  error: Optional[str] = None
+
+
+@dataclass
+class SubAgentKilledEvent(BaseAgentRunEvent):
+  """Emitted when a sub-agent is killed (e.g., timeout or parent cancellation)."""
+
+  event: str = RunEvent.sub_agent_killed.value
+  thread_id: Optional[str] = None
+  reason: Optional[str] = None
+
+
+@dataclass
+class PhaseStartedEvent(BaseAgentRunEvent):
+  """Emitted when a pipeline phase begins execution."""
+
+  event: str = RunEvent.phase_started.value
+  phase_name: str = ""
+
+
+@dataclass
+class PhaseCompletedEvent(BaseAgentRunEvent):
+  """Emitted when a pipeline phase finishes execution."""
+
+  event: str = RunEvent.phase_completed.value
+  phase_name: str = ""
+  duration_ms: float = 0.0
+  skipped: bool = False
+
+
+@dataclass
 class CustomEvent(BaseAgentRunEvent):
   event: str = RunEvent.custom_event.value
 
@@ -557,6 +665,18 @@ RunOutputEvent = Union[
   ParserModelResponseCompletedEvent,
   OutputModelResponseStartedEvent,
   OutputModelResponseCompletedEvent,
+  ModelCallStartedEvent,
+  ModelCallCompletedEvent,
+  SubAgentSpawnedEvent,
+  SubAgentCompletedEvent,
+  SubAgentFailedEvent,
+  SubAgentKilledEvent,
+  PhaseStartedEvent,
+  PhaseCompletedEvent,
+  "InterfaceStartedEvent",
+  "InterfaceStoppedEvent",
+  "InterfaceRestartedEvent",
+  "InterfaceErrorEvent",
   CustomEvent,
   "GuardrailCheckedEvent",
   "GuardrailBlockedEvent",
@@ -601,7 +721,19 @@ RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.parser_model_response_completed.value: ParserModelResponseCompletedEvent,
   RunEvent.output_model_response_started.value: OutputModelResponseStartedEvent,
   RunEvent.output_model_response_completed.value: OutputModelResponseCompletedEvent,
+  RunEvent.model_call_started.value: ModelCallStartedEvent,
+  RunEvent.model_call_completed.value: ModelCallCompletedEvent,
   RunEvent.custom_event.value: CustomEvent,
+  # Sub-agent events
+  RunEvent.sub_agent_spawned.value: SubAgentSpawnedEvent,
+  RunEvent.sub_agent_completed.value: SubAgentCompletedEvent,
+  RunEvent.sub_agent_failed.value: SubAgentFailedEvent,
+  RunEvent.sub_agent_killed.value: SubAgentKilledEvent,
+  # Pipeline phase events
+  RunEvent.phase_started.value: PhaseStartedEvent,
+  RunEvent.phase_completed.value: PhaseCompletedEvent,
+  # Interface gateway events are registered lazily to avoid circular imports.
+  # See _ensure_interface_events_registered() below.
   # Guardrail events are registered lazily to avoid circular imports.
   # See _ensure_guardrail_events_registered() below.
 }
@@ -616,12 +748,29 @@ def _ensure_guardrail_events_registered() -> None:
     RUN_EVENT_TYPE_REGISTRY[RunEvent.guardrail_blocked.value] = GuardrailBlockedEvent
 
 
+def _ensure_interface_events_registered() -> None:
+  """Lazily register interface gateway event types."""
+  if RunEvent.interface_started.value not in RUN_EVENT_TYPE_REGISTRY:
+    from definable.agent.interface.gateway import (
+      InterfaceErrorEvent,
+      InterfaceRestartedEvent,
+      InterfaceStartedEvent,
+      InterfaceStoppedEvent,
+    )
+
+    RUN_EVENT_TYPE_REGISTRY[RunEvent.interface_started.value] = InterfaceStartedEvent
+    RUN_EVENT_TYPE_REGISTRY[RunEvent.interface_stopped.value] = InterfaceStoppedEvent
+    RUN_EVENT_TYPE_REGISTRY[RunEvent.interface_restarted.value] = InterfaceRestartedEvent
+    RUN_EVENT_TYPE_REGISTRY[RunEvent.interface_error.value] = InterfaceErrorEvent
+
+
 def run_output_event_from_dict(data: dict) -> BaseRunOutputEvent:
   event_type = data.get("event", "")
   cls = RUN_EVENT_TYPE_REGISTRY.get(event_type)
   if not cls:
     # Try lazy registration for guardrail events
     _ensure_guardrail_events_registered()
+    _ensure_interface_events_registered()
     cls = RUN_EVENT_TYPE_REGISTRY.get(event_type)
   if not cls:
     raise ValueError(f"Unknown event type: {event_type}")
@@ -675,6 +824,9 @@ class RunOutput:
   created_at: int = field(default_factory=lambda: int(time()))
 
   events: Optional[List[RunOutputEvent]] = None
+
+  # Pipeline phase metrics (timing, skip status)
+  phase_metrics: Optional[List["PhaseMetric"]] = None
 
   status: RunStatus = RunStatus.running
 

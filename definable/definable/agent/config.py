@@ -105,7 +105,7 @@ class ReadersConfig:
   """
 
   enabled: bool = True
-  registry: Optional[Any] = None
+  registry: Optional[object] = None
   max_total_content_length: Optional[int] = None
   context_format: Literal["xml", "markdown"] = "xml"
 

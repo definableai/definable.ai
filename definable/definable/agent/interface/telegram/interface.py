@@ -3,7 +3,8 @@
 import asyncio
 import contextlib
 import hmac
-from typing import Any, Dict, List, Optional
+import warnings
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 import httpx
 
@@ -14,10 +15,18 @@ from definable.agent.interface.errors import (
   InterfaceMessageError,
   InterfaceRateLimitError,
 )
+from definable.agent.interface.hooks import InterfaceHook
 from definable.agent.interface.message import InterfaceMessage, InterfaceResponse
+from definable.agent.interface.session import SessionManager
 from definable.agent.interface.telegram.config import TelegramConfig
 from definable.media import Audio, File, Image
 from definable.utils.log import log_debug, log_error, log_info, log_warning
+
+if TYPE_CHECKING:
+  from aiohttp import web
+
+  from definable.agent.agent import Agent
+  from definable.agent.interface.identity import IdentityResolver
 
 
 class TelegramInterface(BaseInterface):
@@ -26,41 +35,105 @@ class TelegramInterface(BaseInterface):
   Supports both polling (for development) and webhook (for production)
   modes. Uses httpx for async HTTP calls.
 
-  Args:
-    agent: The Agent instance.
-    config: TelegramConfig with bot token and settings.
-    session_manager: Optional session manager.
-    hooks: Optional list of hooks.
+  Example (polling)::
 
-  Example (polling):
-    interface = TelegramInterface(
-      agent=agent,
-      config=TelegramConfig(bot_token="BOT_TOKEN"),
-    )
-    async with interface:
-      await interface.serve_forever()
+      interface = TelegramInterface(
+        agent=agent,
+        bot_token="BOT_TOKEN",
+      )
+      async with interface:
+        await interface.serve_forever()
 
-  Example (webhook):
-    interface = TelegramInterface(
-      agent=agent,
-      config=TelegramConfig(
+  Example (webhook)::
+
+      interface = TelegramInterface(
+        agent=agent,
         bot_token="BOT_TOKEN",
         mode="webhook",
         webhook_url="https://example.com/webhook/telegram",
-      ),
-    )
-    async with interface:
-      await interface.serve_forever()
+      )
+      async with interface:
+        await interface.serve_forever()
   """
 
-  def __init__(self, **kwargs: Any) -> None:
-    super().__init__(**kwargs)
+  def __init__(
+    self,
+    *,
+    # Telegram-specific
+    bot_token: str = "",
+    mode: Literal["polling", "webhook"] = "polling",
+    webhook_url: Optional[str] = None,
+    webhook_path: str = "/webhook/telegram",
+    webhook_port: int = 8443,
+    webhook_secret: Optional[str] = None,
+    allowed_user_ids: Optional[List[int]] = None,
+    allowed_chat_ids: Optional[List[int]] = None,
+    parse_mode: Literal["HTML", "MarkdownV2", "Markdown", None] = "HTML",
+    polling_interval: float = 0.5,
+    polling_timeout: int = 30,
+    connect_timeout: float = 10.0,
+    request_timeout: float = 60.0,
+    # Base config
+    max_session_history: int = 50,
+    session_ttl_seconds: int = 3600,
+    max_concurrent_requests: int = 10,
+    error_message: str = "Sorry, something went wrong. Please try again.",
+    typing_indicator: bool = True,
+    max_message_length: int = 4096,
+    rate_limit_messages_per_minute: int = 30,
+    # BaseInterface params
+    agent: Optional["Agent"] = None,
+    session_manager: Optional[SessionManager] = None,
+    hooks: Optional[List[InterfaceHook]] = None,
+    identity_resolver: Optional["IdentityResolver"] = None,
+    auth: Optional[object] = None,
+    # Deprecated
+    config: Optional[TelegramConfig] = None,
+  ) -> None:
+    if config is not None:
+      warnings.warn(
+        "Passing config= to TelegramInterface is deprecated. Pass bot_token and other params directly as keyword arguments.",
+        DeprecationWarning,
+        stacklevel=2,
+      )
+      resolved_config = config
+    else:
+      resolved_config = TelegramConfig(
+        bot_token=bot_token,
+        mode=mode,
+        webhook_url=webhook_url,
+        webhook_path=webhook_path,
+        webhook_port=webhook_port,
+        webhook_secret=webhook_secret,
+        allowed_user_ids=allowed_user_ids,
+        allowed_chat_ids=allowed_chat_ids,
+        parse_mode=parse_mode,
+        polling_interval=polling_interval,
+        polling_timeout=polling_timeout,
+        connect_timeout=connect_timeout,
+        request_timeout=request_timeout,
+        max_session_history=max_session_history,
+        session_ttl_seconds=session_ttl_seconds,
+        max_concurrent_requests=max_concurrent_requests,
+        error_message=error_message,
+        typing_indicator=typing_indicator,
+        max_message_length=max_message_length,
+        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+      )
+    super().__init__(
+      agent=agent,
+      config=resolved_config,
+      session_manager=session_manager,
+      hooks=hooks,
+      identity_resolver=identity_resolver,
+      auth=auth,
+    )
     self._tg_config: TelegramConfig = self.config  # type: ignore[assignment]
     self._base_url = f"https://api.telegram.org/bot{self._tg_config.bot_token}"
     self._client: Optional[httpx.AsyncClient] = None
     self._poll_task: Optional[asyncio.Task[None]] = None
-    self._webhook_runner: Any = None
-    self._webhook_site: Any = None
+    self._webhook_runner: Optional["web.AppRunner"] = None
+    self._webhook_site: Optional["web.TCPSite"] = None
     self._offset: int = 0
 
   # --- Lifecycle ---
@@ -210,7 +283,7 @@ class TelegramInterface(BaseInterface):
     with contextlib.suppress(Exception):
       await self._api_call("deleteWebhook")
 
-  async def _webhook_handler(self, request: Any) -> Any:
+  async def _webhook_handler(self, request: "web.Request") -> "web.Response":
     """Handle an incoming webhook request."""
     from aiohttp import web
 

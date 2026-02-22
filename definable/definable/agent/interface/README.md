@@ -1,6 +1,6 @@
 # interfaces
 
-Connect agents to messaging platforms — Telegram, Discord, and Signal.
+Connect agents to messaging platforms — Telegram and Discord.
 
 ## Installation
 
@@ -9,20 +9,17 @@ Platform-specific dependencies:
 ```bash
 pip install 'definable[discord]'   # Discord (discord.py)
 pip install 'definable[telegram]'  # Telegram (httpx, included by default)
-# Signal uses signal-cli-rest-api via Docker — no extra pip install needed
 ```
 
 ## Quick Start
 
 ```python
 from definable.agent import Agent
-from definable.agent.interface import TelegramInterface, TelegramConfig
+from definable.agent.interface import TelegramInterface
 
 agent = Agent(model=model, instructions="You are a helpful assistant.")
 
-telegram = TelegramInterface(
-  config=TelegramConfig(bot_token="YOUR_BOT_TOKEN"),
-)
+telegram = TelegramInterface(bot_token="YOUR_BOT_TOKEN")
 
 agent.serve(telegram)
 ```
@@ -38,17 +35,25 @@ interfaces/
 ├── session.py       # InterfaceSession, SessionManager
 ├── hooks.py         # InterfaceHook protocol, LoggingHook, AllowlistHook
 ├── identity.py      # IdentityResolver, SQLiteIdentityResolver, PlatformIdentity
+├── gateway.py       # InterfaceGateway — multi-interface coordinator
 ├── errors.py        # InterfaceError hierarchy
 ├── serve.py         # serve() multi-interface supervisor
 ├── telegram/
-│   ├── config.py    # TelegramConfig (polling/webhook modes)
+│   ├── config.py    # TelegramConfig (internal)
 │   └── interface.py # TelegramInterface
 ├── discord/
-│   ├── config.py    # DiscordConfig
+│   ├── config.py    # DiscordConfig (internal)
 │   └── interface.py # DiscordInterface
-└── signal/
-    ├── config.py    # SignalConfig (optional Docker management)
-    └── interface.py # SignalInterface
+├── desktop/
+│   ├── config.py    # DesktopConfig (internal)
+│   ├── interface.py # DesktopInterface
+│   └── bridge_client.py # BridgeClient for macOS
+└── cli/
+    ├── config.py    # CLIConfig (internal)
+    ├── interface.py # CLIInterface
+    ├── input.py     # InputHandler
+    ├── output.py    # OutputManager
+    └── renderers/   # Event visualization
 ```
 
 ## API Reference
@@ -79,11 +84,12 @@ class MyInterface(BaseInterface):
 
 ### Platform Implementations
 
-| Class | Config | Transport | Key Features |
-|-------|--------|-----------|--------------|
-| `TelegramInterface` | `TelegramConfig` | httpx | Polling (dev) and webhook (prod) modes, media extraction |
-| `DiscordInterface` | `DiscordConfig` | discord.py | Gateway connection, command prefix, auto message splitting |
-| `SignalInterface` | `SignalConfig` | httpx | REST API polling, optional Docker container management |
+| Class | Transport | Key Features |
+|-------|-----------|--------------|
+| `TelegramInterface` | httpx | Polling (dev) and webhook (prod) modes, media extraction |
+| `DiscordInterface` | discord.py | Gateway connection, command prefix, auto message splitting |
+| `DesktopInterface` | websockets | Local WebSocket chat for macOS agents |
+| `CLIInterface` | stdin/stdout | Rich REPL with event visualization |
 
 ### InterfaceMessage / InterfaceResponse
 
@@ -155,22 +161,18 @@ from definable.agent.interface import (
 ```python
 from definable.agent import Agent
 from definable.agent.interface import (
-  TelegramInterface, TelegramConfig,
-  DiscordInterface, DiscordConfig,
+  TelegramInterface,
+  DiscordInterface,
   LoggingHook, AllowlistHook,
 )
 
 agent = Agent(model=model)
 
-telegram = TelegramInterface(
-  config=TelegramConfig(bot_token="..."),
-)
+telegram = TelegramInterface(bot_token="...")
 telegram.add_hook(LoggingHook())
 telegram.add_hook(AllowlistHook(allowed_user_ids={"123456"}))
 
-discord = DiscordInterface(
-  config=DiscordConfig(bot_token="..."),
-)
+discord = DiscordInterface(bot_token="...")
 
 # Serve multiple interfaces
 agent.serve(telegram, discord)

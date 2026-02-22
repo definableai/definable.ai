@@ -31,10 +31,10 @@ def extract_thinking_content(content: str) -> Tuple[Optional[str], str]:
 
 def append_to_reasoning_content(run_response: Union["RunOutput"], content: str) -> None:
   """Helper to append content to the reasoning_content field."""
-  if not hasattr(run_response, "reasoning_content") or not run_response.reasoning_content:  # type: ignore
-    run_response.reasoning_content = content  # type: ignore
+  if not hasattr(run_response, "reasoning_content") or not run_response.reasoning_content:
+    run_response.reasoning_content = content
   else:
-    run_response.reasoning_content += content  # type: ignore
+    run_response.reasoning_content += content
 
 
 def add_reasoning_step_to_metadata(run_response: Union["RunOutput"], reasoning_step: ReasoningStep) -> None:

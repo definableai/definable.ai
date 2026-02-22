@@ -37,14 +37,14 @@ class Ollama(Model):
   supports_native_structured_outputs: bool = True
 
   # Request parameters
-  format: Optional[Any] = None
-  options: Optional[Any] = None
+  format: Optional[Union[str, Dict[str, Any]]] = None
+  options: Optional[Dict[str, Any]] = None
   keep_alive: Optional[Union[float, str]] = None
   request_params: Optional[Dict[str, Any]] = None
 
   # Client parameters
   host: Optional[str] = None
-  timeout: Optional[Any] = None
+  timeout: Optional[float] = None
   api_key: Optional[str] = field(default_factory=lambda: getenv("OLLAMA_API_KEY"))
   client_params: Optional[Dict[str, Any]] = None
 
@@ -62,7 +62,7 @@ class Ollama(Model):
       headers["authorization"] = f"Bearer {self.api_key}"
       log_debug(f"Using Ollama cloud endpoint: {host}")
 
-    base_params = {
+    base_params: Dict[str, Any] = {
       "host": host,
       "timeout": self.timeout,
     }
@@ -93,8 +93,8 @@ class Ollama(Model):
     self,
     tools: Optional[List[Dict[str, Any]]] = None,
   ) -> Dict[str, Any]:
-    base_params = {"format": self.format, "options": self.options, "keep_alive": self.keep_alive}
-    request_params = {k: v for k, v in base_params.items() if v is not None}
+    base_params: Dict[str, Any] = {"format": self.format, "options": self.options, "keep_alive": self.keep_alive}
+    request_params: Dict[str, Any] = {k: v for k, v in base_params.items() if v is not None}
     if tools is not None and len(tools) > 0:
       request_params["tools"] = tools
 
@@ -201,13 +201,13 @@ class Ollama(Model):
 
     provider_response = self.get_client().chat(
       model=self.id.strip(),
-      messages=[self._format_message(m, compress_tool_results) for m in messages],  # type: ignore
+      messages=[self._format_message(m, compress_tool_results) for m in messages],
       **request_kwargs,
-    )  # type: ignore
+    )
 
     assistant_message.metrics.stop_timer()
 
-    model_response = self._parse_provider_response(provider_response)  # type: ignore
+    model_response = self._parse_provider_response(provider_response)
     return model_response
 
   async def ainvoke(
@@ -229,13 +229,13 @@ class Ollama(Model):
 
     provider_response = await self.get_async_client().chat(
       model=self.id.strip(),
-      messages=[self._format_message(m, compress_tool_results) for m in messages],  # type: ignore
+      messages=[self._format_message(m, compress_tool_results) for m in messages],
       **request_kwargs,
-    )  # type: ignore
+    )
 
     assistant_message.metrics.stop_timer()
 
-    model_response = self._parse_provider_response(provider_response)  # type: ignore
+    model_response = self._parse_provider_response(provider_response)
     return model_response
 
   def invoke_stream(
@@ -255,7 +255,7 @@ class Ollama(Model):
 
     for chunk in self.get_client().chat(
       model=self.id,
-      messages=[self._format_message(m, compress_tool_results) for m in messages],  # type: ignore
+      messages=[self._format_message(m, compress_tool_results) for m in messages],
       stream=True,
       **self.get_request_params(tools=tools),
     ):
@@ -280,7 +280,7 @@ class Ollama(Model):
 
     async for chunk in await self.get_async_client().chat(
       model=self.id.strip(),
-      messages=[self._format_message(m, compress_tool_results) for m in messages],  # type: ignore
+      messages=[self._format_message(m, compress_tool_results) for m in messages],
       stream=True,
       **self.get_request_params(tools=tools),
     ):
@@ -288,9 +288,9 @@ class Ollama(Model):
 
     assistant_message.metrics.stop_timer()
 
-  def _parse_provider_response(self, response: dict, **kwargs: Any) -> ModelResponse:
+  def _parse_provider_response(self, response: ChatResponse, **kwargs: Any) -> ModelResponse:
     model_response = ModelResponse()
-    response_message: OllamaMessage = response.get("message")  # type: ignore
+    response_message: OllamaMessage = response.get("message")
 
     if response_message.get("role") is not None:
       model_response.role = response_message.get("role")
@@ -323,7 +323,7 @@ class Ollama(Model):
 
     return model_response
 
-  def _parse_provider_response_delta(self, response: ChatResponse) -> ModelResponse:
+  def _parse_provider_response_delta(self, response: ChatResponse) -> ModelResponse:  # type: ignore[override]
     model_response = ModelResponse()
 
     response_message = response.get("message")

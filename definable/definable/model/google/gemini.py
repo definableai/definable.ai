@@ -207,7 +207,7 @@ class Gemini(Model):
     file_search_config: Dict[str, Any] = {"file_search_store_names": self.file_search_store_names}
     if self.file_search_metadata_filter:
       file_search_config["metadata_filter"] = self.file_search_metadata_filter
-    builtin_tools.append(Tool(file_search=FileSearch(**file_search_config)))  # type: ignore[arg-type]
+    builtin_tools.append(Tool(file_search=FileSearch(**file_search_config)))
 
   def get_request_params(
     self,
@@ -247,10 +247,10 @@ class Gemini(Model):
     })
 
     if system_message is not None:
-      config["system_instruction"] = system_message  # type: ignore
+      config["system_instruction"] = system_message
 
     if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
-      config["response_mime_type"] = "application/json"  # type: ignore
+      config["response_mime_type"] = "application/json"
       config["response_schema"] = prepare_response_schema(response_format)
 
     # Add thinking configuration
@@ -345,7 +345,7 @@ class Gemini(Model):
       response = self.get_client().models.count_tokens(
         model=self.id,
         contents=contents,
-        config=config or None,  # type: ignore
+        config=config or None,
       )
       return (response.total_tokens or 0) + schema_tokens
     else:
@@ -391,7 +391,7 @@ class Gemini(Model):
       response = await self.get_client().aio.models.count_tokens(
         model=self.id,
         contents=contents,
-        config=config or None,  # type: ignore
+        config=config or None,
       )
       return (response.total_tokens or 0) + schema_tokens
     else:
@@ -643,7 +643,7 @@ class Gemini(Model):
 
       role = self.reverse_role_map.get(role, role)
       content = message.get_content(use_compressed_content=compress_tool_results)
-      message_parts: List[Any] = []
+      message_parts: List[Part] = []
 
       # Function calls
       if role == "model" and message.tool_calls is not None and len(message.tool_calls) > 0:
@@ -753,7 +753,7 @@ class Gemini(Model):
       mime_type = f"audio/{audio.format}" if audio.format else "audio/mp3"
       return Part.from_bytes(mime_type=mime_type, data=audio.content)
     elif audio.url is not None:
-      audio_bytes = audio.get_content_bytes()  # type: ignore
+      audio_bytes = audio.get_content_bytes()
       if audio_bytes is not None:
         mime_type = f"audio/{audio.format}" if audio.format else "audio/mp3"
         return Part.from_bytes(mime_type=mime_type, data=audio_bytes)
@@ -1231,28 +1231,28 @@ class Gemini(Model):
 
     return metrics
 
-  def create_file_search_store(self, display_name: Optional[str] = None) -> Any:
+  def create_file_search_store(self, display_name: Optional[str] = None) -> object:
     """Create a new File Search store."""
     config: Dict[str, Any] = {}
     if display_name:
       config["display_name"] = display_name
 
     try:
-      store = self.get_client().file_search_stores.create(config=config or None)  # type: ignore[arg-type]
+      store = self.get_client().file_search_stores.create(config=config or None)
       log_info(f"Created File Search store: {store.name}")
       return store
     except Exception as e:
       log_error(f"Error creating File Search store: {e}")
       raise
 
-  async def async_create_file_search_store(self, display_name: Optional[str] = None) -> Any:
+  async def async_create_file_search_store(self, display_name: Optional[str] = None) -> object:
     """Async version of create_file_search_store."""
     config: Dict[str, Any] = {}
     if display_name:
       config["display_name"] = display_name
 
     try:
-      store = await self.get_client().aio.file_search_stores.create(config=config or None)  # type: ignore[arg-type]
+      store = await self.get_client().aio.file_search_stores.create(config=config or None)
       log_info(f"Created File Search store: {store.name}")
       return store
     except Exception as e:
@@ -1283,7 +1283,7 @@ class Gemini(Model):
       log_error(f"Error listing File Search stores: {e}")
       raise
 
-  def get_file_search_store(self, name: str) -> Any:
+  def get_file_search_store(self, name: str) -> object:
     """Get a specific File Search store by name."""
     try:
       store = self.get_client().file_search_stores.get(name=name)
@@ -1293,7 +1293,7 @@ class Gemini(Model):
       log_error(f"Error getting File Search store {name}: {e}")
       raise
 
-  async def async_get_file_search_store(self, name: str) -> Any:
+  async def async_get_file_search_store(self, name: str) -> object:
     """Async version of get_file_search_store."""
     try:
       store = await self.get_client().aio.file_search_stores.get(name=name)
@@ -1356,7 +1356,7 @@ class Gemini(Model):
     display_name: Optional[str] = None,
     chunking_config: Optional[Dict[str, Any]] = None,
     custom_metadata: Optional[List[Dict[str, Any]]] = None,
-  ) -> Any:
+  ) -> object:
     """Upload a file directly to a File Search store."""
     file_path = file_path if isinstance(file_path, Path) else Path(file_path)
 
@@ -1376,7 +1376,7 @@ class Gemini(Model):
       operation = self.get_client().file_search_stores.upload_to_file_search_store(
         file=file_path,
         file_search_store_name=store_name,
-        config=config or None,  # type: ignore[arg-type]
+        config=config or None,
       )
       log_info(f"Upload initiated for {file_path.name}")
       return operation
@@ -1391,7 +1391,7 @@ class Gemini(Model):
     display_name: Optional[str] = None,
     chunking_config: Optional[Dict[str, Any]] = None,
     custom_metadata: Optional[List[Dict[str, Any]]] = None,
-  ) -> Any:
+  ) -> object:
     """Async version of upload_to_file_search_store."""
     file_path = file_path if isinstance(file_path, Path) else Path(file_path)
 
@@ -1411,7 +1411,7 @@ class Gemini(Model):
       operation = await self.get_client().aio.file_search_stores.upload_to_file_search_store(
         file=file_path,
         file_search_store_name=store_name,
-        config=config or None,  # type: ignore[arg-type]
+        config=config or None,
       )
       log_info(f"Upload initiated for {file_path.name}")
       return operation
@@ -1425,7 +1425,7 @@ class Gemini(Model):
     store_name: str,
     chunking_config: Optional[Dict[str, Any]] = None,
     custom_metadata: Optional[List[Dict[str, Any]]] = None,
-  ) -> Any:
+  ) -> object:
     """Import an existing uploaded file (via Files API) into a File Search store."""
     config: Dict[str, Any] = {}
     if chunking_config:
@@ -1438,7 +1438,7 @@ class Gemini(Model):
       operation = self.get_client().file_search_stores.import_file(
         file_search_store_name=store_name,
         file_name=file_name,
-        config=config or None,  # type: ignore[arg-type]
+        config=config or None,
       )
       log_info(f"Import initiated for {file_name}")
       return operation
@@ -1452,7 +1452,7 @@ class Gemini(Model):
     store_name: str,
     chunking_config: Optional[Dict[str, Any]] = None,
     custom_metadata: Optional[List[Dict[str, Any]]] = None,
-  ) -> Any:
+  ) -> object:
     """Async version of import_file_to_store."""
     config: Dict[str, Any] = {}
     if chunking_config:
@@ -1465,7 +1465,7 @@ class Gemini(Model):
       operation = await self.get_client().aio.file_search_stores.import_file(
         file_search_store_name=store_name,
         file_name=file_name,
-        config=config or None,  # type: ignore[arg-type]
+        config=config or None,
       )
       log_info(f"Import initiated for {file_name}")
       return operation
@@ -1497,7 +1497,7 @@ class Gemini(Model):
       log_error(f"Error listing documents in store {store_name}: {e}")
       raise
 
-  def get_document(self, document_name: str) -> Any:
+  def get_document(self, document_name: str) -> object:
     """Get a specific document by name."""
     try:
       doc = self.get_client().file_search_stores.documents.get(name=document_name)
@@ -1507,7 +1507,7 @@ class Gemini(Model):
       log_error(f"Error getting document {document_name}: {e}")
       raise
 
-  async def async_get_document(self, document_name: str) -> Any:
+  async def async_get_document(self, document_name: str) -> object:
     """Async version of get_document."""
     try:
       doc = await self.get_client().aio.file_search_stores.documents.get(name=document_name)

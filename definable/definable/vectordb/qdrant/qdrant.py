@@ -138,14 +138,14 @@ class Qdrant(VectorDB):
 
     if self.search_type in [SearchType.keyword, SearchType.hybrid]:
       try:
-        from fastembed import SparseTextEmbedding  # type: ignore
+        from fastembed import SparseTextEmbedding
 
         default_kwargs = {"model_name": DEFAULT_SPARSE_MODEL}
         if fastembed_kwargs:
           default_kwargs.update(fastembed_kwargs)
 
         # Type ignore for mypy as SparseTextEmbedding constructor accepts flexible kwargs
-        self.sparse_encoder = SparseTextEmbedding(**default_kwargs)  # type: ignore
+        self.sparse_encoder = SparseTextEmbedding(**default_kwargs)
 
       except ImportError as e:
         raise ImportError("To use keyword/hybrid search, install the `fastembed` extra with `pip install fastembed`.") from e
@@ -322,7 +322,7 @@ class Qdrant(VectorDB):
           vector[self.dense_vector_name] = document.embedding
 
         if self.search_type in [SearchType.keyword, SearchType.hybrid]:
-          vector[self.sparse_vector_name] = next(iter(self.sparse_encoder.embed([document.content]))).as_object()  # type: ignore
+          vector[self.sparse_vector_name] = next(iter(self.sparse_encoder.embed([document.content]))).as_object()
 
       # Create payload with document properties
       payload = {
@@ -379,7 +379,7 @@ class Qdrant(VectorDB):
           vector[self.dense_vector_name] = document.embedding  # Already embedded above
 
         if self.search_type in [SearchType.keyword, SearchType.hybrid]:
-          vector[self.sparse_vector_name] = next(iter(self.sparse_encoder.embed([document.content]))).as_object()  # type: ignore
+          vector[self.sparse_vector_name] = next(iter(self.sparse_encoder.embed([document.content]))).as_object()
 
       if self.search_type in [SearchType.keyword, SearchType.hybrid]:
         vector[self.sparse_vector_name] = next(iter(self.sparse_encoder.embed([document.content]))).as_object()
@@ -402,9 +402,9 @@ class Qdrant(VectorDB):
         payload["meta_data"].update(filters)
 
       log_debug(f"Inserted document asynchronously: {document.name} ({document.meta_data})")
-      return models.PointStruct(  # type: ignore
+      return models.PointStruct(
         id=doc_id,
-        vector=vector,  # type: ignore
+        vector=vector,
         payload=payload,
       )
 
@@ -449,13 +449,13 @@ class Qdrant(VectorDB):
       log_warning("Filters Expressions are not supported in Qdrant. No filters will be applied.")
       filters = None
 
-    formatted_filters = self._format_filters(filters or {})  # type: ignore
+    formatted_filters = self._format_filters(filters or {})
     if self.search_type == SearchType.vector:
-      results = self._run_vector_search_sync(query, limit, formatted_filters=formatted_filters)  # type: ignore
+      results = self._run_vector_search_sync(query, limit, formatted_filters=formatted_filters)
     elif self.search_type == SearchType.keyword:
-      results = self._run_keyword_search_sync(query, limit, formatted_filters=formatted_filters)  # type: ignore
+      results = self._run_keyword_search_sync(query, limit, formatted_filters=formatted_filters)
     elif self.search_type == SearchType.hybrid:
-      results = self._run_hybrid_search_sync(query, limit, formatted_filters=formatted_filters)  # type: ignore
+      results = self._run_hybrid_search_sync(query, limit, formatted_filters=formatted_filters)
     else:
       raise ValueError(f"Unsupported search type: {self.search_type}")
 
@@ -466,13 +466,13 @@ class Qdrant(VectorDB):
       log_warning("Filters Expressions are not supported in Qdrant. No filters will be applied.")
       filters = None
 
-    formatted_filters = self._format_filters(filters or {})  # type: ignore
+    formatted_filters = self._format_filters(filters or {})
     if self.search_type == SearchType.vector:
-      results = await self._run_vector_search_async(query, limit, formatted_filters=formatted_filters)  # type: ignore
+      results = await self._run_vector_search_async(query, limit, formatted_filters=formatted_filters)
     elif self.search_type == SearchType.keyword:
-      results = await self._run_keyword_search_async(query, limit, formatted_filters=formatted_filters)  # type: ignore
+      results = await self._run_keyword_search_async(query, limit, formatted_filters=formatted_filters)
     elif self.search_type == SearchType.hybrid:
-      results = await self._run_hybrid_search_async(query, limit, formatted_filters=formatted_filters)  # type: ignore
+      results = await self._run_hybrid_search_async(query, limit, formatted_filters=formatted_filters)
     else:
       raise ValueError(f"Unsupported search type: {self.search_type}")
 
@@ -490,7 +490,7 @@ class Qdrant(VectorDB):
       collection_name=self.collection,
       prefetch=[
         models.Prefetch(
-          query=models.SparseVector(**sparse_embedding),  # type: ignore  # type: ignore
+          query=models.SparseVector(**sparse_embedding),
           limit=limit,
           using=self.sparse_vector_name,
         ),
@@ -544,7 +544,7 @@ class Qdrant(VectorDB):
     sparse_embedding = next(iter(self.sparse_encoder.embed([query]))).as_object()
     call = self.client.query_points(
       collection_name=self.collection,
-      query=models.SparseVector(**sparse_embedding),  # type: ignore
+      query=models.SparseVector(**sparse_embedding),
       with_vectors=True,
       with_payload=True,
       limit=limit,
@@ -593,7 +593,7 @@ class Qdrant(VectorDB):
     sparse_embedding = next(iter(self.sparse_encoder.embed([query]))).as_object()
     call = await self.async_client.query_points(
       collection_name=self.collection,
-      query=models.SparseVector(**sparse_embedding),  # type: ignore
+      query=models.SparseVector(**sparse_embedding),
       with_vectors=True,
       with_payload=True,
       limit=limit,
@@ -614,7 +614,7 @@ class Qdrant(VectorDB):
       collection_name=self.collection,
       prefetch=[
         models.Prefetch(
-          query=models.SparseVector(**sparse_embedding),  # type: ignore  # type: ignore
+          query=models.SparseVector(**sparse_embedding),
           limit=limit,
           using=self.sparse_vector_name,
         ),
@@ -640,7 +640,7 @@ class Qdrant(VectorDB):
           meta_data=result.payload["meta_data"],
           content=result.payload["content"],
           embedder=self.embedder,
-          embedding=result.vector,  # type: ignore
+          embedding=result.vector,
           usage=result.payload.get("usage"),
           content_id=result.payload.get("content_id"),
         )

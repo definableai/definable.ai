@@ -6,6 +6,7 @@ from uuid import uuid4
 
 import httpx
 from definable.exceptions import ModelAuthenticationError, ModelProviderError
+from definable.types import ToolCallDict
 from definable.media import Audio
 from definable.model.base import Model
 from definable.model.message import Message
@@ -48,7 +49,7 @@ class OpenAIChat(Model):
   verbosity: Optional[Literal["low", "medium", "high"]] = None
   metadata: Optional[Dict[str, Any]] = None
   frequency_penalty: Optional[float] = None
-  logit_bias: Optional[Any] = None
+  logit_bias: Optional[Dict[str, int]] = None
   logprobs: Optional[bool] = None
   top_logprobs: Optional[int] = None
   max_tokens: Optional[int] = None
@@ -68,9 +69,9 @@ class OpenAIChat(Model):
   # When True, guarantees schema adherence for structured outputs.
   # When False, attempts to follow schema as a guide but may occasionally deviate
   strict_output: bool = True
-  extra_headers: Optional[Any] = None
-  extra_query: Optional[Any] = None
-  extra_body: Optional[Any] = None
+  extra_headers: Optional[Dict[str, str]] = None
+  extra_query: Optional[Dict[str, object]] = None
+  extra_body: Optional[Dict[str, object]] = None
   request_params: Optional[Dict[str, Any]] = None
   role_map: Optional[Dict[str, str]] = None
 
@@ -80,8 +81,8 @@ class OpenAIChat(Model):
   base_url: Optional[Union[str, httpx.URL]] = None
   timeout: Optional[float] = None
   max_retries: Optional[int] = None
-  default_headers: Optional[Any] = None
-  default_query: Optional[Any] = None
+  default_headers: Optional[Dict[str, str]] = None
+  default_query: Optional[Dict[str, object]] = None
   http_client: Optional[Union[httpx.Client, httpx.AsyncClient]] = None
   client_params: Optional[Dict[str, Any]] = None
 
@@ -242,7 +243,7 @@ class OpenAIChat(Model):
         base_params["response_format"] = response_format
 
     # Filter out None values
-    request_params = {k: v for k, v in base_params.items() if v is not None}
+    request_params: Dict[str, Any] = {k: v for k, v in base_params.items() if v is not None}
 
     # Add tools
     if tools is not None and len(tools) > 0:
@@ -713,7 +714,7 @@ class OpenAIChat(Model):
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
 
   @staticmethod
-  def parse_tool_calls(tool_calls_data: List[ChoiceDeltaToolCall]) -> List[Dict[str, Any]]:  # type: ignore[override]
+  def parse_tool_calls(tool_calls_data: List[ChoiceDeltaToolCall]) -> list[ToolCallDict]:  # type: ignore[override]
     """
     Build tool calls from streamed tool call data.
 
@@ -721,9 +722,9 @@ class OpenAIChat(Model):
         tool_calls_data (List[ChoiceDeltaToolCall]): The tool call data to build from.
 
     Returns:
-        List[Dict[str, Any]]: The built tool calls.
+        list[ToolCallDict]: The built tool calls.
     """
-    tool_calls: List[Dict[str, Any]] = []
+    tool_calls: list[ToolCallDict] = []
     for _tool_call in tool_calls_data:
       _index = _tool_call.index or 0
       _tool_call_id = _tool_call.id
@@ -762,9 +763,9 @@ class OpenAIChat(Model):
     """
     model_response = ModelResponse()
 
-    if hasattr(response, "error") and response.error:  # type: ignore
+    if hasattr(response, "error") and response.error:
       raise ModelProviderError(
-        message=response.error.get("message", "Unknown model error"),  # type: ignore
+        message=response.error.get("message", "Unknown model error"),
         model_name=self.name,
         model_id=self.id,
       )
@@ -798,7 +799,7 @@ class OpenAIChat(Model):
       model_response.content = response_audio.transcript
 
     # Add audio if present
-    if hasattr(response_message, "audio") and response_message.audio is not None:  # type: ignore[unreachable]
+    if hasattr(response_message, "audio") and response_message.audio is not None:
       # If the audio output modality is requested, we can extract an audio response
       try:
         if isinstance(response_message.audio, dict):  # type: ignore[unreachable]
@@ -818,10 +819,10 @@ class OpenAIChat(Model):
       except Exception as e:
         log_warning(f"Error processing audio: {e}")
 
-    if hasattr(response_message, "reasoning_content") and response_message.reasoning_content is not None:  # type: ignore
-      model_response.reasoning_content = response_message.reasoning_content  # type: ignore
-    elif hasattr(response_message, "reasoning") and response_message.reasoning is not None:  # type: ignore
-      model_response.reasoning_content = response_message.reasoning  # type: ignore
+    if hasattr(response_message, "reasoning_content") and response_message.reasoning_content is not None:
+      model_response.reasoning_content = response_message.reasoning_content
+    elif hasattr(response_message, "reasoning") and response_message.reasoning is not None:
+      model_response.reasoning_content = response_message.reasoning
 
     if response.usage is not None:
       model_response.response_usage = self._get_metrics(response.usage)
@@ -839,7 +840,7 @@ class OpenAIChat(Model):
 
     return model_response
 
-  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:
+  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:  # type: ignore[override]
     """
     Parse the OpenAI streaming response into a ModelResponse.
 

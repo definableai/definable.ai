@@ -13,6 +13,8 @@ from definable.model.message import Message
 from definable.model.response import ToolExecution
 from definable.agent.events import (
   BaseRunOutputEvent,
+  ModelCallCompletedEvent,
+  ModelCallStartedEvent,
   RunCompletedEvent,
   RunContentEvent,
   RunContext,
@@ -28,9 +30,12 @@ from definable.utils.log import log_debug, log_warning
 from definable.utils.tools import get_function_call_for_tool_call
 
 if TYPE_CHECKING:
+  from definable.agent.compression.manager import CompressionManager
   from definable.agent.config import AgentConfig
+  from definable.agent.guardrail.base import Guardrails
   from definable.model.base import Model
   from definable.model.metrics import Metrics
+  from definable.model.response import ModelResponse
 
 
 # ---------------------------------------------------------------------------
@@ -86,8 +91,8 @@ class AgentLoop:
     config: "AgentConfig",
     streaming: bool = False,
     cancellation_token: Optional[CancellationToken] = None,
-    compression_manager: Optional[Any] = None,
-    guardrails: Optional[Any] = None,
+    compression_manager: Optional["CompressionManager"] = None,
+    guardrails: Optional["Guardrails"] = None,
     emit_fn: Callable[[BaseRunOutputEvent], None],
     agent_id: str,
     agent_name: str,
@@ -110,13 +115,20 @@ class AgentLoop:
 
     # Accumulated state during the loop
     self._all_tool_executions: list[ToolExecution] = []
+    self._turn: int = 0
+    self._tool_retry_counts: Dict[str, int] = {}  # tool_call_id → retry count
 
   # ------------------------------------------------------------------
   # Public API
   # ------------------------------------------------------------------
 
-  async def run(self) -> AsyncGenerator[RunOutputEvent, None]:  # type: ignore[misc]
-    """The unified loop. Yields events as they occur."""
+  async def run(self) -> AsyncGenerator[RunOutputEvent, None]:
+    """The unified loop. Yields events as they occur.
+
+    When ``streaming=True``, yields ``RunContentEvent`` deltas during
+    the model call. When ``streaming=False``, uses non-streaming model calls.
+    Tool dispatch, HITL, and all other logic is shared.
+    """
     tool_round = 0
     max_tool_rounds = self._config.max_tool_rounds
     final_content: Optional[str] = None
@@ -143,16 +155,63 @@ class AgentLoop:
           if await self._compression_manager.ashould_compress(self._messages, self._tools_dicts, model=self._model):
             await self._compression_manager.acompress(self._messages)
 
-        # 4. Model call
+        # 4. Model call (streaming or non-streaming)
+        started_evt = self._make_model_call_started()
+        yield started_evt
+
         if self._streaming:
-          content, tool_calls, metrics = await self._call_model_streaming()
-          # Yield content deltas were already yielded inside _call_model_streaming
-          # We need a different approach - collect content events from streaming
-          pass
+          # Streaming: yield RunContentEvent deltas inline
+          content, tool_calls, metrics = "", [], None
+          accumulated_content = ""
+          accumulated_tool_calls: list[dict] = []
+          accumulated_metrics: Optional["Metrics"] = None
+
+          assistant_message = Message(role="assistant")
+          async for chunk in self._model.ainvoke_stream(
+            messages=self._messages,
+            assistant_message=assistant_message,
+            tools=self._tools_dicts,
+            response_format=self._context.output_schema,
+          ):
+            if hasattr(chunk, "content") and chunk.content:
+              accumulated_content += chunk.content
+              yield RunContentEvent(
+                run_id=self._context.run_id,
+                session_id=self._context.session_id,
+                agent_id=self._agent_id,
+                agent_name=self._agent_name,
+                content=chunk.content,
+              )
+            if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+              accumulated_tool_calls = _merge_tool_call_deltas(accumulated_tool_calls, chunk.tool_calls)
+            if hasattr(chunk, "response_usage") and chunk.response_usage is not None:
+              if accumulated_metrics is None:
+                accumulated_metrics = chunk.response_usage
+              else:
+                accumulated_metrics = accumulated_metrics + chunk.response_usage
+
+          # Add assistant message to history
+          assistant_msg = Message(
+            role="assistant",
+            content=accumulated_content or None,
+            tool_calls=accumulated_tool_calls or None,
+          )
+          if accumulated_metrics is not None:
+            assistant_msg.metrics = accumulated_metrics
+            total_metrics = accumulated_metrics if total_metrics is None else total_metrics + accumulated_metrics
+          self._messages.append(assistant_msg)
+
+          content = accumulated_content
+          tool_calls = accumulated_tool_calls
+          metrics = accumulated_metrics
         else:
+          # Non-streaming
           content, tool_calls, metrics = await self._call_model()
 
-        if metrics is not None:
+        completed_evt = self._make_model_call_completed(content, tool_calls, metrics)
+        yield completed_evt
+
+        if metrics is not None and not self._streaming:
           total_metrics = metrics if total_metrics is None else total_metrics + metrics
 
         # 5. If no tool calls -> done
@@ -167,7 +226,6 @@ class AgentLoop:
 
         # 7. Check stop_after_tool_call
         if any(r.should_stop for r in batch.results):
-          # Use the latest content or fall back to the accumulated content from the model
           final_content = content
           break
 
@@ -210,135 +268,42 @@ class AgentLoop:
       )
       raise
 
-  # We need an alternative run method that can yield streaming content events
-  async def run_streaming(self) -> AsyncGenerator[RunOutputEvent, None]:  # type: ignore[misc]
-    """The unified loop for streaming mode.
+  async def run_streaming(self) -> AsyncGenerator[RunOutputEvent, None]:
+    """Alias for ``run()`` — streaming is controlled by the ``streaming`` constructor flag."""
+    async for event in self.run():
+      yield event
 
-    Same logic as ``run()`` but yields ``RunContentEvent`` deltas during
-    the model call, so the caller sees tokens as they arrive.
-    """
-    tool_round = 0
-    max_tool_rounds = self._config.max_tool_rounds
-    final_content: Optional[str] = None
-    total_metrics: Optional["Metrics"] = None
+  # ------------------------------------------------------------------
+  # Model call event helpers
+  # ------------------------------------------------------------------
 
-    try:
-      while True:
-        # 1. Cancellation check
-        if self._cancellation_token:
-          self._cancellation_token.raise_if_cancelled()
+  def _make_model_call_started(self) -> ModelCallStartedEvent:
+    self._turn += 1
+    return ModelCallStartedEvent(
+      run_id=self._context.run_id,
+      session_id=self._context.session_id,
+      agent_id=self._agent_id,
+      agent_name=self._agent_name,
+      turn=self._turn,
+      messages=list(self._messages),
+      tool_definitions=self._tools_dicts,
+      response_format=self._context.output_schema,
+      model_id=self._model.id,
+      model_provider=getattr(self._model, "provider", "") or "",
+    )
 
-        # 2. Increment round, check max_tool_rounds
-        tool_round += 1
-        if tool_round > max_tool_rounds:
-          log_warning(f"Agent loop hit max_tool_rounds={max_tool_rounds}. Forcing stop to prevent infinite tool-call loop.")
-          content, metrics = await self._force_final_answer()
-          final_content = content
-          if metrics is not None:
-            total_metrics = metrics if total_metrics is None else total_metrics + metrics
-          break
-
-        # 3. Compression check
-        if self._compression_manager is not None:
-          if await self._compression_manager.ashould_compress(self._messages, self._tools_dicts, model=self._model):
-            await self._compression_manager.acompress(self._messages)
-
-        # 4. Streaming model call — yield content deltas
-        accumulated_content = ""
-        accumulated_tool_calls: list[dict] = []
-        accumulated_metrics: Optional["Metrics"] = None
-
-        assistant_message = Message(role="assistant")
-        async for chunk in self._model.ainvoke_stream(
-          messages=self._messages,
-          assistant_message=assistant_message,
-          tools=self._tools_dicts,
-          response_format=self._context.output_schema,
-        ):
-          # Yield text content tokens immediately
-          if hasattr(chunk, "content") and chunk.content:
-            accumulated_content += chunk.content
-            yield RunContentEvent(
-              run_id=self._context.run_id,
-              session_id=self._context.session_id,
-              agent_id=self._agent_id,
-              agent_name=self._agent_name,
-              content=chunk.content,
-            )
-
-          # Accumulate tool calls from stream deltas
-          if hasattr(chunk, "tool_calls") and chunk.tool_calls:
-            accumulated_tool_calls = _merge_tool_call_deltas(accumulated_tool_calls, chunk.tool_calls)
-
-          # Accumulate metrics
-          if hasattr(chunk, "response_usage") and chunk.response_usage is not None:
-            if accumulated_metrics is None:
-              accumulated_metrics = chunk.response_usage
-            else:
-              accumulated_metrics = accumulated_metrics + chunk.response_usage
-
-        # Add assistant message to history
-        assistant_msg = Message(
-          role="assistant",
-          content=accumulated_content or None,
-          tool_calls=accumulated_tool_calls or None,
-        )
-        if accumulated_metrics is not None:
-          assistant_msg.metrics = accumulated_metrics
-          total_metrics = accumulated_metrics if total_metrics is None else total_metrics + accumulated_metrics
-        self._messages.append(assistant_msg)
-
-        # 5. If no tool calls -> done
-        if not accumulated_tool_calls:
-          final_content = accumulated_content
-          break
-
-        # 6. Parallel tool dispatch
-        batch = await self._execute_tools(accumulated_tool_calls)
-        for event in batch.events:
-          yield event  # type: ignore[misc]
-
-        # 7. Check stop_after_tool_call
-        if any(r.should_stop for r in batch.results):
-          final_content = accumulated_content
-          break
-
-        # 8. Check HITL pause
-        paused = [r for r in batch.results if r.is_paused]
-        if paused:
-          requirements = [r.requirement for r in paused if r.requirement is not None]
-          paused_tools = [r.tool_execution for r in paused if r.tool_execution is not None]
-          yield RunPausedEvent(
-            run_id=self._context.run_id,
-            session_id=self._context.session_id,
-            agent_id=self._agent_id,
-            agent_name=self._agent_name,
-            requirements=requirements,
-            tools=paused_tools,
-          )
-          return
-
-        # Loop continues
-
-      yield RunCompletedEvent(
-        run_id=self._context.run_id,
-        session_id=self._context.session_id,
-        agent_id=self._agent_id,
-        agent_name=self._agent_name,
-        content=final_content,
-        metrics=total_metrics,
-      )
-
-    except Exception as e:
-      yield RunErrorEvent(
-        run_id=self._context.run_id,
-        session_id=self._context.session_id,
-        agent_id=self._agent_id,
-        agent_name=self._agent_name,
-        error_type=type(e).__name__,
-        content=str(e),
-      )
-      raise
+  def _make_model_call_completed(self, content: str, tool_calls: list[dict], metrics: Optional["Metrics"]) -> ModelCallCompletedEvent:
+    return ModelCallCompletedEvent(
+      run_id=self._context.run_id,
+      session_id=self._context.session_id,
+      agent_id=self._agent_id,
+      agent_name=self._agent_name,
+      turn=self._turn,
+      content=content or None,
+      tool_calls=tool_calls or None,
+      metrics=metrics,
+      model_id=self._model.id,
+    )
 
   # ------------------------------------------------------------------
   # Model calls
@@ -364,45 +329,7 @@ class AgentLoop:
       response.response_usage,
     )
 
-  async def _call_model_streaming(self) -> tuple[str, list[dict], Optional["Metrics"]]:
-    """Streaming model call (accumulates content, doesn't yield events).
-
-    This is used by ``run()`` (non-streaming mode) when the caller doesn't
-    need content deltas. For streaming to the user, use ``run_streaming()``.
-    """
-    accumulated_content = ""
-    accumulated_tool_calls: list[dict] = []
-    accumulated_metrics: Optional["Metrics"] = None
-
-    assistant_message = Message(role="assistant")
-    async for chunk in self._model.ainvoke_stream(
-      messages=self._messages,
-      assistant_message=assistant_message,
-      tools=self._tools_dicts,
-      response_format=self._context.output_schema,
-    ):
-      if hasattr(chunk, "content") and chunk.content:
-        accumulated_content += chunk.content
-      if hasattr(chunk, "tool_calls") and chunk.tool_calls:
-        accumulated_tool_calls = _merge_tool_call_deltas(accumulated_tool_calls, chunk.tool_calls)
-      if hasattr(chunk, "response_usage") and chunk.response_usage is not None:
-        if accumulated_metrics is None:
-          accumulated_metrics = chunk.response_usage
-        else:
-          accumulated_metrics = accumulated_metrics + chunk.response_usage
-
-    assistant_msg = Message(
-      role="assistant",
-      content=accumulated_content or None,
-      tool_calls=accumulated_tool_calls or None,
-    )
-    if accumulated_metrics is not None:
-      assistant_msg.metrics = accumulated_metrics
-    self._messages.append(assistant_msg)
-
-    return accumulated_content, accumulated_tool_calls, accumulated_metrics
-
-  async def _call_model_with_retry(self) -> Any:
+  async def _call_model_with_retry(self) -> "ModelResponse":
     """Call model with retry on transient errors (exponential backoff)."""
     max_retries = self._config.max_retries if self._config.retry_transient_errors else 0
     backoff_base = self._config.retry_backoff_base
@@ -441,6 +368,10 @@ class AgentLoop:
         ),
       )
     )
+
+    started_evt = self._make_model_call_started()
+    self._emit_fn(started_evt)
+
     assistant_msg = Message(role="assistant")
     final_response = await self._model.ainvoke(
       messages=self._messages,
@@ -449,6 +380,10 @@ class AgentLoop:
       response_format=self._context.output_schema,
     )
     self._messages.append(Message(role="assistant", content=final_response.content))
+
+    completed_evt = self._make_model_call_completed(final_response.content or "", [], final_response.response_usage)
+    self._emit_fn(completed_evt)
+
     return final_response.content or "", final_response.response_usage
 
   # ------------------------------------------------------------------
@@ -530,7 +465,6 @@ class AgentLoop:
       agent_name=self._agent_name,
       tool=tool_execution,
     )
-    self._emit_fn(started_event)
     events.append(started_event)
 
     # ---- HITL: requires_confirmation ----
@@ -579,11 +513,30 @@ class AgentLoop:
       # For now, guardrails are handled at the agent level and passed as blocked tool results
       pass
 
-    # ---- Execute ----
+    # ---- Execute (with ToolRetry support) ----
     if function_call:
-      result_obj = await function_call.aexecute()
-      tool_execution.result = str(result_obj.result) if result_obj.status == "success" else str(result_obj.error)
-      tool_execution.tool_call_error = result_obj.status == "failure"
+      try:
+        result_obj = await function_call.aexecute()
+        tool_execution.result = str(result_obj.result) if result_obj.status == "success" else str(result_obj.error)
+        tool_execution.tool_call_error = result_obj.status == "failure"
+      except Exception as exc:
+        # Lazy import to avoid circular dependency
+        from definable.agent.pipeline.tool_retry import ToolRetry as _ToolRetry
+
+        if not isinstance(exc, _ToolRetry):
+          raise
+        retry = exc
+        # ToolRetry: send feedback to model, track retry count
+        call_id = tool_call.get("id", "")
+        count = self._tool_retry_counts.get(call_id, 0) + 1
+        self._tool_retry_counts[call_id] = count
+
+        if count > retry.max_retries:
+          tool_execution.result = f"[RETRY EXHAUSTED] Tool '{fn_name}' failed after {retry.max_retries} retries: {retry.message}"
+          tool_execution.tool_call_error = True
+        else:
+          tool_execution.result = f"[RETRY] {retry.message}"
+          tool_execution.tool_call_error = False
     else:
       tool_execution.result = f"Tool '{fn_name}' not found"
       tool_execution.tool_call_error = True
@@ -599,7 +552,6 @@ class AgentLoop:
       tool=tool_execution,
       content=tool_execution.result,
     )
-    self._emit_fn(completed_event)
     events.append(completed_event)
 
     # Add tool result message to conversation

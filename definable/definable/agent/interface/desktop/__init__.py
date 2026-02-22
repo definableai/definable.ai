@@ -7,7 +7,9 @@ Provides:
 
 Quick Start::
 
-    from definable.agent.interface.desktop import BridgeClient, DesktopConfig, DesktopInterface
+    from definable.agent.interface.desktop import DesktopInterface
+
+    interface = DesktopInterface(agent=agent, websocket_port=8765)
 """
 
 from definable.agent.interface.desktop.bridge_client import BridgeClient
