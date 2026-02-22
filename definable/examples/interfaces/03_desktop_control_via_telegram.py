@@ -34,7 +34,7 @@ import asyncio
 import os
 
 from definable.agent import Agent
-from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+from definable.agent.interface.telegram import TelegramInterface
 from definable.model.openai import OpenAIChat
 from definable.skill.builtin.macos import MacOS
 
@@ -69,16 +69,14 @@ async def main() -> None:
     ),
   )
 
-  # Build the Telegram config
-  telegram_config = TelegramConfig(
+  interface = TelegramInterface(
+    agent=agent,
     bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
     # Restrict to specific user IDs for security
     allowed_user_ids=allowed_user_ids,  # type: ignore[arg-type]
     # Auto-parse markdown so screenshots render correctly
     parse_mode="Markdown",
   )
-
-  interface = TelegramInterface(agent=agent, config=telegram_config)
 
   print("Desktop control Telegram bot is running!")
   print("  Bridge: http://127.0.0.1:7777")

@@ -55,17 +55,13 @@ Some features require additional packages:
 | Discord interface | `discord.py>=2.3.0` | `pip install 'definable[discord]'` |
 | All interfaces | `discord.py>=2.3.0` | `pip install 'definable[interfaces]'` |
 | File readers (PDF, DOCX, PPTX, XLSX, ODS, RTF) | `pypdf`, `python-docx`, `python-pptx`, `openpyxl`, `odfpy`, `striprtf` | `pip install 'definable[readers]'` |
-| PostgreSQL memory | `asyncpg>=0.29.0` | `pip install 'definable[postgres-memory]'` |
+| PostgreSQL memory (legacy — current memory uses SQLite/File/InMemory) | `asyncpg>=0.29.0` | `pip install 'definable[postgres-memory]'` |
 | Mistral OCR | `mistralai>=1.0.0` | `pip install 'definable[mistral-ocr]'` |
 | HTTP server | `fastapi`, `uvicorn` | `pip install 'definable[serve]'` |
 | Cron scheduling | `croniter` | `pip install 'definable[cron]'` |
 | JWT authentication | `pyjwt` | `pip install 'definable[jwt]'` |
 | Dev mode (hot-reload) | `watchfiles` | `pip install watchfiles` |
 | Full runtime | All of the above | `pip install 'definable[runtime]'` |
-
-<Note>
-The Signal interface has no pip dependency — it uses an external `signal-cli-rest-api` Docker container. See the [Signal interface docs](/interfaces/signal) for setup instructions.
-</Note>
 
 ## Environment Variables
 

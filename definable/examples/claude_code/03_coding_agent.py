@@ -372,45 +372,6 @@ async def demo_multi_turn():
   return r2
 
 
-async def demo_streaming():
-  """Demo: Stream events as the agent works."""
-  print("\n" + "=" * 60)
-  print("DEMO 3: Streaming events")
-  print("=" * 60)
-
-  agent = create_coding_agent()
-
-  async for event in agent.arun_stream(
-    "What files are in the current directory? List them briefly.",
-    user_id="dev-alice",
-  ):
-    event_type = type(event).__name__
-    if event_type == "RunStartedEvent":
-      print("  [stream] Agent started working...")
-    elif event_type == "ToolCallStartedEvent":
-      tool = getattr(event, "tool", None)
-      if tool:
-        print(f"  [stream:tool] {tool.tool_name}({_truncate(str(tool.tool_args or {}), 60)})")
-    elif event_type == "ToolCallCompletedEvent":
-      content = getattr(event, "content", "")
-      print(f"  [stream:tool done] ({len(content) if content else 0} chars)")
-    elif event_type == "ReasoningContentDeltaEvent":
-      print(f"  [stream:thinking] {_truncate(getattr(event, 'reasoning_content', ''), 60)}")
-    elif event_type == "RunContentEvent":
-      content = getattr(event, "content", "")
-      if content:
-        print(f"  [stream:content] {_truncate(content, 100)}")
-    elif event_type == "RunCompletedEvent":
-      metrics = getattr(event, "metrics", None)
-      if metrics:
-        cost_str = f"${metrics.cost:.4f}" if getattr(metrics, "cost", None) else "n/a"
-        print(f"  [stream:done] {getattr(metrics, 'input_tokens', 0):,} in / {getattr(metrics, 'output_tokens', 0):,} out | cost: {cost_str}")
-      else:
-        print("  [stream:done]")
-    elif event_type == "RunErrorEvent":
-      print(f"  [stream:error] {getattr(event, 'content', 'unknown')}")
-
-
 async def main():
   """Run all demos sequentially."""
   print("ClaudeCodeAgent — Coding Agent Examples\n")
@@ -420,9 +381,6 @@ async def main():
 
   # Multi-turn demo
   await demo_multi_turn()
-
-  # Streaming demo
-  await demo_streaming()
 
   print("\n" + "=" * 60)
   print("All demos complete. Traces written to ./traces/")

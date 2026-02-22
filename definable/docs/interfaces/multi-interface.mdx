@@ -15,9 +15,7 @@ import asyncio
 from definable.agent import Agent
 from definable.agent.interface import (
     TelegramInterface,
-    TelegramConfig,
     DiscordInterface,
-    DiscordConfig,
     serve,
 )
 from definable.model import OpenAIChat
@@ -29,12 +27,12 @@ agent = Agent(
 
 telegram = TelegramInterface(
   agent=agent,
-  config=TelegramConfig(bot_token="telegram-token"),
+  bot_token="telegram-token",
 )
 
 discord = DiscordInterface(
   agent=agent,
-  config=DiscordConfig(bot_token="discord-token"),
+  bot_token="discord-token",
 )
 
 asyncio.run(serve(telegram, discord, name="my-bot"))
@@ -67,7 +65,7 @@ async def serve(
 - **Concurrent execution** — each interface runs as an independent asyncio task
 - **Automatic restart** — if an interface crashes, it restarts with exponential backoff (1s → 2s → 4s → ... → 60s max)
 - **Stability threshold** — if an interface runs for 60+ seconds without crashing, the backoff resets to 1s
-- **Graceful shutdown** — Ctrl+C sends a stop signal to all interfaces and waits for clean shutdown
+- **Graceful shutdown** — Ctrl+C stops all interfaces and waits for clean shutdown
 
 ## Agent.serve()
 
@@ -100,7 +98,6 @@ resolver = SQLiteIdentityResolver(db_path="./identity.db")
 await serve(
     telegram,
     discord,
-    signal,
     name="my-bot",
     identity_resolver=resolver,
 )

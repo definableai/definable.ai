@@ -160,20 +160,6 @@ For automatic session continuation, set `continue_conversation=True`:
 agent = ClaudeCodeAgent(continue_conversation=True)
 ```
 
-## Streaming
-
-Stream events as they arrive from the CLI:
-
-```python
-async for event in agent.arun_stream("Fix the auth bug"):
-    if isinstance(event, RunContentEvent):
-        print(event.content, end="", flush=True)
-    elif isinstance(event, ToolCallStartedEvent):
-        print(f"\n[Tool: {event.tool.tool_name}]")
-    elif isinstance(event, RunCompletedEvent):
-        print(f"\nDone! Cost: ${event.metrics.cost:.4f}")
-```
-
 ## RunOutput
 
 `ClaudeCodeAgent.arun()` returns the same `RunOutput` type as `Agent.arun()`:

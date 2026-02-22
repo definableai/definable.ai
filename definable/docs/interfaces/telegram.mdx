@@ -29,22 +29,21 @@ import asyncio
 import os
 from definable.agent import Agent
 from definable.model import OpenAIChat
-from definable.agent.interface import TelegramInterface, TelegramConfig
+from definable.agent.interface import TelegramInterface
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
     instructions="You are a helpful Telegram assistant.",
 )
 
-config = TelegramConfig(bot_token=os.environ["TELEGRAM_BOT_TOKEN"])
-interface = TelegramInterface(agent=agent, config=config)
+interface = TelegramInterface(agent=agent, bot_token=os.environ["TELEGRAM_BOT_TOKEN"])
 
 asyncio.run(interface.serve_forever())
 ```
 
 Your bot is now live. Open Telegram, find your bot, and start chatting.
 
-## TelegramConfig Reference
+## TelegramInterface Parameters
 
 ### Authentication
 
@@ -119,7 +118,8 @@ Your bot is now live. Open Telegram, find your bot, and start chatting.
 Polling is the simplest mode. The bot periodically asks Telegram for new messages. No public URL or HTTPS certificate is needed.
 
 ```python
-config = TelegramConfig(
+interface = TelegramInterface(
+    agent=agent,
     bot_token="YOUR_TOKEN",
     mode="polling",           # default
     polling_interval=0.5,     # check every 500ms
@@ -136,7 +136,8 @@ Use polling for local development and testing. It works behind NATs and firewall
 Webhooks are more efficient for production. Telegram pushes updates to your server as they arrive — no polling delay.
 
 ```python
-config = TelegramConfig(
+interface = TelegramInterface(
+    agent=agent,
     bot_token="YOUR_TOKEN",
     mode="webhook",
     webhook_url="https://your-domain.com/webhook/telegram",
@@ -187,7 +188,8 @@ def generate_chart(data: str) -> Image:
 Restrict who can use the bot:
 
 ```python
-config = TelegramConfig(
+interface = TelegramInterface(
+    agent=agent,
     bot_token="YOUR_TOKEN",
     allowed_user_ids=[123456789, 987654321],    # Only these users
     allowed_chat_ids=[111222333],                 # Only these chats
@@ -240,7 +242,6 @@ from definable.agent import Agent, AgentConfig, LoggingMiddleware
 from definable.model import OpenAIChat
 from definable.agent.interface import (
     TelegramInterface,
-    TelegramConfig,
     LoggingHook,
     AllowlistHook,
 )
@@ -254,19 +255,18 @@ agent = Agent(
     config=AgentConfig(max_iterations=5),
 ).use(LoggingMiddleware(logger))
 
-config = TelegramConfig(
-    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
-    mode="webhook",
-    webhook_url="https://bot.acme.com/webhook/telegram",
-    webhook_secret=os.environ.get("WEBHOOK_SECRET"),
-    max_session_history=30,
-    session_ttl_seconds=1800,       # 30-minute sessions
-    max_concurrent_requests=20,
-    parse_mode="HTML",
-)
-
 interface = (
-    TelegramInterface(agent=agent, config=config)
+    TelegramInterface(
+        agent=agent,
+        bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+        mode="webhook",
+        webhook_url="https://bot.acme.com/webhook/telegram",
+        webhook_secret=os.environ.get("WEBHOOK_SECRET"),
+        max_session_history=30,
+        session_ttl_seconds=1800,       # 30-minute sessions
+        max_concurrent_requests=20,
+        parse_mode="HTML",
+    )
     .add_hook(LoggingHook())
     .add_hook(AllowlistHook(allowed_user_ids={"12345", "67890"}))
 )

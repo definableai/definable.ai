@@ -12,11 +12,10 @@ A complete example combining all auth features in one agent: API key auth for HT
 ```python
 from definable.agent import Agent
 from definable.agent.auth import APIKeyAuth, AllowlistAuth, CompositeAuth
-from definable.model import OpenAIChat
+from definable.model.openai import OpenAIChat
 
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
-  tools=[...],
 )
 
 # Composite auth: API keys for HTTP + allowlist for Telegram

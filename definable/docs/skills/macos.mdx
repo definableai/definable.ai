@@ -263,7 +263,7 @@ Control your Mac remotely using the MacOS skill + Telegram interface:
 import asyncio, os
 from definable.agent import Agent
 from definable.model.openai import OpenAIChat
-from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+from definable.agent.interface.telegram import TelegramInterface
 from definable.skill.builtin.macos import MacOS
 
 async def main():
@@ -274,10 +274,8 @@ async def main():
   )
   interface = TelegramInterface(
     agent=agent,
-    config=TelegramConfig(
-      bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
-      allowed_user_ids={int(os.environ["MY_TELEGRAM_USER_ID"])},
-    ),
+    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+    allowed_user_ids={int(os.environ["MY_TELEGRAM_USER_ID"])},
   )
   async with interface:
     await interface.serve_forever()
@@ -285,7 +283,7 @@ async def main():
 asyncio.run(main())
 ```
 
-The MacOS skill works with **any** Definable interface — Telegram, Discord, Signal, or a custom WebSocket frontend.
+The MacOS skill works with **any** Definable interface — Telegram, Discord, or a custom WebSocket frontend.
 
 ## Using BridgeClient Directly
 
@@ -316,7 +314,7 @@ The `DesktopInterface` provides a local WebSocket server for direct chat without
 
 ```python
 from definable.agent import Agent
-from definable.agent.interface.desktop import DesktopConfig, DesktopInterface
+from definable.agent.interface.desktop import DesktopInterface
 from definable.skill.builtin.macos import MacOS
 from definable.model.openai import OpenAIChat
 import asyncio, os
@@ -328,7 +326,7 @@ async def main():
   )
   interface = DesktopInterface(
     agent=agent,
-    config=DesktopConfig(websocket_port=8765),
+    websocket_port=8765,
   )
   async with interface:
     await interface.serve_forever()

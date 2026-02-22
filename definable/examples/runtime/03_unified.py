@@ -66,14 +66,14 @@ def maybe_add_telegram():
   if not bot_token:
     return
   from definable.agent.auth import AllowlistAuth
-  from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+  from definable.agent.interface.telegram import TelegramInterface
 
   # Only allow specific Telegram users (set via env var or hardcode)
   allowed = os.environ.get("TELEGRAM_ALLOWED_USERS", "")
   allowed_ids = {uid.strip() for uid in allowed.split(",") if uid.strip()}
 
   telegram = TelegramInterface(
-    config=TelegramConfig(bot_token=bot_token),
+    bot_token=bot_token,
     auth=AllowlistAuth(user_ids=allowed_ids) if allowed_ids else None,
   )
   agent.add_interface(telegram)

@@ -9,7 +9,7 @@ Definable is a Python framework for building AI-powered applications. It provide
 
 <CardGroup cols={2}>
   <Card title="Models" icon="microchip" href="/models/overview">
-    Unified interface for OpenAI, DeepSeek, Moonshot, xAI, and any OpenAI-compatible provider. Supports streaming, structured output, vision, and audio.
+    Unified interface for OpenAI, DeepSeek, Moonshot, xAI, Anthropic, Mistral, Google Gemini, Perplexity, Ollama, OpenRouter, and any OpenAI-compatible provider. Supports streaming, structured output, vision, and audio.
   </Card>
   <Card title="Agents" icon="robot" href="/agents/overview">
     Autonomous agents with tool calling, middleware, tracing, multi-turn conversations, and streaming. Built for production with retries, compression, and testing utilities.
@@ -27,10 +27,10 @@ Definable is a Python framework for building AI-powered applications. It provide
     Bundle related tools into reusable toolkits. Built-in toolkits for knowledge search and MCP server integration.
   </Card>
   <Card title="Interfaces" icon="message-bot" href="/interfaces/overview">
-    Connect agents to messaging platforms like Telegram, Discord, and Signal. Automatic session management, hooks, identity resolution, and multi-interface serving.
+    Connect agents to messaging platforms like Telegram and Discord. Automatic session management, hooks, identity resolution, and multi-interface serving.
   </Card>
   <Card title="Memory" icon="brain" href="/memory/overview">
-    LLM-driven persistent memory with automatic recall and cross-session context. Supports SQLite, PostgreSQL, and in-memory backends.
+    Session-history memory with automatic recall and auto-summarization. Supports SQLite, file-based, and in-memory backends.
   </Card>
   <Card title="Readers" icon="file-lines" href="/readers/overview">
     Extract text from files (PDF, DOCX, XLSX, audio) and inject into agent context automatically before LLM processing.
@@ -57,7 +57,7 @@ flowchart TD
   end
   subgraph intLayer [Interfaces]
     direction LR
-    Telegram --- Discord --- Signal --- CustomInt["Custom"]
+    Telegram --- Discord --- CustomInt["Custom"]
   end
   agentLayer --> modelLayer
   agentLayer --> capLayer
@@ -66,7 +66,7 @@ flowchart TD
 
 ## Key Features
 
-- **Multi-provider**: Switch between OpenAI, DeepSeek, Moonshot, xAI, or any OpenAI-compatible API with one line.
+- **Multi-provider**: Switch between OpenAI, DeepSeek, Moonshot, xAI, Anthropic, Mistral, Google Gemini, Perplexity, Ollama, OpenRouter, or any OpenAI-compatible API with one line.
 - **Sync and async**: Every API has both synchronous and asynchronous variants.
 - **Streaming**: Stream responses token-by-token with rich event types for tool calls, reasoning, and content.
 - **Structured output**: Return Pydantic models directly from LLM calls with JSON Schema validation.
@@ -75,8 +75,8 @@ flowchart TD
 - **MCP support**: Connect to any MCP server and use its tools, resources, and prompts inside your agents.
 - **Testing**: Mock models, test agents without API calls, and assert on tool execution.
 - **Cost tracking**: Automatic token counting and cost calculation across providers.
-- **Interfaces**: Deploy agents to Telegram, Discord, and Signal with sessions, hooks, identity resolution, and multi-interface serving.
-- **Memory**: LLM-driven persistent memory with automatic recall and 3 storage backends (SQLite, PostgreSQL, in-memory).
+- **Interfaces**: Deploy agents to Telegram and Discord with sessions, hooks, identity resolution, and multi-interface serving.
+- **Memory**: Session-history memory with automatic recall and auto-summarization. 3 storage backends (SQLite, file-based, in-memory).
 - **File readers**: Extract text from PDF, DOCX, XLSX, and audio files attached to agent messages.
 - **Type-safe**: Built on Pydantic with full type annotations and mypy support.
 

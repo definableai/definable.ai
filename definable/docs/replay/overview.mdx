@@ -11,9 +11,9 @@ The replay module lets you look inside completed agent runs, compare two runs si
 
 ```python
 from definable.agent import Agent
-from definable.model import OpenAIChat
+from definable.model.openai import OpenAIChat
 
-agent = Agent(model=OpenAIChat(id="gpt-4o"), tools=[...])
+agent = Agent(model=OpenAIChat(id="gpt-4o"))
 
 # Run and inspect
 output = agent.run("Summarize the Q4 report.")

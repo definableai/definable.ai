@@ -42,9 +42,9 @@ for event in agent.run_stream("Write a short story about a robot."):
     if event.event == "RunContent":
         print(event.content, end="", flush=True)
     elif event.event == "ToolCallStarted":
-        print(f"\n→ Calling {event.tool_name}...")
+        print(f"\n→ Calling {event.tool.tool_name}...")
     elif event.event == "ToolCallCompleted":
-        print(f"  Done: {event.result[:100]}")
+        print(f"  Done: {event.content[:100]}")
     elif event.event == "RunCompleted":
         print(f"\n\nTokens used: {event.metrics.total_tokens}")
 ```
@@ -171,7 +171,7 @@ agent.serve(telegram_interface, discord_interface, port=8000)
 ```
 
 <ParamField path="*interfaces" type="BaseInterface">
-  Interface instances (Telegram, Discord, Signal) to run concurrently.
+  Interface instances (Telegram, Discord) to run concurrently.
 </ParamField>
 
 <ParamField path="host" type="str" default="0.0.0.0">

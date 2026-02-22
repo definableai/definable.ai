@@ -454,13 +454,13 @@ async def main() -> None:
     )
 
     # Option 1: Telegram interface (requires TELEGRAM_BOT_TOKEN env var)
-    from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+    from definable.agent.interface.telegram import TelegramInterface
 
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if bot_token:
       telegram = TelegramInterface(
         agent=agent,
-        config=TelegramConfig(bot_token=bot_token),
+        bot_token=bot_token,
       )
       await agent.aserve(telegram, name="browser-agent")
     else:

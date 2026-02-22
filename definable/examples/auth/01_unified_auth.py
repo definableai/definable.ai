@@ -138,10 +138,10 @@ def maybe_add_telegram():
   bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
   if not bot_token:
     return
-  from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+  from definable.agent.interface.telegram import TelegramInterface
 
   telegram = TelegramInterface(
-    config=TelegramConfig(bot_token=bot_token),
+    bot_token=bot_token,
     auth=AllowlistAuth(user_ids=_telegram_ids) if _telegram_ids else None,
   )
   agent.add_interface(telegram)
@@ -153,10 +153,10 @@ def maybe_add_discord():
   bot_token = os.environ.get("DISCORD_BOT_TOKEN")
   if not bot_token:
     return
-  from definable.agent.interface.discord import DiscordConfig, DiscordInterface
+  from definable.agent.interface.discord import DiscordInterface
 
   discord = DiscordInterface(
-    config=DiscordConfig(bot_token=bot_token),
+    bot_token=bot_token,
     auth=AllowlistAuth(user_ids=_discord_ids) if _discord_ids else None,
   )
   agent.add_interface(discord)

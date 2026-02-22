@@ -97,7 +97,7 @@ session_manager = SessionManager(session_ttl_seconds=7200)
 
 interface = TelegramInterface(
     agent=agent,
-    config=config,
+    bot_token="...",
     session_manager=session_manager,
 )
 ```
@@ -136,10 +136,10 @@ Sessions expire based on `last_activity_at`. Every incoming message updates this
 
 ```python
 # Short sessions for quick interactions
-config = TelegramConfig(bot_token="...", session_ttl_seconds=300)  # 5 minutes
+interface = TelegramInterface(agent=agent, bot_token="...", session_ttl_seconds=300)  # 5 minutes
 
 # Long sessions for complex workflows
-config = TelegramConfig(bot_token="...", session_ttl_seconds=86400)  # 24 hours
+interface = TelegramInterface(agent=agent, bot_token="...", session_ttl_seconds=86400)  # 24 hours
 ```
 
 When a session expires, the next message from that user starts a fresh conversation with no history.
@@ -149,7 +149,8 @@ When a session expires, the next message from that user starts a fresh conversat
 Long conversations are automatically truncated to prevent token limit issues:
 
 ```python
-config = TelegramConfig(
+interface = TelegramInterface(
+    agent=agent,
     bot_token="...",
     max_session_history=20,  # Keep only the 20 most recent messages
 )

@@ -45,8 +45,8 @@ from definable.agent import Agent
 from definable.model.openai import OpenAIChat
 
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o-mini"),
-    instructions="You are a helpful assistant.",
+  model=OpenAIChat(id="gpt-4o-mini"),
+  instructions="You are a helpful assistant.",
 )
 
 output = agent.run("What is the capital of Japan?")
@@ -68,15 +68,17 @@ output = agent.run("What is the capital of Japan?")
 from definable.agent import Agent
 from definable.tool.decorator import tool
 
+
 @tool
 def get_weather(city: str) -> str:
-    """Get current weather for a city."""
-    return f"Sunny, 72°F in {city}"
+  """Get current weather for a city."""
+  return f"Sunny, 72°F in {city}"
+
 
 agent = Agent(
-    model="gpt-4o-mini",
-    tools=[get_weather],
-    instructions="Help users check the weather.",
+  model="gpt-4o-mini",
+  tools=[get_weather],
+  instructions="Help users check the weather.",
 )
 
 output = agent.run("What's the weather in Tokyo?")
@@ -91,15 +93,18 @@ from pydantic import BaseModel
 from definable.agent import Agent
 from definable.tool.decorator import tool
 
+
 @tool
 def get_weather(city: str) -> str:
-    """Get current weather for a city."""
-    return f"Sunny, 72°F in {city}"
+  """Get current weather for a city."""
+  return f"Sunny, 72°F in {city}"
+
 
 class WeatherReport(BaseModel):
-    city: str
-    temperature: float
-    conditions: str
+  city: str
+  temperature: float
+  conditions: str
+
 
 agent = Agent(model="gpt-4o-mini", tools=[get_weather])
 
@@ -117,8 +122,8 @@ from definable.agent import Agent
 agent = Agent(model="gpt-4o-mini", instructions="You are a helpful assistant.")
 
 for event in agent.run_stream("Write a haiku about Python."):
-    if event.content:
-        print(event.content, end="", flush=True)
+  if event.content:
+    print(event.content, end="", flush=True)
 ```
 
 `run_stream()` yields events as they arrive — content chunks, tool calls, and completion signals.
@@ -140,12 +145,13 @@ Pass `messages` from a previous run to continue the conversation.
 ## Persistent Memory
 
 ```python
+from definable.agent import Agent
 from definable.memory import Memory, SQLiteStore
 
 agent = Agent(
-    model="gpt-4o-mini",
-    memory=Memory(store=SQLiteStore("memory.db")),
-    instructions="You are a personal assistant.",
+  model="gpt-4o-mini",
+  memory=Memory(store=SQLiteStore("memory.db")),
+  instructions="You are a personal assistant.",
 )
 
 await agent.arun("My name is Alice and I prefer dark mode.", user_id="alice")
@@ -153,26 +159,27 @@ await agent.arun("My name is Alice and I prefer dark mode.", user_id="alice")
 await agent.arun("What's my name?", user_id="alice")  # Recalls "Alice"
 ```
 
-Memory is LLM-driven: the model decides what to remember via tool calls (add/update/delete). For quick testing, use `memory=True` for an in-memory store. Three backends available: SQLite, PostgreSQL, and in-memory.
+Memory stores session history automatically and summarizes when messages exceed `max_messages`. For quick testing, use `memory=True` for an in-memory store. Three backends available: SQLite, file-based, and in-memory.
 
 ## Knowledge Base (RAG)
 
 ```python
+from definable.agent import Agent
 from definable.knowledge import Knowledge, Document
 from definable.embedder import OpenAIEmbedder
 from definable.vectordb import InMemoryVectorDB
 
 kb = Knowledge(
-    vector_db=InMemoryVectorDB(),
-    embedder=OpenAIEmbedder(),
-    top_k=3,
+  vector_db=InMemoryVectorDB(),
+  embedder=OpenAIEmbedder(),
+  top_k=3,
 )
 kb.add(Document(content="Company vacation policy: 20 days PTO per year."))
 
 agent = Agent(
-    model="gpt-4o-mini",
-    instructions="You are an HR assistant.",
-    knowledge=kb,
+  model="gpt-4o-mini",
+  instructions="You are an HR assistant.",
+  knowledge=kb,
 )
 
 output = agent.run("How many vacation days do I get?")
@@ -189,20 +196,22 @@ from definable.agent import Agent
 from definable.agent.guardrail import Guardrails, max_tokens, pii_filter, tool_blocklist
 from definable.tool.decorator import tool
 
+
 @tool
 def get_weather(city: str) -> str:
-    """Get current weather for a city."""
-    return f"Sunny, 72°F in {city}"
+  """Get current weather for a city."""
+  return f"Sunny, 72°F in {city}"
+
 
 agent = Agent(
-    model="gpt-4o-mini",
-    instructions="You are a support agent.",
-    tools=[get_weather],
-    guardrails=Guardrails(
-        input=[max_tokens(500)],
-        output=[pii_filter()],
-        tool=[tool_blocklist({"dangerous_tool"})],
-    ),
+  model="gpt-4o-mini",
+  instructions="You are a support agent.",
+  tools=[get_weather],
+  guardrails=Guardrails(
+    input=[max_tokens(500)],
+    output=[pii_filter()],
+    tool=[tool_blocklist({"dangerous_tool"})],
+  ),
 )
 
 output = agent.run("What's the weather?")
@@ -217,9 +226,9 @@ from definable.agent import Agent
 from definable.skill import Calculator, WebSearch, DateTime
 
 agent = Agent(
-    model="gpt-4o-mini",
-    skills=[Calculator(), WebSearch(), DateTime()],
-    instructions="You are a helpful assistant.",
+  model="gpt-4o-mini",
+  skills=[Calculator(), WebSearch(), DateTime()],
+  instructions="You are a helpful assistant.",
 )
 
 output = agent.run("What is 15% of 230?")
@@ -230,21 +239,22 @@ Skills bundle domain expertise (instructions) with tools. Built-in skills includ
 ## MCP
 
 ```python
+from definable.agent import Agent
 from definable.mcp import MCPConfig, MCPServerConfig, MCPToolkit
 
 config = MCPConfig(
-    servers=[
-        MCPServerConfig(
-            name="filesystem",
-            command="npx",
-            args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-        )
-    ]
+  servers=[
+    MCPServerConfig(
+      name="filesystem",
+      command="npx",
+      args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    )
+  ]
 )
 
 async with MCPToolkit(config=config) as toolkit:
-    agent = Agent(model="gpt-4o-mini", toolkits=[toolkit])
-    await agent.arun("List files in /tmp")
+  agent = Agent(model="gpt-4o-mini", toolkits=[toolkit])
+  await agent.arun("List files in /tmp")
 ```
 
 Connect to any MCP server. Use the same tools as Claude Desktop.
@@ -256,9 +266,9 @@ from definable.agent import Agent
 from definable.media import File
 
 agent = Agent(
-    model="gpt-4o-mini",
-    readers=True,
-    instructions="Summarize the uploaded document.",
+  model="gpt-4o-mini",
+  readers=True,
+  instructions="Summarize the uploaded document.",
 )
 
 output = agent.run("Summarize this.", files=[File(filepath="report.pdf")])
@@ -287,27 +297,26 @@ agent.serve(host="0.0.0.0", port=8000, dev=True)
 
 ```python
 from definable.agent import Agent
-from definable.agent.interface.telegram import TelegramInterface, TelegramConfig
+from definable.agent.interface.telegram import TelegramInterface
 
-telegram = TelegramInterface(
-    config=TelegramConfig(bot_token="BOT_TOKEN"),
-)
+telegram = TelegramInterface(bot_token="BOT_TOKEN")
 
 agent = Agent(model="gpt-4o-mini", instructions="You are a Telegram bot.")
 agent.serve(telegram)
 ```
 
-One agent, multiple platforms. Discord and Signal interfaces also available.
+One agent, multiple platforms. Discord, Desktop, and CLI interfaces also available.
 
 ## Thinking (Reasoning Layer)
 
 ```python
+from definable.agent import Agent
 from definable.agent.reasoning import Thinking
 
 agent = Agent(
-    model="gpt-4o-mini",
-    thinking=Thinking(),      # or thinking=True for defaults
-    instructions="Think step by step.",
+  model="gpt-4o-mini",
+  thinking=Thinking(),  # or thinking=True for defaults
+  instructions="Think step by step.",
 )
 
 output = await agent.arun("What is 127 * 43?")
@@ -322,9 +331,9 @@ from definable.agent import Agent
 from definable.agent.tracing import Tracing, JSONLExporter
 
 agent = Agent(
-    model="gpt-4o-mini",
-    tracing=Tracing(exporters=[JSONLExporter("./traces")]),
-    instructions="You are a helpful assistant.",
+  model="gpt-4o-mini",
+  tracing=Tracing(exporters=[JSONLExporter("./traces")]),
+  instructions="You are a helpful assistant.",
 )
 
 output = agent.run("Hello!")
@@ -344,13 +353,13 @@ agent = Agent(model="gpt-4o-mini", instructions="You are a helpful assistant.")
 # Inspect a past run
 output = agent.run("Explain quantum computing.")
 replay = agent.replay(run_output=output)
-print(replay.steps)       # Each model call and tool invocation
-print(replay.tokens)      # Token usage breakdown
+print(replay.steps)  # Each model call and tool invocation
+print(replay.tokens)  # Token usage breakdown
 
 # Re-run with a different model and compare
 new_output = agent.replay(run_output=output, model=OpenAIChat(id="gpt-4o"))
 comparison = agent.compare(output, new_output)
-print(comparison.cost_diff)   # Cost difference between runs
+print(comparison.cost_diff)  # Cost difference between runs
 print(comparison.token_diff)  # Token usage difference
 ```
 
@@ -363,8 +372,8 @@ from definable.agent import Agent
 from definable.agent.testing import MockModel
 
 agent = Agent(
-    model=MockModel(responses=["The capital of France is Paris."]),
-    instructions="You are a geography expert.",
+  model=MockModel(responses=["The capital of France is Paris."]),
+  instructions="You are a geography expert.",
 )
 
 output = agent.run("What is the capital of France?")
@@ -379,20 +388,20 @@ assert "Paris" in output.content
 
 | Category | Details |
 |---|---|
-| **Models** | OpenAI, DeepSeek, Moonshot, xAI, any OpenAI-compatible provider. String shorthand: `Agent(model="gpt-4o")` resolves automatically |
+| **Models** | OpenAI, DeepSeek, Moonshot, xAI, Anthropic, Mistral, Google Gemini, Perplexity, Ollama, OpenRouter, any OpenAI-compatible provider. String shorthand: `Agent(model="gpt-4o")` resolves automatically |
 | **Agents** | Multi-turn conversations, structured output, configurable retries, max iterations |
-| **Agentic Loop** | Parallel tool calls via `asyncio.gather`, HITL pause/resume, cooperative cancellation, EventBus |
+| **Agentic Loop** | 8-phase pipeline, parallel tool calls via `asyncio.gather`, HITL pause/resume, cooperative cancellation, EventBus, hooks, ToolRetry, phase metrics |
 | **Tools** | `@tool` decorator with automatic parameter extraction from type hints and docstrings |
 | **Toolkits** | Composable tool groups, `KnowledgeToolkit` for explicit RAG search |
 | **Skills** | Domain expertise + tools in one package; 9 built-in skills (incl. MacOS), custom `Skill` subclass |
 | **Knowledge / RAG** | Embedders, vector DBs, rerankers (Cohere), chunkers, automatic retrieval |
-| **Memory** | LLM-driven memory with tool-based extraction (add/update/delete) |
-| **Memory Stores** | SQLite, PostgreSQL, in-memory |
+| **Memory** | Session-history memory with auto-summarization |
+| **Memory Stores** | SQLite, file-based, in-memory |
 | **Readers** | PDF, DOCX, PPTX, XLSX, ODS, RTF, HTML, images, audio |
 | **Reader Providers** | Mistral OCR, OpenAI, Anthropic, Google (AI-powered document parsing) |
 | **Guardrails** | Input/output/tool checkpoints, PII redaction, token limits, topic blocking, regex filters |
 | **Guardrails Composition** | `ALL`, `ANY`, `NOT`, `when()` combinators for complex policy rules |
-| **Interfaces** | Telegram, Discord, Signal, Desktop, session management, identity resolution |
+| **Interfaces** | Telegram, Discord, Desktop, CLI, session management, identity resolution |
 | **Browser Toolkit** | 50 browser automation tools via SeleniumBase CDP — CSS selectors, screenshots, cookie/storage management |
 | **Claude Code Agent** | Zero-dep subprocess wrapper for Claude Code CLI with full Definable ecosystem integration |
 | **Runtime** | `agent.serve()`, webhooks, cron triggers, event triggers, `dev=True` hot-reload |
@@ -405,21 +414,34 @@ assert "Paris" in output.content
 | **Compression** | Automatic context window management for long conversations |
 | **Testing** | `MockModel`, `AgentTestCase`, `create_test_agent` utilities |
 | **MCP** | Model Context Protocol client for external tool servers |
+| **Pipeline** | 8-phase execution (Prepare → Recall → Think → GuardInput → Compose → InvokeLoop → GuardOutput → Store), custom phases, hooks (before/after/instead) |
+| **Debug Mode** | `Agent(debug=True)`, `DebugExporter` with color-coded model call breakdown, `DebugConfig` for step-mode inspection |
+| **Sub-Agents** | `SubAgentPolicy`, `spawn_agent` tool, concurrent child agents with semaphore-limited execution |
+| **Cancellation** | `CancellationToken` for cooperative cancellation, `AgentCancelled` exception |
 | **Types** | Full Pydantic models, `py.typed` marker, mypy verified |
 
 ## Supported Models
 
 ```python
-from definable.model.openai import OpenAIChat      # GPT-4o, GPT-4o-mini, o1, o3, ...
-from definable.model.deepseek import DeepSeekChat   # deepseek-chat, deepseek-reasoner
-from definable.model.moonshot import MoonshotChat   # moonshot-v1-8k, moonshot-v1-128k
-from definable.model.xai import xAI                 # grok-3, grok-2-latest
+from definable.agent import Agent
+from definable.model.openai import OpenAIChat        # GPT-4o, GPT-4o-mini, o1, o3, ...
+from definable.model.deepseek import DeepSeekChat    # deepseek-chat, deepseek-reasoner
+from definable.model.moonshot import MoonshotChat    # moonshot-v1-8k, moonshot-v1-128k
+from definable.model.xai import xAI                  # grok-3, grok-2-latest
+from definable.model.anthropic import Claude         # claude-sonnet-4-20250514, claude-haiku, ...
+from definable.model.mistral import MistralChat      # mistral-large-latest, mistral-small, ...
+from definable.model.google import Gemini            # gemini-2.0-flash-001, gemini-1.5-pro, ...
+from definable.model.ollama import Ollama            # llama3, mistral, codellama, ...
+from definable.model.openrouter import OpenRouter    # any model via OpenRouter
+from definable.model.perplexity import Perplexity    # pplx-70b-online, pplx-7b-chat, ...
 
 # Or use string shorthand — no model import needed:
 agent = Agent(model="gpt-4o-mini")
+agent = Agent(model="anthropic/claude-sonnet-4-20250514")
+agent = Agent(model="google/gemini-2.0-flash-001")
 ```
 
-Any OpenAI-compatible API works with `OpenAIChat(base_url=..., api_key=...)`.
+Any OpenAI-compatible API works with `OpenAIChat(base_url=..., api_key=...)`. Anthropic, Mistral, Google, and Ollama use their native SDKs (optional deps). Perplexity and OpenRouter use the OpenAI-compatible interface.
 
 ## Optional Extras
 
@@ -463,21 +485,22 @@ definable/definable/
 │   ├── auth/           # APIKeyAuth, JWTAuth, AllowlistAuth, CompositeAuth
 │   ├── compression/    # Context window compression
 │   ├── guardrail/      # Input/output/tool policy, PII, token limits, composable rules
-│   ├── interface/      # Telegram, Discord, Signal, Desktop integrations
+│   ├── interface/      # Telegram, Discord, Desktop, CLI integrations
+│   ├── pipeline/       # 8-phase execution pipeline, hooks, ToolRetry, DebugConfig
 │   ├── reasoning/      # Thinking layer (chain-of-thought)
 │   ├── replay/         # Run inspection, re-execution, comparison
 │   ├── research/       # Deep research: multi-wave web search, CKU, gap analysis
 │   ├── run/            # RunOutput, RunEvent types
 │   ├── runtime/        # AgentRuntime, AgentServer, dev mode
-│   ├── tracing/        # JSONL trace export
+│   ├── tracing/        # JSONL trace export, DebugExporter
 │   └── trigger/        # Webhook, Cron, EventTrigger
 ├── browser/            # BrowserToolkit — 50 tools via SeleniumBase CDP
 ├── claude_code/        # ClaudeCodeAgent — subprocess wrapper for Claude Code CLI
 ├── knowledge/          # RAG: embedders, vector DBs, rerankers, chunkers
 ├── mcp/                # Model Context Protocol client
 ├── media.py            # Image, Audio, Video, File types
-├── memory/             # LLM-driven memory + 3 store backends
-├── model/              # OpenAI, DeepSeek, Moonshot, xAI providers
+├── memory/             # Session-history memory + 3 store backends (SQLite, File, InMemory)
+├── model/              # OpenAI, DeepSeek, Moonshot, xAI, Anthropic, Mistral, Gemini, Perplexity, Ollama, OpenRouter
 ├── reader/             # File parsers + AI reader providers
 ├── skill/              # Built-in + custom skills, skill registry
 ├── tool/               # @tool decorator, Function wrappers

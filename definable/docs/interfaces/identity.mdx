@@ -14,7 +14,6 @@ flowchart LR
   subgraph Platforms
     direction TB
     T["Telegram: user_123"] --- D["Discord: user_456"]
-    D --- S["Signal: +15551234567"]
   end
 
   Platforms --> IR[IdentityResolver]
@@ -29,9 +28,7 @@ The `IdentityResolver` maps `(platform, platform_user_id)` pairs to a single `ca
 from definable.agent.interface import (
     SQLiteIdentityResolver,
     TelegramInterface,
-    TelegramConfig,
     DiscordInterface,
-    DiscordConfig,
     serve,
 )
 
@@ -46,13 +43,13 @@ async with resolver:
 # Both interfaces use the same resolver
 telegram = TelegramInterface(
     agent=agent,
-    config=TelegramConfig(bot_token="..."),
+    bot_token="...",
     identity_resolver=resolver,
 )
 
 discord = DiscordInterface(
     agent=agent,
-    config=DiscordConfig(bot_token="..."),
+    bot_token="...",
     identity_resolver=resolver,
 )
 
@@ -114,7 +111,7 @@ Pass `identity_resolver` when creating any interface:
 ```python
 interface = TelegramInterface(
     agent=agent,
-    config=config,
+    bot_token="...",
     identity_resolver=resolver,
 )
 ```
@@ -129,7 +126,6 @@ When using `serve()` for multi-interface deployments, pass the resolver once and
 await serve(
     telegram_interface,
     discord_interface,
-    signal_interface,
     identity_resolver=resolver,
 )
 ```

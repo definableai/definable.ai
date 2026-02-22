@@ -56,7 +56,7 @@ Use `.add_hook()` for fluent chaining:
 from definable.agent.interface import TelegramInterface, LoggingHook, AllowlistHook
 
 interface = (
-    TelegramInterface(agent=agent, config=config)
+    TelegramInterface(agent=agent, bot_token="YOUR_BOT_TOKEN")
     .add_hook(LoggingHook())
     .add_hook(AllowlistHook(allowed_user_ids={"123", "456"}))
 )
@@ -67,7 +67,7 @@ Or pass them at construction:
 ```python
 interface = TelegramInterface(
     agent=agent,
-    config=config,
+    bot_token="YOUR_BOT_TOKEN",
     hooks=[LoggingHook(), AllowlistHook(allowed_user_ids={"123"})],
 )
 ```

@@ -130,7 +130,7 @@ import asyncio
 from definable.agent import Agent
 from definable.agent.cancellation import CancellationToken, AgentCancelled
 
-agent = Agent(model="openai/gpt-4o", tools=[...])
+agent = Agent(model="openai/gpt-4o", tools=[])
 token = CancellationToken()
 
 async def cancel_after(seconds: float):
@@ -169,7 +169,7 @@ The `EventBus` lets you register callbacks for any event type emitted during a r
 from definable.agent import Agent
 from definable.agent.events import RunCompletedEvent, ToolCallStartedEvent
 
-agent = Agent(model="openai/gpt-4o", tools=[...])
+agent = Agent(model="openai/gpt-4o", tools=[])
 
 @agent.events.on(RunCompletedEvent)
 async def on_complete(event):
@@ -219,6 +219,13 @@ agent.events.off(RunCompletedEvent, my_handler)
 | `MemoryRecallCompletedEvent` | Memory recall finishes |
 | `MemoryUpdateStartedEvent` | Memory update begins |
 | `MemoryUpdateCompletedEvent` | Memory update finishes |
+| `ModelCallStartedEvent` | A model call is about to execute (includes messages snapshot, tools, model_id) |
+| `ModelCallCompletedEvent` | A model call returned (includes content, tool_calls, metrics) |
+| `PhaseStartedEvent` | A pipeline phase begins execution |
+| `PhaseCompletedEvent` | A pipeline phase finishes execution |
+| `SubAgentSpawnedEvent` | A sub-agent is spawned by the parent agent |
+| `SubAgentCompletedEvent` | A sub-agent completes successfully |
+| `SubAgentFailedEvent` | A sub-agent fails with an error |
 
 All events are importable from `definable.agent.events`.
 

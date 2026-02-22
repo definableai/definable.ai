@@ -1,7 +1,7 @@
 ---
 title: Interface Examples
 sidebarTitle: Interfaces
-description: Examples for Discord, Signal, and multi-interface deployments.
+description: Examples for Discord, multi-interface, desktop control, and gateway deployments.
 icon: comments
 ---
 
@@ -13,7 +13,7 @@ A Discord bot with memory that remembers conversations per user.
 import asyncio
 
 from definable.agent import Agent
-from definable.agent.interface import DiscordInterface, DiscordConfig
+from definable.agent.interface import DiscordInterface
 from definable.memory import Memory, SQLiteStore
 from definable.model import OpenAIChat
 
@@ -27,7 +27,7 @@ agent = Agent(
 
 discord = DiscordInterface(
   agent=agent,
-  config=DiscordConfig(bot_token="your-discord-bot-token"),
+  bot_token="your-discord-bot-token",
 )
 
 asyncio.run(discord.serve_forever())
@@ -37,39 +37,7 @@ asyncio.run(discord.serve_forever())
   `definable/examples/interfaces/01_discord_bot.py`
 </Card>
 
-## 02 — Signal Bot
-
-A Signal bot with auto-managed Docker container. Definable handles starting and stopping the `signal-cli-rest-api` container.
-
-```python
-import asyncio
-
-from definable.agent import Agent
-from definable.agent.interface import SignalInterface, SignalConfig
-from definable.model import OpenAIChat
-
-agent = Agent(
-  model=OpenAIChat(id="gpt-4o"),
-  instructions="You are a helpful Signal bot.",
-)
-
-signal = SignalInterface(
-  agent=agent,
-  config=SignalConfig(
-    phone_number="+15551234567",
-    manage_container=True,
-    docker_data_dir="./signal-data",
-  ),
-)
-
-asyncio.run(signal.serve_forever())
-```
-
-<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/02_signal_bot.py">
-  `definable/examples/interfaces/02_signal_bot.py`
-</Card>
-
-## 03 — Multi-Interface with Identity Resolution
+## 02 — Multi-Interface with Identity Resolution
 
 Run Telegram and Discord simultaneously with a shared identity resolver, so the same user is recognized across platforms.
 
@@ -79,9 +47,7 @@ import asyncio
 from definable.agent import Agent
 from definable.agent.interface import (
     TelegramInterface,
-    TelegramConfig,
     DiscordInterface,
-    DiscordConfig,
     SQLiteIdentityResolver,
     serve,
 )
@@ -99,17 +65,33 @@ agent = Agent(
 
 telegram = TelegramInterface(
   agent=agent,
-  config=TelegramConfig(bot_token="telegram-token"),
+  bot_token="telegram-token",
 )
 
 discord = DiscordInterface(
   agent=agent,
-  config=DiscordConfig(bot_token="discord-token"),
+  bot_token="discord-token",
 )
 
 asyncio.run(serve(telegram, discord, name="my-bot", identity_resolver=resolver))
 ```
 
-<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/03_multi_interface.py">
-  `definable/examples/interfaces/03_multi_interface.py`
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/02_multi_interface.py">
+  `definable/examples/interfaces/02_multi_interface.py`
+</Card>
+
+## 03 — Desktop Control via Telegram
+
+Control a macOS desktop agent remotely through Telegram. Combines the Desktop interface with Telegram for remote desktop automation.
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/03_desktop_control_via_telegram.py">
+  `definable/examples/interfaces/03_desktop_control_via_telegram.py`
+</Card>
+
+## 04 — InterfaceGateway with Telegram
+
+Use `InterfaceGateway` for centralized multi-channel coordination — shared hooks, per-interface status tracking, lifecycle events, and cross-platform identity linking.
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/04_gateway_telegram.py">
+  `definable/examples/interfaces/04_gateway_telegram.py`
 </Card>

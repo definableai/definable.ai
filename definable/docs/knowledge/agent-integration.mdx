@@ -121,11 +121,13 @@ When `trigger="auto"`, a routing call decides whether retrieval is needed before
 ```python
 from definable.agent import Agent
 from definable.knowledge import Knowledge
-from definable.model import OpenAIChat
+from definable.model.openai import OpenAIChat
+from definable.embedder import OpenAIEmbedder
+from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
-    vector_db=...,
-    embedder=...,
+    vector_db=InMemoryVectorDB(),
+    embedder=OpenAIEmbedder(),
     trigger="auto",
     routing_model=OpenAIChat(id="gpt-4o-mini"),  # cheap routing gate
     top_k=5,

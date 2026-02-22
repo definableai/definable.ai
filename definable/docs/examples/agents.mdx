@@ -136,7 +136,7 @@ for event in agent.run_stream("Tell me a short story about a robot."):
     if event.event == "RunContent":
         print(event.content, end="", flush=True)
     elif event.event == "ToolCallStarted":
-        print(f"\n[Calling {event.tool_name}...]")
+        print(f"\n[Calling {event.tool.tool_name}...]")
     elif event.event == "RunCompleted":
         print(f"\n\nDone. Tokens: {event.metrics.total_tokens if event.metrics else 'N/A'}")
 ```

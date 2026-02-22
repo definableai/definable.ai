@@ -67,7 +67,7 @@ examples/
 │   ├── 06_agent_with_knowledge.py # Knowledge integration
 │   └── 07_reranking.py        # CohereReranker usage
 │
-├── memory/                    # Cognitive memory
+├── memory/                    # Session-history memory
 │   ├── 01_basic_memory.py     # Agent with persistent memory
 │   ├── 02_store_protocol.py   # MemoryStore protocol walkthrough (no deps)
 │   └── 03_store_backends.py   # Smoke-test all store backends
@@ -79,8 +79,9 @@ examples/
 │
 ├── interfaces/                # Messaging interfaces
 │   ├── 01_discord_bot.py      # Discord bot interface
-│   ├── 02_signal_bot.py       # Signal bot interface
-│   └── 03_multi_interface.py  # Multiple interfaces on one agent
+│   ├── 02_multi_interface.py  # Multiple interfaces on one agent
+│   ├── 03_desktop_control_via_telegram.py  # Desktop control via Telegram
+│   └── 04_gateway_telegram.py # InterfaceGateway with Telegram
 │
 ├── readers/                   # File reading and parsing
 │   ├── 01_basic_readers.py    # Read common file formats
@@ -98,7 +99,8 @@ examples/
 │   └── 02_custom_guardrails.py# Custom + composable guardrails
 │
 ├── skills/                    # Skills and skill registry
-│   └── 01_markdown_skills.py  # SkillRegistry eager/lazy/auto modes
+│   ├── 01_markdown_skills.py  # SkillRegistry eager/lazy/auto modes
+│   └── 02_macos_basic.py      # macOS Desktop skill
 │
 ├── replay/                    # Run inspection and comparison
 │   └── 01_basic_replay.py     # Replay inspection + compare_runs
@@ -121,7 +123,9 @@ examples/
     ├── 01_middleware.py       # Custom middleware
     ├── 02_tracing.py          # JSONLExporter for debugging
     ├── 03_error_handling.py   # Retry logic and exceptions
-    └── 04_cost_tracking.py    # Metrics and pricing
+    ├── 04_cost_tracking.py    # Metrics and pricing
+    ├── 05_pipeline_customization.py  # Pipeline phases and hooks
+    └── 06_all_features.py     # All features combined
 ```
 
 ## Quick Start Examples

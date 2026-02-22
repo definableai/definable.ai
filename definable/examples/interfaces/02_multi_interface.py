@@ -24,9 +24,9 @@ import os
 from definable.agent import Agent
 from definable.agent.tracing import Tracing, JSONLExporter
 from definable.agent.interface import serve
-from definable.agent.interface.discord import DiscordConfig, DiscordInterface
+from definable.agent.interface.discord import DiscordInterface
 from definable.agent.interface.identity import SQLiteIdentityResolver
-from definable.agent.interface.telegram import TelegramConfig, TelegramInterface
+from definable.agent.interface.telegram import TelegramInterface
 from definable.memory import Memory, SQLiteStore
 from definable.model.openai import OpenAIChat
 
@@ -60,12 +60,12 @@ async def main():
 
   telegram = TelegramInterface(
     agent=agent,
-    config=TelegramConfig(bot_token=os.environ["TELEGRAM_BOT_TOKEN"]),
+    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
   )
 
   discord = DiscordInterface(
     agent=agent,
-    config=DiscordConfig(bot_token=os.environ["DISCORD_BOT_TOKEN"]),
+    bot_token=os.environ["DISCORD_BOT_TOKEN"],
   )
 
   # serve() runs both interfaces concurrently and propagates the shared

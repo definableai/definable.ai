@@ -170,6 +170,56 @@ agent = Agent(
 )
 ```
 
+## Debug Mode
+
+For quick, color-coded turn-by-turn inspection of model calls, use `debug=True`:
+
+```python
+from definable.agent import Agent
+
+agent = Agent(
+    model="openai/gpt-4o",
+    debug=True,  # Prints model call breakdown to stderr
+)
+
+output = agent.run("What is 2 + 2?")
+```
+
+This auto-adds a `DebugExporter` to tracing, which uses `rich` to print color-coded panels showing:
+- Messages sent to the model
+- Tools available
+- Model response content and tool calls
+- Token usage and timing
+
+Debug mode composes with existing tracing — if you already have `tracing=Tracing(exporters=[...])`, adding `debug=True` appends the `DebugExporter` without replacing your exporters.
+
+```python
+from definable.agent import Agent
+from definable.agent.tracing import Tracing, JSONLExporter, DebugExporter
+
+# Both file tracing and debug output
+agent = Agent(
+    model="openai/gpt-4o",
+    tracing=Tracing(exporters=[JSONLExporter("./traces")]),
+    debug=True,
+)
+```
+
+### DebugExporter
+
+You can also use `DebugExporter` directly:
+
+```python
+from definable.agent.tracing import Tracing, DebugExporter
+
+agent = Agent(
+    model="openai/gpt-4o",
+    tracing=Tracing(exporters=[DebugExporter()]),
+)
+```
+
+The `DebugExporter` listens for `ModelCallStartedEvent` and `ModelCallCompletedEvent` to render its output.
+
 <Note>
 Tracing failures never break agent execution. If an exporter raises an exception, the error is suppressed and the agent continues normally.
 </Note>

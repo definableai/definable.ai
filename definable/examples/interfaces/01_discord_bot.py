@@ -17,7 +17,7 @@ import asyncio
 import os
 
 from definable.agent import Agent
-from definable.agent.interface.discord import DiscordConfig, DiscordInterface
+from definable.agent.interface.discord import DiscordInterface
 from definable.memory import Memory, SQLiteStore
 from definable.model.openai import OpenAIChat
 
@@ -46,14 +46,12 @@ async def main(user_id: str):
 
   interface = DiscordInterface(
     agent=agent,
-    config=DiscordConfig(
-      bot_token=os.environ["DISCORD_BOT_TOKEN"],
-      # Optional: restrict to specific channels or guilds
-      # allowed_guild_ids=[123456789],
-      # allowed_channel_ids=[987654321],
-      # Optional: only respond to messages starting with !ask
-      # command_prefix="!ask",
-    ),
+    bot_token=os.environ["DISCORD_BOT_TOKEN"],
+    # Optional: restrict to specific channels or guilds
+    # allowed_guild_ids=[123456789],
+    # allowed_channel_ids=[987654321],
+    # Optional: only respond to messages starting with !ask
+    # command_prefix="!ask",
   )
 
   interface.add_hook(ContentFilterHook())  # type: ignore[arg-type]

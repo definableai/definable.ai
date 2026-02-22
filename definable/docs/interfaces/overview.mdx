@@ -5,7 +5,7 @@ description: Connect agents to messaging platforms with automatic sessions, hook
 icon: message-bot
 ---
 
-An **Interface** connects a Definable agent to an external messaging platform — Telegram, Discord, Signal, or any custom channel. It handles the full lifecycle: receiving messages, managing sessions, resolving user identity, running the agent, and sending responses back.
+An **Interface** connects a Definable agent to an external messaging platform — Telegram, Discord, Desktop, CLI, or any custom channel. It handles the full lifecycle: receiving messages, managing sessions, resolving user identity, running the agent, and sending responses back.
 
 ## How It Works
 
@@ -35,15 +35,14 @@ Deploy an agent to Telegram in a few lines:
 import asyncio
 from definable.agent import Agent
 from definable.model import OpenAIChat
-from definable.agent.interface import TelegramInterface, TelegramConfig
+from definable.agent.interface import TelegramInterface
 
 agent = Agent(
     model=OpenAIChat(id="gpt-4o"),
     instructions="You are a helpful assistant on Telegram.",
 )
 
-config = TelegramConfig(bot_token="YOUR_BOT_TOKEN")
-interface = TelegramInterface(agent=agent, config=config)
+interface = TelegramInterface(agent=agent, bot_token="YOUR_BOT_TOKEN")
 
 asyncio.run(interface.serve_forever())
 ```
@@ -56,12 +55,12 @@ That is all it takes. The interface handles session management, conversation his
 
 <CodeGroup>
 ```python Context manager (recommended)
-async with TelegramInterface(agent=agent, config=config) as interface:
+async with TelegramInterface(agent=agent, bot_token="YOUR_BOT_TOKEN") as interface:
     await interface.serve_forever()
 ```
 
 ```python Manual
-interface = TelegramInterface(agent=agent, config=config)
+interface = TelegramInterface(agent=agent, bot_token="YOUR_BOT_TOKEN")
 await interface.start()
 # ...
 await interface.stop()
@@ -85,8 +84,8 @@ All interfaces accept these parameters:
   The Definable agent that processes messages.
 </ParamField>
 
-<ParamField path="config" type="InterfaceConfig" required>
-  Configuration for the interface. Use a platform-specific config like `TelegramConfig`.
+<ParamField path="**kwargs" type="Any">
+  Platform-specific parameters passed directly (e.g., `bot_token`, `mode`, `allowed_user_ids`). See each interface's reference for available parameters.
 </ParamField>
 
 <ParamField path="session_manager" type="SessionManager">
@@ -101,9 +100,9 @@ All interfaces accept these parameters:
   Cross-platform identity resolver. Maps platform user IDs to canonical user IDs for shared memory. See [Identity Resolution](/interfaces/identity).
 </ParamField>
 
-## InterfaceConfig
+## Common Parameters
 
-Base configuration shared by all interfaces:
+All interfaces accept these base parameters as keyword arguments:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -116,10 +115,13 @@ Base configuration shared by all interfaces:
 | `max_message_length` | `int` | `4096` | Max characters per outgoing message |
 | `rate_limit_messages_per_minute` | `int` | `30` | Per-user rate limit |
 
-Like `AgentConfig`, it is immutable. Use `with_updates()` to create a modified copy:
-
 ```python
-custom_config = config.with_updates(max_concurrent_requests=20, session_ttl_seconds=7200)
+interface = TelegramInterface(
+    agent=agent,
+    bot_token="YOUR_BOT_TOKEN",
+    max_concurrent_requests=20,
+    session_ttl_seconds=7200,
+)
 ```
 
 ## Adding Hooks
@@ -130,7 +132,7 @@ Chain hooks with `.add_hook()`:
 from definable.agent.interface import TelegramInterface, LoggingHook, AllowlistHook
 
 interface = (
-    TelegramInterface(agent=agent, config=config)
+    TelegramInterface(agent=agent, bot_token="YOUR_BOT_TOKEN")
     .add_hook(LoggingHook())
     .add_hook(AllowlistHook(allowed_user_ids={"12345", "67890"}))
 )
@@ -150,9 +152,6 @@ interface = (
   </Card>
   <Card title="Discord" icon="discord" href="/interfaces/discord">
     Deploy to Discord with guild/DM support, attachments, and access control.
-  </Card>
-  <Card title="Signal" icon="message" href="/interfaces/signal">
-    Deploy to Signal with auto-managed Docker or bring-your-own container.
   </Card>
   <Card title="Identity" icon="fingerprint" href="/interfaces/identity">
     Map users across platforms to a single canonical identity for shared memory.

@@ -25,7 +25,7 @@ pip install 'definable[discord]'
 import asyncio
 
 from definable.agent import Agent
-from definable.agent.interface import DiscordInterface, DiscordConfig
+from definable.agent.interface import DiscordInterface
 from definable.model import OpenAIChat
 
 agent = Agent(
@@ -35,13 +35,13 @@ agent = Agent(
 
 discord = DiscordInterface(
   agent=agent,
-  config=DiscordConfig(bot_token="your-bot-token"),
+  bot_token="your-bot-token",
 )
 
 asyncio.run(discord.serve_forever())
 ```
 
-## DiscordConfig
+## DiscordInterface Parameters
 
 <ParamField path="bot_token" type="str" required>
   Discord bot token from the Developer Portal.
@@ -88,7 +88,8 @@ asyncio.run(discord.serve_forever())
 Restrict which servers and channels the bot responds in:
 
 ```python
-config = DiscordConfig(
+discord = DiscordInterface(
+  agent=agent,
   bot_token="your-bot-token",
   allowed_guild_ids=[123456789, 987654321],   # Only these servers
   allowed_channel_ids=[111111111, 222222222],  # Only these channels
@@ -99,7 +100,7 @@ config = DiscordConfig(
 
 ```python
 from definable.agent import Agent
-from definable.agent.interface import DiscordInterface, DiscordConfig
+from definable.agent.interface import DiscordInterface
 from definable.memory import Memory, SQLiteStore
 from definable.model import OpenAIChat
 from definable.tool.decorator import tool
@@ -120,6 +121,6 @@ agent = Agent(
 
 discord = DiscordInterface(
   agent=agent,
-  config=DiscordConfig(bot_token="your-bot-token"),
+  bot_token="your-bot-token",
 )
 ```
