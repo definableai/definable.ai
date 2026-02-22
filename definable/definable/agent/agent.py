@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import dataclasses
+import json
 from typing import (
   TYPE_CHECKING,
   Any,
@@ -48,7 +49,6 @@ from definable.agent.events import (
   ReasoningStartedEvent,
   ReasoningStepEvent,
   RunCompletedEvent,
-  RunContentEvent,
   RunContext,
   RunErrorEvent,
   RunInput,
@@ -66,8 +66,14 @@ from pydantic import BaseModel
 if TYPE_CHECKING:
   from pathlib import Path
 
+  from definable.agent.auth.base import AuthProvider
   from definable.agent.compression import CompressionManager
+  from definable.agent.guardrail.base import Guardrails
   from definable.agent.interface.base import BaseInterface
+  from definable.agent.pipeline.debug import DebugConfig
+  from definable.agent.pipeline.pipeline import Pipeline
+  from definable.agent.pipeline.state import LoopState
+  from definable.agent.pipeline.sub_agent import SubAgentPolicy
   from definable.agent.reasoning.thinking import Thinking
   from definable.agent.tracing.base import Tracing
   from definable.knowledge import Knowledge
@@ -77,6 +83,9 @@ if TYPE_CHECKING:
   from definable.agent.replay import Replay, ReplayComparison
   from definable.agent.research.config import DeepResearchConfig
   from definable.agent.research.engine import DeepResearch
+  from definable.agent.trigger.base import BaseTrigger
+  from definable.reader.base import BaseReader
+  from definable.skill.registry import SkillRegistry
 
 
 @runtime_checkable
@@ -153,12 +162,15 @@ class Agent:
     tools: Optional[List[Function]] = None,
     toolkits: Optional[List[Toolkit]] = None,
     skills: Optional[List[Skill]] = None,
-    skill_registry: Optional[Any] = None,
+    skill_registry: Optional["SkillRegistry"] = None,
     # ── Observability ───────────────────────────────────────
     tracing: Union[bool, "Tracing", None] = False,
+    debug: Union[bool, "DebugConfig", None] = False,
+    # ── Advanced ───────────────────────────────────────
+    sub_agents: Union[bool, "SubAgentPolicy", None] = None,
     # ── Support ─────────────────────────────────────────────
-    readers: Optional[Any] = None,
-    guardrails: Optional[Any] = None,
+    readers: Optional[List["BaseReader"]] = None,
+    guardrails: Optional["Guardrails"] = None,
   ):
     """
     Initialize the agent.
@@ -222,16 +234,38 @@ class Agent:
     self.memory = self._resolve_memory(memory)
 
     # Resolve knowledge: Knowledge | bool → Knowledge | None
-    self._knowledge: Optional[Any] = self._resolve_knowledge(knowledge)
+    self._knowledge: Optional["Knowledge"] = self._resolve_knowledge(knowledge)
 
     # Resolve tracing: direct param takes precedence over config.tracing fallback
-    self._tracing_config: Optional[Any] = self._resolve_tracing(tracing, self.config)
+    self._tracing_config: Optional["Tracing"] = self._resolve_tracing(tracing, self.config)
+
+    # Debug mode: auto-add DebugExporter to tracing
+    # Accepts True (default debug config) or DebugConfig (pipeline breakpoints etc.)
+    from definable.agent.pipeline.debug import DebugConfig as _DebugConfig
+
+    self._debug_config: Optional[_DebugConfig] = None
+    if isinstance(debug, _DebugConfig):
+      self._debug_config = debug
+      # DebugConfig also implies debug=True for tracing
+      debug_enabled = True
+    else:
+      debug_enabled = bool(debug)
+
+    if debug_enabled:
+      from definable.agent.tracing.base import Tracing as _Tracing
+      from definable.agent.tracing.debug import DebugExporter
+
+      if self._tracing_config is None:
+        self._tracing_config = _Tracing(exporters=[DebugExporter()])
+      else:
+        existing = self._tracing_config.exporters or []
+        self._tracing_config = dataclasses.replace(self._tracing_config, exporters=[*existing, DebugExporter()])
 
     # Thinking layer — accepts Thinking or bool
     from definable.agent.reasoning.thinking import Thinking as _Thinking
 
     if thinking is True:
-      self._thinking: Optional[Any] = _Thinking()
+      self._thinking: Optional["Thinking"] = _Thinking()
     elif isinstance(thinking, _Thinking):
       self._thinking = thinking
     else:
@@ -253,6 +287,16 @@ class Agent:
     else:
       self._deep_research_config = None
       self._prebuilt_researcher = None
+
+    # Sub-agent spawning — accepts True (default policy) or SubAgentPolicy
+    from definable.agent.pipeline.sub_agent import SubAgentPolicy as _SubAgentPolicy
+
+    if sub_agents is True:
+      self._sub_agent_policy: Optional[_SubAgentPolicy] = _SubAgentPolicy()
+    elif isinstance(sub_agents, _SubAgentPolicy):
+      self._sub_agent_policy = sub_agents
+    else:
+      self._sub_agent_policy = None
 
     # Convert skill_registry to skills (eager/lazy based on size)
     if skill_registry is not None:
@@ -276,18 +320,96 @@ class Agent:
     self._triggers: List[Any] = []
     self._before_hooks: List[Callable] = []
     self._after_hooks: List[Callable] = []
-    self._auth: Optional[Any] = None
+    self._auth: Optional["AuthProvider"] = None
     self._started = False
     self._pending_memory_tasks: list[asyncio.Task] = []
     self._event_bus: EventBus = EventBus()
     self._agent_owned_toolkits: list[Any] = []
     self._toolkit_init_lock: asyncio.Lock = asyncio.Lock()
+    self._session_id_explicit = session_id is not None
     self.session_id = session_id or str(uuid4())
+
+    # Build pipeline (reused for all runs)
+    self._pipeline = self._build_pipeline()
 
     # Deep research engine (prebuilt instance or lazy init from config)
     self._researcher: Optional["DeepResearch"] = self._prebuilt_researcher or (
       self._init_deep_research(self._deep_research_config) if self._deep_research_config else None
     )
+
+  # --- Pipeline ---
+
+  def _build_pipeline(self) -> "Pipeline":
+    """Build the default pipeline from this agent's config.
+
+    Called once during __init__. The pipeline is reused for all runs.
+    Hooks and phase customization happen on the returned Pipeline.
+    """
+    from definable.agent.pipeline.pipeline import Pipeline
+    from definable.agent.pipeline.phases.compose import ComposePhase
+    from definable.agent.pipeline.phases.guard import GuardInputPhase, GuardOutputPhase
+    from definable.agent.pipeline.phases.invoke import InvokeLoopPhase
+    from definable.agent.pipeline.phases.prepare import PreparePhase
+    from definable.agent.pipeline.phases.recall import RecallPhase
+    from definable.agent.pipeline.phases.store import StorePhase
+    from definable.agent.pipeline.phases.think import ThinkPhase
+
+    pipeline = Pipeline(
+      phases=[
+        PreparePhase(self),
+        RecallPhase(self),
+        ThinkPhase(self),
+        GuardInputPhase(self),
+        ComposePhase(self),
+        InvokeLoopPhase(self),  # streaming/cancellation set per-run
+        GuardOutputPhase(self),
+        StorePhase(self),
+      ],
+      debug=self._debug_config,
+    )
+
+    # Wire trace writer to event stream
+    if self._trace_writer:
+      import contextlib as _cl
+
+      def _trace_handler(event: BaseRunOutputEvent) -> None:
+        with _cl.suppress(Exception):
+          self._trace_writer.write(event)  # type: ignore[union-attr]
+
+      pipeline.event_stream.subscribe(_trace_handler)
+
+    # Wire event bus to event stream
+    async def _bus_handler(event: object) -> None:
+      await self._event_bus.emit(event)
+
+    pipeline.event_stream.subscribe(_bus_handler)
+
+    return pipeline
+
+  @property
+  def pipeline(self) -> "Pipeline":
+    """Access the agent's execution pipeline for customization.
+
+    Example::
+
+        agent.pipeline.add_phase(MyPhase(), after="recall")
+        agent.pipeline.remove_phase("think")
+    """
+    return self._pipeline
+
+  def hook(self, spec: str, callback: Optional[Callable] = None, *, priority: int = 0) -> Callable:
+    """Register a hook on the pipeline.
+
+    Delegates to ``self._pipeline.hook()``. See Pipeline.hook() for details.
+
+    Example::
+
+        @agent.hook("before:invoke_loop")
+        async def my_hook(state):
+            print(f"Messages: {len(state.invoke_messages)}")
+            return state
+    """
+    return self._pipeline.hook(spec, callback, priority=priority)
 
   # --- Properties ---
 
@@ -492,12 +614,12 @@ class Agent:
   # --- Auth ---
 
   @property
-  def auth(self) -> Optional[Any]:
+  def auth(self) -> Optional["AuthProvider"]:
     """Get the auth provider."""
     return self._auth
 
   @auth.setter
-  def auth(self, provider: Any) -> None:
+  def auth(self, provider: Optional["AuthProvider"]) -> None:
     """Set the auth provider."""
     self._auth = provider
 
@@ -619,6 +741,10 @@ class Agent:
     """
     Async run with middleware chain execution.
 
+    Delegates to the pipeline (PreparePhase → RecallPhase → ThinkPhase →
+    GuardInputPhase → ComposePhase → InvokeLoopPhase → GuardOutputPhase →
+    StorePhase). Middleware wraps the pipeline from outside.
+
     Args:
         instruction: New user message (string, Message, or list).
         messages: Optional conversation history for multi-turn.
@@ -630,55 +756,35 @@ class Agent:
         audio: Audio to include with the instruction.
         files: Files to include with the instruction.
         output_schema: Optional Pydantic model for structured output.
+        cancellation_token: Optional token for cooperative cancellation.
 
     Returns:
         RunOutput with response, metrics, tool executions, and messages.
     """
-    run_id = run_id or str(uuid4())
-    session_id = session_id or self.session_id
-
-    # Auto-initialize async toolkits (e.g. MCPToolkit) if not already done
-    await self._ensure_toolkits_initialized()
-
-    # Normalize instruction to messages
-    new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
-    all_messages = (messages or []) + new_messages
-
-    # Build context with messages in metadata for middleware access
-    context = RunContext(
-      run_id=run_id,
+    # Build initial LoopState from arguments
+    state = self._build_initial_state(
+      instruction,
+      messages=messages,
       session_id=session_id,
+      run_id=run_id,
       user_id=user_id,
-      dependencies=self.config.dependencies,
-      session_state=dict(self.config.session_state or {}),
-      output_schema=output_schema,
-      metadata={"_messages": all_messages},
-    )
-
-    # Fire before_request hooks
-    await self._fire_before_hooks(context)
-
-    # Pre-execution pipeline: readers → knowledge → research → memory recall
-    await self._run_pre_execution_pipeline(context, new_messages, all_messages)
-
-    # Input guardrails (after memory recall, before execution)
-    if self.guardrails and self.guardrails.input:
-      input_block = await self._run_input_guardrails(context, new_messages)
-      if input_block is not None:
-        await self._fire_after_hooks(input_block)
-        return input_block
-
-    run_input = RunInput(
-      input_content=instruction,
       images=images,
       videos=videos,
-      audios=audio,
+      audio=audio,
       files=files,
+      output_schema=output_schema,
+      cancellation_token=cancellation_token,
     )
 
-    # Build the execution chain with middleware
+    assert state.context is not None
+    context = state.context
+
+    # Fire agent-level before_request hooks (outside pipeline — receives RunContext)
+    await self._fire_before_hooks(context)
+
+    # Build middleware chain where core handler is the pipeline
     async def core_handler(ctx: RunContext) -> RunOutput:
-      return await self._execute_run(ctx, all_messages, run_input, cancellation_token=cancellation_token)
+      return await self._execute_via_pipeline(state)
 
     # Wrap with middleware (innermost to outermost)
     handler = core_handler
@@ -690,22 +796,10 @@ class Agent:
 
       handler = wrapped_handler
 
-    # Execute
+    # Execute pipeline through middleware chain
     result = await handler(context)
 
-    # Output guardrails (after execution, before memory store)
-    if self.guardrails and self.guardrails.output and result.content:
-      output_block = await self._run_output_guardrails(context, result)
-      if output_block is not None:
-        result = output_block
-
-    # Memory store (after execution, fire-and-forget)
-    # Include both user message(s) and assistant response for full conversational context
-    if self._should_store_memory():
-      store_messages = (new_messages + [Message(role="assistant", content=result.content)]) if result.content else new_messages
-      self._memory_store(store_messages, context)
-
-    # Fire after_response hooks
+    # Fire agent-level after_response hooks (outside pipeline — receives RunOutput)
     await self._fire_after_hooks(result)
 
     return result
@@ -890,8 +984,8 @@ class Agent:
     """
     Async streaming run that yields events with full agent loop support.
 
-    Uses the same AgentLoop as arun() but in streaming mode,
-    yielding RunContentEvent deltas as tokens arrive.
+    Delegates to the pipeline in streaming mode. Each phase yields
+    (state, event) tuples; events are forwarded to the caller.
 
     Args:
         instruction: New user message.
@@ -906,129 +1000,34 @@ class Agent:
     Yields:
         RunOutputEvent instances as the run progresses.
     """
-    run_id = run_id or str(uuid4())
-    session_id = session_id or self.session_id
-
-    # Auto-initialize async toolkits (e.g. MCPToolkit) if not already done
-    await self._ensure_toolkits_initialized()
-
-    # Normalize instruction to messages
-    new_messages = self._normalize_instruction(instruction, images)
-    all_messages = (messages or []) + new_messages
-
-    # Build context with messages in metadata for middleware access
-    context = RunContext(
-      run_id=run_id,
+    # Build initial LoopState with streaming=True
+    state = self._build_initial_state(
+      instruction,
+      messages=messages,
       session_id=session_id,
+      run_id=run_id,
       user_id=user_id,
-      dependencies=self.config.dependencies,
-      session_state=dict(self.config.session_state or {}),
-      output_schema=output_schema,
-      metadata={"_messages": all_messages},
-    )
-
-    # Pre-execution pipeline: readers → knowledge → research → memory recall — yield events
-    for evt in await self._run_pre_execution_pipeline(context, new_messages, all_messages):
-      yield evt
-
-    # Input guardrails (streaming)
-    if self.guardrails and self.guardrails.input:
-      input_block = await self._run_input_guardrails(context, new_messages)
-      if input_block is not None:
-        blocked_event = RunCompletedEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          content=input_block.content,
-          metadata={"status": "blocked"},
-        )
-        self._emit(blocked_event)
-        yield blocked_event
-        return
-
-    # Prepare tools
-    tools = self._prepare_tools_for_run(context)
-
-    run_input = RunInput(
-      input_content=instruction,
       images=images,
+      output_schema=output_schema,
+      cancellation_token=cancellation_token,
+      streaming=True,
     )
-
-    # Emit RunStarted
-    started_event = RunStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      model=self.model.id,
-      model_provider=self.model.provider,  # type: ignore[arg-type]
-      run_input=run_input,
-    )
-    self._emit(started_event)
-    await self._event_bus.emit(started_event)
-    yield started_event
 
     try:
-      # Build invoke messages (system prompt, thinking, knowledge, memory, readers)
-      # Note: Thinking streaming (yielding ReasoningContentDeltaEvent) is still handled
-      # by the agent for now — the loop only handles the main model+tool loop.
-      invoke_messages, _reasoning_steps, _reasoning_agent_messages = await self._build_invoke_messages(context, all_messages, tools)
-
-      # For streaming thinking events, we'd need to re-implement the thinking phase
-      # with streaming here. For now, the thinking is done in _build_invoke_messages
-      # (non-streaming). TODO: Extract streaming thinking into a separate method.
-
-      # Create the streaming loop
-      loop = AgentLoop(
-        model=self.model,
-        tools=tools,
-        messages=invoke_messages,
-        context=context,
-        config=self.config,
-        streaming=True,
-        cancellation_token=cancellation_token,
-        compression_manager=self._compression_manager,
-        guardrails=self.guardrails,
-        emit_fn=self._emit,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-      )
-
-      # Yield events from the streaming loop
-      final_content: Optional[str] = None
-      async for event in loop.run_streaming():
-        await self._event_bus.emit(event)
-        # Don't double-emit to trace for content deltas (RunCompleted has full content)
-        if not isinstance(event, RunContentEvent):
-          self._emit(event)
-        if isinstance(event, RunCompletedEvent):
-          final_content = event.content
-        yield event
-
-      # Output guardrails (streaming — modify final_content before completed event)
-      if self.guardrails and self.guardrails.output and final_content:
-        _temp_output = RunOutput(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          content=final_content,
-        )
-        output_block = await self._run_output_guardrails(context, _temp_output)
-        if output_block is not None:
-          final_content = output_block.content or final_content
-
-      # Memory store (after streaming, fire-and-forget)
-      if self._should_store_memory():
-        store_messages = (new_messages + [Message(role="assistant", content=final_content)]) if final_content else new_messages
-        for evt in self._memory_store(store_messages, context):
-          yield evt
+      async for updated_state, event in self._pipeline.execute(
+        state,
+        cancellation_token=state.cancellation_token,
+      ):
+        state = updated_state
+        if event is not None:
+          yield event  # type: ignore[misc]
 
     except AgentCancelled:
       from definable.agent.events import RunCancelledEvent
 
       cancelled_event = RunCancelledEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
+        run_id=state.run_id,
+        session_id=state.session_id,
         agent_id=self.agent_id,
         agent_name=self.agent_name,
         reason="Cancelled via CancellationToken",
@@ -1038,8 +1037,8 @@ class Agent:
 
     except Exception as e:
       error_event = RunErrorEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
+        run_id=state.run_id,
+        session_id=state.session_id,
         agent_id=self.agent_id,
         error_type=type(e).__name__,
         content=str(e),
@@ -1090,7 +1089,7 @@ class Agent:
         messages.append(
           Message(
             role="tool",
-            content="[REJECTED] The user rejected this tool call.",
+            content="[REJECTED] The user rejected this tool call. Do NOT retry this tool. Respond to the user explaining that the action was not performed.",
             tool_call_id=te.tool_call_id,
             name=te.tool_name,
           )
@@ -1102,7 +1101,8 @@ class Agent:
           function_call = get_function_call_for_tool_call(
             {
               "id": te.tool_call_id,
-              "function": {"name": te.tool_name, "arguments": str(te.tool_args or "{}")},
+              "type": "function",
+              "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})},
             },
             self._tools_dict,
           )
@@ -1177,7 +1177,7 @@ class Agent:
         messages.append(
           Message(
             role="tool",
-            content="[REJECTED] The user rejected this tool call.",
+            content="[REJECTED] The user rejected this tool call. Do NOT retry this tool. Respond to the user explaining that the action was not performed.",
             tool_call_id=te.tool_call_id,
             name=te.tool_name,
           )
@@ -1188,7 +1188,8 @@ class Agent:
           function_call = get_function_call_for_tool_call(
             {
               "id": te.tool_call_id,
-              "function": {"name": te.tool_name, "arguments": str(te.tool_args or "{}")},
+              "type": "function",
+              "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})},
             },
             self._tools_dict,
           )
@@ -1351,7 +1352,7 @@ class Agent:
       log_warning(f"Failed to initialize deep research: {e}")
       return None
 
-  def _discover_search_provider(self) -> Optional[Any]:
+  def _discover_search_provider(self) -> object:
     """Try to auto-discover a search provider from WebSearch skill."""
     from definable.utils.log import log_debug
 
@@ -1381,7 +1382,7 @@ class Agent:
           return results
 
         log_debug("Auto-discovered search provider from WebSearch skill")
-        return CallableSearchProvider(_wrapped)  # type: ignore[return-value]
+        return CallableSearchProvider(_wrapped)
 
     return None
 
@@ -1607,7 +1608,7 @@ class Agent:
   # --- Readers Helpers ---
 
   @staticmethod
-  def _init_readers(readers: Optional[Any]) -> Optional[Any]:
+  def _init_readers(readers: "List[BaseReader] | BaseReader | bool | None") -> Optional["BaseReader"]:
     """Resolve the readers= parameter into a BaseReader or None.
 
     Accepts:
@@ -1635,7 +1636,7 @@ class Agent:
       registry.register(readers)
       return BaseReader(registry=registry)
     # Assume it's already a BaseReader / ProviderReader — use as-is
-    return readers
+    return readers  # type: ignore[return-value]
 
   async def _readers_extract(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
     """Extract text from files in new_messages, inject into context."""
@@ -2064,7 +2065,7 @@ class Agent:
     layer_name: str,
     query: str,
     decision_prompt: Optional[str] = None,
-    routing_model: Optional[Any] = None,
+    routing_model: Optional["Model"] = None,
     messages: Optional[List[Message]] = None,
   ) -> bool:
     """Lightweight YES/NO pre-check: does this query need the given layer?
@@ -2177,7 +2178,7 @@ class Agent:
     query_messages: Optional[List[Message]] = None,
     all_messages: Optional[List[Message]] = None,
     decision_prompt: Optional[str] = None,
-    routing_model: Optional[Any] = None,
+    routing_model: Optional["Model"] = None,
   ) -> List[RunOutputEvent]:
     """Evaluate a layer trigger and conditionally run the callback.
 
@@ -2399,10 +2400,18 @@ class Agent:
     context: RunContext,
     messages: List[Message],
     tools: Dict[str, Function],
+    *,
+    thinking_output: "Optional[ThinkingOutput]" = None,
+    reasoning_steps: "Optional[list[ReasoningStep]]" = None,
+    reasoning_messages: "Optional[list[Message]]" = None,
   ) -> tuple:
     """Build the invoke message list with system prompt, thinking, knowledge, memory, readers.
 
-    This consolidates the duplicated message-building logic from _execute_run and arun_stream.
+    Args:
+        thinking_output: Pre-computed thinking output from ThinkPhase. If provided,
+            skips the built-in thinking call. If None, computes inline (backward compat).
+        reasoning_steps: Pre-computed reasoning steps from ThinkPhase.
+        reasoning_messages: Pre-computed reasoning messages from ThinkPhase.
 
     Returns:
         (invoke_messages, reasoning_steps, reasoning_agent_messages)
@@ -2423,18 +2432,21 @@ class Agent:
       system_content = f"{system_content}\n\n{layer_guide}" if system_content else layer_guide
 
     # Thinking phase (BEFORE knowledge/memory)
-    reasoning_steps: Optional[list] = None
-    reasoning_agent_messages: Optional[list] = None
-    if await self._thinking_should_run(invoke_messages):
-      thinking_output, reasoning_steps, reasoning_agent_messages = await self._execute_thinking(
-        context,
-        invoke_messages,
-        tools,
-      )
-      if thinking_output:
-        injection = self._format_thinking_injection(thinking_output)
-        if injection:
-          system_content = f"{system_content}\n\n{injection}" if system_content else injection
+    # If pre-computed thinking is provided (from ThinkPhase), use it directly.
+    # Otherwise, compute inline for backward compatibility.
+    reasoning_agent_messages = reasoning_messages
+    if thinking_output is None:
+      if await self._thinking_should_run(invoke_messages):
+        thinking_output, reasoning_steps, reasoning_agent_messages = await self._execute_thinking(
+          context,
+          invoke_messages,
+          tools,
+        )
+
+    if thinking_output:
+      injection = self._format_thinking_injection(thinking_output)
+      if injection:
+        system_content = f"{system_content}\n\n{injection}" if system_content else injection
 
     # Append knowledge context
     if context.knowledge_context:
@@ -2468,6 +2480,21 @@ class Agent:
           break
 
     return invoke_messages, reasoning_steps, reasoning_agent_messages
+
+  async def _execute_via_pipeline(self, state: "LoopState") -> RunOutput:
+    """Execute the full pipeline and return RunOutput.
+
+    This is the primary execution path for arun(). The pipeline
+    orchestrates all phases (prepare, recall, think, guard, compose,
+    invoke_loop, guard_output, store) and dispatches events via
+    its EventStream.
+    """
+    async for updated_state, _event in self._pipeline.execute(
+      state,
+      cancellation_token=state.cancellation_token,
+    ):
+      state = updated_state
+    return self._state_to_run_output(state)
 
   async def _execute_run(
     self,
@@ -2532,6 +2559,7 @@ class Agent:
             session_id=context.session_id,
             agent_id=self.agent_id,
             agent_name=self.agent_name,
+            input=run_input,
             tools=loop.tool_executions or None,
             messages=output_messages,
             model=self.model.id,
@@ -2549,6 +2577,7 @@ class Agent:
         session_id=context.session_id,
         agent_id=self.agent_id,
         agent_name=self.agent_name,
+        input=run_input,
         content=final_content,
         tools=loop.tool_executions or None,
         metrics=final_metrics,
@@ -2579,6 +2608,7 @@ class Agent:
         session_id=context.session_id,
         agent_id=self.agent_id,
         agent_name=self.agent_name,
+        input=run_input,
         status=RunStatus.cancelled,
         model=self.model.id,
         model_provider=self.model.provider,
@@ -2680,7 +2710,7 @@ class Agent:
 
   # --- Layer Resolvers (called once during __init__) ---
 
-  def _resolve_memory(self, memory: Any) -> Optional[Any]:
+  def _resolve_memory(self, memory: "Memory | bool | None") -> Optional["Memory"]:
     """Resolve memory param to Memory | None.
 
     Accepts:
@@ -2699,7 +2729,7 @@ class Agent:
     # Memory instance — pass through
     return memory
 
-  def _resolve_knowledge(self, knowledge: Any) -> Optional[Any]:
+  def _resolve_knowledge(self, knowledge: "Knowledge | bool | None") -> Optional["Knowledge"]:
     """Resolve knowledge param to Knowledge | None.
 
     Accepts:
@@ -2716,7 +2746,7 @@ class Agent:
     return knowledge
 
   @staticmethod
-  def _resolve_tracing(tracing_param: Any, config: Optional[AgentConfig]) -> Optional[Any]:
+  def _resolve_tracing(tracing_param: "Tracing | bool | None", config: Optional[AgentConfig]) -> Optional["Tracing"]:
     """Resolve tracing param to Tracing | None.
 
     Accepts Tracing, bool, or None.
@@ -2760,6 +2790,100 @@ class Agent:
       )
     return None
 
+  def _build_initial_state(
+    self,
+    instruction: Union[str, Message, List[Message]],
+    *,
+    messages: Optional[List[Message]] = None,
+    session_id: Optional[str] = None,
+    run_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    images: Optional[List[Image]] = None,
+    videos: Optional[List[Video]] = None,
+    audio: Optional[List[Audio]] = None,
+    files: Optional[List[File]] = None,
+    output_schema: Optional[type] = None,
+    cancellation_token: Optional[CancellationToken] = None,
+    streaming: bool = False,
+  ) -> "LoopState":
+    """Build initial LoopState from arun() arguments."""
+    from definable.agent.pipeline.state import LoopState, LoopStatus
+
+    _run_id = run_id or str(uuid4())
+    _session_id = session_id or self.session_id
+
+    new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
+    all_messages = (messages or []) + new_messages
+
+    context = RunContext(
+      run_id=_run_id,
+      session_id=_session_id,
+      user_id=user_id,
+      dependencies=self.config.dependencies,
+      session_state=dict(self.config.session_state or {}),
+      output_schema=output_schema,
+      metadata={"_messages": all_messages},
+    )
+
+    run_input = RunInput(
+      input_content=instruction,
+      images=images,
+      videos=videos,
+      audios=audio,
+      files=files,
+    )
+
+    return LoopState(
+      run_id=_run_id,
+      session_id=_session_id,
+      user_id=user_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      raw_instruction=instruction,
+      new_messages=new_messages,
+      all_messages=all_messages,
+      context=context,
+      config=self.config,
+      model=self.model,
+      status=LoopStatus.pending,
+      run_input=run_input,
+      streaming=streaming,
+      cancellation_token=cancellation_token,
+    )
+
+  def _state_to_run_output(self, state: "LoopState") -> RunOutput:
+    """Convert final LoopState to RunOutput."""
+    from definable.agent.pipeline.state import LoopStatus
+
+    status_map = {
+      LoopStatus.completed: RunStatus.completed,
+      LoopStatus.paused: RunStatus.paused,
+      LoopStatus.cancelled: RunStatus.cancelled,
+      LoopStatus.blocked: RunStatus.blocked,
+      LoopStatus.error: RunStatus.error,
+    }
+
+    return RunOutput(
+      run_id=state.run_id,
+      session_id=state.session_id,
+      agent_id=state.agent_id,
+      agent_name=state.agent_name,
+      input=state.run_input,
+      content=state.content,
+      tools=state.tool_executions or None,
+      metrics=state.metrics,
+      messages=state.output_messages,
+      model=self.model.id,
+      model_provider=self.model.provider,
+      status=status_map.get(state.status, RunStatus.completed),
+      session_state=state.context.session_state if state.context else None,
+      reasoning_steps=state.reasoning_steps or None,
+      reasoning_messages=state.reasoning_messages or None,
+      reasoning_content=self._format_reasoning_context(state.reasoning_steps) if state.reasoning_steps else None,
+      requirements=state.requirements,
+      phase_metrics=state.phase_metrics or None,
+    )
+
   def _prepare_tools_for_run(self, context: RunContext) -> Dict[str, Function]:
     """
     Create tool copies with injected context (thread-safe).
@@ -2778,6 +2902,14 @@ class Agent:
       tool_copy._dependencies = {**existing_deps, **config_deps}
       tool_copy._session_state = context.session_state
       tools[name] = tool_copy
+
+    # Inject spawn_agent tool when sub-agent policy is configured
+    if self._sub_agent_policy:
+      from definable.agent.pipeline.sub_agent import _build_spawn_agent_function
+
+      spawn_fn = _build_spawn_agent_function(self, self._sub_agent_policy)
+      tools["spawn_agent"] = spawn_fn
+
     return tools
 
   def _normalize_instruction(
@@ -2816,11 +2948,11 @@ class Agent:
   # --- Triggers ---
 
   @property
-  def triggers(self) -> List[Any]:
+  def triggers(self) -> List["BaseTrigger"]:
     """Registered triggers (read-only copy)."""
     return list(self._triggers)
 
-  def on(self, trigger: Any) -> Callable:
+  def on(self, trigger: "BaseTrigger") -> Callable:
     """Register a trigger handler.
 
     Can be used as a decorator::
@@ -2844,7 +2976,7 @@ class Agent:
 
     return decorator
 
-  def emit(self, event_name: str, data: Optional[Any] = None) -> None:
+  def emit(self, event_name: str, data: Optional[dict] = None) -> None:
     """Fire all EventTriggers matching *event_name* (fire-and-forget).
 
     Args:

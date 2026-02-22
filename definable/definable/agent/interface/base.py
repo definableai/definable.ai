@@ -1,5 +1,6 @@
 """Base interface for connecting agents to messaging platforms."""
 
+from types import TracebackType
 import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, List, Optional
@@ -178,7 +179,7 @@ class BaseInterface(ABC):
     await self.start()
     return self
 
-  async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+  async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None) -> None:
     """Async context manager exit."""
     await self.stop()
 
@@ -343,10 +344,17 @@ class BaseInterface(ABC):
       user_id = message.metadata["auth_context"].user_id
 
     assert self.agent is not None
+
+    # If the agent has an explicitly configured session_id, use it for memory continuity.
+    # Otherwise, use the interface session's session_id (per-user isolation for multi-user interfaces).
+    run_session_id = session.session_id
+    if getattr(self.agent, "_session_id_explicit", False):
+      run_session_id = self.agent.session_id
+
     return await self.agent.arun(
       instruction=message.text or "",
       messages=session.messages,
-      session_id=session.session_id,
+      session_id=run_session_id,
       user_id=user_id,
       images=message.images,
       audio=message.audio,
