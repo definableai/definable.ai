@@ -20,7 +20,7 @@ concurrency:
 jobs:
   should-fix:
     name: Check if issue should be auto-fixed
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
       issue_number: ${{ steps.check.outputs.issue_number }}
@@ -88,7 +88,7 @@ jobs:
     name: Fix Issue #${{ needs.should-fix.outputs.issue_number }}
     needs: should-fix
     if: needs.should-fix.outputs.should_run == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 30
     permissions:
       contents: write
