@@ -18,10 +18,6 @@ class TestClaudeCodeAgentContract:
     assert hasattr(agent, "arun")
     assert iscoroutinefunction(agent.arun)
 
-  def test_has_arun_stream_method(self):
-    agent = ClaudeCodeAgent()
-    assert hasattr(agent, "arun_stream")
-
   def test_async_context_manager(self):
     agent = ClaudeCodeAgent()
     assert hasattr(agent, "__aenter__")

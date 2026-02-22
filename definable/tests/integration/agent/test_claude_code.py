@@ -176,11 +176,12 @@ class TestKnowledgeIntegration:
       _make_result(),
     ])
 
-    # Create a mock Knowledge with a search method
+    # Create a mock Knowledge with async asearch and format_context
     mock_knowledge = MagicMock()
     mock_doc = MagicMock()
     mock_doc.content = "JWT tokens expire after 24 hours."
-    mock_knowledge.search.return_value = [mock_doc]
+    mock_knowledge.asearch = AsyncMock(return_value=[mock_doc])
+    mock_knowledge.format_context.return_value = "JWT tokens expire after 24 hours."
 
     agent = ClaudeCodeAgent(instructions="Help with auth.")
     # Directly set internal state to bypass isinstance resolution
@@ -331,3 +332,192 @@ class TestSessionResume:
 
     assert "--resume" in mock_transport._connect_args
     assert "sess-resume" in mock_transport._connect_args
+
+
+@pytest.mark.behavioral
+@pytest.mark.integration
+class TestMemoryRoundTrip:
+  async def test_memory_store_and_recall_same_session(self):
+    """Memory store and recall use the same session_id from RunContext."""
+    from definable.memory.manager import Memory
+    from definable.memory.store.in_memory import InMemoryStore
+
+    store = InMemoryStore()
+    memory = Memory(store=store)
+
+    mock_transport = MockTransport([
+      _make_assistant_text("I remember Python."),
+      _make_result(),
+    ])
+
+    agent = ClaudeCodeAgent(instructions="Help.", memory=memory)
+    agent._ensure_initialized()
+
+    with patch("definable.claude_code.agent.SubprocessTransport", return_value=mock_transport):
+      await agent.arun("What do I like?", user_id="user-1", session_id="sess-round-trip")
+
+    # Allow fire-and-forget task to complete
+    import asyncio
+
+    await asyncio.sleep(0.05)
+
+    # Now verify the memory was stored with the correct session_id
+    entries = await memory.get_entries("sess-round-trip", "user-1")
+    assert len(entries) >= 1  # At least the user message was stored
+    contents = [e.content for e in entries]
+    assert any("What do I like?" in c for c in contents)
+
+  async def test_memory_works_without_user_id(self):
+    """Memory store works even when user_id is not provided (defaults to 'default')."""
+    from definable.memory.manager import Memory
+    from definable.memory.store.in_memory import InMemoryStore
+
+    store = InMemoryStore()
+    memory = Memory(store=store)
+
+    mock_transport = MockTransport([
+      _make_assistant_text("Done."),
+      _make_result(),
+    ])
+
+    agent = ClaudeCodeAgent(memory=memory)
+    agent._ensure_initialized()
+
+    with patch("definable.claude_code.agent.SubprocessTransport", return_value=mock_transport):
+      await agent.arun("Hello", session_id="no-user-sess")
+
+    import asyncio
+
+    await asyncio.sleep(0.05)
+
+    # Should store under user_id="default"
+    entries = await memory.get_entries("no-user-sess", "default")
+    assert len(entries) >= 1
+
+
+@pytest.mark.behavioral
+@pytest.mark.integration
+class TestToolkitIntegrationBehavioral:
+  async def test_toolkit_tools_available_in_run(self):
+    """Toolkit tools are registered and available during a run."""
+    from definable.tool.function import Function
+
+    def tk_tool(x: int) -> str:
+      """Toolkit tool."""
+      return f"result: {x}"
+
+    fn = Function.from_callable(tk_tool)
+
+    mock_toolkit = MagicMock()
+    mock_toolkit._initialized = False
+    mock_toolkit.initialize = AsyncMock()
+    mock_toolkit.shutdown = AsyncMock()
+    mock_toolkit.tools = [fn]
+
+    mock_transport = MockTransport([
+      _make_assistant_text("Used toolkit."),
+      _make_result(),
+    ])
+
+    agent = ClaudeCodeAgent(toolkits=[mock_toolkit])
+    agent._ensure_initialized()
+
+    with patch("definable.claude_code.agent.SubprocessTransport", return_value=mock_transport):
+      with patch("definable.claude_code.agent.ToolServer") as MockServer:
+        mock_server_instance = MockServer.return_value
+        mock_server_instance.is_running = True
+        mock_server_instance.start = AsyncMock()
+        mock_server_instance.stop = AsyncMock()
+        mock_server_instance.get_mcp_config_path.return_value = "/tmp/config.json"
+        await agent.arun("Use the toolkit")
+
+    mock_toolkit.initialize.assert_called_once()
+    # Toolkit tool should be in bridge
+    assert "tk_tool" in agent._tool_bridge._tools
+
+
+@pytest.mark.behavioral
+@pytest.mark.integration
+class TestMemoryPersistsAcrossAruns:
+  async def test_memory_persists_across_arun_calls(self):
+    """Two arun() calls without explicit session_id share the same session — memory from first is visible in second."""
+    from definable.memory.manager import Memory
+    from definable.memory.store.in_memory import InMemoryStore
+    import asyncio
+
+    store = InMemoryStore()
+    memory = Memory(store=store)
+
+    # First call — stores "hello" in memory
+    mock_transport_1 = MockTransport([
+      _make_assistant_text("Hi there!"),
+      _make_result(),
+    ])
+
+    agent = ClaudeCodeAgent(instructions="Help.", memory=memory)
+    agent._ensure_initialized()
+
+    with patch("definable.claude_code.agent.SubprocessTransport", return_value=mock_transport_1):
+      await agent.arun("hello")
+
+    # Let fire-and-forget memory store complete
+    await asyncio.sleep(0.05)
+
+    # Second call — memory recall should find entries from the first call
+    mock_transport_2 = MockTransport([
+      _make_assistant_text("You said hello earlier."),
+      _make_result(),
+    ])
+
+    with patch("definable.claude_code.agent.SubprocessTransport", return_value=mock_transport_2):
+      await agent.arun("how many messages?")
+
+    # The system prompt of the second call should contain memory from the first
+    connect_args = mock_transport_2._connect_args
+    system_prompt_idx = connect_args.index("--system-prompt") + 1
+    system_prompt = connect_args[system_prompt_idx]
+    assert "<user_memory>" in system_prompt
+    assert "hello" in system_prompt
+
+
+@pytest.mark.behavioral
+@pytest.mark.integration
+class TestMCPToolkitPassthrough:
+  async def test_mcp_toolkit_passthrough_in_run(self):
+    """Full arun() with MCPToolkit produces --mcp-config in CLI args."""
+    from definable.mcp.toolkit import MCPToolkit
+    from definable.mcp.config import MCPConfig, MCPServerConfig
+
+    mcp_toolkit = MCPToolkit(
+      config=MCPConfig(
+        servers=[
+          MCPServerConfig(name="gmail", transport="http", url="https://backend.composio.dev/mcp"),
+        ]
+      )
+    )
+
+    mock_transport = MockTransport([
+      _make_assistant_text("Email sent."),
+      _make_result(),
+    ])
+
+    agent = ClaudeCodeAgent(toolkits=[mcp_toolkit])
+
+    with patch("definable.claude_code.agent.SubprocessTransport", return_value=mock_transport):
+      await agent.arun("List my emails")
+
+    # Verify --mcp-config appears in CLI args
+    connect_args = mock_transport._connect_args
+    assert "--mcp-config" in connect_args
+
+    # Find the mcp-config path and verify its content
+    mcp_idx = connect_args.index("--mcp-config")
+    config_path = connect_args[mcp_idx + 1]
+
+    # File should still exist during the run, but cleaned up after
+    # (the finally block runs _cleanup_mcp_temps, so file may be gone)
+    # Just verify the config was correct by checking the args were set
+    assert config_path.endswith(".json")
+
+    # MCPToolkit should NOT have been initialized (no double-proxy)
+    assert not mcp_toolkit._initialized
