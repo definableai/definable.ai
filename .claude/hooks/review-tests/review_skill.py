@@ -69,9 +69,15 @@ try:
   agent = Agent(model=MockModel(), skills=[Calculator()])
   output = agent.run("test")
   check("Agent + Calculator runs", output.content is not None, "no content")
-  # Verify skill instructions in system message
-  if agent.model.call_history:
-    system_msg = agent.model.call_history[0].get("system_message", "") or ""
+  # Verify skill instructions in system message (injected as messages[0] with role="system")
+  if agent.model._call_history:
+    msgs = agent.model._call_history[0].get("messages", [])
+    system_msg = ""
+    for m in msgs or []:
+      role = getattr(m, "role", None) or (m.get("role") if isinstance(m, dict) else None)
+      if role == "system":
+        system_msg = getattr(m, "content", "") or (m.get("content", "") if isinstance(m, dict) else "")
+        break
     check(
       "Skill instructions in system prompt",
       "calculator" in system_msg.lower() or "math" in system_msg.lower() or "calc" in system_msg.lower() or len(system_msg) > 10,
@@ -93,7 +99,7 @@ def my_tool(x: str) -> str:
 try:
   agent = Agent(model=MockModel(), skills=[Calculator()], tools=[my_tool])
   check("Agent + skill + custom tool constructs", True)
-  total_tools = len(agent.tools)
+  total_tools = len(agent.tool_names)
   check("Agent has both skill tools and custom tool", total_tools >= 2, f"total tools: {total_tools}")
 except Exception as e:
   check("Agent + skill + tool", False, str(e))

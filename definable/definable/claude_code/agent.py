@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from dataclasses import dataclass, field
 from typing import (
   TYPE_CHECKING,
@@ -37,6 +38,11 @@ from typing import (
 from uuid import uuid4
 
 from definable.agent.events import (
+  KnowledgeRetrievalCompletedEvent,
+  KnowledgeRetrievalStartedEvent,
+  MemoryRecallCompletedEvent,
+  MemoryRecallStartedEvent,
+  MemoryUpdateStartedEvent,
   RunCompletedEvent,
   RunContext,
   RunErrorEvent,
@@ -1033,20 +1039,77 @@ class ClaudeCodeAgent:
       )
       return
 
-    self._emit(
-      RunStartedEvent(
-        agent_id=self.agent_id or "",
-        agent_name=self.agent_name or "",
-        run_id=context.run_id,
-        session_id=context.session_id,
-        model=self.model,
-        model_provider="Anthropic",
-      )
+    started_event = RunStartedEvent(
+      agent_id=self.agent_id or "",
+      agent_name=self.agent_name or "",
+      run_id=context.run_id,
+      session_id=context.session_id,
+      model=self.model,
+      model_provider="Anthropic",
     )
+    self._emit(started_event)
+    yield started_event
 
-    # Pre-pipeline
-    knowledge_ctx = await self._knowledge_retrieve(context, prompt)
-    memory_ctx = await self._memory_recall(context)
+    # Pre-pipeline: knowledge retrieval
+    _agent_id = self.agent_id or ""
+    _agent_name = self.agent_name or ""
+    _run_id = context.run_id
+    _session_id = context.session_id
+
+    knowledge_ctx: Optional[str] = None
+    if self._knowledge_instance:
+      kr_started = KnowledgeRetrievalStartedEvent(
+        agent_id=_agent_id,
+        agent_name=_agent_name,
+        run_id=_run_id,
+        session_id=_session_id,
+        query=prompt,
+      )
+      self._emit(kr_started)
+      yield kr_started
+      t0 = time.perf_counter()
+      knowledge_ctx = await self._knowledge_retrieve(context, prompt)
+      dur_ms = (time.perf_counter() - t0) * 1000
+      doc_count = knowledge_ctx.count("\n\n") + 1 if knowledge_ctx else 0
+      kr_completed = KnowledgeRetrievalCompletedEvent(
+        agent_id=_agent_id,
+        agent_name=_agent_name,
+        run_id=_run_id,
+        session_id=_session_id,
+        query=prompt,
+        documents_found=doc_count,
+        documents_used=doc_count,
+        duration_ms=dur_ms,
+      )
+      self._emit(kr_completed)
+      yield kr_completed
+
+    # Pre-pipeline: memory recall
+    memory_ctx: Optional[str] = None
+    if self._memory_manager:
+      mr_started = MemoryRecallStartedEvent(
+        agent_id=_agent_id,
+        agent_name=_agent_name,
+        run_id=_run_id,
+        session_id=_session_id,
+      )
+      self._emit(mr_started)
+      yield mr_started
+      t0 = time.perf_counter()
+      memory_ctx = await self._memory_recall(context)
+      dur_ms = (time.perf_counter() - t0) * 1000
+      chunk_count = memory_ctx.count("\n") if memory_ctx else 0
+      mr_completed = MemoryRecallCompletedEvent(
+        agent_id=_agent_id,
+        agent_name=_agent_name,
+        run_id=_run_id,
+        session_id=_session_id,
+        chunks_included=chunk_count,
+        duration_ms=dur_ms,
+      )
+      self._emit(mr_completed)
+      yield mr_completed
+
     system_prompt = self._build_system_prompt(knowledge_ctx, memory_ctx)
 
     await self._ensure_toolkits_initialized()
@@ -1131,6 +1194,15 @@ class ClaudeCodeAgent:
         result = modified
 
       if self._memory_manager:
+        mu_started = MemoryUpdateStartedEvent(
+          agent_id=_agent_id,
+          agent_name=_agent_name,
+          run_id=_run_id,
+          session_id=_session_id,
+          message_count=2,
+        )
+        self._emit(mu_started)
+        yield mu_started
         task = asyncio.create_task(self._memory_store(context, prompt, result.content if isinstance(result.content, str) else None))
         self._pending_tasks.append(task)
         task.add_done_callback(lambda t: self._pending_tasks.remove(t) if t in self._pending_tasks else None)

@@ -35,6 +35,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Optional, Set
 
 from definable.agent.events import (
+  KnowledgeRetrievalCompletedEvent,
+  KnowledgeRetrievalStartedEvent,
+  MemoryRecallCompletedEvent,
+  MemoryRecallStartedEvent,
+  MemoryUpdateStartedEvent,
   ReasoningContentDeltaEvent,
   RunCompletedEvent,
   RunContentEvent,
@@ -476,6 +481,7 @@ class ClaudeCodeCLI:
     """Execute a prompt through the agent with streaming + HITL."""
     self._streamed_any_content = False
     self._total_runs += 1
+    self._start_spinner("Preparing")
     try:
       async for event in self.agent.arun_stream(prompt):
         self._render_event(event)
@@ -895,7 +901,30 @@ class ClaudeCodeCLI:
       self._tracked_tasks.clear()
       self._task_counter = 0
       self._panel_line_count = 0
-      self._start_spinner("Thinking")
+      self._update_spinner("Thinking")
+
+    elif isinstance(event, KnowledgeRetrievalStartedEvent):
+      self._update_spinner("Searching knowledge")
+
+    elif isinstance(event, KnowledgeRetrievalCompletedEvent):
+      n = getattr(event, "documents_found", 0)
+      if n:
+        self._stop_spinner()
+        self._console.print(f"  [dim blue]Retrieved {n} document{'s' if n != 1 else ''}[/dim blue]")
+      self._update_spinner("Thinking")
+
+    elif isinstance(event, MemoryRecallStartedEvent):
+      self._update_spinner("Recalling memory")
+
+    elif isinstance(event, MemoryRecallCompletedEvent):
+      n = getattr(event, "chunks_included", 0)
+      if n:
+        self._stop_spinner()
+        self._console.print(f"  [dim yellow]Recalled {n} memory chunk{'s' if n != 1 else ''}[/dim yellow]")
+      self._update_spinner("Thinking")
+
+    elif isinstance(event, MemoryUpdateStartedEvent):
+      self._update_spinner("Saving memory")
 
     elif isinstance(event, RunContentEvent):
       content = event.content
