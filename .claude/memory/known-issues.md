@@ -16,7 +16,7 @@
 | #13 | agents: Agent.arun() uses output_schema but docs reference response_model | 2026-02-17 run #2 | bug | P0 |
 | #14 | tests: xAI tests fail — grok-beta deprecated, use grok-3 | 2026-02-17 run #2 | bug | P1 |
 
-| #18 | Agent(model=None) silently accepts None, fails at runtime with unhelpful error | 2026-02-19 run #4 | bug | P1 |
+| #18 | Agent(model=None) silently accepts None, fails at runtime with unhelpful error | 2026-02-19 run #4 | bug | P1 — **VERIFIED FIXED** (eval run #5 confirms TypeError at init) |
 | #19 | Sync run() breaks on sequential multi-turn calls (Event loop is closed) | 2026-02-19 run #4 | bug | P0 |
 
 ## Closed Issues

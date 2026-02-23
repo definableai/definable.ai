@@ -1,10 +1,10 @@
-# Project Profile -- Definable v0.2.8
+# Project Profile -- Definable v0.3.0
 
-> Last updated: 2026-02-19 (eval run #4, post-DX overhaul)
+> Last updated: 2026-02-20 (eval run #5, post-v0.3.0 release)
 
 ## Package Info
 - **Name**: definable
-- **Version**: 0.2.8
+- **Version**: 0.3.0 (PyPI released)
 - **Python**: >=3.12 (3.12.10 in .venv)
 - **Source**: `definable/definable/` (215+ .py files)
 - **Tests**: `definable/tests/` (700+ tests)
@@ -22,7 +22,7 @@ from definable.agent import StreamingMiddleware, KnowledgeMiddleware
 from definable.agent import Toolkit, KnowledgeToolkit, MCPToolkit
 from definable.agent import AgentCancelled, CancellationToken, EventBus
 from definable.agent import CompressionConfig, ReadersConfig, DeepResearchConfig
-from definable.agent import Memory, MemoryManager, Thinking, Guardrails, GuardrailResult
+from definable.agent import Memory, Thinking, Guardrails, GuardrailResult
 from definable.agent import Replay, ReplayComparison
 
 # Models
@@ -46,7 +46,7 @@ from definable.embedder import Embedder, OpenAIEmbedder, VoyageAIEmbedder
 from definable.vectordb import InMemoryVectorDB, VectorDB, Distance, SearchType
 
 # Memory
-from definable.memory import Memory, MemoryManager, InMemoryStore, SQLiteStore, MemoryStore
+from definable.memory import Memory, InMemoryStore, SQLiteStore, FileStore, MemoryEntry, MemoryStore
 
 # Guardrails
 from definable.agent.guardrail import Guardrails, GuardrailResult
@@ -108,8 +108,15 @@ agent.use(RetryMiddleware(max_retries=3))
 - `InMemoryVectorDB(dimensions=N)` is deprecated, dimensions param ignored
 - `Document(meta_data={})` -- note: meta_data NOT metadata
 - sync `run()` breaks after 2-3 sequential multi-turn calls (#19)
-- `Agent(model=None)` silently accepts None (#18)
+- `Agent(model=None)` now raises TypeError at init (#18 FIXED)
 - `output_schema` not `response_model` for structured output
+
+## Eval Run #5 Results (2026-02-20)
+- 16 eval scripts, 159 checks: **159 passed, 0 failed, 0 skipped**
+- Stability score: **100%**
+- Real API tests all pass (OpenAI, MCP filesystem)
+- Full-stack composition (tools+skills+knowledge+memory+guardrails+tracing+middleware) stable
+- 10-turn conversations stable, concurrent sessions stable
 
 ## Static Analysis
 - mypy: 0 errors

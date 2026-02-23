@@ -216,7 +216,7 @@ from definable.knowledge import Knowledge, Document
 from definable.memory import Memory, SQLiteStore
 
 # Interfaces
-from definable.interfaces.telegram import TelegramInterface, TelegramConfig
+from definable.agent.interface.telegram import TelegramInterface
 ```
 
 ### Sync/Async Examples
