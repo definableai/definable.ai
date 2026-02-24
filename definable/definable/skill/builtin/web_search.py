@@ -4,7 +4,7 @@ Gives the agent the ability to search the web and read web pages.
 Uses DuckDuckGo by default (no API key required), with an optional
 provider parameter for custom search backends.
 
-Requires: ``pip install duckduckgo-search``
+Requires: ``pip install ddgs`` (or legacy ``pip install duckduckgo-search``)
 
 Example:
     from definable.skill.builtin import WebSearch
@@ -25,9 +25,12 @@ from definable.tool.decorator import tool
 def _ddg_search(query: str, max_results: int = 5) -> str:
   """Search DuckDuckGo and return formatted results."""
   try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
   except ImportError:
-    raise ImportError("WebSearch skill requires 'duckduckgo-search'. Install it with: pip install duckduckgo-search")
+    try:
+      from duckduckgo_search import DDGS
+    except ImportError:
+      raise ImportError("WebSearch skill requires 'ddgs'. Install it with: pip install ddgs")
 
   results = []
   with DDGS() as ddgs:
