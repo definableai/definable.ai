@@ -1,18 +1,19 @@
 import AppKit
 import Foundation
 
-/// Clipboard read/write via NSPasteboard.
 enum ClipboardManager {
-  static func getText() -> ClipboardGetResponse {
-    let pb = NSPasteboard.general
-    let text = pb.string(forType: .string) ?? ""
-    let hasImage = pb.data(forType: .tiff) != nil || pb.data(forType: .png) != nil
-    return ClipboardGetResponse(text: text, hasImage: hasImage)
+  static func getText() -> String? {
+    NSPasteboard.general.string(forType: .string)
   }
 
   static func setText(_ text: String) {
-    let pb = NSPasteboard.general
-    pb.clearContents()
-    pb.setString(text, forType: .string)
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(text, forType: .string)
+  }
+
+  static func hasImage() -> Bool {
+    let types: [NSPasteboard.PasteboardType] = [.tiff, .png]
+    return NSPasteboard.general.availableType(from: types) != nil
   }
 }

@@ -1,118 +1,110 @@
 import AppKit
-import AudioToolbox
 import CoreAudio
-import CoreFoundation
 import Foundation
-import IOKit
 import IOKit.ps
 
-/// System information: battery, volume, hostname, OS version.
 enum SystemInfo {
-  // MARK: - Info
-
-  static func getSystemInfo() -> SystemInfoResponse {
-    let hostname = ProcessInfo.processInfo.hostName
-    let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
-    let cpu = cpuModel()
-    let memoryGb = Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824.0
-
-    return SystemInfoResponse(
-      hostname: hostname,
-      osVersion: osVersion,
-      cpu: cpu,
-      memoryGb: round(memoryGb * 10) / 10
-    )
+  static func hostname() -> String {
+    ProcessInfo.processInfo.hostName
   }
 
-  // MARK: - Battery
-
-  static func getBattery() -> BatteryResponse {
-    guard let powerSources = IOPSCopyPowerSourcesList(IOPSCopyPowerSourcesInfo().takeRetainedValue()).takeRetainedValue() as? [CFTypeRef],
-          let source = powerSources.first,
-          let description = IOPSGetPowerSourceDescription(IOPSCopyPowerSourcesInfo().takeRetainedValue(), source)?.takeUnretainedValue() as? [String: Any]
-    else {
-      return BatteryResponse(level: -1, charging: false, timeRemaining: -1)
-    }
-
-    let level = description[kIOPSCurrentCapacityKey] as? Int ?? -1
-    let isCharging = (description[kIOPSIsChargingKey] as? Bool) ?? false
-    let timeRemaining = isCharging
-      ? (description[kIOPSTimeToFullChargeKey] as? Int ?? -1)
-      : (description[kIOPSTimeToEmptyKey] as? Int ?? -1)
-
-    return BatteryResponse(level: level, charging: isCharging, timeRemaining: timeRemaining)
+  static func osVersion() -> String {
+    let v = ProcessInfo.processInfo.operatingSystemVersion
+    return "macOS \(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
   }
 
-  // MARK: - Volume
+  static func cpu() -> String {
+    var size = 0
+    sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+    var buffer = [CChar](repeating: 0, count: size)
+    sysctlbyname("machdep.cpu.brand_string", &buffer, &size, nil, 0)
+    return String(cString: buffer)
+  }
 
-  static func getVolume() -> VolumeResponse {
-    var defaultOutputDeviceID = AudioDeviceID(0)
-    var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
+  static func memoryGB() -> Double {
+    Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824
+  }
+
+  static func volume() -> Int {
+    var defaultOutputID = AudioObjectID(kAudioObjectSystemObject)
     var address = AudioObjectPropertyAddress(
       mSelector: kAudioHardwarePropertyDefaultOutputDevice,
       mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain
-    )
-    AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize, &defaultOutputDeviceID)
+      mElement: kAudioObjectPropertyElementMain)
+    var size = UInt32(MemoryLayout<AudioObjectID>.size)
+    AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &defaultOutputID)
 
-    var volume: Float32 = 0
-    var volumeSize = UInt32(MemoryLayout<Float32>.size)
-    var volumeAddress = AudioObjectPropertyAddress(
-      mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
-      mScope: kAudioDevicePropertyScopeOutput,
-      mElement: kAudioObjectPropertyElementMain
-    )
-    AudioObjectGetPropertyData(defaultOutputDeviceID, &volumeAddress, 0, nil, &volumeSize, &volume)
-
-    return VolumeResponse(volume: Int(volume * 100))
+    var vol: Float32 = 0
+    address.mSelector = kAudioDevicePropertyVolumeScalar
+    address.mScope = kAudioDevicePropertyScopeOutput
+    address.mElement = 1  // Channel 1 (main)
+    size = UInt32(MemoryLayout<Float32>.size)
+    AudioObjectGetPropertyData(defaultOutputID, &address, 0, nil, &size, &vol)
+    return Int(vol * 100)
   }
 
   static func setVolume(_ level: Int) {
-    var defaultOutputDeviceID = AudioDeviceID(0)
-    var propertySize = UInt32(MemoryLayout<AudioDeviceID>.size)
+    let clamped = Float32(min(100, max(0, level))) / 100.0
+
+    var defaultOutputID = AudioObjectID(kAudioObjectSystemObject)
     var address = AudioObjectPropertyAddress(
       mSelector: kAudioHardwarePropertyDefaultOutputDevice,
       mScope: kAudioObjectPropertyScopeGlobal,
-      mElement: kAudioObjectPropertyElementMain
-    )
-    AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &propertySize, &defaultOutputDeviceID)
+      mElement: kAudioObjectPropertyElementMain)
+    var size = UInt32(MemoryLayout<AudioObjectID>.size)
+    AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &defaultOutputID)
 
-    var volume = Float32(max(0, min(100, level))) / 100.0
-    var volumeSize = UInt32(MemoryLayout<Float32>.size)
-    var volumeAddress = AudioObjectPropertyAddress(
-      mSelector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
-      mScope: kAudioDevicePropertyScopeOutput,
-      mElement: kAudioObjectPropertyElementMain
-    )
-    AudioObjectSetPropertyData(defaultOutputDeviceID, &volumeAddress, 0, nil, volumeSize, &volume)
+    var vol = clamped
+    address.mSelector = kAudioDevicePropertyVolumeScalar
+    address.mScope = kAudioDevicePropertyScopeOutput
+    address.mElement = 1
+    size = UInt32(MemoryLayout<Float32>.size)
+    AudioObjectSetPropertyData(defaultOutputID, &address, 0, nil, size, &vol)
   }
 
-  // MARK: - Dark Mode
+  static func battery() -> (level: Int, charging: Bool, timeRemaining: Int?) {
+    let snapshot = IOPSCopyPowerSourcesInfo().takeRetainedValue()
+    let sources = IOPSCopyPowerSourcesList(snapshot).takeRetainedValue() as [CFTypeRef]
 
-  static func getDarkMode() -> DarkModeResponse {
-    let names: [NSAppearance.Name] = [.darkAqua, .aqua]
-    let isDark = NSAppearance.current?.bestMatch(from: names) == NSAppearance.Name.darkAqua
-    return DarkModeResponse(enabled: isDark)
+    for source in sources {
+      guard let info = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any] else {
+        continue
+      }
+
+      let capacity = info[kIOPSCurrentCapacityKey] as? Int ?? 0
+      let maxCapacity = info[kIOPSMaxCapacityKey] as? Int ?? 100
+      let isCharging = (info[kIOPSIsChargingKey] as? Bool) ?? false
+      let timeToEmpty = info[kIOPSTimeToEmptyKey] as? Int
+
+      let level = maxCapacity > 0 ? (capacity * 100 / maxCapacity) : 0
+      return (level: level, charging: isCharging, timeRemaining: timeToEmpty)
+    }
+
+    return (level: -1, charging: false, timeRemaining: nil)
   }
 
-  static func setDarkMode(enabled: Bool) {
-    let mode = enabled ? "true" : "false"
-    let script = "tell application \"System Events\" to tell appearance preferences to set dark mode to \(mode)"
-    _ = AppleScriptEngine.run(script: script)
+  static func isDarkMode() -> Bool {
+    let appearance = NSApp?.effectiveAppearance ?? NSAppearance.currentDrawing()
+    return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+  }
+
+  static func setDarkMode(_ enabled: Bool) {
+    let script = """
+    tell application "System Events"
+      tell appearance preferences
+        set dark mode to \(enabled ? "true" : "false")
+      end tell
+    end tell
+    """
+    var error: NSDictionary?
+    NSAppleScript(source: script)?.executeAndReturnError(&error)
   }
 
   static func lockScreen() {
-    // Lock via screensaver (requires password-on-wake in System Settings)
-    NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Library/CoreServices/ScreenSaverEngine.app"))
-  }
-
-  // MARK: - Private helpers
-
-  private static func cpuModel() -> String {
-    var size = 0
-    sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
-    var model = [CChar](repeating: 0, count: size)
-    sysctlbyname("machdep.cpu.brand_string", &model, &size, nil, 0)
-    return String(cString: model)
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+    process.arguments = ["displaysleepnow"]
+    try? process.run()
+    process.waitUntilExit()
   }
 }

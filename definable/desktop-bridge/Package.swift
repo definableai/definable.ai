@@ -3,9 +3,9 @@ import PackageDescription
 
 let package = Package(
   name: "DesktopBridge",
-  platforms: [.macOS(.v13)],
+  platforms: [.macOS(.v14)],
   dependencies: [
-    .package(url: "https://github.com/vapor/vapor.git", from: "4.89.0"),
+    .package(url: "https://github.com/vapor/vapor.git", from: "4.99.0"),
   ],
   targets: [
     .executableTarget(
@@ -13,7 +13,15 @@ let package = Package(
       dependencies: [
         .product(name: "Vapor", package: "vapor"),
       ],
-      path: "Sources/DesktopBridge"
+      linkerSettings: [
+        .linkedFramework("ApplicationServices"),
+        .linkedFramework("AVFoundation"),
+        .linkedFramework("CoreGraphics"),
+        .linkedFramework("CoreLocation"),
+        .linkedFramework("ScreenCaptureKit"),
+        .linkedFramework("Speech"),
+        .linkedFramework("Vision"),
+      ]
     ),
   ]
 )

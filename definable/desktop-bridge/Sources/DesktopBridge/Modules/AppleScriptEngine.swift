@@ -1,15 +1,24 @@
-import AppKit
 import Foundation
 
-/// Executes AppleScript via NSAppleScript.
 enum AppleScriptEngine {
-  static func run(script: String) -> AppleScriptResponse {
-    var error: NSDictionary?
+  struct ScriptResult {
+    var output: String?
+    var error: String?
+  }
+
+  @MainActor
+  static func execute(script: String) -> ScriptResult {
+    var errorDict: NSDictionary?
     let appleScript = NSAppleScript(source: script)
-    guard let result = appleScript?.executeAndReturnError(&error) else {
-      let errMsg = (error?["NSAppleScriptErrorMessage"] as? String) ?? "Unknown error"
-      return AppleScriptResponse(output: "", error: errMsg)
+    let result = appleScript?.executeAndReturnError(&errorDict)
+
+    if let errorDict {
+      let message = errorDict["NSAppleScriptErrorMessage"] as? String
+        ?? errorDict["NSAppleScriptErrorBriefMessage"] as? String
+        ?? "Unknown AppleScript error"
+      return ScriptResult(output: nil, error: message)
     }
-    return AppleScriptResponse(output: result.stringValue ?? "", error: nil)
+
+    return ScriptResult(output: result?.stringValue, error: nil)
   }
 }

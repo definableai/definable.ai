@@ -173,17 +173,23 @@ class BridgeClient:
 
   # --- Internal helper ---
 
-  async def _post(self, path: str, data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """POST to the bridge and return the JSON response body.
+  async def _post(self, path: str, data: Optional[Dict[str, Any]] = None) -> Any:
+    """POST to the bridge and return the unwrapped ``data`` field.
+
+    The bridge wraps all responses in ``{"ok": true, "data": ...}``.
 
     Raises:
       httpx.ConnectError: Bridge is not reachable.
       httpx.HTTPStatusError: Bridge returned a non-2xx status.
+      RuntimeError: Bridge returned ``ok=false``.
     """
     client = self._get_client()
     response = await client.post(path, json=data or {})
     response.raise_for_status()
-    return response.json()
+    body = response.json()
+    if not body.get("ok", False):
+      raise RuntimeError(f"Bridge error: {body.get('error', 'unknown')}")
+    return body.get("data", {})
 
   # --- Health ---
 
@@ -216,7 +222,7 @@ class BridgeClient:
     Returns:
       JPEG image as raw bytes.
     """
-    result = await self._post("/screen/capture", {"display": display, "region": region, "max_width": max_width})
+    result = await self._post("/screen/capture", {"display": display, "region": region, "maxWidth": max_width})
     return base64.b64decode(result["image"])
 
   async def ocr_screen(
@@ -243,11 +249,11 @@ class BridgeClient:
     Returns:
       :class:`ElementBounds` if found, ``None`` otherwise.
     """
-    result = await self._post("/screen/find_text", {"text": text, "nth": nth})
-    if not result.get("found"):
+    try:
+      result = await self._post("/screen/find_text", {"text": text, "nth": nth})
+      return ElementBounds(x=result["x"], y=result["y"], width=result["width"], height=result["height"])
+    except Exception:
       return None
-    b = result["bounds"]
-    return ElementBounds(x=b["x"], y=b["y"], width=b["width"], height=b["height"])
 
   # --- Input ---
 
@@ -328,14 +334,15 @@ class BridgeClient:
       List of :class:`AppInfo` for each running app.
     """
     result = await self._post("/apps/list")
+    apps = result if isinstance(result, list) else result.get("apps", [])
     return [
       AppInfo(
         name=a["name"],
-        bundle_id=a.get("bundleId", ""),
+        bundle_id=a.get("bundle_id", a.get("bundleId", "")),
         pid=a.get("pid", -1),
         active=a.get("active", False),
       )
-      for a in result.get("apps", [])
+      for a in apps
     ]
 
   async def open_app(self, name: str) -> int:
@@ -348,7 +355,7 @@ class BridgeClient:
       PID of the launched/activated process.
     """
     result = await self._post("/apps/open", {"name": name})
-    return int(result.get("pid", -1))
+    return int(result.get("pid", result.get("PID", -1)))
 
   async def quit_app(self, name: str, force: bool = False) -> None:
     """Quit an application.
@@ -392,19 +399,19 @@ class BridgeClient:
       List of :class:`WindowInfo` for each window.
     """
     result = await self._post("/windows/list")
+    items = result if isinstance(result, list) else result.get("windows", [])
     windows = []
-    for w in result.get("windows", []):
-      b = w.get("bounds", {})
+    for w in items:
       windows.append(
         WindowInfo(
           id=w.get("id", 0),
           app=w.get("app", ""),
           title=w.get("title", ""),
           bounds=ElementBounds(
-            x=b.get("x", 0),
-            y=b.get("y", 0),
-            width=b.get("width", 0),
-            height=b.get("height", 0),
+            x=w.get("x", 0),
+            y=w.get("y", 0),
+            width=w.get("width", 0),
+            height=w.get("height", 0),
           ),
           minimized=w.get("minimized", False),
         )
@@ -418,7 +425,7 @@ class BridgeClient:
       window_id: Window ID (from :meth:`list_windows`).
       title: Window title substring to match.
     """
-    await self._post("/windows/focus", {"id": window_id, "title": title})
+    await self._post("/windows/focus", {"window_id": window_id, "title": title})
 
   async def resize_window(self, window_id: int, x: float, y: float, width: float, height: float) -> None:
     """Resize and reposition a window.
@@ -430,7 +437,7 @@ class BridgeClient:
       width: New width.
       height: New height.
     """
-    await self._post("/windows/resize", {"id": window_id, "x": x, "y": y, "width": width, "height": height})
+    await self._post("/windows/resize", {"window_id": window_id, "x": x, "y": y, "width": width, "height": height})
 
   async def close_window(self, window_id: int) -> None:
     """Close a window.
@@ -438,7 +445,7 @@ class BridgeClient:
     Args:
       window_id: Window ID.
     """
-    await self._post("/windows/close", {"id": window_id})
+    await self._post("/windows/close", {"window_id": window_id})
 
   # --- Accessibility ---
 
@@ -448,10 +455,11 @@ class BridgeClient:
     Returns:
       :class:`UIElement` or ``None`` if nothing is focused.
     """
-    result = await self._post("/ax/get_focused_element")
-    if not result.get("found"):
+    try:
+      result = await self._post("/ax/get_focused_element")
+      return _parse_ui_element(result)
+    except Exception:
       return None
-    return _parse_ui_element(result["element"])
 
   async def get_ui_tree(self, app: str, depth: int = 3) -> Dict[str, Any]:
     """Get the accessibility UI tree for an application.
@@ -476,10 +484,11 @@ class BridgeClient:
     Returns:
       :class:`UIElement` or ``None`` if not found.
     """
-    result = await self._post("/ax/find_element", {"app": app, "role": role, "title": title})
-    if not result.get("found"):
+    try:
+      result = await self._post("/ax/find_element", {"app": app, "role": role, "title": title})
+      return _parse_ui_element(result)
+    except Exception:
       return None
-    return _parse_ui_element(result["element"])
 
   async def click_ui_element(self, app: str, role: Optional[str] = None, title: Optional[str] = None) -> None:
     """Click a UI element found by accessibility attributes.
@@ -515,6 +524,135 @@ class BridgeClient:
     """
     return await self._post("/applescript/run", {"script": script})
 
+  # --- Shell ---
+
+  async def run_shell(
+    self,
+    command: List[str],
+    cwd: Optional[str] = None,
+    env: Optional[Dict[str, str]] = None,
+    timeout: Optional[float] = None,
+  ) -> Dict[str, Any]:
+    """Execute a shell command.
+
+    Args:
+      command: Command and arguments as a list (e.g. ``["ls", "-la"]``).
+      cwd: Working directory.
+      env: Environment variables.
+      timeout: Timeout in seconds.
+
+    Returns:
+      Dict with ``stdout``, ``stderr``, ``exit_code``, ``timed_out``, ``success``.
+    """
+    data: Dict[str, Any] = {"command": command}
+    if cwd is not None:
+      data["cwd"] = cwd
+    if env is not None:
+      data["env"] = env
+    if timeout is not None:
+      data["timeout"] = timeout
+    return await self._post("/shell/run", data)
+
+  # --- Camera ---
+
+  async def camera_list(self) -> List[Dict[str, str]]:
+    """List available camera devices.
+
+    Returns:
+      List of dicts with ``id``, ``name``, ``position``.
+    """
+    result = await self._post("/camera/list")
+    return result if isinstance(result, list) else []
+
+  async def camera_snap(
+    self,
+    facing: str = "front",
+    max_width: int = 1600,
+    quality: float = 0.9,
+    out_path: Optional[str] = None,
+  ) -> bytes:
+    """Take a photo with the camera.
+
+    Args:
+      facing: ``"front"`` or ``"back"``.
+      max_width: Maximum image width.
+      quality: JPEG quality (0.0-1.0).
+      out_path: If set, the bridge writes the JPEG to this path on disk.
+
+    Returns:
+      JPEG image as raw bytes.
+    """
+    payload: Dict[str, Any] = {
+      "facing": facing,
+      "max_width": max_width,
+      "quality": quality,
+    }
+    if out_path is not None:
+      payload["out_path"] = out_path
+    result = await self._post("/camera/snap", payload)
+    return base64.b64decode(result["image"])
+
+  async def camera_clip(
+    self,
+    facing: str = "front",
+    duration_ms: int = 3000,
+    include_audio: bool = False,
+    out_path: Optional[str] = None,
+  ) -> Dict[str, Any]:
+    """Record a video clip with the camera.
+
+    Args:
+      facing: ``"front"`` or ``"back"``.
+      duration_ms: Duration in milliseconds.
+      include_audio: Whether to include audio.
+      out_path: Optional output file path.
+
+    Returns:
+      Dict with ``path``, ``duration_ms``, ``has_audio``.
+    """
+    return await self._post(
+      "/camera/clip",
+      {
+        "facing": facing,
+        "duration_ms": duration_ms,
+        "include_audio": include_audio,
+        "out_path": out_path,
+      },
+    )
+
+  # --- Screen Recording ---
+
+  async def screen_record(
+    self,
+    screen_index: int = 0,
+    duration_ms: int = 10000,
+    fps: float = 10,
+    include_audio: bool = False,
+    out_path: Optional[str] = None,
+  ) -> Dict[str, Any]:
+    """Record the screen.
+
+    Args:
+      screen_index: Display index (0 = primary).
+      duration_ms: Duration in milliseconds.
+      fps: Frames per second.
+      include_audio: Whether to include audio.
+      out_path: Optional output file path.
+
+    Returns:
+      Dict with ``path``, ``has_audio``.
+    """
+    return await self._post(
+      "/screen/record",
+      {
+        "screen_index": screen_index,
+        "duration_ms": duration_ms,
+        "fps": fps,
+        "include_audio": include_audio,
+        "out_path": out_path,
+      },
+    )
+
   # --- Files ---
 
   async def list_files(self, path: str, recursive: bool = False) -> List[Dict[str, Any]]:
@@ -528,7 +666,7 @@ class BridgeClient:
       List of dicts with ``name``, ``path``, ``kind``, ``size``.
     """
     result = await self._post("/files/list", {"path": path, "recursive": recursive})
-    return result.get("files", [])
+    return result if isinstance(result, list) else result.get("files", [])
 
   async def read_file(self, path: str) -> str:
     """Read a file as text.

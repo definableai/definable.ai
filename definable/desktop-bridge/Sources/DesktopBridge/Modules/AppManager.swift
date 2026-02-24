@@ -1,124 +1,120 @@
 import AppKit
 import Foundation
 
-/// Application lifecycle via NSWorkspace.
 enum AppManager {
-  static func listApps() -> AppListResponse {
-    let running = NSWorkspace.shared.runningApplications
-    let apps = running.map { app in
-      AppInfoResponse(
-        name: app.localizedName ?? app.bundleIdentifier ?? "Unknown",
-        bundleId: app.bundleIdentifier ?? "",
-        pid: app.processIdentifier,
-        active: app.isActive
-      )
-    }
-    return AppListResponse(apps: apps)
+  struct AppInfo {
+    var name: String
+    var bundleId: String?
+    var pid: Int
+    var active: Bool
   }
 
-  static func openApp(_ name: String) throws -> OpenAppResponse {
-    // Try bundle ID first, then name, then path
-    let workspace = NSWorkspace.shared
-
-    if name.hasPrefix("/") {
-      // Treat as path
-      let url = URL(fileURLWithPath: name)
-      let config = NSWorkspace.OpenConfiguration()
-      var pid: pid_t = -1
-      let sem = DispatchSemaphore(value: 0)
-      workspace.openApplication(at: url, configuration: config) { app, err in
-        pid = app?.processIdentifier ?? -1
-        sem.signal()
+  static func listRunningApps() -> [AppInfo] {
+    NSWorkspace.shared.runningApplications
+      .filter { $0.activationPolicy == .regular }
+      .map { app in
+        AppInfo(
+          name: app.localizedName ?? "Unknown",
+          bundleId: app.bundleIdentifier,
+          pid: Int(app.processIdentifier),
+          active: app.isActive)
       }
-      sem.wait()
-      if pid > 0 { return OpenAppResponse(pid: pid) }
-      throw BridgeError.operationFailed("Failed to open app at path: \(name)")
-    }
-
-    // Try by bundle ID
-    if name.contains("."), let url = workspace.urlForApplication(withBundleIdentifier: name) {
-      let config = NSWorkspace.OpenConfiguration()
-      var pid: pid_t = -1
-      let sem = DispatchSemaphore(value: 0)
-      workspace.openApplication(at: url, configuration: config) { app, err in
-        pid = app?.processIdentifier ?? -1
-        sem.signal()
-      }
-      sem.wait()
-      if pid > 0 { return OpenAppResponse(pid: pid) }
-    }
-
-    // Try to find running app by name and activate it
-    if let running = workspace.runningApplications.first(where: { $0.localizedName == name }) {
-      running.activate(options: [.activateIgnoringOtherApps])
-      return OpenAppResponse(pid: running.processIdentifier)
-    }
-
-    // Try NSWorkspace launch by name
-    guard
-      let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "")
-        ?? findAppURL(name: name)
-    else {
-      throw BridgeError.notFound("App not found: '\(name)'")
-    }
-
-    let config = NSWorkspace.OpenConfiguration()
-    var resultPid: pid_t = -1
-    let sem = DispatchSemaphore(value: 0)
-    workspace.openApplication(at: url, configuration: config) { app, err in
-      resultPid = app?.processIdentifier ?? -1
-      sem.signal()
-    }
-    sem.wait()
-
-    if resultPid > 0 { return OpenAppResponse(pid: resultPid) }
-    throw BridgeError.operationFailed("Failed to open '\(name)'")
   }
 
-  static func quitApp(_ name: String, force: Bool) throws {
-    guard let app = findRunning(name: name) else {
-      throw BridgeError.notFound("App not running: '\(name)'")
+  static func openApp(name: String? = nil, bundleId: String? = nil, path: String? = nil) async throws -> Int {
+    if let bundleId {
+      if let running = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleId }) {
+        running.activate()
+        return Int(running.processIdentifier)
+      }
+      if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) {
+        let config = NSWorkspace.OpenConfiguration()
+        let app = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
+        return Int(app.processIdentifier)
+      }
     }
+
+    if let path {
+      let url = URL(fileURLWithPath: path)
+      let config = NSWorkspace.OpenConfiguration()
+      let app = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
+      return Int(app.processIdentifier)
+    }
+
+    if let name {
+      // Try to find by name in running apps first
+      if let running = NSWorkspace.shared.runningApplications.first(where: {
+        $0.localizedName?.lowercased() == name.lowercased()
+      }) {
+        running.activate()
+        return Int(running.processIdentifier)
+      }
+
+      // Try common locations
+      let paths = [
+        "/Applications/\(name).app",
+        "/System/Applications/\(name).app",
+        "/Applications/Utilities/\(name).app",
+        "/System/Applications/Utilities/\(name).app",
+      ]
+
+      for p in paths {
+        let url = URL(fileURLWithPath: p)
+        if FileManager.default.fileExists(atPath: p) {
+          let config = NSWorkspace.OpenConfiguration()
+          let app = try await NSWorkspace.shared.openApplication(at: url, configuration: config)
+          return Int(app.processIdentifier)
+        }
+      }
+
+      // Try open command as fallback
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+      process.arguments = ["-a", name]
+      try process.run()
+      process.waitUntilExit()
+
+      // Find the newly launched app
+      try? await Task.sleep(nanoseconds: 500_000_000)
+      if let app = NSWorkspace.shared.runningApplications.first(where: {
+        $0.localizedName?.lowercased() == name.lowercased()
+      }) {
+        return Int(app.processIdentifier)
+      }
+    }
+
+    throw NSError(domain: "AppManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "App not found"])
+  }
+
+  static func quitApp(name: String, force: Bool = false) -> Bool {
+    guard let app = NSWorkspace.shared.runningApplications.first(where: {
+      $0.localizedName?.lowercased() == name.lowercased()
+        || $0.bundleIdentifier?.lowercased() == name.lowercased()
+    }) else { return false }
+
     if force {
-      app.forceTerminate()
+      return app.forceTerminate()
     } else {
-      app.terminate()
+      return app.terminate()
     }
   }
 
-  static func activateApp(_ name: String) throws {
-    guard let app = findRunning(name: name) else {
-      throw BridgeError.notFound("App not running: '\(name)'")
-    }
-    app.activate(options: [.activateIgnoringOtherApps])
+  static func activateApp(name: String) -> Bool {
+    guard let app = NSWorkspace.shared.runningApplications.first(where: {
+      $0.localizedName?.lowercased() == name.lowercased()
+        || $0.bundleIdentifier?.lowercased() == name.lowercased()
+    }) else { return false }
+
+    return app.activate()
   }
 
-  static func openURL(_ urlString: String) throws {
-    guard let url = URL(string: urlString) else {
-      throw BridgeError.invalidInput("Invalid URL: \(urlString)")
-    }
-    NSWorkspace.shared.open(url)
+  static func openURL(_ urlString: String) -> Bool {
+    guard let url = URL(string: urlString) else { return false }
+    return NSWorkspace.shared.open(url)
   }
 
-  static func openFile(_ path: String) {
+  static func openFile(_ path: String) -> Bool {
     let url = URL(fileURLWithPath: path)
-    NSWorkspace.shared.open(url)
-  }
-
-  // MARK: - Private helpers
-
-  private static func findRunning(name: String) -> NSRunningApplication? {
-    return NSWorkspace.shared.runningApplications.first {
-      $0.localizedName == name || $0.bundleIdentifier == name
-    }
-  }
-
-  private static func findAppURL(name: String) -> URL? {
-    let paths = ["/Applications", "/System/Applications", "/Applications/Utilities"]
-    for dir in paths {
-      let url = URL(fileURLWithPath: dir).appendingPathComponent("\(name).app")
-      if FileManager.default.fileExists(atPath: url.path) { return url }
-    }
-    return nil
+    return NSWorkspace.shared.open(url)
   }
 }

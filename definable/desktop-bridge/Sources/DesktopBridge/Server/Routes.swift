@@ -1,325 +1,453 @@
 import Foundation
 import Vapor
 
-// MARK: - Route registration
+// Shared instances for actor-based modules
+private let screenCapture = ScreenCapture()
+private let cameraCapture = CameraCapture()
 
-func registerRoutes(app: Application, token: String) throws {
-  // All routes require bearer auth
-  let protected = app.grouped(BearerAuthMiddleware(expectedToken: token))
+// MARK: - Health
 
-  // MARK: Health
+func registerHealthRoutes(_ app: RoutesBuilder) {
+  app.post("health") { _ async throws -> BridgeResponse<HealthData> in
+    .success(HealthData(
+      status: "ok",
+      permissions: PermissionStatus(
+        accessibility: PermissionChecker.checkAccessibility(),
+        screenRecording: PermissionChecker.checkScreenRecording(),
+        fullDiskAccess: PermissionChecker.checkFullDiskAccess())))
+  }
+}
 
-  protected.post("health") { req async throws -> HealthResponse in
-    let perms = PermissionChecker.currentPermissions()
-    return HealthResponse(status: "ok", version: "1.0.0", permissions: perms)
+// MARK: - Screen
+
+func registerScreenRoutes(_ app: RoutesBuilder) {
+  let screen = app.grouped("screen")
+
+  screen.post("capture") { req async throws -> BridgeResponse<CaptureData> in
+    let body = try req.content.decode(CaptureRequest.self)
+    let region: CGRect? = body.region.map {
+      CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)
+    }
+    let result = try await screenCapture.captureScreen(
+      display: body.display ?? 0,
+      maxWidth: body.maxWidth ?? 512,
+      region: region)
+    return .success(CaptureData(
+      image: result.data.base64EncodedString(),
+      width: result.width,
+      height: result.height))
   }
 
-  // MARK: Screen
-
-  protected.post("screen", "capture") { req async throws -> CaptureResponse in
-    let body = try? req.content.decode(ScreenCaptureRequest.self)
-    let jpeg = try ScreenCapture.captureDisplay(body?.display ?? 0, region: body?.cgRect, maxWidth: body?.max_width ?? 512)
-    return CaptureResponse(image: jpeg.base64EncodedString(), format: "jpeg")
+  screen.post("ocr") { req async throws -> BridgeResponse<OCRData> in
+    let body = try req.content.decode(OCRRequest.self)
+    let region: CGRect? = body.region.map {
+      CGRect(x: $0.x, y: $0.y, width: $0.width, height: $0.height)
+    }
+    let result = try await screenCapture.ocrScreen(region: region)
+    return .success(OCRData(
+      text: result.text,
+      elements: result.elements.map { e in
+        OCRElement(text: e.text, x: e.x, y: e.y, width: e.width, height: e.height, confidence: e.confidence)
+      }))
   }
 
-  protected.post("screen", "ocr") { req async throws -> OCRResponse in
-    let body = try? req.content.decode(ScreenOCRRequest.self)
-    return try ScreenCapture.ocrDisplay(0, region: body?.cgRect)
-  }
-
-  protected.post("screen", "find_text") { req async throws -> FindTextResponse in
+  screen.post("find_text") { req async throws -> BridgeResponse<TextLocation> in
     let body = try req.content.decode(FindTextRequest.self)
-    return try ScreenCapture.findText(body.text, nth: body.nth ?? 0)
+    guard let loc = try await screenCapture.findText(body.text, nth: body.nth ?? 0) else {
+      throw Abort(.notFound, reason: "Text '\(body.text)' not found on screen")
+    }
+    return .success(TextLocation(
+      x: loc.x, y: loc.y, width: loc.width, height: loc.height,
+      centerX: loc.centerX, centerY: loc.centerY))
   }
+}
 
-  // MARK: Input
+// MARK: - Input
 
-  protected.post("input", "click") { req async throws -> OKResponse in
+func registerInputRoutes(_ app: RoutesBuilder) {
+  let input = app.grouped("input")
+
+  input.post("click") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(ClickRequest.self)
-    try await Task.detached(priority: .userInitiated) {
-      try InputSimulator.click(x: body.x, y: body.y, button: body.button ?? "left", clicks: body.clicks ?? 1)
-    }.value
-    return OKResponse()
+    InputSimulator.click(
+      x: body.x, y: body.y,
+      button: body.button ?? "left",
+      clicks: body.clicks ?? 1,
+      modifiers: body.modifiers ?? [])
+    return .success(EmptyData())
   }
 
-  protected.post("input", "type") { req async throws -> OKResponse in
-    let body = try req.content.decode(TypeRequest.self)
-    try await Task.detached(priority: .userInitiated) {
-      try InputSimulator.typeText(body.text)
-    }.value
-    return OKResponse()
+  input.post("type") { req async throws -> BridgeResponse<EmptyData> in
+    let body = try req.content.decode(TypeTextRequest.self)
+    InputSimulator.typeText(body.text)
+    return .success(EmptyData())
   }
 
-  protected.post("input", "key") { req async throws -> OKResponse in
+  input.post("key") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(KeyRequest.self)
-    try await Task.detached(priority: .userInitiated) {
-      try InputSimulator.pressKey(body.key, modifiers: body.modifiers ?? [])
-    }.value
-    return OKResponse()
+    InputSimulator.pressKey(body.key, modifiers: body.modifiers ?? [])
+    return .success(EmptyData())
   }
 
-  protected.post("input", "mouse_move") { req async throws -> OKResponse in
+  input.post("mouse_move") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(MouseMoveRequest.self)
-    try await Task.detached(priority: .userInitiated) {
-      try InputSimulator.mouseMove(x: body.x, y: body.y)
-    }.value
-    return OKResponse()
+    InputSimulator.mouseMove(x: body.x, y: body.y)
+    return .success(EmptyData())
   }
 
-  protected.post("input", "scroll") { req async throws -> OKResponse in
+  input.post("scroll") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(ScrollRequest.self)
-    try await Task.detached(priority: .userInitiated) {
-      try InputSimulator.scroll(x: body.x, y: body.y, dx: body.dx ?? 0, dy: body.dy ?? -3)
-    }.value
-    return OKResponse()
+    InputSimulator.scroll(x: body.x, y: body.y, dx: body.dx ?? 0, dy: body.dy ?? -3)
+    return .success(EmptyData())
   }
 
-  protected.post("input", "drag") { req async throws -> OKResponse in
+  input.post("drag") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(DragRequest.self)
-    try await Task.detached(priority: .userInitiated) {
-      try InputSimulator.drag(fromX: body.from_x, fromY: body.from_y, toX: body.to_x, toY: body.to_y, duration: body.duration ?? 0.5)
-    }.value
-    return OKResponse()
+    InputSimulator.drag(
+      fromX: body.fromX, fromY: body.fromY,
+      toX: body.toX, toY: body.toY,
+      duration: body.duration ?? 0.5)
+    return .success(EmptyData())
+  }
+}
+
+// MARK: - Apps
+
+func registerAppRoutes(_ app: RoutesBuilder) {
+  let apps = app.grouped("apps")
+
+  apps.post("list") { _ async throws -> BridgeResponse<[AppInfoData]> in
+    let list = AppManager.listRunningApps()
+    return .success(list.map { app in
+      AppInfoData(name: app.name, bundleId: app.bundleId, pid: app.pid, active: app.active)
+    })
   }
 
-  // MARK: Apps
-
-  protected.post("apps", "list") { req async throws -> AppListResponse in
-    return AppManager.listApps()
+  apps.post("open") { req async throws -> BridgeResponse<OpenAppData> in
+    let body = try req.content.decode(OpenAppRequest.self)
+    let pid = try await AppManager.openApp(name: body.name, bundleId: body.bundleId, path: body.path)
+    return .success(OpenAppData(pid: pid))
   }
 
-  protected.post("apps", "open") { req async throws -> OpenAppResponse in
-    let body = try req.content.decode(AppNameRequest.self)
-    return try AppManager.openApp(body.name)
-  }
-
-  protected.post("apps", "quit") { req async throws -> OKResponse in
+  apps.post("quit") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(QuitAppRequest.self)
-    try AppManager.quitApp(body.name, force: body.force ?? false)
-    return OKResponse()
+    let ok = AppManager.quitApp(name: body.name, force: body.force ?? false)
+    if !ok { throw Abort(.notFound, reason: "App '\(body.name)' not found") }
+    return .success(EmptyData())
   }
 
-  protected.post("apps", "activate") { req async throws -> OKResponse in
-    let body = try req.content.decode(AppNameRequest.self)
-    try AppManager.activateApp(body.name)
-    return OKResponse()
+  apps.post("activate") { req async throws -> BridgeResponse<EmptyData> in
+    let body = try req.content.decode(ActivateAppRequest.self)
+    let ok = AppManager.activateApp(name: body.name)
+    if !ok { throw Abort(.notFound, reason: "App '\(body.name)' not found") }
+    return .success(EmptyData())
   }
 
-  protected.post("apps", "open_url") { req async throws -> OKResponse in
+  apps.post("open_url") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(OpenURLRequest.self)
-    try AppManager.openURL(body.url)
-    return OKResponse()
+    let ok = AppManager.openURL(body.url)
+    if !ok { throw Abort(.badRequest, reason: "Failed to open URL") }
+    return .success(EmptyData())
   }
 
-  protected.post("apps", "open_file") { req async throws -> OKResponse in
+  apps.post("open_file") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(OpenFileRequest.self)
-    AppManager.openFile(body.path)
-    return OKResponse()
+    let ok = AppManager.openFile(body.path)
+    if !ok { throw Abort(.notFound, reason: "File not found or no app to open it") }
+    return .success(EmptyData())
+  }
+}
+
+// MARK: - Windows
+
+func registerWindowRoutes(_ app: RoutesBuilder) {
+  let windows = app.grouped("windows")
+
+  windows.post("list") { _ async throws -> BridgeResponse<[WindowInfoData]> in
+    let list = WindowManager.listWindows()
+    return .success(list.map { w in
+      WindowInfoData(id: w.id, app: w.app, title: w.title,
+                     x: w.x, y: w.y, width: w.width, height: w.height,
+                     minimized: w.minimized)
+    })
   }
 
-  // MARK: Windows
-
-  protected.post("windows", "list") { req async throws -> WindowListResponse in
-    return WindowManager.listWindows()
-  }
-
-  protected.post("windows", "focus") { req async throws -> OKResponse in
+  windows.post("focus") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(FocusWindowRequest.self)
-    try WindowManager.focusWindow(id: body.id, title: body.title)
-    return OKResponse()
+    let ok = WindowManager.focusWindow(windowId: body.windowId, title: body.title)
+    if !ok { throw Abort(.notFound, reason: "Window not found") }
+    return .success(EmptyData())
   }
 
-  protected.post("windows", "resize") { req async throws -> OKResponse in
+  windows.post("resize") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(ResizeWindowRequest.self)
-    try WindowManager.resizeWindow(id: body.id, x: body.x, y: body.y, width: body.width, height: body.height)
-    return OKResponse()
+    let ok = WindowManager.resizeWindow(
+      windowId: body.windowId,
+      x: body.x, y: body.y, width: body.width, height: body.height)
+    if !ok { throw Abort(.notFound, reason: "Window not found") }
+    return .success(EmptyData())
   }
 
-  protected.post("windows", "close") { req async throws -> OKResponse in
-    let body = try req.content.decode(WindowIDRequest.self)
-    try WindowManager.closeWindow(id: body.id)
-    return OKResponse()
+  windows.post("close") { req async throws -> BridgeResponse<EmptyData> in
+    let body = try req.content.decode(CloseWindowRequest.self)
+    let ok = WindowManager.closeWindow(windowId: body.windowId)
+    if !ok { throw Abort(.notFound, reason: "Window not found") }
+    return .success(EmptyData())
+  }
+}
+
+// MARK: - Accessibility
+
+func registerAccessibilityRoutes(_ app: RoutesBuilder) {
+  let ax = app.grouped("ax")
+
+  ax.post("get_focused_element") { _ async throws -> BridgeResponse<UIElementData> in
+    guard let el = AccessibilityEngine.getFocusedElement() else {
+      throw Abort(.notFound, reason: "No focused element")
+    }
+    return .success(convertUIElement(el))
   }
 
-  // MARK: Accessibility
-
-  protected.post("ax", "get_focused_element") { req async throws -> FocusedElementResponse in
-    return AccessibilityEngine.getFocusedElement()
-  }
-
-  protected.post("ax", "get_ui_tree") { req async throws -> Response in
+  ax.post("get_ui_tree") { req async throws -> BridgeResponse<UIElementData> in
     let body = try req.content.decode(UITreeRequest.self)
-    let tree = try AccessibilityEngine.getUITree(appName: body.app, depth: body.depth ?? 3)
-    let data = try JSONSerialization.data(withJSONObject: tree)
-    return Response(status: .ok, headers: ["content-type": "application/json"], body: .init(data: data))
+    guard let tree = AccessibilityEngine.getUITree(appName: body.app, depth: body.depth ?? 3) else {
+      throw Abort(.notFound, reason: "App '\(body.app)' not found")
+    }
+    return .success(convertUIElement(tree))
   }
 
-  protected.post("ax", "find_element") { req async throws -> FindElementResponse in
+  ax.post("find_element") { req async throws -> BridgeResponse<UIElementData> in
     let body = try req.content.decode(FindElementRequest.self)
-    return try AccessibilityEngine.findElement(appName: body.app, role: body.role, title: body.title)
+    guard let el = AccessibilityEngine.findElement(appName: body.app, role: body.role, title: body.title) else {
+      throw Abort(.notFound, reason: "Element not found")
+    }
+    return .success(convertUIElement(el))
   }
 
-  protected.post("ax", "perform_action") { req async throws -> OKResponse in
+  ax.post("perform_action") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(PerformActionRequest.self)
-    try AccessibilityEngine.performAction(appName: body.app, role: body.role, title: body.title, action: body.action)
-    return OKResponse()
+    let ok = AccessibilityEngine.performAction(
+      appName: body.app, role: body.role, title: body.title, action: body.action ?? "AXPress")
+    if !ok { throw Abort(.notFound, reason: "Element not found or action failed") }
+    return .success(EmptyData())
   }
 
-  protected.post("ax", "set_value") { req async throws -> OKResponse in
+  ax.post("set_value") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(SetValueRequest.self)
-    try AccessibilityEngine.setValue(appName: body.app, role: body.role, title: body.title, value: body.value)
-    return OKResponse()
+    let ok = AccessibilityEngine.setValue(appName: body.app, role: body.role, title: body.title, value: body.value)
+    if !ok { throw Abort(.notFound, reason: "Element not found or value set failed") }
+    return .success(EmptyData())
   }
+}
 
-  // MARK: AppleScript
+// MARK: - AppleScript
 
-  protected.post("applescript", "run") { req async throws -> AppleScriptResponse in
+func registerAppleScriptRoutes(_ app: RoutesBuilder) {
+  app.post("applescript", "run") { req async throws -> BridgeResponse<AppleScriptData> in
     let body = try req.content.decode(AppleScriptRequest.self)
-    return AppleScriptEngine.run(script: body.script)
+    let result = await MainActor.run { AppleScriptEngine.execute(script: body.script) }
+    return .success(AppleScriptData(output: result.output, error: result.error))
+  }
+}
+
+// MARK: - Files
+
+func registerFileRoutes(_ app: RoutesBuilder) {
+  let files = app.grouped("files")
+
+  files.post("list") { req async throws -> BridgeResponse<[FileEntryData]> in
+    let body = try req.content.decode(ListFilesRequest.self)
+    let entries = try FileBridge.listFiles(path: body.path, recursive: body.recursive ?? false)
+    return .success(entries.map { e in
+      FileEntryData(name: e.name, path: e.path, isDirectory: e.isDirectory, size: e.size)
+    })
   }
 
-  // MARK: Files
-
-  protected.post("files", "list") { req async throws -> FileListResponse in
-    let body = try req.content.decode(FileListRequest.self)
-    return try FileBridge.listFiles(path: body.path, recursive: body.recursive ?? false)
+  files.post("read") { req async throws -> BridgeResponse<FileContentData> in
+    let body = try req.content.decode(ReadFileRequest.self)
+    let content = try FileBridge.readFile(path: body.path)
+    return .success(FileContentData(content: content))
   }
 
-  protected.post("files", "read") { req async throws -> FileContentResponse in
-    let body = try req.content.decode(FilePathRequest.self)
-    return try FileBridge.readFile(path: body.path)
-  }
-
-  protected.post("files", "write") { req async throws -> OKResponse in
-    let body = try req.content.decode(FileWriteRequest.self)
+  files.post("write") { req async throws -> BridgeResponse<EmptyData> in
+    let body = try req.content.decode(WriteFileRequest.self)
     try FileBridge.writeFile(path: body.path, content: body.content)
-    return OKResponse()
+    return .success(EmptyData())
   }
 
-  protected.post("files", "move") { req async throws -> OKResponse in
-    let body = try req.content.decode(FileMoveRequest.self)
+  files.post("move") { req async throws -> BridgeResponse<EmptyData> in
+    let body = try req.content.decode(MoveFileRequest.self)
     try FileBridge.moveFile(from: body.from, to: body.to)
-    return OKResponse()
+    return .success(EmptyData())
   }
 
-  protected.post("files", "delete") { req async throws -> OKResponse in
-    let body = try req.content.decode(FileDeleteRequest.self)
+  files.post("delete") { req async throws -> BridgeResponse<EmptyData> in
+    let body = try req.content.decode(DeleteFileRequest.self)
     try FileBridge.deleteFile(path: body.path, toTrash: body.toTrash ?? true)
-    return OKResponse()
+    return .success(EmptyData())
   }
 
-  protected.post("files", "info") { req async throws -> FileInfoResponse in
-    let body = try req.content.decode(FilePathRequest.self)
-    return try FileBridge.fileInfo(path: body.path)
+  files.post("info") { req async throws -> BridgeResponse<FileInfoData> in
+    let body = try req.content.decode(FileInfoRequest.self)
+    let info = try FileBridge.fileInfo(path: body.path)
+    return .success(FileInfoData(size: info.size, created: info.created, modified: info.modified, kind: info.kind))
+  }
+}
+
+// MARK: - Clipboard
+
+func registerClipboardRoutes(_ app: RoutesBuilder) {
+  let clipboard = app.grouped("clipboard")
+
+  clipboard.post("get") { _ async throws -> BridgeResponse<ClipboardData> in
+    .success(ClipboardData(text: ClipboardManager.getText(), hasImage: ClipboardManager.hasImage()))
   }
 
-  // MARK: Clipboard
-
-  protected.post("clipboard", "get") { req async throws -> ClipboardGetResponse in
-    return ClipboardManager.getText()
-  }
-
-  protected.post("clipboard", "set") { req async throws -> OKResponse in
-    let body = try req.content.decode(ClipboardSetRequest.self)
+  clipboard.post("set") { req async throws -> BridgeResponse<EmptyData> in
+    let body = try req.content.decode(SetClipboardRequest.self)
     ClipboardManager.setText(body.text)
-    return OKResponse()
+    return .success(EmptyData())
+  }
+}
+
+// MARK: - System
+
+func registerSystemRoutes(_ app: RoutesBuilder) {
+  let system = app.grouped("system")
+
+  system.post("info") { _ async throws -> BridgeResponse<SystemInfoData> in
+    .success(SystemInfoData(
+      hostname: SystemInfo.hostname(),
+      osVersion: SystemInfo.osVersion(),
+      cpu: SystemInfo.cpu(),
+      memoryGb: SystemInfo.memoryGB()))
   }
 
-  // MARK: System
-
-  protected.post("system", "info") { req async throws -> SystemInfoResponse in
-    return SystemInfo.getSystemInfo()
+  system.post("volume") { _ async throws -> BridgeResponse<VolumeData> in
+    .success(VolumeData(volume: SystemInfo.volume()))
   }
 
-  protected.post("system", "volume") { req async throws -> VolumeResponse in
-    return SystemInfo.getVolume()
-  }
-
-  protected.post("system", "set_volume") { req async throws -> OKResponse in
+  system.post("set_volume") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(SetVolumeRequest.self)
     SystemInfo.setVolume(body.volume)
-    return OKResponse()
+    return .success(EmptyData())
   }
 
-  protected.post("system", "battery") { req async throws -> BatteryResponse in
-    return SystemInfo.getBattery()
+  system.post("battery") { _ async throws -> BridgeResponse<BatteryData> in
+    let b = SystemInfo.battery()
+    return .success(BatteryData(level: b.level, charging: b.charging, timeRemaining: b.timeRemaining))
   }
 
-  protected.post("system", "dark_mode") { req async throws -> DarkModeResponse in
-    return SystemInfo.getDarkMode()
+  system.post("dark_mode") { _ async throws -> BridgeResponse<DarkModeData> in
+    .success(DarkModeData(enabled: SystemInfo.isDarkMode()))
   }
 
-  protected.post("system", "set_dark_mode") { req async throws -> OKResponse in
+  system.post("set_dark_mode") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(SetDarkModeRequest.self)
-    SystemInfo.setDarkMode(enabled: body.enabled)
-    return OKResponse()
+    SystemInfo.setDarkMode(body.enabled)
+    return .success(EmptyData())
   }
 
-  protected.post("system", "lock") { req async throws -> OKResponse in
+  system.post("lock") { _ async throws -> BridgeResponse<EmptyData> in
     SystemInfo.lockScreen()
-    return OKResponse()
+    return .success(EmptyData())
+  }
+}
+
+// MARK: - Shell
+
+func registerShellRoutes(_ app: RoutesBuilder) {
+  app.post("shell", "run") { req async throws -> BridgeResponse<ShellResultData> in
+    let body = try req.content.decode(ShellRequest.self)
+    let result = await ShellExecutor.run(
+      command: body.command,
+      cwd: body.cwd,
+      env: body.env,
+      timeout: body.timeout)
+    return .success(ShellResultData(
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: result.exitCode,
+      timedOut: result.timedOut,
+      success: result.success))
+  }
+}
+
+// MARK: - Camera
+
+func registerCameraRoutes(_ app: RoutesBuilder) {
+  let camera = app.grouped("camera")
+
+  camera.post("list") { _ async throws -> BridgeResponse<[CameraDeviceData]> in
+    let devices = await cameraCapture.listDevices()
+    return .success(devices.map { d in
+      CameraDeviceData(id: d.id, name: d.name, position: d.position)
+    })
   }
 
-  // MARK: Notifications
+  camera.post("snap") { req async throws -> BridgeResponse<CameraSnapData> in
+    let body = try req.content.decode(CameraSnapRequest.self)
+    let result = try await cameraCapture.snap(
+      facing: body.facing ?? "front",
+      maxWidth: body.maxWidth ?? 1600,
+      quality: body.quality ?? 0.9,
+      outPath: body.outPath)
+    return .success(CameraSnapData(
+      image: result.data.base64EncodedString(),
+      width: result.width,
+      height: result.height))
+  }
 
-  protected.post("notifications", "send") { req async throws -> OKResponse in
+  camera.post("clip") { req async throws -> BridgeResponse<CameraClipData> in
+    let body = try req.content.decode(CameraClipRequest.self)
+    let result = try await cameraCapture.clip(
+      facing: body.facing ?? "front",
+      durationMs: body.durationMs ?? 3000,
+      includeAudio: body.includeAudio ?? false,
+      outPath: body.outPath)
+    return .success(CameraClipData(
+      path: result.path,
+      durationMs: result.durationMs,
+      hasAudio: result.hasAudio))
+  }
+}
+
+// MARK: - Screen Record
+
+func registerScreenRecordRoutes(_ app: RoutesBuilder) {
+  app.post("screen", "record") { req async throws -> BridgeResponse<ScreenRecordData> in
+    let body = try req.content.decode(ScreenRecordRequest.self)
+    let recorder = await MainActor.run { ScreenRecorder() }
+    let result = try await recorder.record(
+      screenIndex: body.screenIndex,
+      durationMs: body.durationMs,
+      fps: body.fps,
+      includeAudio: body.includeAudio ?? false,
+      outPath: body.outPath)
+    return .success(ScreenRecordData(path: result.path, hasAudio: result.hasAudio))
+  }
+}
+
+// MARK: - Notifications
+
+func registerNotificationRoutes(_ app: RoutesBuilder) {
+  app.post("notifications", "send") { req async throws -> BridgeResponse<EmptyData> in
     let body = try req.content.decode(NotificationRequest.self)
-    NotificationManager.send(title: body.title, message: body.message)
-    return OKResponse()
+    let ok = await NotificationService.send(title: body.title, message: body.message, sound: body.sound)
+    if !ok { throw Abort(.forbidden, reason: "Notification permission denied") }
+    return .success(EmptyData())
   }
 }
 
-// MARK: - Convenience OK response
+// MARK: - Helpers
 
-struct OKResponse: Content {
-  let status = "ok"
+private func convertUIElement(_ el: AccessibilityEngine.UIElement) -> UIElementData {
+  UIElementData(
+    role: el.role,
+    title: el.title,
+    value: el.value,
+    x: el.x, y: el.y,
+    width: el.width, height: el.height,
+    children: el.children?.map { convertUIElement($0) })
 }
 
-// MARK: - Request body types
-
-struct ScreenCaptureRequest: Decodable {
-  let display: Int?
-  let region: [String: Double]?
-  let max_width: Int?
-  var cgRect: CGRect? {
-    guard let r = region, let x = r["x"], let y = r["y"], let w = r["width"], let h = r["height"] else { return nil }
-    return CGRect(x: x, y: y, width: w, height: h)
-  }
-}
-
-struct ScreenOCRRequest: Decodable {
-  let region: [String: Double]?
-  var cgRect: CGRect? {
-    guard let r = region, let x = r["x"], let y = r["y"], let w = r["width"], let h = r["height"] else { return nil }
-    return CGRect(x: x, y: y, width: w, height: h)
-  }
-}
-
-struct FindTextRequest: Decodable { let text: String; let nth: Int? }
-struct ClickRequest: Decodable { let x: Double; let y: Double; let button: String?; let clicks: Int?; let modifiers: [String]? }
-struct TypeRequest: Decodable { let text: String }
-struct KeyRequest: Decodable { let key: String; let modifiers: [String]? }
-struct MouseMoveRequest: Decodable { let x: Double; let y: Double }
-struct ScrollRequest: Decodable { let x: Double; let y: Double; let dx: Double?; let dy: Double? }
-struct DragRequest: Decodable { let from_x: Double; let from_y: Double; let to_x: Double; let to_y: Double; let duration: Double? }
-struct AppNameRequest: Decodable { let name: String }
-struct QuitAppRequest: Decodable { let name: String; let force: Bool? }
-struct OpenURLRequest: Decodable { let url: String }
-struct OpenFileRequest: Decodable { let path: String }
-struct FocusWindowRequest: Decodable { let id: Int?; let title: String? }
-struct ResizeWindowRequest: Decodable { let id: Int; let x: Double; let y: Double; let width: Double; let height: Double }
-struct WindowIDRequest: Decodable { let id: Int }
-struct UITreeRequest: Decodable { let app: String; let depth: Int? }
-struct FindElementRequest: Decodable { let app: String; let role: String?; let title: String? }
-struct PerformActionRequest: Decodable { let app: String; let role: String?; let title: String?; let action: String }
-struct SetValueRequest: Decodable { let app: String; let role: String; let title: String; let value: String }
-struct AppleScriptRequest: Decodable { let script: String }
-struct FileListRequest: Decodable { let path: String; let recursive: Bool? }
-struct FilePathRequest: Decodable { let path: String }
-struct FileWriteRequest: Decodable { let path: String; let content: String }
-struct FileMoveRequest: Decodable { let from: String; let to: String }
-struct FileDeleteRequest: Decodable { let path: String; let toTrash: Bool? }
-struct ClipboardSetRequest: Decodable { let text: String }
-struct SetVolumeRequest: Decodable { let volume: Int }
-struct SetDarkModeRequest: Decodable { let enabled: Bool }
-struct NotificationRequest: Decodable { let title: String; let message: String }

@@ -2,173 +2,185 @@ import CoreGraphics
 import Foundation
 import ScreenCaptureKit
 import Vision
+import AppKit
 
-/// Screen capture and OCR via CGWindowListCreateImage and Vision framework.
-enum ScreenCapture {
-  // MARK: - Capture
+actor ScreenCapture {
+  enum CaptureError: LocalizedError {
+    case noDisplays
+    case captureFailed(String)
+    case ocrFailed(String)
 
-  /// Capture a display, scale down to ``maxWidth`` if needed, and encode as JPEG.
-  ///
-  /// Full-retina screenshots can be 5–15 MB as PNG. JPEG at 85 % quality is
-  /// 10–20× smaller, which keeps tool results within LLM context budgets.
-  static func captureDisplay(_ displayIndex: Int = 0, region: CGRect? = nil, maxWidth: Int = 512) throws -> Data {
-    let displays = DisplayList.all()
-    guard displayIndex < displays.count else {
-      throw BridgeError.invalidInput("Display index \(displayIndex) out of range (\(displays.count) displays)")
-    }
-    let displayID = displays[displayIndex]
-
-    let captureRect = region ?? CGDisplayBounds(displayID)
-    let cgImage = CGDisplayCreateImage(displayID, rect: captureRect)
-    guard var image = cgImage else {
-      throw BridgeError.operationFailed("Failed to capture display \(displayIndex)")
-    }
-
-    if image.width > maxWidth {
-      image = scaled(image: image, maxWidth: maxWidth)
-    }
-
-    return try jpegData(from: image)
-  }
-
-  // MARK: - OCR
-
-  static func ocrDisplay(_ displayIndex: Int = 0, region: CGRect? = nil) throws -> OCRResponse {
-    // OCR uses full native resolution — do NOT downscale before recognition.
-    guard let rawImage = captureRaw(displayIndex, region: region) else {
-      throw BridgeError.operationFailed("Failed to capture display \(displayIndex)")
-    }
-    return try performOCR(on: rawImage, offset: region?.origin ?? .zero)
-  }
-
-  static func findText(_ query: String, displayIndex: Int = 0, nth: Int = 0) throws -> FindTextResponse {
-    let result = try ocrDisplay(displayIndex)
-    let matches = result.elements.filter { $0.text.lowercased().contains(query.lowercased()) }
-    if matches.count > nth {
-      return FindTextResponse(found: true, bounds: matches[nth].bounds)
-    }
-    return FindTextResponse(found: false, bounds: nil)
-  }
-
-  // MARK: - Private helpers
-
-  private static func performOCR(on image: CGImage, offset: CGPoint) throws -> OCRResponse {
-    var fullText = ""
-    var elements: [OCRElement] = []
-    let semaphore = DispatchSemaphore(value: 0)
-    var ocrError: Error?
-
-    let request = VNRecognizeTextRequest { req, err in
-      defer { semaphore.signal() }
-      if let err = err { ocrError = err; return }
-      guard let observations = req.results as? [VNRecognizedTextObservation] else { return }
-      let imageW = Double(image.width)
-      let imageH = Double(image.height)
-      var lines: [String] = []
-      for obs in observations {
-        guard let top = obs.topCandidates(1).first else { continue }
-        lines.append(top.string)
-        // Vision uses bottom-left origin; convert to top-left screen coords
-        let box = obs.boundingBox
-        let x = box.minX * imageW + offset.x
-        let y = (1 - box.maxY) * imageH + offset.y
-        let w = box.width * imageW
-        let h = box.height * imageH
-        elements.append(OCRElement(text: top.string, bounds: BoundsResponse(x: x, y: y, width: w, height: h)))
+    var errorDescription: String? {
+      switch self {
+      case .noDisplays: "No displays available"
+      case let .captureFailed(msg): msg
+      case let .ocrFailed(msg): msg
       }
-      fullText = lines.joined(separator: "\n")
     }
-    request.recognitionLevel = .accurate
-    request.usesLanguageCorrection = true
-
-    let handler = VNImageRequestHandler(cgImage: image, options: [:])
-    do {
-      try handler.perform([request])
-    } catch {
-      throw BridgeError.operationFailed("OCR failed: \(error)")
-    }
-    semaphore.wait()
-    if let err = ocrError { throw BridgeError.operationFailed("OCR error: \(err)") }
-
-    return OCRResponse(text: fullText, elements: elements)
   }
 
-  /// Encode a CGImage as JPEG at 85 % quality (~10–20× smaller than PNG for screen content).
-  private static func jpegData(from image: CGImage, quality: CGFloat = 0.85) throws -> Data {
-    let mutableData = NSMutableData()
-    guard
-      let dest = CGImageDestinationCreateWithData(
-        mutableData as CFMutableData, "public.jpeg" as CFString, 1, nil)
-    else {
-      throw BridgeError.operationFailed("Failed to create JPEG destination")
-    }
-    let options = [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary
-    CGImageDestinationAddImage(dest, image, options)
-    guard CGImageDestinationFinalize(dest) else {
-      throw BridgeError.operationFailed("Failed to encode JPEG")
-    }
-    return mutableData as Data
+  struct OCRResult {
+    var text: String
+    var elements: [OCRElement]
   }
 
-  private static func pngData(from image: CGImage) throws -> Data {
-    let mutableData = NSMutableData()
-    guard
-      let dest = CGImageDestinationCreateWithData(mutableData as CFMutableData, "public.png" as CFString, 1, nil)
-    else {
-      throw BridgeError.operationFailed("Failed to create PNG destination")
-    }
-    CGImageDestinationAddImage(dest, image, nil)
-    guard CGImageDestinationFinalize(dest) else {
-      throw BridgeError.operationFailed("Failed to encode PNG")
-    }
-    return mutableData as Data
+  struct OCRElement {
+    var text: String
+    var x: Double
+    var y: Double
+    var width: Double
+    var height: Double
+    var confidence: Double
   }
 
-  /// Downscale a CGImage proportionally so its width is at most ``maxWidth``.
-  private static func scaled(image: CGImage, maxWidth: Int) -> CGImage {
-    let origW = image.width
-    let origH = image.height
-    let scale = Double(maxWidth) / Double(origW)
-    let newW = maxWidth
-    let newH = Int(Double(origH) * scale)
+  struct TextLocation {
+    var x: Double
+    var y: Double
+    var width: Double
+    var height: Double
+    var centerX: Double
+    var centerY: Double
+  }
 
-    let colorSpace = image.colorSpace ?? CGColorSpaceCreateDeviceRGB()
-    guard
-      let ctx = CGContext(
-        data: nil,
-        width: newW,
-        height: newH,
-        bitsPerComponent: 8,
-        bytesPerRow: 0,
-        space: colorSpace,
-        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-      )
-    else {
-      return image  // fallback: return original if context creation fails
+  func captureScreen(display: Int = 0, maxWidth: Int = 512, region: CGRect? = nil) async throws -> (data: Data, width: Int, height: Int) {
+    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+    let displays = content.displays.sorted { $0.displayID < $1.displayID }
+    guard !displays.isEmpty else { throw CaptureError.noDisplays }
+    guard display >= 0, display < displays.count else {
+      throw CaptureError.captureFailed("Invalid display index \(display)")
     }
-    ctx.interpolationQuality = .high
-    ctx.draw(image, in: CGRect(x: 0, y: 0, width: newW, height: newH))
-    return ctx.makeImage() ?? image
+
+    let scDisplay = displays[display]
+    let filter = SCContentFilter(display: scDisplay, excludingWindows: [])
+
+    let config = SCStreamConfiguration()
+    let scale = Double(maxWidth) / Double(scDisplay.width)
+    config.width = maxWidth
+    config.height = Int(Double(scDisplay.height) * scale)
+    config.showsCursor = true
+    config.captureResolution = .nominal
+
+    let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+
+    let cgImage: CGImage
+    if let region = region {
+      guard let cropped = image.cropping(to: region) else {
+        throw CaptureError.captureFailed("Failed to crop image")
+      }
+      cgImage = cropped
+    } else {
+      cgImage = image
+    }
+
+    let rep = NSBitmapImageRep(cgImage: cgImage)
+    guard let jpegData = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.85]) else {
+      throw CaptureError.captureFailed("Failed to encode JPEG")
+    }
+
+    return (data: jpegData, width: cgImage.width, height: cgImage.height)
   }
 
-  /// Capture a display at native resolution without any scaling or encoding.
-  private static func captureRaw(_ displayIndex: Int, region: CGRect?) -> CGImage? {
-    let displays = DisplayList.all()
-    guard displayIndex < displays.count else { return nil }
-    let displayID = displays[displayIndex]
-    let captureRect = region ?? CGDisplayBounds(displayID)
-    return CGDisplayCreateImage(displayID, rect: captureRect)
+  func ocrScreen(region: CGRect? = nil) async throws -> OCRResult {
+    // Capture at full resolution for OCR
+    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+    guard let display = content.displays.first else { throw CaptureError.noDisplays }
+
+    let filter = SCContentFilter(display: display, excludingWindows: [])
+    let config = SCStreamConfiguration()
+    config.width = display.width * 2  // Retina
+    config.height = display.height * 2
+    config.showsCursor = false
+    config.captureResolution = .best
+
+    let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+
+    let cgImage: CGImage
+    if let region = region {
+      // Scale region to retina
+      let scale = Double(image.width) / Double(display.width)
+      let scaledRegion = CGRect(
+        x: region.origin.x * scale,
+        y: region.origin.y * scale,
+        width: region.size.width * scale,
+        height: region.size.height * scale)
+      guard let cropped = image.cropping(to: scaledRegion) else {
+        throw CaptureError.ocrFailed("Failed to crop for OCR")
+      }
+      cgImage = cropped
+    } else {
+      cgImage = image
+    }
+
+    let displayWidth = Double(display.width)
+    let displayHeight = Double(display.height)
+
+    return try await withCheckedThrowingContinuation { cont in
+      let request = VNRecognizeTextRequest { req, error in
+        if let error {
+          cont.resume(throwing: CaptureError.ocrFailed(error.localizedDescription))
+          return
+        }
+
+        guard let observations = req.results as? [VNRecognizedTextObservation] else {
+          cont.resume(returning: OCRResult(text: "", elements: []))
+          return
+        }
+
+        var fullText = ""
+        var elements: [OCRElement] = []
+
+        for obs in observations {
+          guard let candidate = obs.topCandidates(1).first else { continue }
+          let text = candidate.string
+          fullText += text + "\n"
+
+          let box = obs.boundingBox
+          // Convert Vision coords (bottom-left origin, normalized) to screen coords (top-left origin)
+          let x = box.origin.x * displayWidth
+          let y = (1.0 - box.origin.y - box.size.height) * displayHeight
+          let w = box.size.width * displayWidth
+          let h = box.size.height * displayHeight
+
+          elements.append(OCRElement(
+            text: text,
+            x: x, y: y, width: w, height: h,
+            confidence: Double(candidate.confidence)))
+        }
+
+        cont.resume(returning: OCRResult(
+          text: fullText.trimmingCharacters(in: .whitespacesAndNewlines),
+          elements: elements))
+      }
+      request.recognitionLevel = .accurate
+      request.usesLanguageCorrection = true
+
+      let handler = VNImageRequestHandler(cgImage: cgImage)
+      do {
+        try handler.perform([request])
+      } catch {
+        cont.resume(throwing: CaptureError.ocrFailed(error.localizedDescription))
+      }
+    }
   }
-}
 
-// MARK: - Display enumeration helper
+  func findText(_ searchText: String, nth: Int = 0) async throws -> TextLocation? {
+    let result = try await ocrScreen()
+    let lowered = searchText.lowercased()
+    var matches: [TextLocation] = []
 
-enum DisplayList {
-  static func all() -> [CGDirectDisplayID] {
-    var displayCount: UInt32 = 0
-    CGGetActiveDisplayList(0, nil, &displayCount)
-    var displays = [CGDirectDisplayID](repeating: kCGNullDirectDisplay, count: Int(displayCount))
-    CGGetActiveDisplayList(displayCount, &displays, &displayCount)
-    return displays
+    for element in result.elements {
+      if element.text.lowercased().contains(lowered) {
+        matches.append(TextLocation(
+          x: element.x,
+          y: element.y,
+          width: element.width,
+          height: element.height,
+          centerX: element.x + element.width / 2,
+          centerY: element.y + element.height / 2))
+      }
+    }
+
+    guard nth < matches.count else { return nil }
+    return matches[nth]
   }
 }
