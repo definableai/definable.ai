@@ -505,14 +505,51 @@ class Agent:
     # Future: initialize connections, warm up caches, etc.
 
   def _shutdown(self) -> None:
-    """Cleanup resources."""
+    """Cleanup resources (sync-safe).
+
+    Closes memory, drains pending memory tasks, and shuts down
+    agent-owned toolkits when called outside an async event loop.
+    If an event loop is already running (e.g. sync context manager
+    used inside async code), logs a warning — use ``_ashutdown()``
+    or ``async with`` instead.
+    """
     # Teardown skills
     for skill in self.skills:
       with contextlib.suppress(Exception):
         skill.teardown()
     if self._trace_writer:
       self._trace_writer.shutdown()
+    # Best-effort async resource cleanup from sync context
+    self._sync_close_async_resources()
     self._started = False
+
+  def _sync_close_async_resources(self) -> None:
+    """Close memory, toolkits, and drain tasks from a sync context."""
+
+    async def _cleanup() -> None:
+      await self._drain_memory_tasks()
+      for toolkit in self._agent_owned_toolkits:
+        with contextlib.suppress(Exception):
+          await toolkit.shutdown()
+      self._agent_owned_toolkits.clear()
+      if self.memory:
+        with contextlib.suppress(Exception):
+          await self.memory.close()
+
+    try:
+      asyncio.get_running_loop()
+      # Running inside an async context — can't nest asyncio.run()
+      from definable.utils.log import log_warning
+
+      log_warning(
+        "Agent._shutdown() cannot close async resources (memory, toolkits) "
+        "from inside a running event loop. Use 'async with Agent(...)' or "
+        "await agent._ashutdown() instead."
+      )
+    except RuntimeError:
+      # No running loop — safe to create one
+      with contextlib.suppress(Exception):
+        asyncio.run(_cleanup())
 
   async def _ashutdown(self) -> None:
     """Async cleanup."""
