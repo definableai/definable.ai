@@ -175,6 +175,8 @@ class Agent:
     observability: Union[bool, "ObservabilityConfig", None] = False,
     # ── Advanced ───────────────────────────────────────
     sub_agents: Union[bool, "SubAgentPolicy", None] = None,
+    # ── Media ────────────────────────────────────────────────
+    audio_transcriber: Union[bool, Any, None] = None,
     # ── Support ─────────────────────────────────────────────
     readers: Optional[List["BaseReader"]] = None,
     guardrails: Optional["Guardrails"] = None,
@@ -210,6 +212,11 @@ class Agent:
         session_id: Optional session ID for multi-turn memory. Generated once
             at init if not provided. All runs reuse it by default; callers
             can still override per-call.
+        audio_transcriber: Optional audio transcription backend. When set,
+            audio in incoming messages is automatically transcribed to text
+            before reaching the model. Accepts True (default OpenAITranscriber
+            using Whisper), an AudioTranscriber instance (custom backend), or
+            None (disabled — audio passes through raw to the model).
         config: Optional advanced configuration settings.
     """
     # Direct attributes — resolve string model shorthand
@@ -327,6 +334,16 @@ class Agent:
       self._sub_agent_policy = sub_agents
     else:
       self._sub_agent_policy = None
+
+    # Audio transcriber — accepts True (OpenAITranscriber) or AudioTranscriber instance
+    from definable.reader.audio import AudioTranscriber as _AudioTranscriber, OpenAITranscriber as _OpenAITranscriber
+
+    if audio_transcriber is True:
+      self._audio_transcriber: Optional[_AudioTranscriber] = _OpenAITranscriber()
+    elif isinstance(audio_transcriber, _AudioTranscriber):
+      self._audio_transcriber = audio_transcriber
+    else:
+      self._audio_transcriber = None
 
     # Convert skill_registry to skills (eager/lazy based on size)
     if skill_registry is not None:
@@ -849,6 +866,9 @@ class Agent:
       cancellation_token=cancellation_token,
     )
 
+    # Transcribe audio in new messages (before pipeline — enriches text for all models)
+    await self._transcribe_audio(state.new_messages)
+
     assert state.context is not None
     context = state.context
 
@@ -1085,6 +1105,9 @@ class Agent:
       cancellation_token=cancellation_token,
       streaming=True,
     )
+
+    # Transcribe audio in new messages (before pipeline — enriches text for all models)
+    await self._transcribe_audio(state.new_messages)
 
     try:
       async for updated_state, event in self._pipeline.execute(
@@ -3021,6 +3044,54 @@ class Agent:
     elif isinstance(instruction, list):
       return instruction
     raise TypeError(f"Unexpected instruction type: {type(instruction)}")
+
+  async def _transcribe_audio(self, messages: List[Message]) -> None:
+    """Transcribe audio in messages if a transcriber is configured.
+
+    Mutates messages in-place: populates ``audio.transcript``, injects
+    the transcript text into ``message.content``, and **clears
+    ``message.audio``** so the model layer does not send ``input_audio``
+    content blocks to models that don't support them (most models only
+    accept ``text`` and ``image_url`` blocks).
+
+    When no transcriber is set (``self._audio_transcriber is None``), this
+    is a no-op — audio passes through raw for audio-capable models.
+    """
+    if self._audio_transcriber is None:
+      return
+
+    for msg in messages:
+      if not msg.audio:
+        continue
+      transcripts: List[str] = []
+      for audio_item in msg.audio:
+        # Skip if already transcribed
+        if audio_item.transcript:
+          transcripts.append(audio_item.transcript)
+          continue
+        audio_bytes = audio_item.get_content_bytes()
+        if audio_bytes is None:
+          continue
+        mime = audio_item.mime_type or "audio/ogg"
+        try:
+          text = await self._audio_transcriber.atranscribe(audio_bytes, mime)
+        except Exception as e:
+          from definable.utils.log import log_warning
+
+          log_warning(f"Audio transcription failed: {e}")
+          continue
+        audio_item.transcript = text
+        transcripts.append(text)
+      if transcripts:
+        transcript_text = "\n".join(transcripts)
+        if msg.content:
+          msg.content = f"{msg.content}\n\n{transcript_text}"
+        else:
+          msg.content = transcript_text
+        # Clear audio from message — the transcript is now in .content.
+        # This prevents the model from sending input_audio blocks that
+        # non-audio models (gpt-4o-mini, DeepSeek, Claude, etc.) reject.
+        msg.audio = None
 
   def _emit(self, event: BaseRunOutputEvent) -> None:
     """Emit event to trace writer (fire-and-forget)."""

@@ -15,46 +15,45 @@ def audio_to_message(audio: Sequence[Audio]) -> List[Dict[str, Any]]:
   Add audio to a message for the model. By default, we use the OpenAI audio format but other Models
   can override this method to use a different audio format.
 
+  Automatically normalizes audio formats that OpenAI's ``input_audio`` API
+  doesn't accept (e.g. Telegram's ``oga``, generic ``ogg``) to ``wav`` or
+  ``mp3`` via :func:`definable.reader.audio.normalize_audio_format`.
+
   Args:
-      audio: Pre-formatted audio data like {
-                  "content": encoded_string,
-                  "format": "wav"
-              }
+      audio: Sequence of Audio objects with url, filepath, or content bytes.
 
   Returns:
       Message content with audio added in the format expected by the model
   """
   from urllib.parse import urlparse
 
+  from definable.reader.audio import normalize_audio_format
+
   audio_messages = []
   for audio_snippet in audio:
-    encoded_string: Optional[str] = None
+    audio_bytes: Optional[bytes] = None
     audio_format: Optional[str] = audio_snippet.format
 
     # The audio is raw data
     if audio_snippet.content:
-      encoded_string = base64.b64encode(audio_snippet.content).decode("utf-8")
+      audio_bytes = audio_snippet.content
       if not audio_format:
         audio_format = "wav"  # Default format if not provided
 
     # The audio is a URL
     elif audio_snippet.url:
       audio_bytes = audio_snippet.get_content_bytes()
-      if audio_bytes is not None:
-        encoded_string = base64.b64encode(audio_bytes).decode("utf-8")
-        if not audio_format:
-          # Try to guess format from URL extension
-          try:
-            # Parse the URL first to isolate the path
-            parsed_url = urlparse(audio_snippet.url)
-            # Get suffix from the path component only
-            audio_format = Path(parsed_url.path).suffix.lstrip(".")
-            if not audio_format:  # Handle cases like URLs ending in /
-              log_warning(f"Could not determine audio format from URL path: {parsed_url.path}. Defaulting.")
-              audio_format = "wav"
-          except Exception as e:
-            log_warning(f"Could not determine audio format from URL: {audio_snippet.url}. Error: {e}. Defaulting.")
-            audio_format = "wav"  # Default if guessing fails
+      if audio_bytes is not None and not audio_format:
+        # Try to guess format from URL extension
+        try:
+          parsed_url = urlparse(audio_snippet.url)
+          audio_format = Path(parsed_url.path).suffix.lstrip(".")
+          if not audio_format:
+            log_warning(f"Could not determine audio format from URL path: {parsed_url.path}. Defaulting.")
+            audio_format = "wav"
+        except Exception as e:
+          log_warning(f"Could not determine audio format from URL: {audio_snippet.url}. Error: {e}. Defaulting.")
+          audio_format = "wav"
 
     # The audio is a file path
     elif audio_snippet.filepath:
@@ -62,18 +61,25 @@ def audio_to_message(audio: Sequence[Audio]) -> List[Dict[str, Any]]:
       if path.exists() and path.is_file():
         try:
           with open(path, "rb") as audio_file:
-            encoded_string = base64.b64encode(audio_file.read()).decode("utf-8")
+            audio_bytes = audio_file.read()
           if not audio_format:
             audio_format = path.suffix.lstrip(".")
         except Exception as e:
           log_error(f"Failed to read audio file {path}: {e}")
-          continue  # Skip this audio snippet if file reading fails
+          continue
       else:
         log_error(f"Audio file not found or is not a file: {path}")
-        continue  # Skip if file doesn't exist
+        continue
 
-    # Append the message if we successfully processed the audio
-    if encoded_string and audio_format:
+    # Normalize format and encode for OpenAI input_audio API
+    if audio_bytes and audio_format:
+      try:
+        audio_bytes, audio_format = normalize_audio_format(audio_bytes, audio_format)
+      except RuntimeError as e:
+        log_error(f"Audio format normalization failed: {e}")
+        continue
+
+      encoded_string = base64.b64encode(audio_bytes).decode("utf-8")
       audio_messages.append(
         {
           "type": "input_audio",

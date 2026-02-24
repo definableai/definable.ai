@@ -22,11 +22,11 @@ import asyncio
 import os
 
 from definable.agent import Agent
-from definable.agent.tracing import Tracing, JSONLExporter
 from definable.agent.interface import serve
 from definable.agent.interface.discord import DiscordInterface
 from definable.agent.interface.identity import SQLiteIdentityResolver
 from definable.agent.interface.telegram import TelegramInterface
+from definable.agent.tracing import JSONLExporter, Tracing
 from definable.memory import Memory, SQLiteStore
 from definable.model.openai import OpenAIChat
 
@@ -38,12 +38,13 @@ from definable.model.openai import OpenAIChat
 
 
 async def main():
-  memory = Memory(store=SQLiteStore("./example_memory.db"))
+  memory = Memory(store=SQLiteStore())
   agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
     instructions="You are a helpful assistant. Keep responses concise.",
     name="multi-bot",
     memory=memory,
+    audio_transcriber=True,
     tracing=Tracing(
       exporters=[JSONLExporter("./traces")],
     ),

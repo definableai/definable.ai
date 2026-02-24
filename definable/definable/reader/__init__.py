@@ -43,7 +43,7 @@ FileReaderRegistry = BaseReader
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-  from definable.reader.audio import AudioTranscriber, OpenAITranscriber
+  from definable.reader.audio import OPENAI_INPUT_AUDIO_FORMATS, AudioTranscriber, OpenAITranscriber, normalize_audio_format
   from definable.reader.parsers.audio import AudioParser
   from definable.reader.parsers.base_parser import BaseParser
   from definable.reader.parsers.docx import DocxParser
@@ -93,6 +93,8 @@ __all__ = [
   # Audio (lazy-loaded)
   "AudioTranscriber",
   "OpenAITranscriber",
+  "normalize_audio_format",
+  "OPENAI_INPUT_AUDIO_FORMATS",
 ]
 
 _LAZY_IMPORTS = {
@@ -127,6 +129,8 @@ _LAZY_IMPORTS = {
   "AudioFileReader": ("definable.reader.parsers.audio", "AudioParser"),
   "AudioTranscriber": ("definable.reader.audio", "AudioTranscriber"),
   "OpenAITranscriber": ("definable.reader.audio", "OpenAITranscriber"),
+  "normalize_audio_format": ("definable.reader.audio", "normalize_audio_format"),
+  "OPENAI_INPUT_AUDIO_FORMATS": ("definable.reader.audio", "OPENAI_INPUT_AUDIO_FORMATS"),
 }
 
 
