@@ -2585,12 +2585,35 @@ class Agent:
     invoke_loop, guard_output, store) and dispatches events via
     its EventStream.
     """
-    async for updated_state, _event in self._pipeline.execute(
-      state,
-      cancellation_token=state.cancellation_token,
-    ):
-      state = updated_state
-    return self._state_to_run_output(state)
+    try:
+      async for updated_state, _event in self._pipeline.execute(
+        state,
+        cancellation_token=state.cancellation_token,
+      ):
+        state = updated_state
+      return self._state_to_run_output(state)
+
+    except AgentCancelled:
+      from definable.agent.events import RunCancelledEvent
+
+      cancelled_event = RunCancelledEvent(
+        run_id=state.run_id,
+        session_id=state.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        reason="Cancelled via CancellationToken",
+      )
+      self._emit(cancelled_event)
+      await self._event_bus.emit(cancelled_event)
+      return RunOutput(
+        run_id=state.run_id,
+        session_id=state.session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        status=RunStatus.cancelled,
+        model=self.model.id,
+        model_provider=self.model.provider,
+      )
 
   async def _execute_run(
     self,
