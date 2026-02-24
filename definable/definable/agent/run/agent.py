@@ -280,6 +280,7 @@ class IntermediateRunContentEvent(BaseAgentRunEvent):
 class RunCompletedEvent(BaseAgentRunEvent):
   event: str = RunEvent.run_completed.value
   content: Optional[Any] = None
+  parsed: Optional[Any] = None
   content_type: str = "str"
   reasoning_content: Optional[str] = None
   citations: Optional[Citations] = None
@@ -793,6 +794,7 @@ class RunOutput:
   input: Optional[RunInput] = None
 
   content: Optional[Any] = None
+  parsed: Optional[Any] = None
   content_type: str = "str"
 
   reasoning_content: Optional[str] = None
