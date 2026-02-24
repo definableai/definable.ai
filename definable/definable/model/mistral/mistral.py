@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass
 from os import getenv
 from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Type, Union
@@ -10,7 +11,7 @@ from definable.model.message import Message
 from definable.model.metrics import Metrics
 from definable.model.response import ModelResponse
 from definable.agent.events import RunOutput
-from definable.utils.log import log_debug, log_error
+from definable.utils.log import log_debug, log_error, log_warning
 from definable.utils.mistral import format_messages
 
 try:
@@ -319,6 +320,18 @@ class MistralChat(Model):
 
     if response.usage is not None:
       model_response.response_usage = self._get_metrics(response.usage)
+
+    # Parse structured output if response_format is a Pydantic model
+    response_format = kwargs.get("response_format")
+    if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+      if model_response.content:
+        try:
+          parsed_data = json.loads(model_response.content)
+          model_response.parsed = response_format.model_validate(parsed_data)
+        except json.JSONDecodeError as e:
+          log_warning(f"Failed to parse JSON from structured output: {e}")
+        except Exception as e:
+          log_warning(f"Failed to validate structured output against schema: {e}")
 
     return model_response
 

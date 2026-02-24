@@ -2548,6 +2548,7 @@ class Agent:
 
       # Run the loop, collect events
       final_content: Optional[str] = None
+      final_parsed: Any = None
       final_metrics: Optional[Metrics] = None
 
       async for event in loop.run():
@@ -2556,6 +2557,7 @@ class Agent:
 
         if isinstance(event, RunCompletedEvent):
           final_content = event.content
+          final_parsed = event.parsed
           final_metrics = event.metrics
         elif isinstance(event, RunPausedEvent):
           # Build paused RunOutput
@@ -2585,6 +2587,7 @@ class Agent:
         agent_name=self.agent_name,
         input=run_input,
         content=final_content,
+        parsed=final_parsed,
         tools=loop.tool_executions or None,
         metrics=final_metrics,
         messages=output_messages,

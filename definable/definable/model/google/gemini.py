@@ -1076,6 +1076,18 @@ class Gemini(Model):
     if model_response.role and model_response.content is None and not model_response.tool_calls:
       model_response.content = ""
 
+    # Parse structured output if response_format is a Pydantic model
+    response_format = kwargs.get("response_format")
+    if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+      if model_response.content:
+        try:
+          parsed_data = json.loads(model_response.content)
+          model_response.parsed = response_format.model_validate(parsed_data)
+        except json.JSONDecodeError as e:
+          log_warning(f"Failed to parse JSON from structured output: {e}")
+        except Exception as e:
+          log_warning(f"Failed to validate structured output against schema: {e}")
+
     return model_response
 
   def _parse_provider_response_delta(self, response: GenerateContentResponse, **kwargs: Any) -> ModelResponse:

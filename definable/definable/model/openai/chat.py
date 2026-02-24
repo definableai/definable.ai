@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from os import getenv
@@ -837,6 +838,17 @@ class OpenAIChat(Model):
       model_response.provider_data["system_fingerprint"] = response.system_fingerprint
     if response.model_extra:
       model_response.provider_data["model_extra"] = response.model_extra
+
+    # Parse structured output if response_format is a Pydantic model
+    if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+      if model_response.content:
+        try:
+          parsed_data = json.loads(model_response.content)
+          model_response.parsed = response_format.model_validate(parsed_data)
+        except json.JSONDecodeError as e:
+          log_warning(f"Failed to parse JSON from structured output: {e}")
+        except Exception as e:
+          log_warning(f"Failed to validate structured output against schema: {e}")
 
     return model_response
 
