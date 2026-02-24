@@ -145,5 +145,52 @@
 ### DX Observations
 1. `agent.tools` returns `[]` when only skills provide tools; `agent.tool_names` shows them
 2. `InMemoryVectorDB.insert(docs)` silently accepts un-embedded docs; search returns empty
-3. Guardrail built-ins (max_tokens, pii_filter) are not `callable()` — they're objects
+3. Guardrail built-ins (max_tokens, pii_filter) are not `callable()` -- they're objects
 4. `from definable import Claude` gives clear ImportError when anthropic not installed
+
+## Run #6 -- 2026-02-25 (full stability eval, v0.3.1)
+
+| Metric | Value |
+|--------|-------|
+| Version | 0.3.1 (editable install) |
+| Branch | feature/observability-dashboard |
+| Eval Scripts | 16 written (eval_00 through eval_15) |
+| Total Checks | 305 total: 302 passed, 0 failed, 3 skipped |
+| Pass Rate | **100.0%** (302/302 non-skipped) |
+| MockModel Tests | All passed |
+| Real API Tests (OpenAI) | All passed (gpt-4o-mini) |
+| MCP Tests | All passed (npx filesystem server, 14 tools) |
+| New Issues Filed | 0 |
+| Stability Score | **10/10** |
+
+### Eval Matrix (all 16 evals)
+| Eval | Use Case | Pass | Fail | Skip | Status |
+|------|----------|------|------|------|--------|
+| 00 | Foundation: Imports & Circular Deps | 34 | 0 | 3 | PASS |
+| 01 | Bare Agent + MockModel | 37 | 0 | 0 | PASS |
+| 02 | Agent + @tool (Customer Support) | 30 | 0 | 0 | PASS |
+| 03 | Agent + Skills (Data Analyst) | 29 | 0 | 0 | PASS |
+| 04 | Agent + Knowledge RAG (HR Assistant) | 13 | 0 | 0 | PASS |
+| 05 | Agent + Memory (Personal Assistant) | 16 | 0 | 0 | PASS |
+| 06 | Agent + Guardrails (Safety) | 38 | 0 | 0 | PASS |
+| 07 | Agent + Middleware + Tracing | 21 | 0 | 0 | PASS |
+| 08 | Tools + Knowledge (Tech Support) | 9 | 0 | 0 | PASS |
+| 09 | Tools + Memory (PA) | 10 | 0 | 0 | PASS |
+| 10 | Knowledge + Memory (HR Onboarding) | 10 | 0 | 0 | PASS |
+| 11 | Guardrails + Tools (Security) | 9 | 0 | 0 | PASS |
+| 12 | Agent + MCP (Filesystem Server) | 9 | 0 | 0 | PASS |
+| 13 | Full Stack (All Systems) | 12 | 0 | 0 | PASS |
+| 14 | Multi-Turn Stress (10+ turns) | 6 | 0 | 0 | PASS |
+| 15 | Error Handling (Bad Inputs) | 22 | 0 | 0 | PASS |
+
+### Changes from Run #5
+- Version bump 0.3.0 -> 0.3.1 (editable install)
+- Check count increased: 159 -> 302 (more thorough evals with LLM tests)
+- All LLM tests use gpt-4o-mini for cost efficiency
+- New features tested: Pipeline phases, DebugConfig, SubAgentPolicy
+- Guardrail blocking confirmed: raises InputCheckError (not RunOutput with blocked status)
+- MockEmbedder abstract methods: async_get_embedding/async_get_embedding_and_usage (not aget_*)
+- 3 skips: optional model deps (Claude/anthropic, Gemini/google-genai, Ollama/ollama)
+- Full-stack composition stable with all 8 systems simultaneously
+- 10-turn MockModel and 5-turn LLM stress tests pass
+- MCP filesystem server: 14 tools discovered, context manager lifecycle clean
