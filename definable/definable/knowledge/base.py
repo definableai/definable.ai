@@ -91,6 +91,82 @@ class Knowledge:
     if self.embedder is not None and self.vector_db.embedder is None:
       self.vector_db.embedder = self.embedder
 
+  @classmethod
+  def from_path(
+    cls,
+    path: Union[str, Path],
+    *,
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200,
+    top_k: int = 5,
+  ) -> "Knowledge":
+    """Create a Knowledge base from a file or directory path.
+
+    Auto-configures the full RAG pipeline with sensible defaults:
+    - InMemoryVectorDB + OpenAIEmbedder
+    - RecursiveChunker
+    - TextReader + PDFReader (auto-detect by extension)
+    - Recursively loads all supported files from directories
+
+    Args:
+      path: File or directory path containing documents.
+      chunk_size: Chunk size for text splitting.
+      chunk_overlap: Overlap between chunks.
+      top_k: Number of results to return per search.
+
+    Returns:
+      A fully configured and loaded Knowledge instance.
+
+    Raises:
+      FileNotFoundError: If the path does not exist.
+      ValueError: If no supported files are found.
+    """
+    from definable.knowledge.chunker.recursive import RecursiveChunker
+    from definable.knowledge.embedder.openai import OpenAIEmbedder
+    from definable.knowledge.reader.pdf import PDFReader
+    from definable.knowledge.reader.text import TextReader
+    from definable.vectordb.memory import InMemoryVectorDB
+
+    resolved = Path(path).expanduser().resolve()
+    if not resolved.exists():
+      raise FileNotFoundError(f"Knowledge source path does not exist: {resolved}")
+
+    # Build components
+    embedder = OpenAIEmbedder()
+    vector_db = InMemoryVectorDB(embedder=embedder)
+    chunker = RecursiveChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    readers = [TextReader(), PDFReader()]
+
+    kb = cls(
+      vector_db=vector_db,
+      embedder=embedder,
+      chunker=chunker,
+      readers=readers,
+      top_k=top_k,
+    )
+
+    # Collect files to load
+    supported_extensions = {".txt", ".text", ".md", ".rst", ".csv", ".log", ".pdf"}
+    files_to_load: list[Path] = []
+
+    if resolved.is_file():
+      files_to_load.append(resolved)
+    elif resolved.is_dir():
+      for ext in supported_extensions:
+        files_to_load.extend(resolved.rglob(f"*{ext}"))
+      files_to_load.sort()  # deterministic order
+    else:
+      raise ValueError(f"Knowledge source is neither a file nor directory: {resolved}")
+
+    if not files_to_load:
+      raise ValueError(f"No supported files found in {resolved}. Supported extensions: {', '.join(sorted(supported_extensions))}")
+
+    # Load all files
+    for file_path in files_to_load:
+      kb.add(file_path)
+
+    return kb
+
   def _require_vector_db(self) -> "VectorDB":
     if self.vector_db is None:
       raise ValueError("VectorDB required")
