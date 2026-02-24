@@ -68,6 +68,7 @@ if TYPE_CHECKING:
 
   from definable.agent.auth.base import AuthProvider
   from definable.agent.compression import CompressionManager
+  from definable.agent.observability.config import ObservabilityConfig
   from definable.agent.guardrail.base import Guardrails
   from definable.agent.interface.base import BaseInterface
   from definable.agent.interface.gateway import InterfaceGateway
@@ -171,6 +172,7 @@ class Agent:
     # ── Observability ───────────────────────────────────────
     tracing: Union[bool, "Tracing", None] = False,
     debug: Union[bool, "DebugConfig", None] = False,
+    observability: Union[bool, "ObservabilityConfig", None] = False,
     # ── Advanced ───────────────────────────────────────
     sub_agents: Union[bool, "SubAgentPolicy", None] = None,
     # ── Support ─────────────────────────────────────────────
@@ -265,6 +267,29 @@ class Agent:
       else:
         existing = self._tracing_config.exporters or []
         self._tracing_config = dataclasses.replace(self._tracing_config, exporters=[*existing, DebugExporter()])
+
+    # Observability dashboard — accepts True (default config) or ObservabilityConfig
+    # Same composition pattern as debug=True: adds ObservabilityExporter to tracing exporters
+    from definable.agent.observability.config import ObservabilityConfig as _ObsConfig
+
+    self._observability_config: Optional[_ObsConfig] = None
+    self._observability_exporter: Optional[Any] = None
+    if isinstance(observability, _ObsConfig):
+      self._observability_config = observability
+    elif observability is True:
+      self._observability_config = _ObsConfig(enabled=True)
+
+    if self._observability_config is not None and self._observability_config.enabled:
+      from definable.agent.observability.collector import ObservabilityExporter as _ObsExporter
+
+      self._observability_exporter = _ObsExporter(buffer_size=self._observability_config.buffer_size)
+      from definable.agent.tracing.base import Tracing as _Tracing
+
+      if self._tracing_config is None:
+        self._tracing_config = _Tracing(exporters=[self._observability_exporter])
+      else:
+        existing_exporters = self._tracing_config.exporters or []
+        self._tracing_config = dataclasses.replace(self._tracing_config, exporters=[*existing_exporters, self._observability_exporter])
 
     # Thinking layer — accepts Thinking or bool
     from definable.agent.reasoning.thinking import Thinking as _Thinking
@@ -445,6 +470,11 @@ class Agent:
             print(f"Tool: {event.tool.tool_name}")
     """
     return self._event_bus
+
+  @property
+  def observability(self) -> Optional["ObservabilityConfig"]:
+    """Observability config, if enabled."""
+    return self._observability_config
 
   # --- Lifecycle Management ---
 

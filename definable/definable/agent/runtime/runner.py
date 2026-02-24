@@ -237,6 +237,10 @@ class AgentRuntime:
     if self.agent._auth is not None:
       lines.append(f"  Auth: {type(self.agent._auth).__name__}")
 
+    obs_config = getattr(self.agent, "_observability_config", None)
+    if obs_config is not None and obs_config.enabled and self.enable_server:
+      lines.append(f"  Observability: http://{self.host}:{self.port}/obs/")
+
     lines.append("")
 
     banner = "\n".join(lines)

@@ -116,8 +116,54 @@ class AgentServer:
     # --- Webhook routes ---
     self._register_webhooks(app)
 
+    # --- Observability dashboard (conditionally mounted) ---
+    self._mount_observability(app)
+
     self._app = app
     return app
+
+  def _mount_observability(self, app: Any) -> None:
+    """Conditionally mount observability dashboard and API endpoints."""
+    obs_config = getattr(self.agent, "_observability_config", None)
+    if obs_config is None or not obs_config.enabled:
+      return
+
+    from fastapi.responses import HTMLResponse
+
+    from definable.agent.observability.api import create_observability_router
+    from definable.agent.observability.collector import ObservabilityExporter
+    from definable.agent.observability.dashboard import get_dashboard_html
+    from definable.agent.observability.metrics import MetricsAggregator
+    from definable.agent.observability.trace_browser import TraceBrowser
+
+    # Get or create the collector exporter
+    exporter = getattr(self.agent, "_observability_exporter", None)
+    if exporter is None:
+      exporter = ObservabilityExporter(buffer_size=obs_config.buffer_size)
+
+    trace_browser = TraceBrowser(trace_dir=obs_config.trace_dir)
+    metrics_aggregator = MetricsAggregator()
+
+    # Mount API router
+    obs_router = create_observability_router(
+      collector=exporter,
+      trace_browser=trace_browser,
+      metrics_aggregator=metrics_aggregator,
+    )
+    app.include_router(obs_router, prefix="/obs/api")
+
+    # Serve dashboard HTML at /obs/
+    dashboard_html = get_dashboard_html(obs_config)
+
+    @app.get("/obs/", response_class=HTMLResponse)
+    async def obs_dashboard():
+      return dashboard_html
+
+    @app.get("/obs", response_class=HTMLResponse)
+    async def obs_dashboard_redirect():
+      return dashboard_html
+
+    log_info("Observability dashboard mounted at /obs/")
 
   def _register_webhooks(self, app: Any) -> None:
     """Register webhook trigger routes on the FastAPI app."""

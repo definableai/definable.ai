@@ -71,6 +71,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
   from definable.agent.guardrail import GuardrailResult, Guardrails
+  from definable.agent.observability.config import ObservabilityConfig
   from definable.agent.pipeline import (
     BasePhase,
     DebugConfig,
@@ -122,6 +123,10 @@ def __getattr__(name: str):
     from definable.agent.reasoning import Thinking
 
     return Thinking
+  if name == "ObservabilityConfig":
+    from definable.agent.observability.config import ObservabilityConfig
+
+    return ObservabilityConfig
   if name in ("Pipeline", "Phase", "BasePhase", "LoopState", "LoopStatus", "ToolRetry", "DebugConfig", "SubAgentPolicy"):
     from definable.agent import pipeline as _pipeline
 
@@ -140,6 +145,7 @@ __all__ = [
   "CompressionConfig",
   "ReadersConfig",
   "DeepResearchConfig",
+  "ObservabilityConfig",
   "FileReaderRegistry",
   "Toolkit",
   "KnowledgeToolkit",
