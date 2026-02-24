@@ -161,7 +161,7 @@ class Agent:
     model: Union[str, "Model"],
     # ── Layers ──────────────────────────────────────────────
     memory: Union["Memory", bool, None] = False,
-    knowledge: Union["Knowledge", bool, None] = False,
+    knowledge: Union["Knowledge", str, bool, None] = False,
     thinking: Union[bool, "Thinking", None] = None,
     deep_research: Union[bool, "DeepResearchConfig", "DeepResearch", None] = None,
     # ── Tools ───────────────────────────────────────────────
@@ -2805,18 +2805,26 @@ class Agent:
     # Memory instance — pass through
     return memory
 
-  def _resolve_knowledge(self, knowledge: "Knowledge | bool | None") -> Optional["Knowledge"]:
+  def _resolve_knowledge(self, knowledge: "Knowledge | str | bool | None") -> Optional["Knowledge"]:
     """Resolve knowledge param to Knowledge | None.
 
     Accepts:
       - False/None → None
-      - True → ValueError
+      - True → ValueError (ambiguous — no path to load from)
+      - str → Knowledge.from_path(path) with auto-configured RAG pipeline
       - Knowledge instance → pass through (has agent-integration fields)
     """
     if knowledge is False or knowledge is None:
       return None
     if knowledge is True:
-      raise ValueError("knowledge=True is not supported. Pass a Knowledge instance (Agent(knowledge=Knowledge(vector_db=..., top_k=5))).")
+      raise ValueError(
+        "knowledge=True is not supported. Pass a path string or Knowledge instance:"
+        " Agent(knowledge='./docs/') or Agent(knowledge=Knowledge(vector_db=..., top_k=5))."
+      )
+    if isinstance(knowledge, str):
+      from definable.knowledge.base import Knowledge as _Knowledge
+
+      return _Knowledge.from_path(knowledge)
 
     # Knowledge instance — pass through directly
     return knowledge
