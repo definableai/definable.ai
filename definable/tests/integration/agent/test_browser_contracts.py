@@ -1,25 +1,25 @@
 """
-Contract tests: BaseBrowser ABC compliance (SeleniumBase CDP version).
+Contract tests: BaseBrowser ABC compliance (Playwright CDP version).
 
-No browser is launched, no seleniumbase import, no API calls.
+No browser is launched, no Playwright import, no API calls.
 
 Covers:
   - A concrete subclass of BaseBrowser can be instantiated (no TypeError)
   - All abstract method signatures match the declared parameter names
-  - SeleniumBaseBrowser is a subclass of BaseBrowser (import check only)
+  - PlaywrightBrowser is a subclass of BaseBrowser (import check only)
   - BrowserToolkit is a subclass of Toolkit
 """
 
 import inspect
+from typing import Any
 
 import pytest
 
 from definable.browser.base import BaseBrowser
-from definable.browser.config import BrowserConfig
 
 
 # ---------------------------------------------------------------------------
-# Minimal concrete implementation (no seleniumbase dependency)
+# Minimal concrete implementation (no Playwright dependency)
 # ---------------------------------------------------------------------------
 
 
@@ -32,6 +32,17 @@ class _ConcreteTestBrowser(BaseBrowser):
   async def stop(self) -> None:
     pass
 
+  # -- Perception --
+  async def snapshot(self, **kwargs: Any) -> str:
+    return "(empty)"
+
+  async def screenshot(self, name: str = "screenshot", **kwargs: Any) -> str:
+    return "/tmp/screenshot.png"
+
+  async def get_page_info(self) -> str:
+    return "URL: https://example.com\nTitle: Test"
+
+  # -- Navigation --
   async def navigate(self, url: str) -> str:
     return f"navigated to {url}"
 
@@ -44,81 +55,123 @@ class _ConcreteTestBrowser(BaseBrowser):
   async def refresh(self) -> str:
     return "refreshed"
 
+  # -- Page state --
   async def get_url(self) -> str:
     return "https://example.com"
 
   async def get_title(self) -> str:
     return "Test Page"
 
-  async def get_page_source(self) -> str:
+  async def get_page_source(self, max_chars: int = 20000) -> str:
     return "<html></html>"
 
-  async def get_text(self, selector: str = "body") -> str:
+  async def get_text(self, ref_or_selector: str = "body") -> str:
     return "page text"
 
-  async def get_attribute(self, selector: str, attribute: str) -> str:
+  async def get_attribute(self, ref_or_selector: str, attribute: str) -> str:
     return "value"
 
-  async def is_element_visible(self, selector: str) -> str:
+  async def is_element_visible(self, ref_or_selector: str) -> str:
     return "true"
 
-  async def click(self, selector: str) -> str:
-    return f"clicked {selector}"
+  # -- Interaction --
+  async def click(self, ref_or_selector: str) -> str:
+    return f"clicked {ref_or_selector}"
 
-  async def click_if_visible(self, selector: str) -> str:
-    return f"clicked if visible {selector}"
+  async def click_if_visible(self, ref_or_selector: str) -> str:
+    return f"clicked if visible {ref_or_selector}"
 
-  async def type_text(self, selector: str, text: str) -> str:
-    return f"typed {text!r} into {selector}"
+  async def click_by_text(self, text: str, tag_name: str = "") -> str:
+    return f"clicked text: {text}"
 
-  async def press_keys(self, selector: str, keys: str) -> str:
-    return f"pressed {keys!r} on {selector}"
+  async def hover(self, ref_or_selector: str) -> str:
+    return f"hovered {ref_or_selector}"
 
-  async def clear_input(self, selector: str) -> str:
-    return f"cleared {selector}"
+  async def drag(self, from_ref: str, to_ref: str) -> str:
+    return f"dragged {from_ref} to {to_ref}"
 
-  async def execute_js(self, code: str) -> str:
+  async def type_text(self, ref_or_selector: str, text: str, submit: bool = False) -> str:
+    return f"typed {text!r} into {ref_or_selector}"
+
+  async def type_slowly(self, ref_or_selector: str, text: str, delay: float = 75.0) -> str:
+    return f"slowly typed {text!r} into {ref_or_selector}"
+
+  async def press_key(self, key: str) -> str:
+    return f"pressed {key}"
+
+  async def press_keys(self, ref_or_selector: str, keys: str) -> str:
+    return f"pressed {keys!r} on {ref_or_selector}"
+
+  async def clear_input(self, ref_or_selector: str) -> str:
+    return f"cleared {ref_or_selector}"
+
+  async def select_option(self, ref_or_selector: str, text: str) -> str:
+    return f"selected '{text}' in {ref_or_selector}"
+
+  async def check_element(self, ref_or_selector: str) -> str:
+    return f"checked {ref_or_selector}"
+
+  async def uncheck_element(self, ref_or_selector: str) -> str:
+    return f"unchecked {ref_or_selector}"
+
+  async def is_checked(self, ref_or_selector: str) -> str:
+    return "false"
+
+  async def set_value(self, ref_or_selector: str, value: str) -> str:
+    return f"set {ref_or_selector}={value}"
+
+  async def set_input_files(self, ref_or_selector: str, paths: list[str]) -> str:
+    return f"set files on {ref_or_selector}"
+
+  async def fill_form(self, fields: list[dict[str, Any]]) -> str:
+    return f"filled {len(fields)} fields"
+
+  async def execute_js(self, code: str, **kwargs: Any) -> str:
     return "null"
 
+  async def highlight(self, ref_or_selector: str) -> str:
+    return f"highlighted {ref_or_selector}"
+
+  async def remove_elements(self, selector: str) -> str:
+    return f"removed {selector}"
+
+  # -- Scrolling --
   async def scroll_down(self, amount: int = 3) -> str:
     return f"scrolled down {amount}"
 
   async def scroll_up(self, amount: int = 3) -> str:
     return f"scrolled up {amount}"
 
-  async def scroll_to_element(self, selector: str) -> str:
-    return f"scrolled to {selector}"
+  async def scroll_to_element(self, ref_or_selector: str) -> str:
+    return f"scrolled to {ref_or_selector}"
 
+  # -- Waiting --
   async def wait(self, seconds: float = 2.0) -> str:
     return f"waited {seconds}s"
 
-  async def wait_for_element(self, selector: str, timeout: float = 10.0) -> str:
-    return f"waited for {selector}"
+  async def wait_for_element(self, ref_or_selector: str, timeout: float = 10.0) -> str:
+    return f"waited for {ref_or_selector}"
 
   async def wait_for_text(self, text: str, selector: str = "body", timeout: float = 10.0) -> str:
     return f"waited for {text!r}"
 
-  async def screenshot(self, name: str = "screenshot") -> str:
-    return "/tmp/screenshot.png"
+  async def wait_for(self, **kwargs: Any) -> str:
+    return "waited"
 
+  # -- Tabs --
   async def open_tab(self, url: str = "") -> str:
     return f"opened tab {url}"
 
   async def close_tab(self) -> str:
     return "closed tab"
 
-  async def hover(self, selector: str) -> str:
-    return f"hovered {selector}"
+  async def get_tabs(self) -> str:
+    return "1 tab(s) open"
 
-  async def drag(self, from_selector: str, to_selector: str) -> str:
-    return f"dragged {from_selector} to {to_selector}"
+  async def switch_to_tab(self, index: int) -> str:
+    return f"switched to tab {index}"
 
-  async def type_slowly(self, selector: str, text: str) -> str:
-    return f"slowly typed {text!r} into {selector}"
-
-  async def select_option(self, selector: str, text: str) -> str:
-    return f"selected '{text}' in {selector}"
-
+  # -- Cookies --
   async def get_cookies(self) -> str:
     return "[]"
 
@@ -128,53 +181,34 @@ class _ConcreteTestBrowser(BaseBrowser):
   async def clear_cookies(self) -> str:
     return "cleared"
 
+  # -- Storage --
+  async def get_storage(self, key: str | None = None, kind: str = "local") -> str:
+    return "null"
+
+  async def set_storage(self, key: str, value: str, kind: str = "local") -> str:
+    return f"set {key}={value}"
+
+  # -- Dialogs --
   async def handle_dialog(self, accept: bool = True, prompt_text: str = "") -> str:
     return "accepted" if accept else "dismissed"
 
-  async def get_storage(self, key: str, storage_type: str = "local") -> str:
-    return "null"
-
-  async def set_storage(self, key: str, value: str, storage_type: str = "local") -> str:
-    return f"set {key}={value}"
-
+  # -- Emulation --
   async def set_geolocation(self, latitude: float, longitude: float, accuracy: float = 10.0) -> str:
     return f"geo set: {latitude},{longitude}"
 
-  async def highlight(self, selector: str) -> str:
-    return f"highlighted {selector}"
-
-  async def get_page_info(self) -> str:
-    return "URL: https://example.com\nTitle: Test"
-
-  async def click_by_text(self, text: str, tag_name: str = "") -> str:
-    return f"clicked text: {text}"
-
-  async def remove_elements(self, selector: str) -> str:
-    return f"removed {selector}"
-
-  async def is_checked(self, selector: str) -> str:
-    return "false"
-
-  async def check_element(self, selector: str) -> str:
-    return f"checked {selector}"
-
-  async def uncheck_element(self, selector: str) -> str:
-    return f"unchecked {selector}"
-
-  async def set_value(self, selector: str, value: str) -> str:
-    return f"set {selector}={value}"
-
-  async def get_tabs(self) -> str:
-    return "1 tab(s) open"
-
-  async def switch_to_tab(self, index: int) -> str:
-    return f"switched to tab {index}"
-
+  # -- PDF --
   async def print_to_pdf(self, name: str = "page") -> str:
     return f"/tmp/{name}.pdf"
 
-  async def solve_captcha(self) -> str:
-    return "CAPTCHA solved"
+  # -- Diagnostics --
+  async def get_console(self, limit: int = 50, level: str | None = None) -> str:
+    return "No console messages."
+
+  async def get_errors(self, limit: int = 20) -> str:
+    return "No page errors."
+
+  async def get_network(self, limit: int = 50, url_filter: str | None = None) -> str:
+    return "No network requests."
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +252,7 @@ class TestBaseBrowserSignatures:
 
   def _params(self, method_name: str) -> list[str]:
     sig = inspect.signature(getattr(BaseBrowser, method_name))
-    return [p for p in sig.parameters if p != "self"]
+    return [p for p in sig.parameters if p not in ("self", "kwargs")]
 
   # Lifecycle
   def test_start_has_no_required_params(self):
@@ -226,6 +260,19 @@ class TestBaseBrowserSignatures:
 
   def test_stop_has_no_required_params(self):
     assert self._params("stop") == []
+
+  # Perception
+  def test_snapshot_is_abstract(self):
+    assert "snapshot" in [m for m in dir(BaseBrowser) if not m.startswith("_")]
+
+  def test_screenshot_has_optional_name(self):
+    params = self._params("screenshot")
+    assert "name" in params
+    sig = inspect.signature(BaseBrowser.screenshot)
+    assert sig.parameters["name"].default is not inspect.Parameter.empty
+
+  def test_get_page_info_has_no_required_params(self):
+    assert self._params("get_page_info") == []
 
   # Navigation
   def test_navigate_has_url_param(self):
@@ -247,45 +294,57 @@ class TestBaseBrowserSignatures:
   def test_get_title_has_no_required_params(self):
     assert self._params("get_title") == []
 
-  def test_get_page_source_has_no_required_params(self):
-    assert self._params("get_page_source") == []
+  def test_get_page_source_has_optional_max_chars(self):
+    params = self._params("get_page_source")
+    assert "max_chars" in params
 
-  def test_get_text_has_optional_selector(self):
+  def test_get_text_has_optional_ref_or_selector(self):
     params = self._params("get_text")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     sig = inspect.signature(BaseBrowser.get_text)
-    assert sig.parameters["selector"].default is not inspect.Parameter.empty
+    assert sig.parameters["ref_or_selector"].default is not inspect.Parameter.empty
 
-  def test_get_attribute_has_selector_and_attribute(self):
+  def test_get_attribute_has_ref_or_selector_and_attribute(self):
     params = self._params("get_attribute")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     assert "attribute" in params
 
-  def test_is_element_visible_has_selector(self):
-    assert "selector" in self._params("is_element_visible")
+  def test_is_element_visible_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("is_element_visible")
 
   # Interaction
-  def test_click_has_selector(self):
-    assert "selector" in self._params("click")
+  def test_click_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("click")
 
-  def test_click_if_visible_has_selector(self):
-    assert "selector" in self._params("click_if_visible")
+  def test_click_if_visible_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("click_if_visible")
 
-  def test_type_text_has_selector_and_text(self):
+  def test_type_text_has_ref_or_selector_and_text(self):
     params = self._params("type_text")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     assert "text" in params
 
-  def test_press_keys_has_selector_and_keys(self):
+  def test_press_key_has_key(self):
+    assert "key" in self._params("press_key")
+
+  def test_press_keys_has_ref_or_selector_and_keys(self):
     params = self._params("press_keys")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     assert "keys" in params
 
-  def test_clear_input_has_selector(self):
-    assert "selector" in self._params("clear_input")
+  def test_clear_input_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("clear_input")
 
   def test_execute_js_has_code(self):
     assert "code" in self._params("execute_js")
+
+  def test_fill_form_has_fields(self):
+    assert "fields" in self._params("fill_form")
+
+  def test_set_input_files_has_ref_or_selector_and_paths(self):
+    params = self._params("set_input_files")
+    assert "ref_or_selector" in params
+    assert "paths" in params
 
   # Scrolling
   def test_scroll_down_has_optional_amount(self):
@@ -300,8 +359,8 @@ class TestBaseBrowserSignatures:
     sig = inspect.signature(BaseBrowser.scroll_up)
     assert sig.parameters["amount"].default is not inspect.Parameter.empty
 
-  def test_scroll_to_element_has_selector(self):
-    assert "selector" in self._params("scroll_to_element")
+  def test_scroll_to_element_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("scroll_to_element")
 
   # Waiting
   def test_wait_has_optional_seconds(self):
@@ -310,9 +369,9 @@ class TestBaseBrowserSignatures:
     sig = inspect.signature(BaseBrowser.wait)
     assert sig.parameters["seconds"].default is not inspect.Parameter.empty
 
-  def test_wait_for_element_has_selector_and_optional_timeout(self):
+  def test_wait_for_element_has_ref_or_selector_and_optional_timeout(self):
     params = self._params("wait_for_element")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     assert "timeout" in params
     sig = inspect.signature(BaseBrowser.wait_for_element)
     assert sig.parameters["timeout"].default is not inspect.Parameter.empty
@@ -326,13 +385,6 @@ class TestBaseBrowserSignatures:
     assert sig.parameters["selector"].default is not inspect.Parameter.empty
     assert sig.parameters["timeout"].default is not inspect.Parameter.empty
 
-  # Screenshot
-  def test_screenshot_has_optional_name(self):
-    params = self._params("screenshot")
-    assert "name" in params
-    sig = inspect.signature(BaseBrowser.screenshot)
-    assert sig.parameters["name"].default is not inspect.Parameter.empty
-
   # Tabs
   def test_open_tab_has_optional_url(self):
     params = self._params("open_tab")
@@ -343,27 +395,23 @@ class TestBaseBrowserSignatures:
   def test_close_tab_has_no_required_params(self):
     assert self._params("close_tab") == []
 
-  # CAPTCHA
-  def test_solve_captcha_has_no_required_params(self):
-    assert self._params("solve_captcha") == []
-
   # Advanced interaction
-  def test_hover_has_selector(self):
-    assert "selector" in self._params("hover")
+  def test_hover_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("hover")
 
   def test_drag_has_from_and_to(self):
     params = self._params("drag")
-    assert "from_selector" in params
-    assert "to_selector" in params
+    assert "from_ref" in params
+    assert "to_ref" in params
 
-  def test_type_slowly_has_selector_and_text(self):
+  def test_type_slowly_has_ref_or_selector_and_text(self):
     params = self._params("type_slowly")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     assert "text" in params
 
-  def test_select_option_has_selector_and_text(self):
+  def test_select_option_has_ref_or_selector_and_text(self):
     params = self._params("select_option")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     assert "text" in params
 
   # Cookies
@@ -388,18 +436,18 @@ class TestBaseBrowserSignatures:
     assert sig.parameters["prompt_text"].default is not inspect.Parameter.empty
 
   # Storage
-  def test_get_storage_has_key_and_optional_storage_type(self):
+  def test_get_storage_has_key_and_optional_kind(self):
     params = self._params("get_storage")
     assert "key" in params
-    assert "storage_type" in params
+    assert "kind" in params
     sig = inspect.signature(BaseBrowser.get_storage)
-    assert sig.parameters["storage_type"].default is not inspect.Parameter.empty
+    assert sig.parameters["kind"].default is not inspect.Parameter.empty
 
-  def test_set_storage_has_key_value_and_optional_storage_type(self):
+  def test_set_storage_has_key_value_and_optional_kind(self):
     params = self._params("set_storage")
     assert "key" in params
     assert "value" in params
-    assert "storage_type" in params
+    assert "kind" in params
 
   # Browser state
   def test_set_geolocation_has_lat_lon_and_optional_accuracy(self):
@@ -410,11 +458,8 @@ class TestBaseBrowserSignatures:
     sig = inspect.signature(BaseBrowser.set_geolocation)
     assert sig.parameters["accuracy"].default is not inspect.Parameter.empty
 
-  def test_highlight_has_selector(self):
-    assert "selector" in self._params("highlight")
-
-  def test_get_page_info_has_no_required_params(self):
-    assert self._params("get_page_info") == []
+  def test_highlight_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("highlight")
 
   # Text interaction & DOM mutation
   def test_click_by_text_has_text_and_optional_tag(self):
@@ -428,19 +473,19 @@ class TestBaseBrowserSignatures:
     assert "selector" in self._params("remove_elements")
 
   # Checkboxes
-  def test_is_checked_has_selector(self):
-    assert "selector" in self._params("is_checked")
+  def test_is_checked_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("is_checked")
 
-  def test_check_element_has_selector(self):
-    assert "selector" in self._params("check_element")
+  def test_check_element_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("check_element")
 
-  def test_uncheck_element_has_selector(self):
-    assert "selector" in self._params("uncheck_element")
+  def test_uncheck_element_has_ref_or_selector(self):
+    assert "ref_or_selector" in self._params("uncheck_element")
 
   # Value & tab control
-  def test_set_value_has_selector_and_value(self):
+  def test_set_value_has_ref_or_selector_and_value(self):
     params = self._params("set_value")
-    assert "selector" in params
+    assert "ref_or_selector" in params
     assert "value" in params
 
   def test_get_tabs_has_no_required_params(self):
@@ -455,48 +500,40 @@ class TestBaseBrowserSignatures:
     sig = inspect.signature(BaseBrowser.print_to_pdf)
     assert sig.parameters["name"].default is not inspect.Parameter.empty
 
+  # Diagnostics
+  def test_get_console_has_optional_limit_and_level(self):
+    params = self._params("get_console")
+    assert "limit" in params
+    assert "level" in params
+
+  def test_get_errors_has_optional_limit(self):
+    assert "limit" in self._params("get_errors")
+
+  def test_get_network_has_optional_limit_and_url_filter(self):
+    params = self._params("get_network")
+    assert "limit" in params
+    assert "url_filter" in params
+
 
 # ---------------------------------------------------------------------------
-# Contract: SeleniumBaseBrowser is a BaseBrowser subclass (import check only)
+# Contract: PlaywrightBrowser is a BaseBrowser subclass (import check only)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.contract
-class TestSeleniumBaseBrowserSubclass:
-  """SeleniumBaseBrowser must be a subclass of BaseBrowser."""
+class TestPlaywrightBrowserSubclass:
+  """PlaywrightBrowser must be a subclass of BaseBrowser."""
 
-  def test_seleniumbase_browser_is_subclass_of_base_browser(self):
-    from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
+  def test_playwright_browser_is_subclass_of_base_browser(self):
+    from definable.browser.playwright_browser import PlaywrightBrowser
 
-    assert issubclass(SeleniumBaseBrowser, BaseBrowser)
+    assert issubclass(PlaywrightBrowser, BaseBrowser)
 
-  def test_seleniumbase_browser_can_be_instantiated_with_default_config(self):
-    """Instantiation must NOT launch the browser or import seleniumbase."""
-    from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
+  def test_playwright_browser_can_be_instantiated_with_default_config(self):
+    from definable.browser.playwright_browser import PlaywrightBrowser
 
-    browser = SeleniumBaseBrowser()
+    browser = PlaywrightBrowser()
     assert isinstance(browser, BaseBrowser)
-
-  def test_seleniumbase_browser_accepts_config(self):
-    from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
-
-    cfg = BrowserConfig(headless=True, lang="fr")
-    browser = SeleniumBaseBrowser(config=cfg)
-    assert browser._config is cfg
-
-  def test_seleniumbase_browser_has_no_sb_on_init(self):
-    from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
-
-    browser = SeleniumBaseBrowser()
-    assert browser._sb is None
-
-  def test_seleniumbase_browser_has_executor_on_init(self):
-    from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
-
-    browser = SeleniumBaseBrowser()
-    assert browser._executor is not None
-    # Cleanup
-    browser._executor.shutdown(wait=False)
 
 
 # ---------------------------------------------------------------------------

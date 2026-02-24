@@ -402,7 +402,7 @@ assert "Paris" in output.content
 | **Guardrails** | Input/output/tool checkpoints, PII redaction, token limits, topic blocking, regex filters |
 | **Guardrails Composition** | `ALL`, `ANY`, `NOT`, `when()` combinators for complex policy rules |
 | **Interfaces** | Telegram, Discord, Desktop, CLI, session management, identity resolution |
-| **Browser Toolkit** | 50 browser automation tools via SeleniumBase CDP — CSS selectors, screenshots, cookie/storage management |
+| **Browser Toolkit** | 55 browser automation tools via Playwright CDP — role-based refs, AI-friendly errors, console/network diagnostics |
 | **Claude Code Agent** | Zero-dep subprocess wrapper for Claude Code CLI with full Definable ecosystem integration |
 | **Runtime** | `agent.serve()`, webhooks, cron triggers, event triggers, `dev=True` hot-reload |
 | **Auth** | `APIKeyAuth`, `JWTAuth`, `AllowlistAuth`, `CompositeAuth`, pluggable `AuthProvider` protocol |
@@ -454,7 +454,7 @@ pip install definable[cron]             # Cron trigger support
 pip install definable[jwt]              # JWT authentication
 pip install definable[runtime]          # serve + cron combined
 pip install definable[discord]          # Discord interface
-pip install definable[browser]          # Browser automation (SeleniumBase CDP)
+pip install definable[browser]          # Browser automation (Playwright CDP)
 pip install definable[desktop]          # macOS Desktop Bridge
 pip install definable[postgres-memory]  # PostgreSQL memory store
 pip install definable[research]         # Deep research (DuckDuckGo + curl-cffi)
@@ -494,7 +494,7 @@ definable/definable/
 │   ├── runtime/        # AgentRuntime, AgentServer, dev mode
 │   ├── tracing/        # JSONL trace export, DebugExporter
 │   └── trigger/        # Webhook, Cron, EventTrigger
-├── browser/            # BrowserToolkit — 50 tools via SeleniumBase CDP
+├── browser/            # BrowserToolkit — 55 tools via Playwright CDP
 ├── claude_code/        # ClaudeCodeAgent — subprocess wrapper for Claude Code CLI
 ├── knowledge/          # RAG: embedders, vector DBs, rerankers, chunkers
 ├── mcp/                # Model Context Protocol client

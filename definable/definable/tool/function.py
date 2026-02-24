@@ -590,10 +590,14 @@ class Function(BaseModel):
   def _get_cache_file_path(self, cache_key: str) -> str:
     """Get the full path for the cache file."""
     from pathlib import Path
-    from tempfile import gettempdir
 
-    base_cache_dir = self.cache_dir or Path(gettempdir()) / "definable_cache"
-    func_cache_dir = Path(base_cache_dir) / "functions" / self.name
+    if self.cache_dir:
+      base_cache_dir = Path(self.cache_dir)
+    else:
+      from definable.utils.workspace import workspace_path
+
+      base_cache_dir = workspace_path("cache", "tools")
+    func_cache_dir = base_cache_dir / "functions" / self.name
     func_cache_dir.mkdir(parents=True, exist_ok=True)
     return str(func_cache_dir / f"{cache_key}.json")
 

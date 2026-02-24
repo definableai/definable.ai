@@ -3,9 +3,11 @@ Definable Events — All agent run event types in one place.
 
 Usage:
     from definable.agent.events import RunContentEvent, ToolCallStartedEvent, RunCompletedEvent
+    from definable.agent.events import BrowserActionEvent
 """
 
 from definable.agent.run.base import BaseRunOutputEvent, RunContext, RunStatus
+from definable.browser.events import BrowserActionEvent
 from definable.agent.run.agent import (
   BaseAgentRunEvent,
   CustomEvent,
@@ -131,4 +133,6 @@ __all__ = [
   "SubAgentKilledEvent",
   # Custom
   "CustomEvent",
+  # Browser
+  "BrowserActionEvent",
 ]

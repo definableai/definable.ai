@@ -1,16 +1,17 @@
 ---
 title: Browser Toolkit
 sidebarTitle: Overview
-description: SeleniumBase CDP browser automation — 50 tools, 3 connection modes.
+description: Playwright CDP browser automation — 55 tools, role-based refs, 3 connection modes.
 icon: globe
 ---
 
-The **BrowserToolkit** gives agents full browser automation via [SeleniumBase](https://seleniumbase.io/) CDP mode. It drives Chrome directly through the Chrome DevTools Protocol — no WebDriver, no automation fingerprints. Websites cannot detect it with standard bot-detection checks.
+The **BrowserToolkit** gives agents full browser automation via [Playwright](https://playwright.dev/) CDP mode. It drives Chrome directly through the Chrome DevTools Protocol — native async, role-based element refs (`e1`, `e2`, `e3`), AI-friendly errors, and self-healing connections.
 
 ## Installation
 
 ```bash
 pip install 'definable[browser]'
+playwright install chromium
 ```
 
 ## Quick Start
@@ -27,7 +28,7 @@ async def main():
     print(result.content)
 ```
 
-The toolkit exposes **50 tools** that the agent can call to navigate, read, interact with, and extract data from web pages.
+The toolkit exposes **55 tools** that the agent can call to navigate, read, interact with, and extract data from web pages.
 
 ## Connection Modes
 
@@ -60,25 +61,29 @@ Attach to an already-running Chrome instance via its remote debugging port. No n
 ```
 
 ```python
-config = BrowserConfig(host="127.0.0.1", port=9222)
+config = BrowserConfig(cdp_url="http://127.0.0.1:9222")
 ```
 
 ## BrowserConfig Reference
 
+<ParamField path="cdp_url" type="str">
+  WebSocket or HTTP URL of an existing Chrome CDP endpoint. When set, no new browser is launched.
+</ParamField>
+
 <ParamField path="headless" type="bool" default="false">
-  Run Chrome without a visible window. CDP mode works best headed for maximum stealth.
+  Run Chrome without a visible window.
 </ParamField>
 
 <ParamField path="user_data_dir" type="str">
   Path to a Chrome user data directory for session persistence.
 </ParamField>
 
-<ParamField path="host" type="str">
-  Remote-debugging host to attach to an existing Chrome. Must be combined with `port`.
+<ParamField path="stealth" type="bool" default="true">
+  Enable anti-detection flags (`--disable-blink-features=AutomationControlled`).
 </ParamField>
 
-<ParamField path="port" type="int">
-  Remote-debugging port to attach to an existing Chrome. Must be combined with `host`.
+<ParamField path="no_sandbox" type="bool" default="false">
+  Disable Chrome sandbox. Required in Docker/CI environments.
 </ParamField>
 
 <ParamField path="proxy" type="str">
@@ -89,29 +94,59 @@ config = BrowserConfig(host="127.0.0.1", port=9222)
   Override the browser's User-Agent string.
 </ParamField>
 
-<ParamField path="lang" type="str" default="en">
-  Language locale code, e.g. `"en"`, `"fr"`, `"zh-CN"`.
+<ParamField path="locale" type="str" default="en-US">
+  Browser locale code, e.g. `"en-US"`, `"fr"`, `"zh-CN"`.
 </ParamField>
 
-<ParamField path="incognito" type="bool" default="false">
-  Launch in incognito mode.
+<ParamField path="timezone" type="str">
+  Browser timezone override, e.g. `"America/New_York"`.
 </ParamField>
 
-<ParamField path="mobile" type="bool" default="false">
-  Enable mobile emulation mode.
+<ParamField path="viewport_width" type="int" default="1280">
+  Browser viewport width in pixels.
 </ParamField>
 
-<ParamField path="ad_block" type="bool" default="false">
-  Enable SeleniumBase's built-in ad blocker.
+<ParamField path="viewport_height" type="int" default="720">
+  Browser viewport height in pixels.
 </ParamField>
 
 <ParamField path="timeout" type="float" default="30.0">
   Default per-operation timeout in seconds.
 </ParamField>
 
+<ParamField path="executable_path" type="str">
+  Path to Chrome/Brave/Edge binary. Auto-detected if not set.
+</ParamField>
+
+<ParamField path="extra_args" type="tuple[str, ...]">
+  Additional Chrome CLI flags.
+</ParamField>
+
+## Element Refs — The Key Innovation
+
+Agents interact with semantic element refs instead of brittle CSS selectors. After calling `browser_snapshot()`, every interactive element gets a ref like `e1`, `e2`, `e3`:
+
+```
+- heading "Login" [level=1]
+- textbox "Email" [ref=e1]
+- textbox "Password" [ref=e2]
+- button "Sign In" [ref=e3]
+[3 refs, 3 interactive]
+```
+
+Then the agent uses refs for all interactions:
+
+```
+browser_type("e1", "user@example.com")  → Typed into e1
+browser_type("e2", "password123")       → Typed into e2
+browser_click("e3")                     → Clicked: e3
+```
+
+CSS selectors still work everywhere — `browser_click("button.submit")` is also valid. The ref system auto-detects which you're using.
+
 ## Tools Reference
 
-All 50 tools are grouped by category below. Every tool name is prefixed with `browser_`.
+All 55 tools are grouped by category below. Every tool name is prefixed with `browser_`.
 
 ### Navigation (4 tools)
 
@@ -134,17 +169,18 @@ All 50 tools are grouped by category below. Every tool name is prefixed with `br
 | `browser_is_visible` | Check if an element is currently visible |
 | `browser_get_page_info` | Situational snapshot: URL, title, scroll position, element counts |
 
-### Page Snapshot (1 tool)
+### Perception (2 tools)
 
 | Tool | Description |
 |------|-------------|
-| `browser_snapshot` | Accessibility-tree view of the page showing interactive elements with CSS selectors |
+| `browser_snapshot` | Accessibility-tree view with role-based refs (e1, e2, e3) for every interactive element |
+| `browser_screenshot` | Take a screenshot and save to a file |
 
-### Interaction (11 tools)
+### Interaction (15 tools)
 
 | Tool | Description |
 |------|-------------|
-| `browser_click` | Click an element by CSS selector |
+| `browser_click` | Click an element by ref or CSS selector |
 | `browser_click_if_visible` | Click only if the element is visible (safe for popups) |
 | `browser_click_by_text` | Click the first element whose visible text contains the given string |
 | `browser_type` | Clear an input and type text into it |
@@ -154,7 +190,11 @@ All 50 tools are grouped by category below. Every tool name is prefixed with `br
 | `browser_clear_input` | Clear an input field or textarea |
 | `browser_select_option` | Select an option from a `<select>` dropdown by visible text |
 | `browser_hover` | Hover over an element (reveals dropdowns, tooltips) |
-| `browser_drag` | Drag one element to another via HTML5 drag-and-drop |
+| `browser_drag` | Drag one element to another via Playwright native drag |
+| `browser_fill_form` | Batch fill a form: `[{ref, type, value}, ...]` |
+| `browser_set_value` | Set an element's value directly (works for sliders, range inputs) |
+| `browser_set_input_files` | Set files on a file input element |
+| `browser_execute_js` | Execute JavaScript in the page context |
 
 ### Scrolling (3 tools)
 
@@ -164,30 +204,29 @@ All 50 tools are grouped by category below. Every tool name is prefixed with `br
 | `browser_scroll_up` | Scroll up by N screen-heights (default 3) |
 | `browser_scroll_to` | Scroll until an element is in view |
 
-### Waiting (3 tools)
+### Waiting (4 tools)
 
 | Tool | Description |
 |------|-------------|
 | `browser_wait` | Pause for N seconds (use after page loads) |
 | `browser_wait_for_element` | Wait up to N seconds for an element to appear |
 | `browser_wait_for_text` | Wait up to N seconds for text to appear inside a selector |
+| `browser_wait_for` | Unified wait: text, text_gone, selector, url, load_state, or JS function |
 
 ### DOM Manipulation (2 tools)
 
 | Tool | Description |
 |------|-------------|
-| `browser_execute_js` | Execute JavaScript in the page context |
+| `browser_highlight` | Flash a gold border around an element for 2 seconds |
 | `browser_remove_elements` | Remove all elements matching a selector from the DOM |
 
-### Forms & Checkboxes (5 tools)
+### Forms & Checkboxes (3 tools)
 
 | Tool | Description |
 |------|-------------|
-| `browser_set_value` | Set an element's value directly (works for sliders, range inputs) |
 | `browser_is_checked` | Check if a checkbox or radio is checked |
 | `browser_check` | Check a checkbox or radio (idempotent) |
 | `browser_uncheck` | Uncheck a checkbox (idempotent) |
-| `browser_highlight` | Flash a gold border around an element for 2 seconds |
 
 ### Cookies (3 tools)
 
@@ -213,11 +252,10 @@ All 50 tools are grouped by category below. Every tool name is prefixed with `br
 | `browser_get_tabs` | Return the number of open tabs |
 | `browser_switch_to_tab` | Switch to a tab by zero-based index |
 
-### Output (2 tools)
+### Output (1 tool)
 
 | Tool | Description |
 |------|-------------|
-| `browser_screenshot` | Take a screenshot and save to a file |
 | `browser_print_to_pdf` | Save the current page as PDF |
 
 ### Dialogs (1 tool)
@@ -232,11 +270,13 @@ All 50 tools are grouped by category below. Every tool name is prefixed with `br
 |------|-------------|
 | `browser_set_geolocation` | Override GPS coordinates via CDP |
 
-### CAPTCHA (1 tool)
+### Diagnostics (3 tools)
 
 | Tool | Description |
 |------|-------------|
-| `browser_solve_captcha` | Attempt to solve Cloudflare Turnstile, reCAPTCHA, hCaptcha |
+| `browser_get_console` | Return captured browser console messages (with level filter) |
+| `browser_get_errors` | Return captured browser page errors |
+| `browser_get_network` | Return captured network requests (with URL filter) |
 
 ## Usage with Agent
 
@@ -260,7 +300,7 @@ async def run():
 ```
 
 <Tip>
-Use `browser_snapshot` before interacting with a page. It returns an accessibility-tree view with CSS selectors for every interactive element, which is more useful than `browser_get_source` for understanding page structure.
+Use `browser_snapshot` before interacting with a page. It returns an accessibility-tree view with role-based refs (e1, e2, e3) for every interactive element, which is more useful than `browser_get_source` for understanding page structure.
 </Tip>
 
 ## Combining with Other Toolkits
@@ -292,5 +332,5 @@ mock_browser.navigate.return_value = "Navigated to https://example.com | Title: 
 toolkit = BrowserToolkit(browser=mock_browser)
 await toolkit.initialize()
 
-assert len(toolkit.tools) == 50
+assert len(toolkit.tools) == 55
 ```

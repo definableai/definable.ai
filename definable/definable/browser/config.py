@@ -1,52 +1,28 @@
-"""BrowserConfig — frozen configuration dataclass for BrowserToolkit (SeleniumBase CDP)."""
+"""BrowserConfig — frozen configuration dataclass for BrowserToolkit (Playwright)."""
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Optional
 
 
 @dataclass(frozen=True)
 class BrowserConfig:
-  """Configuration for BrowserToolkit (SeleniumBase CDP mode).
+  """Configuration for BrowserToolkit (Playwright CDP mode).
 
   Immutable once created. Follows the same frozen-dataclass convention as
   AgentConfig, Memory, Knowledge, and Thinking.
 
-  SeleniumBase CDP mode drives Chrome directly via Chrome DevTools Protocol —
-  no WebDriver, no automation fingerprint. It is the most stealth-capable
-  browser automation approach available in Python.
+  Playwright connects to Chrome via Chrome DevTools Protocol (CDP), giving
+  full control with native async support and no automation fingerprints.
 
   Connection modes (in priority order):
-    1. ``host`` + ``port``: Attach to an already-running Chrome with
-       ``--remote-debugging-port=<port>``. No new browser window is opened.
+    1. ``cdp_url``: Connect to an already-running Chrome via WebSocket
+       (e.g. ``ws://127.0.0.1:9222``).
     2. ``user_data_dir``: Launch with a persistent user profile (cookies,
        localStorage, logged-in sessions are preserved between runs).
     3. Default: Launch a fresh Chrome instance (ephemeral).
-
-  Attributes:
-      headless: Run Chrome without a visible window. Default False — CDP mode
-                works best headed for maximum stealth.
-      user_data_dir: Path to a Chrome user data directory for session
-                     persistence. Default None (ephemeral).
-      proxy: Proxy server in ``"host:port"`` or ``"user:pass@host:port"``
-             format. Default None.
-      user_agent: Override the browser's User-Agent string. Default None.
-      lang: Language locale code, e.g. ``"en"``, ``"fr"``, ``"zh-CN"``.
-            Default ``"en"``.
-      sandbox: Whether to enable Chrome's sandbox (default True).
-               Set False only if Chrome refuses to launch in restricted envs.
-      browser_executable_path: Path to a specific Chrome/Chromium binary.
-                                Default None (SeleniumBase finds Chrome).
-      browser_args: Extra Chrome CLI args passed at launch. Default None.
-      host: Remote-debugging host to attach to an existing Chrome session.
-            Must be combined with ``port``. Default None.
-      port: Remote-debugging port to attach to an existing Chrome session.
-            Must be combined with ``host``. Default None.
-      incognito: Launch in incognito mode. Default False.
-      mobile: Enable mobile emulation mode. Default False.
-      ad_block: Enable SeleniumBase's built-in ad blocker. Default False.
-      timeout: Default per-operation timeout in seconds. Default 30.0.
 
   Examples::
 
@@ -58,23 +34,93 @@ class BrowserConfig:
 
       # Attach to your running Chrome
       # (launch Chrome with: --remote-debugging-port=9222 --no-first-run)
-      config = BrowserConfig(host="127.0.0.1", port=9222)
+      config = BrowserConfig(cdp_url="ws://127.0.0.1:9222")
+
+      # CI / Docker
+      config = BrowserConfig(headless=True, no_sandbox=True)
 
       # With proxy
       config = BrowserConfig(proxy="user:pass@proxy.example.com:8080")
   """
 
-  headless: bool = False
+  # Connection (priority: cdp_url > user_data_dir > fresh launch)
+  cdp_url: Optional[str] = None
   user_data_dir: Optional[str] = None
+
+  # Launch options
+  headless: bool = False
+  executable_path: Optional[str] = None
+  extra_args: tuple[str, ...] = ()
+  no_sandbox: bool = False
   proxy: Optional[str] = None
+  stealth: bool = True
+
+  # Behavior
+  timeout: float = 30.0
+  viewport_width: int = 1280
+  viewport_height: int = 720
+  locale: str = "en-US"
+  timezone: Optional[str] = None
   user_agent: Optional[str] = None
-  lang: str = "en"
-  sandbox: bool = True
-  browser_executable_path: Optional[str] = None
-  browser_args: Optional[tuple[str, ...]] = None
+
+  # Page state ring buffer sizes
+  max_console_messages: int = 500
+  max_page_errors: int = 200
+  max_network_requests: int = 500
+
+  # Downloads
+  downloads_dir: Optional[str] = None
+
+  # Advanced
+  cdp_port: int = 9222
+  slow_mo: float = 0.0
+
+  # Deprecated compat (emit DeprecationWarning in __post_init__)
   host: Optional[str] = None
   port: Optional[int] = None
-  incognito: bool = False
-  mobile: bool = False
-  ad_block: bool = False
-  timeout: float = 30.0
+
+  # Deprecated SeleniumBase compat
+  sandbox: Optional[bool] = None
+  browser_executable_path: Optional[str] = None
+  browser_args: Optional[tuple[str, ...]] = None
+
+  def __post_init__(self) -> None:
+    # host/port -> cdp_url migration
+    if self.host and self.port:
+      warnings.warn(
+        "host/port are deprecated. Use cdp_url='ws://host:port' instead.",
+        DeprecationWarning,
+        stacklevel=3,
+      )
+      if not self.cdp_url:
+        object.__setattr__(self, "cdp_url", f"ws://{self.host}:{self.port}")
+
+    # sandbox -> no_sandbox migration
+    if self.sandbox is not None:
+      warnings.warn(
+        "sandbox is deprecated. Use no_sandbox=True instead of sandbox=False.",
+        DeprecationWarning,
+        stacklevel=3,
+      )
+      if not self.no_sandbox and self.sandbox is False:
+        object.__setattr__(self, "no_sandbox", True)
+
+    # browser_executable_path -> executable_path migration
+    if self.browser_executable_path is not None:
+      warnings.warn(
+        "browser_executable_path is deprecated. Use executable_path instead.",
+        DeprecationWarning,
+        stacklevel=3,
+      )
+      if not self.executable_path:
+        object.__setattr__(self, "executable_path", self.browser_executable_path)
+
+    # browser_args -> extra_args migration
+    if self.browser_args is not None:
+      warnings.warn(
+        "browser_args is deprecated. Use extra_args instead.",
+        DeprecationWarning,
+        stacklevel=3,
+      )
+      if not self.extra_args:
+        object.__setattr__(self, "extra_args", self.browser_args)

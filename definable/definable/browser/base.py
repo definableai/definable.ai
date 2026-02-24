@@ -1,16 +1,17 @@
-"""BaseBrowser — abstract interface for SeleniumBase CDP browser implementations."""
+"""BaseBrowser — abstract interface for Playwright-based browser implementations."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 
 class BaseBrowser(ABC):
-  """Abstract base class for CDP-backed browser implementations.
+  """Abstract base class for browser implementations.
 
-  All methods are async — concrete implementations wrap SeleniumBase's
-  synchronous API with ``asyncio.to_thread`` or a dedicated executor so the
-  agent event loop is never blocked.
+  All methods are async. All interaction methods accept a ``ref_or_selector``
+  parameter that can be either a role-based ref (e.g. ``"e1"``) from the
+  last ``snapshot()`` call, or a CSS selector (e.g. ``"button.submit"``).
 
   All methods return a plain ``str`` result that the agent can read.
   Error conditions are returned as ``"Error: <message>"`` strings rather
@@ -28,6 +29,39 @@ class BaseBrowser(ABC):
   @abstractmethod
   async def stop(self) -> None:
     """Close the browser and release all resources."""
+
+  async def __aenter__(self) -> "BaseBrowser":
+    await self.start()
+    return self
+
+  async def __aexit__(self, *_: object) -> None:
+    await self.stop()
+
+  # ---------------------------------------------------------------------------
+  # Perception
+  # ---------------------------------------------------------------------------
+
+  @abstractmethod
+  async def snapshot(
+    self,
+    options: Any = None,
+    selector: str | None = None,
+    frame_selector: str | None = None,
+  ) -> str:
+    """Get role-based accessibility snapshot with element refs (e1, e2, ...)."""
+
+  @abstractmethod
+  async def screenshot(
+    self,
+    name: str = "screenshot",
+    ref: str | None = None,
+    full_page: bool = False,
+  ) -> str:
+    """Save a screenshot and return its file path."""
+
+  @abstractmethod
+  async def get_page_info(self) -> str:
+    """Return situational snapshot: URL, title, scroll position, viewport."""
 
   # ---------------------------------------------------------------------------
   # Navigation
@@ -62,19 +96,19 @@ class BaseBrowser(ABC):
     """Return the current page title."""
 
   @abstractmethod
-  async def get_page_source(self) -> str:
-    """Return the full page HTML source (capped at 20 000 chars)."""
+  async def get_page_source(self, max_chars: int = 20000) -> str:
+    """Return the full page HTML source (capped at ``max_chars``)."""
 
   @abstractmethod
-  async def get_text(self, selector: str = "body") -> str:
-    """Return the visible text content of the element at ``selector``."""
+  async def get_text(self, ref_or_selector: str = "body") -> str:
+    """Return the visible text content of the element."""
 
   @abstractmethod
-  async def get_attribute(self, selector: str, attribute: str) -> str:
-    """Return the value of ``attribute`` on the element at ``selector``."""
+  async def get_attribute(self, ref_or_selector: str, attribute: str) -> str:
+    """Return the value of ``attribute`` on the element."""
 
   @abstractmethod
-  async def is_element_visible(self, selector: str) -> str:
+  async def is_element_visible(self, ref_or_selector: str) -> str:
     """Return ``"true"`` or ``"false"`` depending on element visibility."""
 
   # ---------------------------------------------------------------------------
@@ -82,28 +116,84 @@ class BaseBrowser(ABC):
   # ---------------------------------------------------------------------------
 
   @abstractmethod
-  async def click(self, selector: str) -> str:
-    """Click the element at ``selector``."""
+  async def click(self, ref_or_selector: str) -> str:
+    """Click the element."""
 
   @abstractmethod
-  async def click_if_visible(self, selector: str) -> str:
+  async def click_if_visible(self, ref_or_selector: str) -> str:
     """Click the element only if it is currently visible."""
 
   @abstractmethod
-  async def type_text(self, selector: str, text: str) -> str:
-    """Clear ``selector`` and type ``text`` into it."""
+  async def click_by_text(self, text: str, tag_name: str = "") -> str:
+    """Click the first element whose visible text contains ``text``."""
 
   @abstractmethod
-  async def press_keys(self, selector: str, keys: str) -> str:
-    """Send ``keys`` to the element (e.g. ``"\\n"`` to press Enter)."""
+  async def hover(self, ref_or_selector: str) -> str:
+    """Hover the mouse over the element."""
 
   @abstractmethod
-  async def clear_input(self, selector: str) -> str:
+  async def drag(self, from_ref: str, to_ref: str) -> str:
+    """Drag from one element to another."""
+
+  @abstractmethod
+  async def type_text(self, ref_or_selector: str, text: str, submit: bool = False) -> str:
+    """Clear the element and type ``text`` into it."""
+
+  @abstractmethod
+  async def type_slowly(self, ref_or_selector: str, text: str, delay: float = 75.0) -> str:
+    """Type ``text`` char-by-char with human-like keystroke delays."""
+
+  @abstractmethod
+  async def press_key(self, key: str) -> str:
+    """Press a keyboard key on the currently focused element."""
+
+  @abstractmethod
+  async def press_keys(self, ref_or_selector: str, keys: str) -> str:
+    """Send ``keys`` to the element."""
+
+  @abstractmethod
+  async def clear_input(self, ref_or_selector: str) -> str:
     """Clear the text from an input or textarea element."""
 
   @abstractmethod
-  async def execute_js(self, code: str) -> str:
-    """Execute ``code`` as JavaScript in the page context and return the result."""
+  async def select_option(self, ref_or_selector: str, text: str) -> str:
+    """Select an option from a ``<select>`` element by its visible text."""
+
+  @abstractmethod
+  async def check_element(self, ref_or_selector: str) -> str:
+    """Check a checkbox or radio button."""
+
+  @abstractmethod
+  async def uncheck_element(self, ref_or_selector: str) -> str:
+    """Uncheck a checkbox."""
+
+  @abstractmethod
+  async def is_checked(self, ref_or_selector: str) -> str:
+    """Return ``"true"`` or ``"false"`` for checkbox/radio state."""
+
+  @abstractmethod
+  async def set_value(self, ref_or_selector: str, value: str) -> str:
+    """Set the value of an element directly (works for sliders, range inputs)."""
+
+  @abstractmethod
+  async def set_input_files(self, ref_or_selector: str, paths: list[str]) -> str:
+    """Set files on a file input element."""
+
+  @abstractmethod
+  async def fill_form(self, fields: list[dict[str, Any]]) -> str:
+    """Batch form fill. Each field: {ref, type, value}."""
+
+  @abstractmethod
+  async def execute_js(self, code: str, ref: str | None = None, timeout: float | None = None) -> str:
+    """Execute ``code`` as JavaScript in the page context."""
+
+  @abstractmethod
+  async def highlight(self, ref_or_selector: str) -> str:
+    """Briefly highlight the element for visual debugging."""
+
+  @abstractmethod
+  async def remove_elements(self, selector: str) -> str:
+    """Remove ALL elements matching ``selector`` from the DOM."""
 
   # ---------------------------------------------------------------------------
   # Scrolling
@@ -118,8 +208,8 @@ class BaseBrowser(ABC):
     """Scroll up by ``amount`` screen-heights."""
 
   @abstractmethod
-  async def scroll_to_element(self, selector: str) -> str:
-    """Scroll until ``selector`` is in the viewport."""
+  async def scroll_to_element(self, ref_or_selector: str) -> str:
+    """Scroll until the element is in the viewport."""
 
   # ---------------------------------------------------------------------------
   # Waiting
@@ -130,20 +220,25 @@ class BaseBrowser(ABC):
     """Pause for ``seconds`` seconds."""
 
   @abstractmethod
-  async def wait_for_element(self, selector: str, timeout: float = 10.0) -> str:
-    """Wait up to ``timeout`` seconds for ``selector`` to appear in the DOM."""
+  async def wait_for_element(self, ref_or_selector: str, timeout: float = 10.0) -> str:
+    """Wait up to ``timeout`` seconds for the element to appear."""
 
   @abstractmethod
   async def wait_for_text(self, text: str, selector: str = "body", timeout: float = 10.0) -> str:
-    """Wait up to ``timeout`` seconds for ``text`` to appear inside ``selector``."""
-
-  # ---------------------------------------------------------------------------
-  # Screenshot
-  # ---------------------------------------------------------------------------
+    """Wait up to ``timeout`` seconds for ``text`` to appear."""
 
   @abstractmethod
-  async def screenshot(self, name: str = "screenshot") -> str:
-    """Save a screenshot and return its file path."""
+  async def wait_for(
+    self,
+    text: str | None = None,
+    text_gone: str | None = None,
+    selector: str | None = None,
+    url: str | None = None,
+    load_state: str | None = None,
+    fn: str | None = None,
+    timeout: float | None = None,
+  ) -> str:
+    """Unified wait with multiple condition types."""
 
   # ---------------------------------------------------------------------------
   # Tabs
@@ -157,25 +252,13 @@ class BaseBrowser(ABC):
   async def close_tab(self) -> str:
     """Close the current tab."""
 
-  # ---------------------------------------------------------------------------
-  # Advanced interaction
-  # ---------------------------------------------------------------------------
+  @abstractmethod
+  async def get_tabs(self) -> str:
+    """Return the list of open browser tabs."""
 
   @abstractmethod
-  async def hover(self, selector: str) -> str:
-    """Hover the mouse over ``selector`` (reveals dropdown menus, tooltips)."""
-
-  @abstractmethod
-  async def drag(self, from_selector: str, to_selector: str) -> str:
-    """Dispatch HTML5 drag-and-drop events from ``from_selector`` to ``to_selector``."""
-
-  @abstractmethod
-  async def type_slowly(self, selector: str, text: str) -> str:
-    """Type ``text`` char-by-char with human-like 75 ms keystroke delays."""
-
-  @abstractmethod
-  async def select_option(self, selector: str, text: str) -> str:
-    """Select an option from a ``<select>`` element by its visible text."""
+  async def switch_to_tab(self, index: int) -> str:
+    """Switch focus to the tab at ``index`` (0-based)."""
 
   # ---------------------------------------------------------------------------
   # Cookies
@@ -194,85 +277,53 @@ class BaseBrowser(ABC):
     """Delete all cookies for the current session."""
 
   # ---------------------------------------------------------------------------
+  # Storage
+  # ---------------------------------------------------------------------------
+
+  @abstractmethod
+  async def get_storage(self, key: str | None = None, kind: str = "local") -> str:
+    """Get a value from ``localStorage`` or ``sessionStorage``."""
+
+  @abstractmethod
+  async def set_storage(self, key: str, value: str, kind: str = "local") -> str:
+    """Set a key/value pair in ``localStorage`` or ``sessionStorage``."""
+
+  # ---------------------------------------------------------------------------
   # Dialogs
   # ---------------------------------------------------------------------------
 
   @abstractmethod
   async def handle_dialog(self, accept: bool = True, prompt_text: str = "") -> str:
-    """Accept or dismiss a browser dialog (alert/confirm/prompt).
-    Pass ``prompt_text`` to fill a ``prompt()`` dialog before accepting."""
+    """Accept or dismiss a browser dialog (alert/confirm/prompt)."""
 
   # ---------------------------------------------------------------------------
-  # Storage
-  # ---------------------------------------------------------------------------
-
-  @abstractmethod
-  async def get_storage(self, key: str, storage_type: str = "local") -> str:
-    """Get a value from ``localStorage`` or ``sessionStorage``.
-    ``storage_type``: ``"local"`` (default) or ``"session"``."""
-
-  @abstractmethod
-  async def set_storage(self, key: str, value: str, storage_type: str = "local") -> str:
-    """Set a key/value pair in ``localStorage`` or ``sessionStorage``."""
-
-  # ---------------------------------------------------------------------------
-  # Browser state
+  # Emulation
   # ---------------------------------------------------------------------------
 
   @abstractmethod
   async def set_geolocation(self, latitude: float, longitude: float, accuracy: float = 10.0) -> str:
-    """Override the browser's GPS coordinates via CDP Emulation."""
+    """Override the browser's GPS coordinates."""
 
-  @abstractmethod
-  async def highlight(self, selector: str) -> str:
-    """Briefly highlight ``selector`` with a gold border (2 s) for visual debugging."""
-
-  @abstractmethod
-  async def get_page_info(self) -> str:
-    """Return situational snapshot: URL, title, scroll position, interactive element counts."""
-
-  @abstractmethod
-  async def click_by_text(self, text: str, tag_name: str = "") -> str:
-    """Click the first element whose visible text contains ``text``.
-    Optionally filter to ``tag_name`` (e.g. ``"button"``, ``"a"``)."""
-
-  @abstractmethod
-  async def remove_elements(self, selector: str) -> str:
-    """Remove ALL elements matching ``selector`` from the DOM.
-    Use to dismiss cookie banners, ads, and overlay popups."""
-
-  @abstractmethod
-  async def is_checked(self, selector: str) -> str:
-    """Return ``"true"`` or ``"false"`` depending on whether a checkbox/radio is checked."""
-
-  @abstractmethod
-  async def check_element(self, selector: str) -> str:
-    """Check a checkbox or radio button if it is not already checked."""
-
-  @abstractmethod
-  async def uncheck_element(self, selector: str) -> str:
-    """Uncheck a checkbox if it is currently checked."""
-
-  @abstractmethod
-  async def set_value(self, selector: str, value: str) -> str:
-    """Set the value of an element directly (works for sliders and range inputs)."""
-
-  @abstractmethod
-  async def get_tabs(self) -> str:
-    """Return the number of open browser tabs."""
-
-  @abstractmethod
-  async def switch_to_tab(self, index: int) -> str:
-    """Switch focus to the tab at ``index`` (0-based)."""
+  # ---------------------------------------------------------------------------
+  # PDF
+  # ---------------------------------------------------------------------------
 
   @abstractmethod
   async def print_to_pdf(self, name: str = "page") -> str:
     """Save the current page as a PDF and return the file path."""
 
   # ---------------------------------------------------------------------------
-  # CAPTCHA
+  # Page state diagnostics
   # ---------------------------------------------------------------------------
 
   @abstractmethod
-  async def solve_captcha(self) -> str:
-    """Attempt to solve any CAPTCHA on the current page."""
+  async def get_console(self, limit: int = 50, level: str | None = None) -> str:
+    """Return captured browser console messages."""
+
+  @abstractmethod
+  async def get_errors(self, limit: int = 20) -> str:
+    """Return captured browser page errors."""
+
+  @abstractmethod
+  async def get_network(self, limit: int = 50, url_filter: str | None = None) -> str:
+    """Return captured network requests."""

@@ -1,19 +1,18 @@
-"""Browser automation for Definable agents via SeleniumBase CDP mode.
+"""Browser automation for Definable agents via Playwright CDP.
 
-SeleniumBase CDP drives Chrome directly via Chrome DevTools Protocol —
-no WebDriver, no automation fingerprints. It is the most stealth-capable
-browser automation approach available in Python.
+Playwright connects to Chrome directly via Chrome DevTools Protocol —
+native async, role-based element refs, AI-friendly errors, and
+self-healing connections.
 
 Quick start::
 
     from definable.agent import Agent
     from definable.browser import BrowserToolkit, BrowserConfig
-    from definable.model.openai import OpenAIChat
 
     async def main():
         async with BrowserToolkit() as toolkit:
             agent = Agent(
-                model=OpenAIChat(id="gpt-4o"),
+                model="openai/gpt-4o",
                 toolkits=[toolkit],
             )
             result = await agent.arun("Go to news.ycombinator.com and list the top 3 stories")
@@ -22,36 +21,52 @@ Quick start::
 Requires::
 
     pip install 'definable[browser]'
+    playwright install chromium
 """
 
 from typing import TYPE_CHECKING
 
 from definable.browser.base import BaseBrowser
 from definable.browser.config import BrowserConfig
+from definable.browser.events import BrowserActionEvent
 
 if TYPE_CHECKING:
-  from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
+  from definable.browser.playwright_browser import PlaywrightBrowser
   from definable.browser.toolkit import BrowserToolkit
 
 __all__ = [
   # Always safe to import (no heavy deps)
   "BaseBrowser",
   "BrowserConfig",
-  # Lazy (requires seleniumbase)
-  "SeleniumBaseBrowser",
+  "BrowserActionEvent",
+  # Lazy (requires playwright)
+  "PlaywrightBrowser",
   "BrowserToolkit",
 ]
 
 
-def __getattr__(name: str):
-  if name == "SeleniumBaseBrowser":
-    from definable.browser.seleniumbase_browser import SeleniumBaseBrowser
+def __getattr__(name: str):  # type: ignore[no-untyped-def]
+  if name == "PlaywrightBrowser":
+    from definable.browser.playwright_browser import PlaywrightBrowser
 
-    return SeleniumBaseBrowser
+    return PlaywrightBrowser
 
   if name == "BrowserToolkit":
     from definable.browser.toolkit import BrowserToolkit
 
     return BrowserToolkit
+
+  # Backward compat: old name still works, emits deprecation warning
+  if name == "SeleniumBaseBrowser":
+    import warnings
+
+    warnings.warn(
+      "SeleniumBaseBrowser has been removed. Use PlaywrightBrowser instead.",
+      DeprecationWarning,
+      stacklevel=2,
+    )
+    from definable.browser.playwright_browser import PlaywrightBrowser
+
+    return PlaywrightBrowser
 
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

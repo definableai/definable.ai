@@ -82,7 +82,11 @@ class SQLiteIdentityResolver:
     db_path: Path to the SQLite database file.
   """
 
-  def __init__(self, db_path: str = "./identity.db") -> None:
+  def __init__(self, db_path: str | None = None) -> None:
+    if db_path is None:
+      from definable.utils.workspace import workspace_path
+
+      db_path = str(workspace_path("identity.db"))
     self.db_path = db_path
     self._db: Any = None
     self._initialized = False

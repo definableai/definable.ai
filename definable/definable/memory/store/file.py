@@ -25,10 +25,15 @@ class FileStore:
   """JSONL file-based session memory store.
 
   Args:
-    base_dir: Root directory for memory files. Defaults to ".memory".
+    base_dir: Root directory for memory files.
+        Defaults to ``.definable/memory/`` in the project workspace.
   """
 
-  def __init__(self, base_dir: str = ".memory") -> None:
+  def __init__(self, base_dir: str | None = None) -> None:
+    if base_dir is None:
+      from definable.utils.workspace import workspace_path
+
+      base_dir = str(workspace_path("memory", mkdir=False))
     self.base_dir = Path(base_dir)
     self._initialized = False
 

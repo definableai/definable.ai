@@ -17,7 +17,11 @@ class SQLiteStore:
   Tables are auto-created on first ``initialize()`` call.
   """
 
-  def __init__(self, db_path: str = "./memory.db"):
+  def __init__(self, db_path: str | None = None):
+    if db_path is None:
+      from definable.utils.workspace import workspace_path
+
+      db_path = str(workspace_path("memory.db"))
     self.db_path = db_path
     self._db: Any = None
     self._initialized = False
