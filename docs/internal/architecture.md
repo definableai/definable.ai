@@ -23,6 +23,7 @@ Agent ──┬── Model (lazy client, global HTTP pool) — or string shorth
         ├── Knowledge (top_k, trigger, context_format — wraps VectorDB)
         ├── DeepResearch → DeepResearchConfig
         ├── Tracing (exporters: JSONLExporter, etc.)
+        ├── AudioTranscriber (voice→text, runs in arun before pipeline)
         ├── Toolkits[] → MCPToolkit | BrowserToolkit
         ├── Tools[] → Function (decorator-based)
         ├── Skills[] → Skill (instructions + tools)
@@ -45,7 +46,7 @@ Agent ──┬── Model (lazy client, global HTTP pool) — or string shorth
 
 ## Key Patterns
 - **String shorthand**: `model="openai/gpt-4o-mini"` resolves at Agent init
-- **Boolean shortcuts**: `memory=True` → InMemoryStore, `tracing=True` → default exporters
+- **Boolean shortcuts**: `memory=True` → InMemoryStore, `tracing=True` → default exporters, `audio_transcriber=True` → OpenAITranscriber
 - **Exception**: `knowledge=True` raises ValueError (requires vector_db)
 - **Middleware chain**: `__call__(context, next_handler)` protocol — NOT before/after hooks
 - **Document metadata**: Always `meta_data` (NOT `metadata`) — this is a known quirk, don't "fix" it

@@ -54,6 +54,18 @@ for doc in results:
     print(f"[{doc.reranking_score or 'n/a'}] {doc.content}")
 ```
 
+## Path Shorthand
+
+For the quickest setup, pass a directory path directly to the Agent:
+
+```python
+from definable.agent import Agent
+
+agent = Agent(model="gpt-4o-mini", knowledge="./docs/")
+```
+
+This auto-configures InMemoryVectorDB + OpenAIEmbedder + RecursiveChunker and recursively loads all supported files. See [Agent Integration](/knowledge/agent-integration) for details.
+
 ## Adding Documents
 
 The `add()` method accepts strings, file paths, or URLs. The appropriate reader is selected automatically:

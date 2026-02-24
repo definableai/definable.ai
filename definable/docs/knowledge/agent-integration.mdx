@@ -5,12 +5,31 @@ description: Connect knowledge bases to agents for automatic or on-demand retrie
 icon: robot
 ---
 
-There are two ways to give an agent access to a knowledge base:
+There are three ways to give an agent access to a knowledge base:
 
 | Approach | How It Works | When to Use |
 |----------|-------------|-------------|
-| **KnowledgeMiddleware** | Automatically retrieves context before every model call | Always-on RAG |
+| **Path shorthand** | Pass a directory path string — auto-configures full RAG pipeline | Quick setup from local files |
+| **KnowledgeMiddleware** | Automatically retrieves context before every model call | Always-on RAG with custom config |
 | **KnowledgeToolkit** | Agent decides when to search | Selective, multi-step reasoning |
+
+## Path Shorthand (Quickest)
+
+Pass a directory path as a string to auto-configure the full RAG pipeline with sensible defaults (InMemoryVectorDB + OpenAIEmbedder + RecursiveChunker). All supported files in the directory are recursively loaded.
+
+```python
+from definable.agent import Agent
+
+agent = Agent(
+    model="gpt-4o-mini",
+    knowledge="./docs/",  # Auto-loads all files, sets up embedder + vector DB
+    instructions="Answer questions from the documentation.",
+)
+```
+
+<Note>
+`Agent(knowledge=True)` raises `ValueError` — unlike `memory=True`, knowledge requires either a path string or a `Knowledge` instance.
+</Note>
 
 ## KnowledgeMiddleware (Automatic)
 

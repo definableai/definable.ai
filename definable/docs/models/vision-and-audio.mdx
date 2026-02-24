@@ -56,7 +56,7 @@ image = Image(url="https://example.com/chart.png", detail="high")
 
 ## Audio
 
-Send audio input and receive audio output from supported models:
+Send audio input and receive audio output from supported models.
 
 ### Audio Input
 
@@ -69,6 +69,10 @@ response = model.invoke(
     assistant_message=Message(role="assistant", content=""),
 )
 ```
+
+<Warning>
+Only `gpt-4o-audio-preview` supports raw `input_audio` blocks. Other models (GPT-4o-mini, Claude, DeepSeek) will reject them. Use `audio_transcriber=True` on the Agent to automatically transcribe voice to text before it reaches the model — see [Voice Note Transcription](#voice-note-transcription) below.
+</Warning>
 
 ### Audio Output
 
@@ -90,6 +94,70 @@ response = model.invoke(
 print(response.audio.transcript)
 audio_bytes = response.audio.get_content_bytes()
 ```
+
+### Voice Note Transcription
+
+When your agent receives voice messages from Telegram, Discord, or other interfaces, you need to transcribe the audio to text before sending it to the model. The `audio_transcriber` parameter handles this automatically.
+
+```python
+from definable.agent import Agent
+
+# Transcribe voice notes using OpenAI Whisper (default)
+agent = Agent(
+    model="openai/gpt-4o-mini",
+    audio_transcriber=True,
+)
+```
+
+When `audio_transcriber` is set:
+1. Voice messages arrive as `Audio` objects on the message
+2. Each audio clip is sent to the Whisper API for transcription
+3. The transcript text is appended to the message content
+4. The `audio` field is cleared so non-audio models don't receive raw audio blocks
+
+<CodeGroup>
+```python Default (Whisper)
+from definable.agent import Agent
+
+agent = Agent(model="openai/gpt-4o-mini", audio_transcriber=True)
+```
+
+```python Custom language
+from definable import Agent, OpenAITranscriber
+
+agent = Agent(
+    model="openai/gpt-4o-mini",
+    audio_transcriber=OpenAITranscriber(language="es"),
+)
+```
+
+```python Custom API key
+from definable import Agent, OpenAITranscriber
+
+agent = Agent(
+    model="openai/gpt-4o-mini",
+    audio_transcriber=OpenAITranscriber(api_key="sk-..."),
+)
+```
+</CodeGroup>
+
+<Tip>
+`audio_transcriber` works at the agent level, so all interfaces (Telegram, Discord, Desktop) and direct `arun()` callers benefit automatically. No per-interface setup required.
+</Tip>
+
+### Format Normalization
+
+Telegram sends voice notes as `.oga` (OGG Opus), which isn't accepted by all APIs. The `reader.audio` module provides format normalization:
+
+```python
+from definable.reader.audio import normalize_audio_format
+
+# Automatically converts oga/ogg/opus → wav via ffmpeg
+out_bytes, out_fmt = normalize_audio_format(raw_bytes, "oga")
+# out_fmt == "wav"
+```
+
+This requires `ffmpeg` installed on your system. The `audio_transcriber` handles this transparently — you don't need to call `normalize_audio_format` directly when using it.
 
 ## Video
 

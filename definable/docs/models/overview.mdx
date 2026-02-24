@@ -9,13 +9,19 @@ Models are the foundation of Definable. The `Model` base class provides a consis
 
 ## Supported Providers
 
-| Provider | Class | Default Model | Docs |
-|----------|-------|---------------|------|
-| OpenAI | `OpenAIChat` | `gpt-4o` | [OpenAI](/models/openai) |
-| DeepSeek | `DeepSeekChat` | `deepseek-chat` | [DeepSeek](/models/deepseek) |
-| Moonshot | `MoonshotChat` | `kimi-k2-turbo-preview` | [Moonshot](/models/moonshot) |
-| xAI | `xAI` | `grok-3` | [xAI](/models/xai) |
-| Custom | `OpenAILike` | -- | [OpenAI-Like](/models/openai-like) |
+| Provider | Class | Default Model | Install Extra |
+|----------|-------|---------------|--------------|
+| OpenAI | `OpenAIChat` | `gpt-4o` | *(core)* |
+| DeepSeek | `DeepSeekChat` | `deepseek-chat` | *(core)* |
+| Moonshot | `MoonshotChat` | `kimi-k2-turbo-preview` | *(core)* |
+| xAI | `xAI` | `grok-3` | *(core)* |
+| Anthropic | `Claude` | `claude-sonnet-4-20250514` | `pip install 'definable[anthropic]'` |
+| Mistral | `MistralChat` | `mistral-large-latest` | `pip install 'definable[mistral]'` |
+| Google | `Gemini` | `gemini-2.0-flash-001` | `pip install 'definable[google]'` |
+| Perplexity | `Perplexity` | `pplx-70b-online` | *(core)* |
+| Ollama | `Ollama` | `llama3` | `pip install 'definable[ollama]'` |
+| OpenRouter | `OpenRouter` | -- | *(core)* |
+| Custom | `OpenAILike` | -- | *(core)* |
 
 ## Basic Usage
 
@@ -158,14 +164,29 @@ model = OpenAIChat(
 
 ## Model Resolution from Strings
 
-You can resolve a model from a `"provider:model-id"` string:
+Agents accept string model shorthand — no explicit model import needed:
 
 ```python
-from definable.model.utils import get_model
+from definable.agent import Agent
 
-model = get_model("openai:gpt-4o")
-model = get_model("deepseek:deepseek-chat")
+# Bare model name (defaults to OpenAI)
+agent = Agent(model="gpt-4o-mini", instructions="Hello")
+
+# Provider/model-id format
+agent = Agent(model="anthropic/claude-sonnet-4-20250514", instructions="Hello")
+agent = Agent(model="google/gemini-2.0-flash-001", instructions="Hello")
 ```
+
+You can also resolve strings programmatically:
+
+```python
+from definable.model.utils import resolve_model_string
+
+model = resolve_model_string("openai/gpt-4o")
+model = resolve_model_string("deepseek/deepseek-chat")
+```
+
+Supported providers: `openai`, `deepseek`, `moonshot`, `xai`, `anthropic`, `mistral`, `google`, `perplexity`, `ollama`, `openrouter`
 
 ## Next Steps
 

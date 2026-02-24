@@ -120,7 +120,16 @@ See [Memory](/memory/agent-integration) for full documentation.
 
 Knowledge (RAG) is configured directly on the `Agent` constructor:
 
-```python
+<CodeGroup>
+```python Path shorthand (easiest)
+from definable.agent import Agent
+
+# Auto-configures InMemoryVectorDB + OpenAIEmbedder + RecursiveChunker
+# Recursively loads all supported files from the directory
+agent = Agent(model=model, knowledge="./docs/")
+```
+
+```python Full configuration
 from definable.agent import Agent
 from definable.embedder import OpenAIEmbedder
 from definable.knowledge import Knowledge
@@ -135,11 +144,13 @@ kb = Knowledge(
 )
 kb.add("Company policy: employees get 20 days PTO per year.")
 
-agent = Agent(
-    model=model,
-    knowledge=kb,
-)
+agent = Agent(model=model, knowledge=kb)
 ```
+</CodeGroup>
+
+<Warning>
+`Agent(knowledge=True)` raises `ValueError` — unlike `memory=True`, knowledge requires explicit configuration. Use a path string or a `Knowledge` instance.
+</Warning>
 
 See [Knowledge Agent Integration](/knowledge/agent-integration) for full documentation.
 
@@ -196,7 +207,7 @@ from definable.agent import AgentConfig, CompressionConfig
 config = AgentConfig(
     compression=CompressionConfig(
         enabled=True,
-        tool_results_limit=5,      # Trigger compression after 5 uncompressed tool results
+        tool_results_limit=3,      # Trigger compression after 3 uncompressed tool results
         token_limit=None,          # Or set a token threshold to trigger compression
         instructions="Preserve key facts and data. Remove formatting.",
     ),
@@ -239,6 +250,42 @@ config = AgentConfig(
 <ParamField path="readers.context_format" type="str" default="xml">
   Format for injecting file content into the prompt. `"xml"` wraps content in XML tags, `"markdown"` uses code blocks.
 </ParamField>
+
+## Audio Transcription
+
+The audio transcriber is configured directly on the `Agent` constructor. It automatically transcribes voice messages (from Telegram, Discord, or direct `arun()` calls) to text before the model sees them.
+
+```python
+from definable.agent import Agent
+
+# Simple enable (uses OpenAI Whisper)
+agent = Agent(model=model, audio_transcriber=True)
+
+# Custom configuration
+from definable import OpenAITranscriber
+agent = Agent(
+    model=model,
+    audio_transcriber=OpenAITranscriber(
+        model="whisper-1",    # Whisper model
+        language="en",        # Language hint (improves accuracy)
+        api_key=None,         # Falls back to OPENAI_API_KEY env var
+    ),
+)
+```
+
+See [Vision & Audio](/models/vision-and-audio#voice-note-transcription) for full documentation.
+
+### How It Works
+
+When `audio_transcriber` is set:
+1. Before the pipeline runs, `_transcribe_audio()` iterates over messages with `Audio` attachments
+2. Each audio clip is transcribed via the configured backend (Whisper by default)
+3. The transcript text is appended to the message's `content` field
+4. The `audio` field is cleared from the message so non-audio models don't receive raw `input_audio` blocks
+
+<Warning>
+Without `audio_transcriber`, voice messages from interfaces arrive as raw `Audio` objects. Most models (GPT-4o-mini, Claude, DeepSeek) will reject `input_audio` blocks — only `gpt-4o-audio-preview` supports them natively.
+</Warning>
 
 ## Deep Research
 

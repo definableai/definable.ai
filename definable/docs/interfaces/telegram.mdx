@@ -168,6 +168,34 @@ The interface automatically handles Telegram media types:
 
 Media is passed to the agent in the `images`, `audio`, and `files` parameters, so tools and the model can access them.
 
+### Voice Notes
+
+Telegram voice messages are sent as `.oga` files (OGG Opus). Most LLMs don't understand raw audio — you need to transcribe voice to text first. Add `audio_transcriber=True` to your agent:
+
+```python
+from definable.agent import Agent
+from definable.model import OpenAIChat
+from definable.agent.interface import TelegramInterface
+
+agent = Agent(
+    model=OpenAIChat(id="gpt-4o-mini"),
+    instructions="You are a helpful assistant.",
+    audio_transcriber=True,  # Transcribe voice notes via Whisper
+)
+
+interface = TelegramInterface(agent=agent, bot_token="YOUR_TOKEN")
+```
+
+When a user sends a voice note:
+1. Telegram delivers it as an `Audio` object with `mime_type="audio/ogg"`
+2. The agent's transcriber converts the audio to text via the Whisper API
+3. The transcript is injected into the message content
+4. The model processes the text normally
+
+<Tip>
+This works out of the box with no ffmpeg or format conversion needed — the Whisper API accepts OGG natively. Format normalization (OGA → WAV) is only needed when sending audio as `input_audio` blocks to models, which `audio_transcriber` bypasses entirely.
+</Tip>
+
 ### Sending Media
 
 The agent can return media in its response. Images are sent as photos, and files are sent as documents:

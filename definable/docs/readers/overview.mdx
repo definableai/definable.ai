@@ -333,6 +333,32 @@ for file in files:
   print(f"{result.filename}: {result.content[:100]}")
 ```
 
+## Audio Format Normalization
+
+The `reader.audio` module provides utilities for normalizing audio formats. This is used internally by the `audio_to_message()` function in `utils/openai.py` and can be used standalone:
+
+```python
+from definable.reader.audio import normalize_audio_format, OPENAI_INPUT_AUDIO_FORMATS
+
+# Converts oga/ogg/opus → wav via ffmpeg (passthrough if already wav/mp3)
+out_bytes, out_fmt = normalize_audio_format(raw_bytes, "oga")
+```
+
+### Supported Aliases
+
+| Input Extension | Resolves To |
+|----------------|-------------|
+| `oga` | `ogg` (Telegram voice) |
+| `opus` | `ogg` (raw Opus) |
+| `mpga` | `mp3` |
+| `mpeg` | `mp3` |
+
+If the resolved format is not in the target set (`wav`, `mp3` by default), ffmpeg is used to transcode. When ffmpeg is not installed, a `RuntimeError` is raised with install instructions.
+
+<Note>
+For agent-level voice transcription (the common use case), use `audio_transcriber=True` on the Agent instead of calling `normalize_audio_format` directly. See [Voice Note Transcription](/models/vision-and-audio#voice-note-transcription).
+</Note>
+
 ## Stream Events
 
 When using streaming, file reads emit events:

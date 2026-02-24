@@ -77,6 +77,7 @@ Check `.claude/memory/` before every significant action — especially `project-
 | `mcp/` | Synaptic protocol — inter-agent communication | MCPToolkit, MCPClient, MCPConfig |
 | `browser/` | Embodiment — acting in the browser | BrowserToolkit |
 | `reader/` | Sensory input — file parsing | BaseReader |
+| `reader/audio.py` | The ear — audio transcription + format normalization | AudioTranscriber, OpenAITranscriber, normalize_audio_format |
 
 ### How the Organs Connect
 
@@ -88,6 +89,7 @@ Agent ──┬── Model (the voice — lazy client, global HTTP pool)
         ├── Knowledge (what is known — top_k, trigger, context_format → VectorDB)
         ├── DeepResearch (deep curiosity → DeepResearchConfig)
         ├── Tracing (self-awareness → JSONLExporter, etc.)
+        ├── AudioTranscriber (the ear — voice→text before pipeline, Whisper default)
         ├── Toolkits[] (extended capabilities → MCPToolkit | BrowserToolkit)
         ├── Tools[] (specific actions → Function via @tool)
         ├── Skills[] (learned behaviors → instructions + tools)
@@ -167,14 +169,19 @@ model.invoke(messages=[Message(...)], assistant_message=Message(role="assistant"
 ```python
 from definable.agent import Agent
 agent = Agent(model=OpenAIChat(id="gpt-4o-mini"), tools=[...], instructions="...")
-# String shorthand — format: "provider/model-id"
+# String shorthand — format: "provider/model-id" (or bare model name → defaults to OpenAI)
 agent = Agent(model="openai/gpt-4o-mini", instructions="...")
-# Supported: openai, deepseek, moonshot, xai
-# e.g. "deepseek/deepseek-chat", "xai/grok-3", "moonshot/kimi-k2-turbo-preview"
+agent = Agent(model="gpt-4o-mini", instructions="...")  # bare name → OpenAI
+# Supported providers (10): openai, deepseek, moonshot, xai, anthropic, mistral, google, perplexity, ollama, openrouter
+# e.g. "anthropic/claude-sonnet-4-20250514", "google/gemini-2.0-flash-001", "deepseek/deepseek-chat"
 
 result = await agent.arun("prompt")       # result.content has the text
 # Structured output:
 await agent.arun("prompt", output_schema=MyModel)  # NOT response_model
+
+# Voice note transcription (Telegram/Discord voice → text before model)
+agent = Agent(model=model, audio_transcriber=True)  # uses OpenAITranscriber (Whisper)
+# Or custom: audio_transcriber=OpenAITranscriber(language="en", model="whisper-1")
 ```
 
 ### Tools — The Hands
@@ -196,6 +203,9 @@ doc = Document(content="...", meta_data={"source": "file.pdf"})  # meta_data, NO
 from definable.vectordb import InMemoryVectorDB  # import from vectordb, NOT knowledge
 knowledge = Knowledge(vector_db=InMemoryVectorDB(), top_k=5)
 agent = Agent(model=model, knowledge=knowledge)
+
+# Path shorthand — auto-configures InMemoryVectorDB + OpenAIEmbedder + RecursiveChunker
+agent = Agent(model=model, knowledge="./docs/")
 ```
 
 ### VectorDB — Spatial Memory
@@ -271,6 +281,8 @@ These are injuries the organism has already suffered. Learn from them. Never rep
 | `session_id` for history | Does nothing alone. Pass `messages=r1.messages` or use Memory. |
 | Sync `run()` multi-turn | Breaks after 2-3 sequential calls. Use async. Always. |
 | `mock_model.call_count` | Not incremented with `side_effect`. Use `len(mock.call_history)`. |
+| `audio_transcriber` clears audio | After transcription, `msg.audio` is set to `None` so non-audio models don't receive `input_audio` blocks. |
+| OGA/OGG format for OpenAI | Telegram sends `.oga` (Opus in OGG). OpenAI's `input_audio` API only accepts `wav`/`mp3`. Use `normalize_audio_format()` or `audio_transcriber=True`. |
 
 ---
 

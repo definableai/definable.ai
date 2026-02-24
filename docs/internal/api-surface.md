@@ -21,6 +21,7 @@ agent = Agent(
     tracing=True,                    # or Tracing(exporters=[...])
     guardrails=Guardrails(input=[max_tokens(500)]),
     deep_research=True,              # or DeepResearchConfig(...)
+    audio_transcriber=True,          # or OpenAITranscriber(language="en")
     config=AgentConfig(...),         # advanced settings
 )
 
@@ -49,7 +50,8 @@ response = model.invoke(
 )
 ```
 
-String shorthand providers: `openai`, `deepseek`, `moonshot`, `xai`
+String shorthand providers (10): `openai`, `deepseek`, `moonshot`, `xai`, `anthropic`, `mistral`, `google`, `perplexity`, `ollama`, `openrouter`
+Bare model names default to OpenAI: `Agent(model="gpt-4o-mini")` → `OpenAIChat(id="gpt-4o-mini")`
 
 ## Tools
 
@@ -73,6 +75,9 @@ from definable.vectordb import InMemoryVectorDB, PgVector, Qdrant, ChromaDb
 doc = Document(content="...", meta_data={"source": "file.pdf"})
 
 knowledge = Knowledge(vector_db=InMemoryVectorDB(), top_k=5)
+
+# Path shorthand — auto-configures full RAG pipeline
+agent = Agent(model=model, knowledge="./docs/")
 ```
 
 ## Memory
@@ -131,6 +136,27 @@ auth = AllowlistAuth(user_ids={"user1"})     # NOT allowed_ids
 from definable.agent import MockModel, create_test_agent, AgentTestCase
 # MockModel gotcha: call_count NOT incremented with side_effect
 # Use len(mock_model.call_history) instead
+```
+
+## Audio Transcription
+
+```python
+from definable import Agent, OpenAITranscriber
+
+# Auto-transcribe voice notes from interfaces (uses Whisper API)
+agent = Agent(model="openai/gpt-4o-mini", audio_transcriber=True)
+
+# Custom transcriber with language hint
+agent = Agent(model="openai/gpt-4o-mini", audio_transcriber=OpenAITranscriber(language="en"))
+```
+
+Format normalization (Telegram OGA, Discord OGG → WAV/MP3):
+
+```python
+from definable.reader.audio import normalize_audio_format, OPENAI_INPUT_AUDIO_FORMATS
+
+# Converts oga/ogg/opus → wav via ffmpeg if needed
+out_bytes, out_fmt = normalize_audio_format(raw_bytes, "oga")
 ```
 
 ## Known Gotchas
