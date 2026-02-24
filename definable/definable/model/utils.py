@@ -20,6 +20,15 @@ _PROVIDER_MAP: Dict[str, Tuple[str, str]] = {
   "openrouter": ("definable.model.openrouter.openrouter", "OpenRouter"),
 }
 
+# Maps provider names to pip install extras for helpful error messages.
+# Providers using the 'openai' SDK (core dep) don't need an extra.
+_INSTALL_HINTS: Dict[str, str] = {
+  "anthropic": 'pip install "definable[anthropic]"',
+  "google": 'pip install "definable[google]"',
+  "mistral": 'pip install "definable[mistral]"',
+  "ollama": 'pip install "definable[ollama]"',
+}
+
 
 def get_supported_providers() -> list[str]:
   """Return sorted list of supported provider names."""
@@ -47,7 +56,13 @@ def resolve_model_string(model_string: str) -> Model:
     provider = "openai"
     model_id = model_string.strip()
     module_path, class_name = _PROVIDER_MAP[provider]
-    module = import_module(module_path)
+    try:
+      module = import_module(module_path)
+    except ImportError as e:
+      hint = _INSTALL_HINTS.get(provider)
+      if hint:
+        raise ImportError(f"Provider '{provider}' requires an optional dependency that is not installed. Install it with: {hint}") from e
+      raise
     model_class = getattr(module, class_name)
     return model_class(id=model_id)
 
@@ -63,7 +78,13 @@ def resolve_model_string(model_string: str) -> Model:
     raise ValueError(f"Unknown model provider '{provider}'. Supported providers: {supported}")
 
   module_path, class_name = _PROVIDER_MAP[provider]
-  module = import_module(module_path)
+  try:
+    module = import_module(module_path)
+  except ImportError as e:
+    hint = _INSTALL_HINTS.get(provider)
+    if hint:
+      raise ImportError(f"Provider '{provider}' requires an optional dependency that is not installed. Install it with: {hint}") from e
+    raise
   model_class = getattr(module, class_name)
   return model_class(id=model_id)
 
