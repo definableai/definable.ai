@@ -66,6 +66,7 @@ class PlaywrightBrowser(BaseBrowser):
     self._page_state: PageState | None = None
     self._refs = RefResolver()
     self.on_action: Callable[[BrowserActionEvent], Any] | None = None
+    self._screenshot_dir: str = ""
     if self._config.downloads_dir:
       self._screenshot_dir = self._config.downloads_dir
     else:

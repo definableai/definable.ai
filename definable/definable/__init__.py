@@ -79,6 +79,7 @@ if TYPE_CHECKING:
   from definable.model.perplexity import Perplexity
   from definable.model.ollama import Ollama
   from definable.model.openrouter import OpenRouter
+  from definable.agent.observability import ObservabilityConfig
   from definable.claude_code import ClaudeCodeAgent
   from definable.reader.audio import OpenAITranscriber
   from definable.skill.registry import SkillRegistry
@@ -124,6 +125,8 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   "SubAgentPolicy": ("definable.agent.pipeline", "SubAgentPolicy"),
   # Audio transcription
   "OpenAITranscriber": ("definable.reader.audio", "OpenAITranscriber"),
+  # Observability
+  "ObservabilityConfig": ("definable.agent.observability", "ObservabilityConfig"),
 }
 
 
@@ -193,4 +196,6 @@ __all__ = [
   "Tracing",
   # Lazy — Audio
   "OpenAITranscriber",
+  # Lazy — Observability
+  "ObservabilityConfig",
 ]

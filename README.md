@@ -276,6 +276,23 @@ output = agent.run("Summarize this.", files=[File(filepath="report.pdf")])
 
 Pass `readers=True` to enable automatic parsing. Supports PDF, DOCX, PPTX, XLSX, ODS, RTF, HTML, images, and audio. AI-powered OCR available via Mistral, OpenAI, Anthropic, and Google providers.
 
+## Observability Dashboard
+
+```python
+from definable.agent import Agent
+
+agent = Agent(
+  model="gpt-4o-mini",
+  observability=True,  # enables live dashboard at /obs/
+  instructions="You are a helpful assistant.",
+)
+
+agent.serve(enable_server=True)
+# Open http://localhost:8000/obs/ in your browser
+```
+
+Live events (SSE), session history, run comparison, per-tool and per-model metrics — all in a single-page dashboard. Use `ObservabilityConfig` for fine-grained control (trace dir, buffer size, theme).
+
 ## Deploy It
 
 ```python
@@ -410,6 +427,7 @@ assert "Paris" in output.content
 | **Replay** | Inspect past runs, re-execute with overrides, `agent.compare()` for side-by-side diffs |
 | **Middleware** | Request/response transforms via `agent.use()`, logging, retry, metrics |
 | **Tracing** | JSONL trace export for debugging and analysis |
+| **Observability** | Live dashboard at `/obs/` with real-time events (SSE), session browser, run comparison, tool/model metrics — `Agent(observability=True)` |
 | **Thinking** | Chain-of-thought reasoning layer with configurable triggers |
 | **Compression** | Automatic context window management for long conversations |
 | **Testing** | `MockModel`, `AgentTestCase`, `create_test_agent` utilities |
@@ -486,6 +504,7 @@ definable/definable/
 │   ├── compression/    # Context window compression
 │   ├── guardrail/      # Input/output/tool policy, PII, token limits, composable rules
 │   ├── interface/      # Telegram, Discord, Desktop, CLI integrations
+│   ├── observability/  # Live dashboard, metrics, trace browser, SSE events
 │   ├── pipeline/       # 8-phase execution pipeline, hooks, ToolRetry, DebugConfig
 │   ├── reasoning/      # Thinking layer (chain-of-thought)
 │   ├── replay/         # Run inspection, re-execution, comparison

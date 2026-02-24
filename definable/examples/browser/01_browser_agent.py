@@ -42,7 +42,7 @@ async def main() -> None:
     print(f"Browser ready — {len(toolkit.tools)} tools\n")
 
     agent = Agent(
-      model=OpenAIChat(id="gpt-5.2"),
+      model=OpenAIChat(id="gpt-4o-mini"),
       toolkits=[toolkit],
       instructions=INSTRUCTIONS,
     )
