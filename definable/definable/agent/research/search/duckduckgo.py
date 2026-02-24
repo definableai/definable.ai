@@ -1,4 +1,4 @@
-"""DuckDuckGo search backend via duckduckgo-search package."""
+"""DuckDuckGo search backend via ddgs package (or legacy duckduckgo-search)."""
 
 import asyncio
 from typing import List
@@ -11,7 +11,7 @@ class DuckDuckGoSearchProvider:
   """Search provider using DuckDuckGo (no API key required).
 
   Wraps the synchronous DDGS().text() in asyncio.to_thread().
-  Requires: pip install duckduckgo-search
+  Requires: pip install ddgs (or legacy pip install duckduckgo-search)
   """
 
   async def search(self, query: str, max_results: int = 10) -> List[SearchResult]:
@@ -20,9 +20,12 @@ class DuckDuckGoSearchProvider:
 
   def _search_sync(self, query: str, max_results: int) -> List[SearchResult]:
     try:
-      from duckduckgo_search import DDGS
+      from ddgs import DDGS
     except ImportError:
-      raise ImportError("DuckDuckGo search requires 'duckduckgo-search'. Install it with: pip install duckduckgo-search")
+      try:
+        from duckduckgo_search import DDGS
+      except ImportError:
+        raise ImportError("DuckDuckGo search requires 'ddgs'. Install it with: pip install ddgs")
 
     results: List[SearchResult] = []
     try:
