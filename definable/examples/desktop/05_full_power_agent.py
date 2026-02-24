@@ -14,10 +14,8 @@ Usage:
 """
 
 import asyncio
-import os
 
 from definable.agent import Agent
-from definable.agent.interface import TelegramInterface
 from definable.model.openai import OpenAIChat
 from definable.skill.builtin.macos import MacOS
 
@@ -48,15 +46,10 @@ async def main() -> None:
       "approaches when possible."
     ),
   )
-  telegram = TelegramInterface(
-    agent=agent,
-    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+  result = await agent.arun(
+    "Take a photo with the camera and save it to /tmp/selfie.png, then take a screenshot of my desktop and tell me what apps are open."
   )
-  # result = await agent.arun(
-  #   "Take a photo with the camera and save it to /tmp/selfie.png, then take a screenshot of my desktop and tell me what apps are open."
-  # )
-  # print(result.content)
-  await agent.aserve(telegram)
+  print(result.content)
 
 
 if __name__ == "__main__":
