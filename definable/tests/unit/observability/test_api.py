@@ -214,9 +214,11 @@ class TestTimelineEndpoint:
     resp = client.get("/obs/api/metrics/timeline")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["bucket"] == "hour"
+    assert data["bucket"] in ("5min", "30min", "hour", "day")
     assert "data" in data
     assert isinstance(data["data"], list)
+    assert "bucket_seconds" in data
+    assert "range_hours" in data
 
   def test_timeline_range_param(self, app_client):
     """Should accept range parameter."""

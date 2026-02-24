@@ -128,6 +128,8 @@ class AgentServer:
     if obs_config is None or not obs_config.enabled:
       return
 
+    import logging
+
     from fastapi.responses import HTMLResponse
 
     from definable.agent.observability.api import create_observability_router
@@ -135,6 +137,15 @@ class AgentServer:
     from definable.agent.observability.dashboard import get_dashboard_html
     from definable.agent.observability.metrics import MetricsAggregator
     from definable.agent.observability.trace_browser import TraceBrowser
+
+    # Suppress noisy "socket.send() raised exception" from asyncio transport.
+    # These fire when the browser refreshes and the old SSE connection's transport
+    # keeps trying to write to the dead socket (asyncio.selector_events._SelectorSocketTransport).
+    class _SocketSendFilter(logging.Filter):
+      def filter(self, record: logging.LogRecord) -> bool:
+        return "socket.send() raised exception" not in record.getMessage()
+
+    logging.getLogger("asyncio").addFilter(_SocketSendFilter())
 
     # Get or create the collector exporter
     exporter = getattr(self.agent, "_observability_exporter", None)
@@ -149,6 +160,7 @@ class AgentServer:
       collector=exporter,
       trace_browser=trace_browser,
       metrics_aggregator=metrics_aggregator,
+      agent=self.agent,
     )
     app.include_router(obs_router, prefix="/obs/api")
 

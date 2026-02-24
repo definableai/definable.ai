@@ -21,6 +21,7 @@ def create_observability_router(
   collector: "ObservabilityExporter",
   trace_browser: "TraceBrowser",
   metrics_aggregator: "MetricsAggregator",
+  agent: Any = None,
 ) -> Any:
   """Create the FastAPI APIRouter for observability endpoints.
 
@@ -28,6 +29,7 @@ def create_observability_router(
     collector: The live event collector.
     trace_browser: The historical trace browser.
     metrics_aggregator: The metrics aggregator.
+    agent: Optional Agent instance for the chat endpoint.
 
   Returns:
     A FastAPI APIRouter.
@@ -36,6 +38,9 @@ def create_observability_router(
   from fastapi.responses import JSONResponse, StreamingResponse
 
   router = APIRouter()
+
+  # Chat conversation history keyed by session
+  _chat_sessions: Dict[str, List[Any]] = {}
 
   # --- Health ---
   @router.get("/health")
@@ -56,33 +61,53 @@ def create_observability_router(
     session_id: Optional[str] = Query(None, description="Filter by session ID"),
   ) -> StreamingResponse:
     q = collector.subscribe()
+    _disconnected = False
+
+    async def _watch_disconnect() -> None:
+      """Poll for client disconnect and inject sentinel to unblock q.get()."""
+      nonlocal _disconnected
+      while not _disconnected:
+        if await request.is_disconnected():
+          _disconnected = True
+          # Wake up the generator immediately
+          with contextlib.suppress(asyncio.QueueFull):
+            q.put_nowait(None)
+          return
+        await asyncio.sleep(1.0)
 
     async def event_generator():
+      nonlocal _disconnected
+      watcher = asyncio.create_task(_watch_disconnect())
       try:
         # Send catchup from buffer
         for evt in collector.get_recent_events(limit=100):
+          if _disconnected:
+            return
           if _matches_filter(evt, event_type=event_type, run_id=run_id, session_id=session_id):
             yield f"data: {json.dumps(evt, default=str)}\n\n"
 
         # Stream live events
-        while True:
-          if await request.is_disconnected():
-            break
+        while not _disconnected:
           try:
-            evt = await asyncio.wait_for(q.get(), timeout=30.0)  # type: ignore[arg-type]
+            evt = await asyncio.wait_for(q.get(), timeout=15.0)  # type: ignore[arg-type]
           except asyncio.TimeoutError:
-            # Send keepalive
+            if _disconnected:
+              break  # type: ignore[unreachable]
             yield ": keepalive\n\n"
             continue
 
-          if evt is None:
+          if evt is None or _disconnected:
             break  # type: ignore[unreachable]
 
           if _matches_filter(evt, event_type=event_type, run_id=run_id, session_id=session_id):
             yield f"data: {json.dumps(evt, default=str)}\n\n"
-      except (asyncio.CancelledError, GeneratorExit):
+      except (asyncio.CancelledError, GeneratorExit, ConnectionError, OSError):
         pass
       finally:
+        _disconnected = True
+        watcher.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+          await watcher
         collector.unsubscribe(q)
 
     return StreamingResponse(
@@ -211,15 +236,18 @@ def create_observability_router(
   # --- Metrics timeline ---
   @router.get("/metrics/timeline")
   async def obs_metrics_timeline(
-    bucket: str = Query("hour", pattern="^(hour|day)$"),
-    range_param: str = Query("24h", alias="range", pattern="^(24h|7d|30d)$"),
+    bucket: str = Query("auto", pattern="^(auto|5min|30min|hour|day)$"),
+    range_param: str = Query("auto", alias="range", pattern="^(auto|1h|6h|24h|7d|30d)$"),
   ) -> Dict[str, Any]:
-    range_hours = {"24h": 24, "7d": 168, "30d": 720}.get(range_param, 24)
+    range_hours_map = {"auto": 0, "1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
+    range_hours = range_hours_map.get(range_param, 0)
     all_events = list(collector.buffer)
-    buckets = metrics_aggregator.compute_timeline(all_events, bucket=bucket, range_hours=range_hours)
+    result = metrics_aggregator.compute_timeline(all_events, bucket=bucket, range_hours=range_hours)
     return {
-      "bucket": bucket,
+      "bucket": result.resolved_bucket,
+      "bucket_seconds": result.bucket_seconds,
       "range": range_param,
+      "range_hours": round(result.range_hours, 2),
       "data": [
         {
           "timestamp": b.timestamp,
@@ -229,7 +257,7 @@ def create_observability_router(
           "tokens": b.tokens,
           "cost": round(b.cost, 6),
         }
-        for b in buckets
+        for b in result.buckets
       ],
     }
 
@@ -255,6 +283,51 @@ def create_observability_router(
         "Content-Disposition": f'attachment; filename="{session_id}.jsonl"',
       },
     )
+
+  # --- Chat ---
+  @router.post("/chat")
+  async def obs_chat(request: Request) -> Any:
+    if agent is None:
+      return JSONResponse(status_code=501, content={"error": "No agent configured for chat"})
+
+    body = await request.json()
+    message = body.get("message", "").strip()
+    session_id = body.get("session_id", "default")
+
+    if not message:
+      return JSONResponse(status_code=400, content={"error": "Empty message"})
+
+    # Retrieve or initialize conversation history
+    prev_messages = _chat_sessions.get(session_id)
+
+    try:
+      result = await agent.arun(
+        message,
+        messages=prev_messages,
+      )
+      # Store updated conversation for multi-turn
+      _chat_sessions[session_id] = result.messages
+
+      return {
+        "content": result.content,
+        "run_id": result.run_id,
+        "session_id": session_id,
+        "tokens": {
+          "input_tokens": result.metrics.input_tokens if result.metrics else 0,
+          "output_tokens": result.metrics.output_tokens if result.metrics else 0,
+          "total_tokens": result.metrics.total_tokens if result.metrics else 0,
+        },
+        "cost": result.metrics.cost if result.metrics else 0,
+      }
+    except Exception as exc:
+      return JSONResponse(status_code=500, content={"error": str(exc)})
+
+  @router.post("/chat/reset")
+  async def obs_chat_reset(request: Request) -> Dict[str, str]:
+    body = await request.json()
+    session_id = body.get("session_id", "default")
+    _chat_sessions.pop(session_id, None)
+    return {"status": "ok", "session_id": session_id}
 
   return router
 

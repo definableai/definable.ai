@@ -34,6 +34,21 @@ class ModelStats:
 
 
 @dataclass
+class RecentRun:
+  """Summary of a single run for the overview page."""
+
+  run_id: str = ""
+  session_id: str = ""
+  status: str = "PENDING"
+  tokens: int = 0
+  cost: float = 0.0
+  duration: float = 0.0
+  agent_name: str = ""
+  model: str = ""
+  created_at: float = 0.0
+
+
+@dataclass
 class TimeSeriesBucket:
   """A single time-series bucket."""
 
@@ -71,6 +86,7 @@ class MetricsSnapshot:
 
   tool_stats: List[ToolStats] = field(default_factory=list)
   model_stats: List[ModelStats] = field(default_factory=list)
+  recent_runs: List[RecentRun] = field(default_factory=list)
 
   def to_dict(self) -> Dict[str, Any]:
     """Serialize to dict for JSON response."""
@@ -114,6 +130,20 @@ class MetricsSnapshot:
         }
         for ms in self.model_stats
       ],
+      "recent_runs": [
+        {
+          "run_id": r.run_id,
+          "session_id": r.session_id,
+          "status": r.status,
+          "tokens": r.tokens,
+          "cost": round(r.cost, 6),
+          "duration": round(r.duration, 3),
+          "agent_name": r.agent_name,
+          "model": r.model,
+          "created_at": r.created_at,
+        }
+        for r in self.recent_runs
+      ],
     }
 
 
@@ -139,6 +169,7 @@ class MetricsAggregator:
     # Track per-run data
     run_starts: Dict[str, Dict[str, Any]] = {}
     run_completions: Dict[str, Dict[str, Any]] = {}
+    run_errors: set[str] = set()
     durations: List[float] = []
 
     # Per-tool accumulators
@@ -163,11 +194,11 @@ class MetricsAggregator:
 
         metrics = evt.get("metrics")
         if metrics:
-          inp = metrics.get("input_tokens", 0) or 0
-          out = metrics.get("output_tokens", 0) or 0
-          total = metrics.get("total_tokens", 0) or 0
-          cost = metrics.get("cost", 0) or 0
-          dur = metrics.get("duration")
+          inp = _get(metrics, "input_tokens", 0) or 0
+          out = _get(metrics, "output_tokens", 0) or 0
+          total = _get(metrics, "total_tokens", 0) or 0
+          cost = _get(metrics, "cost", 0) or 0
+          dur = _get(metrics, "duration")
 
           snap.total_input_tokens += inp
           snap.total_output_tokens += out
@@ -179,6 +210,9 @@ class MetricsAggregator:
 
       elif event_type == "RunError":
         snap.error_runs += 1
+        run_id = evt.get("run_id")
+        if run_id:
+          run_errors.add(run_id)
 
       elif event_type == "RunCancelled":
         snap.cancelled_runs += 1
@@ -188,13 +222,13 @@ class MetricsAggregator:
 
       elif event_type == "ToolCallCompleted":
         tool = evt.get("tool") or {}
-        name = tool.get("tool_name", "unknown")
+        name = _get(tool, "tool_name", "unknown")
         td = tool_data[name]
         td["count"] += 1
-        if tool.get("tool_call_error"):
+        if _get(tool, "tool_call_error"):
           td["errors"] += 1
         # Compute duration from created_at delta if available
-        dur = tool.get("duration_ms")
+        dur = _get(tool, "duration_ms")
         if dur is not None:
           td["total_ms"] += float(dur)
 
@@ -204,10 +238,10 @@ class MetricsAggregator:
         md["count"] += 1
         metrics = evt.get("metrics")
         if metrics:
-          md["input_tokens"] += metrics.get("input_tokens", 0) or 0
-          md["output_tokens"] += metrics.get("output_tokens", 0) or 0
-          md["total_tokens"] += metrics.get("total_tokens", 0) or 0
-          md["cost"] += metrics.get("cost", 0) or 0
+          md["input_tokens"] += _get(metrics, "input_tokens", 0) or 0
+          md["output_tokens"] += _get(metrics, "output_tokens", 0) or 0
+          md["total_tokens"] += _get(metrics, "total_tokens", 0) or 0
+          md["cost"] += _get(metrics, "cost", 0) or 0
 
     # Finalize
     snap.total_runs = snap.completed_runs + snap.error_runs + snap.cancelled_runs + snap.paused_runs
@@ -252,6 +286,36 @@ class MetricsAggregator:
         )
       )
 
+    # Build recent runs — merge RunStarted metadata with RunCompleted metrics
+    all_run_ids = set(run_starts.keys()) | set(run_completions.keys()) | set(run_errors)
+    recent: List[RecentRun] = []
+    for rid in all_run_ids:
+      start_evt = run_starts.get(rid, {})
+      comp_evt = run_completions.get(rid)
+      metrics = _get(comp_evt or {}, "metrics") or {}
+      if comp_evt:
+        status = "COMPLETED"
+      elif rid in run_errors:
+        status = "ERROR"
+      else:
+        status = "RUNNING"
+      recent.append(
+        RecentRun(
+          run_id=rid,
+          session_id=start_evt.get("session_id", ""),
+          status=status,
+          tokens=_get(metrics, "total_tokens", 0) or 0,
+          cost=_get(metrics, "cost", 0) or 0,
+          duration=_get(metrics, "duration", 0) or 0,
+          agent_name=start_evt.get("agent_name", ""),
+          model=start_evt.get("model", ""),
+          created_at=start_evt.get("created_at", 0) or 0,
+        )
+      )
+    # Sort newest first, keep top 20
+    recent.sort(key=lambda r: r.created_at, reverse=True)
+    snap.recent_runs = recent[:20]
+
     return snap
 
   def compute_timeline(
@@ -259,30 +323,52 @@ class MetricsAggregator:
     events: List[Dict[str, Any]],
     *,
     bucket: str = "hour",
-    range_hours: int = 24,
-  ) -> List[TimeSeriesBucket]:
+    range_hours: float = 24,
+  ) -> "TimelineResult":
     """Compute time-series buckets from events.
 
     Args:
       events: List of event dicts.
-      bucket: Bucket granularity (``"hour"`` or ``"day"``).
-      range_hours: How far back to look (default 24h).
+      bucket: Bucket granularity — ``"5min"``, ``"30min"``, ``"hour"``,
+              ``"day"``, or ``"auto"`` (picks based on data spread).
+      range_hours: How far back to look. Use ``0`` for auto-range
+                   (derived from earliest event to now).
 
     Returns:
-      List of TimeSeriesBucket sorted by timestamp.
+      TimelineResult with buckets and resolved bucket/range info.
     """
     now = time.time()
+
+    # Auto-range: find earliest event timestamp
+    if range_hours <= 0:
+      earliest = now
+      for evt in events:
+        ts = evt.get("created_at")
+        if ts is not None and ts < earliest:
+          earliest = ts
+      spread = now - earliest
+      # Pad by 10% on each side for visual breathing room, minimum 1h
+      range_hours = max(1.0, (spread * 1.2) / 3600)
+
     cutoff = now - (range_hours * 3600)
 
-    if bucket == "day":
-      bucket_seconds = 86400
-    else:
-      bucket_seconds = 3600
+    # Resolve bucket granularity
+    if bucket == "auto":
+      if range_hours <= 1:
+        bucket = "5min"
+      elif range_hours <= 6:
+        bucket = "30min"
+      elif range_hours <= 48:
+        bucket = "hour"
+      else:
+        bucket = "day"
 
-    # Initialize empty buckets
+    bucket_seconds = _bucket_to_seconds(bucket)
+
+    # Initialize empty buckets from cutoff to now
     buckets: Dict[int, TimeSeriesBucket] = {}
     t = cutoff
-    while t < now:
+    while t < now + bucket_seconds:
       bucket_ts = int(t // bucket_seconds) * bucket_seconds
       if bucket_ts not in buckets:
         buckets[bucket_ts] = TimeSeriesBucket(
@@ -311,13 +397,36 @@ class MetricsAggregator:
         b.run_count += 1
         metrics = evt.get("metrics")
         if metrics:
-          b.tokens += metrics.get("total_tokens", 0) or 0
-          b.cost += metrics.get("cost", 0) or 0
+          b.tokens += _get(metrics, "total_tokens", 0) or 0
+          b.cost += _get(metrics, "cost", 0) or 0
       elif event_type == "RunError":
         b.run_count += 1
         b.error_count += 1
 
-    return sorted(buckets.values(), key=lambda b: b.timestamp)
+    sorted_buckets = sorted(buckets.values(), key=lambda b: b.timestamp)
+    return TimelineResult(
+      buckets=sorted_buckets,
+      resolved_bucket=bucket,
+      bucket_seconds=bucket_seconds,
+      range_hours=range_hours,
+    )
+
+
+@dataclass
+class TimelineResult:
+  """Result of compute_timeline with resolved metadata."""
+
+  buckets: List[TimeSeriesBucket] = field(default_factory=list)
+  resolved_bucket: str = "hour"
+  bucket_seconds: int = 3600
+  range_hours: float = 24.0
+
+
+def _get(obj: Any, key: str, default: Any = None) -> Any:
+  """Get a value from a dict or object attribute, handling both cases."""
+  if isinstance(obj, dict):
+    return obj.get(key, default)
+  return getattr(obj, key, default)
 
 
 def _percentile(data: List[float], pct: float) -> float:
@@ -333,11 +442,22 @@ def _percentile(data: List[float], pct: float) -> float:
   return sorted_data[f] + (k - f) * (sorted_data[c] - sorted_data[f])
 
 
+def _bucket_to_seconds(bucket: str) -> int:
+  """Convert bucket name to duration in seconds."""
+  return {"5min": 300, "30min": 1800, "hour": 3600, "day": 86400}.get(bucket, 3600)
+
+
 def _format_bucket_label(ts: float, bucket: str) -> str:
-  """Format a bucket timestamp into a human-readable label."""
+  """Format a bucket timestamp into a human-readable label.
+
+  Note: labels are UTC. The frontend converts to local time using
+  the ``timestamp`` field (Unix epoch) via ``new Date()``.
+  """
   import datetime
 
   dt = datetime.datetime.fromtimestamp(ts, tz=datetime.timezone.utc)
   if bucket == "day":
     return dt.strftime("%Y-%m-%d")
-  return dt.strftime("%Y-%m-%d %H:00")
+  if bucket in ("5min", "30min"):
+    return dt.strftime("%H:%M")
+  return dt.strftime("%H:00")

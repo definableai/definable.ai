@@ -15,6 +15,7 @@ flow into the dashboard in real time.
 """
 
 from definable.agent import Agent
+from definable.agent.interface import CLIInterface
 from definable.model.openai import OpenAIChat
 from definable.tool.decorator import tool
 
@@ -40,4 +41,4 @@ agent = Agent(
 )
 
 # Serve the agent — dashboard is at /obs/
-agent.serve(enable_server=True)
+agent.serve(CLIInterface(), enable_server=True)

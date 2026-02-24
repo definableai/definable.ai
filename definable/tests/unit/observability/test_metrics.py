@@ -168,10 +168,10 @@ class TestTimeline:
     ]
 
     agg = MetricsAggregator()
-    buckets = agg.compute_timeline(events, bucket="hour", range_hours=1)
+    result = agg.compute_timeline(events, bucket="hour", range_hours=1)
 
-    assert len(buckets) >= 1
-    total_runs = sum(b.run_count for b in buckets)
+    assert len(result.buckets) >= 1
+    total_runs = sum(b.run_count for b in result.buckets)
     assert total_runs == 2
 
   def test_events_in_same_hour_same_bucket(self):
@@ -183,9 +183,9 @@ class TestTimeline:
     ]
 
     agg = MetricsAggregator()
-    buckets = agg.compute_timeline(events, bucket="hour", range_hours=1)
+    result = agg.compute_timeline(events, bucket="hour", range_hours=1)
 
     # Last bucket should have both runs
-    active_buckets = [b for b in buckets if b.run_count > 0]
+    active_buckets = [b for b in result.buckets if b.run_count > 0]
     assert len(active_buckets) == 1
     assert active_buckets[0].run_count == 2

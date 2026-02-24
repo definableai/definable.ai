@@ -47,10 +47,14 @@ class TraceBrowser:
     trace_dir: Path to the directory containing JSONL trace files.
   """
 
-  trace_dir: str = "./traces"
+  trace_dir: str = ""
   _cache: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict, repr=False)
 
   def __post_init__(self) -> None:
+    if not self.trace_dir:
+      from definable.utils.workspace import workspace_path
+
+      object.__setattr__(self, "trace_dir", str(workspace_path("traces")))
     path = Path(self.trace_dir)
     path.mkdir(parents=True, exist_ok=True)
 

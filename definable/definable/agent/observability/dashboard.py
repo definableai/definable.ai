@@ -48,6 +48,7 @@ def get_dashboard_html(config: "ObservabilityConfig") -> str:
 {_models_page()}
 </div>
 </main>
+{_chat_widget()}
 </div>
 {_alpine_app()}
 </body>
@@ -157,9 +158,24 @@ a{color:var(--accent);text-decoration:none}
 .badge-running{color:var(--info);border:1px solid var(--info)}
 .badge-pending{color:var(--text-muted);border:1px solid var(--border)}
 
-/* Chart (SVG bars) */
-.chart-container{padding:16px;height:200px;display:flex;align-items:flex-end;gap:4px}
-.chart-container svg{width:100%;height:100%}
+/* Chart */
+.chart-wrap{position:relative}
+.chart-range-bar{display:flex;gap:4px;padding:0 16px 4px}
+.chart-range-btn{background:none;border:1px solid var(--border);color:var(--text-muted);
+  padding:2px 8px;border-radius:3px;font-family:var(--font);font-size:10px;cursor:pointer}
+.chart-range-btn:hover{color:var(--text);border-color:var(--text-muted)}
+.chart-range-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.chart-container{padding:8px 16px 12px;height:180px;display:flex;align-items:center;justify-content:center}
+.chart-container svg{width:100%;height:100%;overflow:visible}
+.chart-container svg rect.bar{cursor:pointer;transition:opacity .1s}
+.chart-container svg rect.bar:hover{opacity:1 !important}
+.chart-tooltip{position:absolute;z-index:50;pointer-events:none;background:var(--surface);
+  border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:11px;
+  line-height:1.6;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.3);opacity:0;transition:opacity .12s}
+.chart-tooltip.visible{opacity:1}
+.chart-tooltip-time{font-weight:600;color:var(--text);margin-bottom:2px}
+.chart-tooltip-row{color:var(--text-muted);display:flex;gap:8px;justify-content:space-between}
+.chart-tooltip-row span:last-child{color:var(--text);font-weight:500}
 
 /* Event feed */
 .event-row{display:flex;align-items:flex-start;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);font-size:12px}
@@ -224,10 +240,16 @@ a{color:var(--accent);text-decoration:none}
 .collapsible-body pre{white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto}
 
 /* Compare */
-.compare-select{display:flex;gap:16px;margin-bottom:24px;align-items:center}
-.compare-select select{background:var(--surface);border:1px solid var(--border);color:var(--text);
-  padding:8px 12px;border-radius:4px;font-family:var(--font);font-size:12px;flex:1;max-width:300px}
-.compare-vs{color:var(--text-muted);font-weight:600}
+.compare-bar{display:flex;gap:12px;margin-bottom:24px;align-items:flex-end;flex-wrap:wrap}
+.compare-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:200px;max-width:360px}
+.compare-field label{font-size:10px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.compare-field select{background:var(--surface);border:1px solid var(--border);color:var(--text);
+  padding:8px 12px;border-radius:4px;font-family:var(--font);font-size:12px;width:100%}
+.compare-vs{color:var(--text-muted);font-weight:600;padding-bottom:8px}
+.compare-btn{background:var(--accent);color:var(--bg);border:none;padding:8px 20px;border-radius:4px;
+  font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;height:35px}
+.compare-btn:hover{opacity:.9}
+.compare-btn:disabled{opacity:.4;cursor:not-allowed}
 .diff-block{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:16px;margin-bottom:16px;font-size:12px}
 .diff-block pre{white-space:pre-wrap;word-break:break-all}
 .diff-add{color:var(--success)}
@@ -238,6 +260,51 @@ a{color:var(--accent);text-decoration:none}
 .diff-meta-value{font-size:18px;font-weight:700}
 .diff-meta-value.positive{color:var(--error)}
 .diff-meta-value.negative{color:var(--success)}
+.diff-tool-card{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 12px;margin-bottom:8px}
+.diff-tool-name{font-weight:600;font-size:12px;margin-bottom:6px}
+.diff-tool-detail{font-size:11px;line-height:1.6}
+.diff-tool-detail pre{background:var(--surface);padding:6px 10px;border-radius:4px;margin:4px 0;
+  white-space:pre-wrap;word-break:break-all;font-size:11px;max-height:150px;overflow-y:auto}
+.diff-section{margin-bottom:20px}
+.diff-section-title{font-size:12px;font-weight:600;margin-bottom:10px;padding-bottom:6px;
+  border-bottom:1px solid var(--border)}
+
+/* Waterfall */
+.waterfall-run{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.waterfall-run-header{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;font-size:12px;transition:background .15s}
+.waterfall-run-header:hover{background:var(--surface-hover)}
+.waterfall-run-header .run-status{margin-left:auto;display:flex;align-items:center;gap:8px}
+.waterfall-events{border-top:1px solid var(--border);background:var(--bg)}
+.waterfall-evt{display:flex;align-items:center;gap:10px;padding:6px 16px 6px 32px;border-bottom:1px solid var(--border);font-size:12px}
+.waterfall-evt:last-child{border-bottom:none}
+.waterfall-evt-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.waterfall-evt-dot.model{background:var(--info)}
+.waterfall-evt-dot.tool{background:var(--accent)}
+.waterfall-evt-dot.knowledge{background:var(--purple)}
+.waterfall-evt-dot.memory{background:var(--warning)}
+.waterfall-evt-dot.lifecycle{background:var(--success)}
+.waterfall-evt-dot.error{background:var(--error)}
+.waterfall-evt-dot.guardrail{background:var(--purple)}
+.waterfall-evt-dot.phase{background:var(--warning)}
+.waterfall-evt-time{color:var(--text-muted);white-space:nowrap;flex-shrink:0;width:70px;font-size:11px}
+.waterfall-evt-desc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.waterfall-evt-dur{color:var(--text-muted);font-size:11px;white-space:nowrap;flex-shrink:0}
+.waterfall-evt-expand{font-size:9px;color:var(--text-muted);flex-shrink:0;width:12px;text-align:center}
+.waterfall-evt-expandable{cursor:pointer;transition:background .15s}
+.waterfall-evt-expandable:hover{background:var(--surface-hover)}
+.waterfall-evt-body{padding:8px 16px 12px 50px;border-bottom:1px solid var(--border);background:var(--bg)}
+.waterfall-code-section{margin-bottom:8px}
+.waterfall-code-section:last-child{margin-bottom:0}
+.waterfall-code-label{font-size:10px;color:var(--text-muted);margin-bottom:4px;font-weight:600}
+.waterfall-code{font-family:var(--font);font-size:11px;line-height:1.6;padding:8px 12px;
+  background:var(--surface);border:1px solid var(--border);border-radius:4px;
+  white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;margin:0}
+.waterfall-code-output{color:var(--success);background:rgba(74,222,128,.05);border-color:rgba(74,222,128,.2)}
+.waterfall-code-error{color:var(--error);background:rgba(248,113,113,.05);border-color:rgba(248,113,113,.2)}
+.waterfall-phase-desc{color:var(--text-muted);font-size:11px;font-style:italic;margin-left:4px}
+.waterfall-evt.skipped{opacity:.45}
+.waterfall-ungrouped{margin-top:16px}
+.waterfall-ungrouped-title{font-size:11px;color:var(--text-muted);margin-bottom:8px;padding-left:4px}
 
 /* Empty state */
 .empty-state{text-align:center;padding:48px 24px;color:var(--text-muted)}
@@ -253,6 +320,52 @@ a{color:var(--accent);text-decoration:none}
 .back-btn{display:inline-flex;align-items:center;gap:4px;color:var(--text-muted);font-size:12px;cursor:pointer;margin-bottom:16px;padding:4px 0}
 .back-btn:hover{color:var(--text)}
 
+/* Chat widget */
+.chat-fab{position:fixed;bottom:24px;right:24px;width:48px;height:48px;border-radius:50%;
+  background:var(--accent);color:var(--bg);border:none;cursor:pointer;z-index:200;
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+  box-shadow:0 4px 16px rgba(0,0,0,.4);transition:transform .15s,box-shadow .15s}
+.chat-fab:hover{transform:scale(1.08);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.chat-panel{position:fixed;bottom:24px;right:24px;width:420px;height:560px;z-index:200;
+  background:var(--bg);border:1px solid var(--border);border-radius:12px;
+  display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.5);overflow:hidden}
+.chat-header{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+.chat-header-title{font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px}
+.chat-header-actions{display:flex;gap:6px}
+.chat-header-btn{background:none;border:1px solid var(--border);color:var(--text-muted);
+  padding:3px 8px;border-radius:4px;font-family:var(--font);font-size:10px;cursor:pointer}
+.chat-header-btn:hover{color:var(--text);border-color:var(--text-muted)}
+.chat-close{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;
+  padding:2px 6px;border-radius:4px}
+.chat-close:hover{color:var(--text);background:var(--surface-hover)}
+.chat-messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.chat-msg{max-width:85%;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.6;word-break:break-word}
+.chat-msg.user{align-self:flex-end;background:var(--accent);color:var(--bg);border-bottom-right-radius:2px}
+.chat-msg.assistant{align-self:flex-start;background:var(--surface);border:1px solid var(--border);
+  border-bottom-left-radius:2px}
+.chat-msg.assistant pre{background:var(--bg);padding:6px 8px;border-radius:4px;margin:6px 0;
+  font-size:11px;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.chat-msg.assistant code{background:var(--bg);padding:1px 4px;border-radius:3px;font-size:11px}
+.chat-msg.error{align-self:center;color:var(--error);font-size:11px;font-style:italic}
+.chat-msg-meta{font-size:9px;color:var(--text-muted);margin-top:4px}
+.chat-typing{align-self:flex-start;padding:8px 12px;color:var(--text-muted);font-size:12px;font-style:italic}
+.chat-typing .dot{display:inline-block;animation:chatdot 1.2s infinite;opacity:.3}
+.chat-typing .dot:nth-child(2){animation-delay:.2s}
+.chat-typing .dot:nth-child(3){animation-delay:.4s}
+@keyframes chatdot{0%,100%{opacity:.3}50%{opacity:1}}
+.chat-input-bar{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface)}
+.chat-input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+  padding:8px 12px;border-radius:6px;font-family:var(--font);font-size:12px;resize:none;
+  min-height:36px;max-height:80px;outline:none}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{background:var(--accent);color:var(--bg);border:none;padding:0 14px;border-radius:6px;
+  font-family:var(--font);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.chat-send:hover{opacity:.9}
+.chat-send:disabled{opacity:.4;cursor:not-allowed}
+.chat-empty{text-align:center;color:var(--text-muted);padding:32px 16px;font-size:12px}
+.chat-empty-icon{font-size:28px;margin-bottom:8px;opacity:.4}
+
 /* Responsive */
 @media(max-width:768px){
   .sidebar{position:fixed;left:-220px;top:0;bottom:0;z-index:100;transition:left .2s}
@@ -262,6 +375,7 @@ a{color:var(--accent);text-decoration:none}
   .diff-meta{grid-template-columns:1fr}
   .phase-timeline{height:24px}
   .phase-bar .phase-label{font-size:8px}
+  .chat-panel{width:calc(100vw - 32px);right:16px;bottom:16px;height:70vh}
 }
 </style>"""
 
@@ -318,12 +432,12 @@ def _overview_page() -> str:
     <div class="stat-card">
       <div class="stat-label"><em>const</em> total_runs =</div>
       <div class="stat-value" x-text="metrics.total_runs || 0"></div>
-      <div class="stat-delta" x-text="'++ ' + (metrics.recent_runs || 0) + ' recent'"></div>
+      <div class="stat-delta" x-text="'++ ' + (metrics.recent_runs ? metrics.recent_runs.length : 0) + ' recent'"></div>
     </div>
     <div class="stat-card">
       <div class="stat-label"><em>const</em> success_rate =</div>
-      <div class="stat-value" x-text="formatPercent(metrics.success_rate)"></div>
-      <div class="stat-delta" x-text="'++ ' + formatPercent(metrics.success_rate) + ' overall'"></div>
+      <div class="stat-value" x-text="formatPercent((metrics.success_rate || 0) * 100)"></div>
+      <div class="stat-delta" x-text="'++ ' + formatPercent((metrics.success_rate || 0) * 100) + ' overall'"></div>
     </div>
     <div class="stat-card">
       <div class="stat-label"><em>const</em> total_tokens =</div>
@@ -363,9 +477,24 @@ def _overview_page() -> str:
     <div class="panel">
       <div class="panel-header">
         <span>// run_cadence</span>
-        <span>$ ls -la</span>
+        <span x-text="chartBucketLabel()"></span>
       </div>
-      <div class="chart-container" x-html="renderBarChart(metrics.timeline || [])"></div>
+      <div class="chart-wrap">
+        <div class="chart-range-bar">
+          <template x-for="r in [{v:'auto',l:'auto'},{v:'1h',l:'1h'},{v:'6h',l:'6h'},{v:'24h',l:'24h'},{v:'7d',l:'7d'}]" :key="r.v">
+            <button class="chart-range-btn" :class="{'active': chartRange === r.v}"
+                    @click="chartRange = r.v; fetchTimeline()" x-text="r.l"></button>
+          </template>
+        </div>
+        <div class="chart-container"
+             @mouseleave="chartTooltipVisible = false"
+             x-html="renderBarChart(metrics.timeline || [])">
+        </div>
+        <div class="chart-tooltip" :class="{'visible': chartTooltipVisible}"
+             :style="'left:' + chartTooltipX + 'px;top:' + chartTooltipY + 'px'"
+             x-html="chartTooltipHtml">
+        </div>
+      </div>
     </div>
   </div>
 </div>"""
@@ -404,12 +533,136 @@ def _live_events_page() -> str:
           <div class="empty-state-text">waiting for events...</div>
         </div>
       </template>
-      <template x-for="evt in filteredEvents().slice(-500)" :key="evt._idx">
-        <div class="event-row">
-          <span class="event-time" x-text="formatTime(evt.created_at)"></span>
-          <span class="event-type" :class="eventCategory(evt.event)" x-text="evt.event"></span>
-          <span class="event-run" x-text="evt.run_id ? evt.run_id.substring(0,12) + '...' : '-'"></span>
-          <span class="event-detail" x-text="eventSummary(evt)"></span>
+      <template x-if="filteredEvents().length > 0">
+        <div>
+          <template x-for="group in groupedEvents()" :key="group.run_id">
+            <div class="waterfall-run" x-data="{open: true}">
+              <div class="waterfall-run-header" @click="open = !open">
+                <span x-text="open ? '&#9660;' : '&#9654;'" style="font-size:10px;color:var(--text-muted)"></span>
+                <div class="run-dot" :class="group.status"></div>
+                <strong x-text="group.agent_name || 'agent'" style="font-size:12px"></strong>
+                <span style="color:var(--text-muted);font-size:11px" x-text="group.model || ''"></span>
+                <div class="run-status">
+                  <span class="badge" :class="'badge-' + group.status" x-text="'[' + group.status.toUpperCase() + ']'"></span>
+                  <span style="font-size:11px;color:var(--text-muted)" x-text="formatNumber(group.tokens) + ' tok'"></span>
+                  <span style="font-size:11px;color:var(--text-muted)" x-text="group.duration ? formatDuration(group.duration) : ''"></span>
+                  <span style="font-size:11px;color:var(--text-muted)" x-text="group.events.length + ' events'"></span>
+                </div>
+              </div>
+              <div class="waterfall-events" x-show="open" x-cloak>
+                <template x-for="evt in group.events" :key="evt._idx">
+                  <div x-show="evt.event !== 'PhaseStarted'" x-data="{exp: false}">
+                    <!-- Tool call events: expandable with code preview -->
+                    <template x-if="isToolEvent(evt)">
+                      <div>
+                        <div class="waterfall-evt waterfall-evt-expandable" @click="exp = !exp">
+                          <div class="waterfall-evt-dot" :class="eventCategory(evt.event)"></div>
+                          <span class="waterfall-evt-time" x-text="formatTime(evt.created_at)"></span>
+                          <span class="event-type" :class="eventCategory(evt.event)"
+                                x-text="evt.event" style="font-size:10px;min-width:80px"></span>
+                          <span class="waterfall-evt-desc" x-text="richEventSummary(evt)"></span>
+                          <span class="waterfall-evt-dur" x-text="eventDuration(evt)"></span>
+                          <span class="waterfall-evt-expand" x-text="exp ? '\u25bc' : '\u25b6'"></span>
+                        </div>
+                        <div class="waterfall-evt-body" x-show="exp" x-cloak>
+                          <div class="waterfall-code-section" x-show="evt.tool && evt.tool.tool_args">
+                            <div class="waterfall-code-label">// arguments</div>
+                            <pre class="waterfall-code"
+                                 x-text="JSON.stringify(evt.tool?.tool_args || {}, null, 2)"></pre>
+                          </div>
+                          <div class="waterfall-code-section" x-show="evt.tool && evt.tool.result">
+                            <div class="waterfall-code-label">// output</div>
+                            <pre class="waterfall-code waterfall-code-output"
+                                 x-text="evt.tool?.result || ''"></pre>
+                          </div>
+                          <div class="waterfall-code-section" x-show="evt.tool && evt.tool.tool_call_error">
+                            <div class="waterfall-code-label">// error</div>
+                            <pre class="waterfall-code waterfall-code-error"
+                                 x-text="evt.tool?.tool_call_error || ''"></pre>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <!-- Phase completed: rich description -->
+                    <template x-if="evt.event === 'PhaseCompleted'">
+                      <div class="waterfall-evt" :class="{'skipped': evt.skipped}">
+                        <div class="waterfall-evt-dot phase"></div>
+                        <span class="waterfall-evt-time" x-text="formatTime(evt.created_at)"></span>
+                        <span class="event-type phase" style="font-size:10px;min-width:80px"
+                              x-text="evt.phase_name"></span>
+                        <span class="waterfall-evt-desc">
+                          <span x-text="phaseDescription(evt.phase_name)"></span>
+                          <span class="waterfall-phase-desc"
+                                x-show="evt.skipped" x-text="'[skipped]'"></span>
+                        </span>
+                        <span class="waterfall-evt-dur" x-text="eventDuration(evt)"></span>
+                      </div>
+                    </template>
+                    <!-- Model call events: expandable with details -->
+                    <template x-if="isModelEvent(evt)">
+                      <div>
+                        <div class="waterfall-evt waterfall-evt-expandable" @click="exp = !exp">
+                          <div class="waterfall-evt-dot model"></div>
+                          <span class="waterfall-evt-time" x-text="formatTime(evt.created_at)"></span>
+                          <span class="event-type model" style="font-size:10px;min-width:80px"
+                                x-text="evt.event"></span>
+                          <span class="waterfall-evt-desc" x-text="richEventSummary(evt)"></span>
+                          <span class="waterfall-evt-dur" x-text="eventDuration(evt)"></span>
+                          <span class="waterfall-evt-expand" x-text="exp ? '\u25bc' : '\u25b6'"></span>
+                        </div>
+                        <div class="waterfall-evt-body" x-show="exp" x-cloak>
+                          <template x-if="evt.event === 'ModelCallCompleted' && evt.metrics">
+                            <div class="waterfall-code-section">
+                              <div class="waterfall-code-label">// metrics</div>
+                              <pre class="waterfall-code"
+                                   x-text="JSON.stringify(evt.metrics, null, 2)"></pre>
+                            </div>
+                          </template>
+                          <template x-if="evt.tool_calls && evt.tool_calls.length > 0">
+                            <div class="waterfall-code-section">
+                              <div class="waterfall-code-label">// tool calls requested</div>
+                              <pre class="waterfall-code"
+                                   x-text="JSON.stringify(evt.tool_calls, null, 2)"></pre>
+                            </div>
+                          </template>
+                          <template x-if="evt.content">
+                            <div class="waterfall-code-section">
+                              <div class="waterfall-code-label">// content</div>
+                              <pre class="waterfall-code waterfall-code-output"
+                                   x-text="typeof evt.content === 'string' ? evt.content : JSON.stringify(evt.content, null, 2)"></pre>
+                            </div>
+                          </template>
+                        </div>
+                      </div>
+                    </template>
+                    <!-- All other events: standard row -->
+                    <template x-if="!isToolEvent(evt) && !isModelEvent(evt) && evt.event !== 'PhaseCompleted'">
+                      <div class="waterfall-evt">
+                        <div class="waterfall-evt-dot" :class="eventCategory(evt.event)"></div>
+                        <span class="waterfall-evt-time" x-text="formatTime(evt.created_at)"></span>
+                        <span class="event-type" :class="eventCategory(evt.event)"
+                              x-text="evt.event" style="font-size:10px;min-width:80px"></span>
+                        <span class="waterfall-evt-desc" x-text="richEventSummary(evt)"></span>
+                        <span class="waterfall-evt-dur" x-text="eventDuration(evt)"></span>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+          <template x-if="groupedEvents()._ungrouped && groupedEvents()._ungrouped.length > 0">
+            <div class="waterfall-ungrouped">
+              <div class="waterfall-ungrouped-title">// ungrouped events</div>
+              <template x-for="evt in groupedEvents()._ungrouped" :key="evt._idx">
+                <div class="event-row">
+                  <span class="event-time" x-text="formatTime(evt.created_at)"></span>
+                  <span class="event-type" :class="eventCategory(evt.event)" x-text="evt.event"></span>
+                  <span class="event-detail" x-text="richEventSummary(evt)"></span>
+                </div>
+              </template>
+            </div>
+          </template>
         </div>
       </template>
     </div>
@@ -598,90 +851,159 @@ def _compare_page() -> str:
   <div class="page-title"><span>&gt;</span> COMPARE<span>|</span></div>
   <div class="page-subtitle"># side-by-side run comparison</div>
 
-  <div class="compare-select">
-    <select x-model="compareA" @change="loadComparison()">
-      <option value="">select run A</option>
-      <template x-for="r in allRunIds" :key="r"><option :value="r" x-text="r"></option></template>
-    </select>
+  <div class="compare-bar">
+    <div class="compare-field">
+      <label>Run A</label>
+      <select x-model="compareA">
+        <option value="">-- select run --</option>
+        <template x-for="r in allRunIds" :key="r.run_id">
+          <option :value="r.run_id"
+                  x-text="r.run_id.substring(0,12) + '... [' + r.status + '] ' + r.tokens + ' tok'">
+          </option>
+        </template>
+      </select>
+    </div>
     <span class="compare-vs">vs</span>
-    <select x-model="compareB" @change="loadComparison()">
-      <option value="">select run B</option>
-      <template x-for="r in allRunIds" :key="r"><option :value="r" x-text="r"></option></template>
-    </select>
+    <div class="compare-field">
+      <label>Run B</label>
+      <select x-model="compareB">
+        <option value="">-- select run --</option>
+        <template x-for="r in allRunIds" :key="r.run_id">
+          <option :value="r.run_id"
+                  x-text="r.run_id.substring(0,12) + '... [' + r.status + '] ' + r.tokens + ' tok'">
+          </option>
+        </template>
+      </select>
+    </div>
+    <button class="compare-btn" @click="loadComparison()"
+            :disabled="!compareA || !compareB || compareA === compareB || loadingCompare">
+      Compare
+    </button>
   </div>
+
+  <template x-if="compareA && compareB && compareA === compareB">
+    <div style="color:var(--warning);font-size:12px;margin-bottom:16px">
+      select two different runs to compare
+    </div>
+  </template>
 
   <template x-if="loadingCompare">
     <div class="loading"><div class="spinner"></div> comparing runs...</div>
   </template>
 
-  <template x-if="!loadingCompare && compareResult">
+  <template x-if="!loadingCompare && compareResult && compareResult._error">
+    <div class="panel" style="color:var(--error);padding:16px;font-size:12px">
+      <span style="font-weight:600">error:</span> <span x-text="compareResult._error"></span>
+    </div>
+  </template>
+
+  <template x-if="!loadingCompare && compareResult && !compareResult._error">
     <div>
       <div class="diff-meta">
         <div class="diff-meta-card">
           <div class="diff-meta-label">token delta</div>
-          <div class="diff-meta-value" :class="compareResult.token_diff > 0 ? 'positive' : (compareResult.token_diff < 0 ? 'negative' : '')"
-               x-text="(compareResult.token_diff > 0 ? '+' : '') + formatNumber(compareResult.token_diff || 0)"></div>
+          <div class="diff-meta-value"
+               :class="compareResult.token_diff > 0 ? 'positive' : (compareResult.token_diff < 0 ? 'negative' : '')"
+               x-text="(compareResult.token_diff > 0 ? '+' : '') + formatNumber(compareResult.token_diff || 0)">
+          </div>
         </div>
         <div class="diff-meta-card">
           <div class="diff-meta-label">cost delta</div>
-          <div class="diff-meta-value" :class="compareResult.cost_diff > 0 ? 'positive' : (compareResult.cost_diff < 0 ? 'negative' : '')"
-               x-text="(compareResult.cost_diff > 0 ? '+$' : '-$') + formatCost(Math.abs(compareResult.cost_diff || 0))"></div>
+          <div class="diff-meta-value"
+               :class="compareResult.cost_diff > 0 ? 'positive' : (compareResult.cost_diff < 0 ? 'negative' : '')"
+               x-text="(compareResult.cost_diff > 0 ? '+$' : '-$') + formatCost(Math.abs(compareResult.cost_diff || 0))">
+          </div>
         </div>
         <div class="diff-meta-card">
           <div class="diff-meta-label">duration delta</div>
-          <div class="diff-meta-value" :class="compareResult.duration_diff > 0 ? 'positive' : (compareResult.duration_diff < 0 ? 'negative' : '')"
-               x-text="(compareResult.duration_diff > 0 ? '+' : '') + formatDuration(compareResult.duration_diff)"></div>
+          <div class="diff-meta-value"
+               :class="compareResult.duration_diff > 0 ? 'positive' : (compareResult.duration_diff < 0 ? 'negative' : '')"
+               x-text="(compareResult.duration_diff > 0 ? '+' : '') + formatDuration(compareResult.duration_diff)">
+          </div>
         </div>
       </div>
 
-      <template x-if="compareResult.content_diff">
-        <div>
-          <div class="section-header"><span class="section-title">// content_diff</span></div>
+      <!-- Content diff -->
+      <div class="diff-section">
+        <div class="diff-section-title" style="color:var(--accent)">// output_diff</div>
+        <template x-if="compareResult.content_diff">
           <div class="diff-block"><pre x-html="renderDiff(compareResult.content_diff)"></pre></div>
-        </div>
-      </template>
-      <template x-if="!compareResult.content_diff && compareA && compareB">
-        <div class="diff-block" style="text-align:center;color:var(--text-muted)">outputs are identical</div>
-      </template>
+        </template>
+        <template x-if="!compareResult.content_diff">
+          <div class="diff-block" style="text-align:center;color:var(--text-muted)">
+            outputs are identical
+          </div>
+        </template>
+      </div>
 
+      <!-- Tool calls diff -->
       <template x-if="compareResult.tool_calls_diff">
-        <div>
-          <div class="section-header"><span class="section-title">// tool_calls_diff</span></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-            <div class="diff-block">
-              <div style="color:var(--success);margin-bottom:8px;font-weight:600">added
-                (<span x-text="(compareResult.tool_calls_diff.added||[]).length"></span>)</div>
-              <template x-for="tc in compareResult.tool_calls_diff.added||[]" :key="tc.tool_name">
-                <div style="padding:2px 0" x-text="'+ ' + tc.tool_name"></div>
+        <div class="diff-section">
+          <div class="diff-section-title" style="color:var(--accent)">// tool_calls_diff</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+            <!-- Added tools -->
+            <div>
+              <div style="color:var(--success);font-weight:600;font-size:12px;margin-bottom:8px">
+                + added in Run B
+                (<span x-text="(compareResult.tool_calls_diff.added||[]).length"></span>)
+              </div>
+              <template x-for="(tc, i) in compareResult.tool_calls_diff.added||[]" :key="'add-'+i">
+                <div class="diff-tool-card" style="border-left:3px solid var(--success)">
+                  <div class="diff-tool-name" style="color:var(--success)"
+                       x-text="'+ ' + tc.tool_name"></div>
+                  <div class="diff-tool-detail">
+                    <div style="color:var(--text-muted);font-size:10px;margin-bottom:2px">arguments</div>
+                    <pre x-text="JSON.stringify(tc.tool_args || {}, null, 2)"></pre>
+                    <div style="color:var(--text-muted);font-size:10px;margin-bottom:2px;margin-top:6px">result</div>
+                    <pre style="color:var(--success)" x-text="String(tc.result || 'null')"></pre>
+                  </div>
+                </div>
               </template>
               <template x-if="!(compareResult.tool_calls_diff.added||[]).length">
-                <div style="color:var(--text-muted)">none</div>
+                <div style="color:var(--text-muted);font-size:12px;font-style:italic">none</div>
               </template>
             </div>
-            <div class="diff-block">
-              <div style="color:var(--error);margin-bottom:8px;font-weight:600">removed
-                (<span x-text="(compareResult.tool_calls_diff.removed||[]).length"></span>)</div>
-              <template x-for="tc in compareResult.tool_calls_diff.removed||[]" :key="tc.tool_name">
-                <div style="padding:2px 0" x-text="'- ' + tc.tool_name"></div>
+
+            <!-- Removed tools -->
+            <div>
+              <div style="color:var(--error);font-weight:600;font-size:12px;margin-bottom:8px">
+                - removed from Run A
+                (<span x-text="(compareResult.tool_calls_diff.removed||[]).length"></span>)
+              </div>
+              <template x-for="(tc, i) in compareResult.tool_calls_diff.removed||[]" :key="'rem-'+i">
+                <div class="diff-tool-card" style="border-left:3px solid var(--error)">
+                  <div class="diff-tool-name" style="color:var(--error)"
+                       x-text="'- ' + tc.tool_name"></div>
+                  <div class="diff-tool-detail">
+                    <div style="color:var(--text-muted);font-size:10px;margin-bottom:2px">arguments</div>
+                    <pre x-text="JSON.stringify(tc.tool_args || {}, null, 2)"></pre>
+                    <div style="color:var(--text-muted);font-size:10px;margin-bottom:2px;margin-top:6px">result</div>
+                    <pre style="color:var(--error)" x-text="String(tc.result || 'null')"></pre>
+                  </div>
+                </div>
               </template>
               <template x-if="!(compareResult.tool_calls_diff.removed||[]).length">
-                <div style="color:var(--text-muted)">none</div>
+                <div style="color:var(--text-muted);font-size:12px;font-style:italic">none</div>
               </template>
             </div>
-            <div class="diff-block">
-              <div style="color:var(--text-muted);margin-bottom:8px;font-weight:600">common
-                (<span x-text="compareResult.tool_calls_diff.common || 0"></span>)</div>
-            </div>
+
+          </div>
+
+          <!-- Common tools -->
+          <div style="margin-top:12px;color:var(--text-muted);font-size:12px">
+            <span style="font-weight:600">common tool calls:</span>
+            <span x-text="compareResult.tool_calls_diff.common || 0"></span>
           </div>
         </div>
       </template>
     </div>
   </template>
 
-  <template x-if="!loadingCompare && !compareResult && compareA && compareB">
+  <template x-if="!loadingCompare && !compareResult && !(compareA && compareB)">
     <div class="empty-state">
       <div class="empty-state-icon">&gt;_</div>
-      <div class="empty-state-text">select two runs to compare</div>
+      <div class="empty-state-text">select two runs and click Compare</div>
     </div>
   </template>
 </div>"""
@@ -692,27 +1014,27 @@ def _tools_page() -> str:
   <div class="page-title"><span>&gt;</span> TOOLS<span>|</span></div>
   <div class="page-subtitle"># tool call analytics — count, errors, latency</div>
 
-  <template x-if="!metrics.tool_stats || Object.keys(metrics.tool_stats || {}).length === 0">
+  <template x-if="!metrics.tool_stats || !Array.isArray(metrics.tool_stats) || metrics.tool_stats.length === 0">
     <div class="empty-state">
       <div class="empty-state-icon">&gt;_</div>
       <div class="empty-state-text">no tool call data yet</div>
     </div>
   </template>
-  <template x-if="metrics.tool_stats && Object.keys(metrics.tool_stats).length > 0">
+  <template x-if="Array.isArray(metrics.tool_stats) && metrics.tool_stats.length > 0">
     <div class="panel">
       <table class="data-table">
         <thead><tr>
           <th>tool_name</th><th>calls</th><th>errors</th><th>avg latency</th><th>error rate</th>
         </tr></thead>
         <tbody>
-          <template x-for="[name, stats] in Object.entries(metrics.tool_stats)" :key="name">
+          <template x-for="stats in metrics.tool_stats" :key="stats.tool_name">
             <tr>
-              <td><strong x-text="name"></strong></td>
-              <td x-text="stats.count || 0"></td>
+              <td><strong x-text="stats.tool_name"></strong></td>
+              <td x-text="stats.call_count || 0"></td>
               <td :style="(stats.error_count || 0) > 0 ? 'color:var(--error)' : ''" x-text="stats.error_count || 0"></td>
-              <td x-text="formatMs(stats.avg_latency_ms)"></td>
+              <td x-text="formatMs(stats.avg_duration_ms)"></td>
               <td :style="(stats.error_count || 0) > 0 ? 'color:var(--error)' : ''"
-                  x-text="stats.count ? formatPercent((stats.error_count || 0) / stats.count * 100) : '0%'"></td>
+                  x-text="stats.call_count ? formatPercent((stats.error_count || 0) / stats.call_count * 100) : '0%'"></td>
             </tr>
           </template>
         </tbody>
@@ -727,23 +1049,23 @@ def _models_page() -> str:
   <div class="page-title"><span>&gt;</span> MODELS<span>|</span></div>
   <div class="page-subtitle"># model call analytics — tokens, cost, latency</div>
 
-  <template x-if="!metrics.model_stats || Object.keys(metrics.model_stats || {}).length === 0">
+  <template x-if="!metrics.model_stats || !Array.isArray(metrics.model_stats) || metrics.model_stats.length === 0">
     <div class="empty-state">
       <div class="empty-state-icon">&gt;_</div>
       <div class="empty-state-text">no model call data yet</div>
     </div>
   </template>
-  <template x-if="metrics.model_stats && Object.keys(metrics.model_stats).length > 0">
+  <template x-if="Array.isArray(metrics.model_stats) && metrics.model_stats.length > 0">
     <div class="panel">
       <table class="data-table">
         <thead><tr>
           <th>model_id</th><th>calls</th><th>avg tokens</th><th>total cost</th>
         </tr></thead>
         <tbody>
-          <template x-for="[name, stats] in Object.entries(metrics.model_stats)" :key="name">
+          <template x-for="stats in metrics.model_stats" :key="stats.model_id">
             <tr>
-              <td><strong x-text="name"></strong></td>
-              <td x-text="stats.count || 0"></td>
+              <td><strong x-text="stats.model_id"></strong></td>
+              <td x-text="stats.call_count || 0"></td>
               <td x-text="formatNumber(stats.avg_tokens || 0)"></td>
               <td x-text="'$' + formatCost(stats.total_cost || 0)"></td>
             </tr>
@@ -752,6 +1074,72 @@ def _models_page() -> str:
       </table>
     </div>
   </template>
+</div>"""
+
+
+def _chat_widget() -> str:
+  return """<!-- Chat FAB (floating action button) -->
+<button class="chat-fab" x-show="!chatOpen" @click="chatOpen = true" title="Chat with agent">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+</button>
+
+<!-- Chat panel -->
+<div class="chat-panel" x-show="chatOpen" x-cloak x-transition.opacity.duration.150ms>
+  <div class="chat-header">
+    <div class="chat-header-title">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span x-text="agentName + ' chat'"></span>
+      <span style="font-size:9px;color:var(--text-muted)" x-text="chatMessages.length ? chatMessages.length + ' msgs' : ''"></span>
+    </div>
+    <div class="chat-header-actions">
+      <button class="chat-header-btn" @click="resetChat()" title="Clear history">clear</button>
+      <button class="chat-close" @click="chatOpen = false" title="Close">&times;</button>
+    </div>
+  </div>
+
+  <div class="chat-messages" x-ref="chatMessages">
+    <!-- Empty state -->
+    <template x-if="chatMessages.length === 0 && !chatSending">
+      <div class="chat-empty">
+        <div class="chat-empty-icon">&gt;_</div>
+        <div>Send a message to test your agent.</div>
+        <div style="margin-top:4px;font-size:10px;color:var(--text-muted)">
+          Runs will appear in Live Events in real time.
+        </div>
+      </div>
+    </template>
+
+    <!-- Messages -->
+    <template x-for="(msg, i) in chatMessages" :key="i">
+      <div>
+        <div class="chat-msg" :class="msg.role" x-html="msg.role === 'assistant' ? renderMarkdown(msg.content) : escapeHtml(msg.content)"></div>
+        <div class="chat-msg-meta" :style="msg.role === 'user' ? 'text-align:right' : ''"
+          x-text="msg.tokens ? msg.tokens + ' tok' + (msg.cost ? ' &middot; $' + msg.cost.toFixed(4) : '') : ''">
+        </div>
+      </div>
+    </template>
+
+    <!-- Typing indicator -->
+    <div class="chat-typing" x-show="chatSending">
+      <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span> thinking
+    </div>
+  </div>
+
+  <div class="chat-input-bar">
+    <textarea class="chat-input" x-model="chatInput"
+      @keydown.enter.prevent="if (!$event.shiftKey) sendChat()"
+      placeholder="Message the agent..."
+      :disabled="chatSending"
+      rows="1"
+      x-ref="chatInput"></textarea>
+    <button class="chat-send" @click="sendChat()" :disabled="!chatInput.trim() || chatSending">
+      send
+    </button>
+  </div>
 </div>"""
 
 
@@ -797,9 +1185,29 @@ function obsApp() {
     loadingCompare: false,
     allRunIds: [],
 
+    // Chart
+    chartRange: 'auto',
+    chartBucketSize: 3600,
+    chartResolvedBucket: 'hour',
+    chartTooltipVisible: false,
+    chartTooltipX: 0,
+    chartTooltipY: 0,
+    chartTooltipHtml: '',
+
+    // Chat
+    chatOpen: false,
+    chatMessages: [],
+    chatInput: '',
+    chatSending: false,
+    chatSessionId: 'obs-chat-' + Date.now(),
+
     // Init
     async init() {
       document.documentElement.setAttribute('data-theme', this.theme);
+      // Bridge for SVG inline event handlers → Alpine tooltip
+      const self = this;
+      document.__obsTooltip = (evt, bucket) => self.showChartTooltip(evt, bucket);
+      document.__obsTooltipHide = () => { self.chartTooltipVisible = false; };
       await this.fetchMetrics();
       await this.fetchSessions();
       this.connectSSE();
@@ -837,6 +1245,25 @@ function obsApp() {
       if (data) {
         this.metrics = data;
         this.agentName = data.agent_name || 'agent';
+        this.recentRuns = data.recent_runs || [];
+      }
+      await this.fetchTimeline();
+    },
+
+    async fetchTimeline() {
+      const tl = await this.fetchJSON(
+        '/obs/api/metrics/timeline?bucket=auto&range=' + encodeURIComponent(this.chartRange)
+      );
+      if (tl && tl.data) {
+        this.chartBucketSize = tl.bucket_seconds || 3600;
+        this.chartResolvedBucket = tl.bucket || 'hour';
+        this.metrics.timeline = tl.data.map(b => ({
+          ts: b.timestamp,
+          count: b.run_count || 0,
+          errors: b.error_count || 0,
+          tokens: b.tokens || 0,
+          cost: b.cost || 0,
+        }));
       }
     },
 
@@ -844,7 +1271,7 @@ function obsApp() {
     async fetchSessions() {
       this.loadingSessions = true;
       const data = await this.fetchJSON('/obs/api/sessions');
-      this.sessions = data || [];
+      this.sessions = (data && data.sessions) || [];
       this.loadingSessions = false;
     },
 
@@ -852,7 +1279,7 @@ function obsApp() {
       this.selectedSession = sid;
       this.loadingRuns = true;
       const data = await this.fetchJSON('/obs/api/sessions/' + encodeURIComponent(sid));
-      this.sessionRuns = data || [];
+      this.sessionRuns = (data && data.runs) || [];
       this.loadingRuns = false;
     },
 
@@ -869,32 +1296,75 @@ function obsApp() {
 
     // Compare
     async fetchAllRunIds() {
-      const data = await this.fetchJSON('/obs/api/sessions');
-      if (!data) return;
-      const ids = [];
-      for (const s of data) {
-        const runs = await this.fetchJSON('/obs/api/sessions/' + encodeURIComponent(s.session_id));
-        if (runs) {
-          for (const r of runs) ids.push(r.run_id);
+      // Primary source: recentRuns from metrics (includes live buffer runs)
+      const seen = new Set();
+      const runs = [];
+      for (const r of (this.recentRuns || [])) {
+        if (!seen.has(r.run_id)) {
+          seen.add(r.run_id);
+          runs.push(r);
         }
       }
-      this.allRunIds = ids;
+      // Secondary source: sessions API (persisted trace files)
+      const data = await this.fetchJSON('/obs/api/sessions');
+      if (data && data.sessions) {
+        for (const s of data.sessions) {
+          const resp = await this.fetchJSON(
+            '/obs/api/sessions/' + encodeURIComponent(s.session_id)
+          );
+          if (resp && resp.runs) {
+            for (const r of resp.runs) {
+              if (!seen.has(r.run_id)) {
+                seen.add(r.run_id);
+                runs.push({
+                  run_id: r.run_id,
+                  session_id: s.session_id,
+                  status: r.status || 'COMPLETED',
+                  tokens: r.tokens?.total_tokens || 0,
+                  cost: r.cost || 0,
+                  duration: r.duration || 0,
+                });
+              }
+            }
+          }
+        }
+      }
+      this.allRunIds = runs;
     },
 
     async loadComparison() {
-      if (!this.compareA || !this.compareB) { this.compareResult = null; return; }
+      if (!this.compareA || !this.compareB || this.compareA === this.compareB) {
+        this.compareResult = null;
+        return;
+      }
       this.loadingCompare = true;
-      const data = await this.fetchJSON('/obs/api/compare?a=' + encodeURIComponent(this.compareA) + '&b=' + encodeURIComponent(this.compareB));
-      this.compareResult = data;
+      this.compareResult = null;
+      const url = '/obs/api/compare?a=' + encodeURIComponent(this.compareA)
+        + '&b=' + encodeURIComponent(this.compareB);
+      try {
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (!resp.ok) {
+          this.compareResult = { _error: data.error || 'Compare failed (HTTP ' + resp.status + ')' };
+        } else {
+          this.compareResult = data;
+        }
+      } catch (e) {
+        this.compareResult = { _error: 'Connection error: ' + e.message };
+      }
       this.loadingCompare = false;
     },
 
     // SSE
+    _sseRetries: 0,
+    _sseReconnectTimer: null,
+
     connectSSE() {
-      if (this.sseSource) { this.sseSource.close(); }
+      if (this._sseReconnectTimer) { clearTimeout(this._sseReconnectTimer); this._sseReconnectTimer = null; }
+      if (this.sseSource) { this.sseSource.close(); this.sseSource = null; }
       try {
         this.sseSource = new EventSource('/obs/api/events');
-        this.sseSource.onopen = () => { this.connected = true; };
+        this.sseSource.onopen = () => { this.connected = true; this._sseRetries = 0; };
         this.sseSource.onmessage = (e) => {
           if (this.ssePaused) return;
           try {
@@ -906,7 +1376,17 @@ function obsApp() {
             }
           } catch {}
         };
-        this.sseSource.onerror = () => { this.connected = false; };
+        this.sseSource.onerror = () => {
+          this.connected = false;
+          if (this.sseSource) { this.sseSource.close(); this.sseSource = null; }
+          const delay = Math.min(1000 * Math.pow(2, this._sseRetries), 30000);
+          this._sseRetries++;
+          this._sseReconnectTimer = setTimeout(() => this.connectSSE(), delay);
+        };
+        window.addEventListener('beforeunload', () => {
+          if (this._sseReconnectTimer) clearTimeout(this._sseReconnectTimer);
+          if (this.sseSource) { this.sseSource.close(); this.sseSource = null; }
+        });
       } catch { this.connected = false; }
     },
 
@@ -951,11 +1431,124 @@ function obsApp() {
       return 'lifecycle';
     },
 
+    isToolEvent(evt) {
+      return evt.event === 'ToolCallStarted' || evt.event === 'ToolCallCompleted';
+    },
+
+    isModelEvent(evt) {
+      return evt.event === 'ModelCallStarted' || evt.event === 'ModelCallCompleted';
+    },
+
+    phaseDescription(name) {
+      const desc = {
+        'prepare': 'Initialize run context — resolve model, register tools, set session ID',
+        'recall': 'Recall session memory — load conversation history, inject summaries',
+        'think': 'Reasoning step — internal chain-of-thought before model call',
+        'guard_input': 'Input guardrails — validate user input before processing',
+        'compose': 'Assemble messages — build system prompt, tool definitions, context',
+        'invoke_loop': 'Inference loop — model calls, tool execution, multi-turn reasoning',
+        'guard_output': 'Output guardrails — validate model response before returning',
+        'store': 'Persist results — store to memory, emit completion events',
+      };
+      return desc[name] || name;
+    },
+
     eventSummary(evt) {
       if (evt.content) return typeof evt.content === 'string' ? evt.content.substring(0, 120) : JSON.stringify(evt.content).substring(0, 120);
       if (evt.tool) return (evt.tool.tool_name || '') + '(' + JSON.stringify(evt.tool.tool_args || {}).substring(0, 60) + ')';
       if (evt.agent_name) return evt.agent_name;
       if (evt.phase_name) return 'phase: ' + evt.phase_name;
+      return '';
+    },
+
+    groupedEvents() {
+      const filtered = this.filteredEvents().slice(-500);
+      const groups = {};
+      const ungrouped = [];
+      const order = [];
+      for (const evt of filtered) {
+        const rid = evt.run_id;
+        if (!rid) { ungrouped.push(evt); continue; }
+        if (!groups[rid]) {
+          groups[rid] = { run_id: rid, agent_name: '', model: '', status: 'running', tokens: 0, duration: null, events: [] };
+          order.push(rid);
+        }
+        const g = groups[rid];
+        g.events.push(evt);
+        if (evt.agent_name) g.agent_name = evt.agent_name;
+        if (evt.model_id) g.model = evt.model_id;
+        if (evt.event === 'RunCompleted') {
+          g.status = 'completed';
+          const m = evt.metrics;
+          if (m) { g.tokens = m.total_tokens || 0; g.duration = m.duration || null; }
+        } else if (evt.event === 'RunError') { g.status = 'error'; }
+        else if (evt.event === 'RunCancelled') { g.status = 'cancelled'; }
+        else if (evt.event === 'RunPaused') { g.status = 'paused'; }
+      }
+      const result = order.map(rid => groups[rid]);
+      result._ungrouped = ungrouped;
+      return result;
+    },
+
+    richEventSummary(evt) {
+      const e = evt.event;
+      if (!e) return '';
+      if (e === 'RunStarted') return 'Agent run started' + (evt.agent_name ? ' (' + evt.agent_name + ')' : '');
+      if (e === 'RunCompleted') {
+        const m = evt.metrics;
+        if (m) return 'Completed — ' + (m.total_tokens || 0) + ' tokens, $' + ((m.cost || 0).toFixed(4));
+        return 'Run completed';
+      }
+      if (e === 'RunError') return 'Error: ' + (evt.error || 'unknown');
+      if (e === 'RunCancelled') return 'Run cancelled';
+      if (e === 'RunPaused') return 'Run paused — awaiting input';
+      if (e === 'ToolCallStarted') {
+        const t = evt.tool;
+        return t ? 'Calling ' + (t.tool_name || '?')
+          + '(' + JSON.stringify(t.tool_args || {}).substring(0, 60) + ')'
+          : 'Tool call started';
+      }
+      if (e === 'ToolCallCompleted') {
+        const t = evt.tool;
+        return t ? (t.tool_name || '?') + ' returned'
+          + (t.tool_call_error ? ' [ERROR]' : '')
+          : 'Tool call completed';
+      }
+      if (e === 'ModelCallStarted') {
+        return 'Model call' + (evt.model_id ? ' (' + evt.model_id + ')' : '')
+          + ' \u2014 ' + (evt.messages_count || '?') + ' messages';
+      }
+      if (e === 'ModelCallCompleted') {
+        const m = evt.metrics;
+        if (m) return 'Model responded — ' + (m.total_tokens || 0) + ' tokens' + (m.cost ? ', $' + m.cost.toFixed(4) : '');
+        return 'Model call completed';
+      }
+      if (e === 'GuardrailTriggered') return 'Guardrail: ' + (evt.guardrail_name || '?') + ' — ' + (evt.action || 'blocked');
+      if (e === 'GuardrailPassed') return 'Guardrail passed: ' + (evt.guardrail_name || '?');
+      if (e === 'PhaseStarted') return 'Phase: ' + (evt.phase_name || '?');
+      if (e === 'PhaseCompleted') return 'Phase done: ' + (evt.phase_name || '?');
+      if (e === 'KnowledgeRetrievalCompleted') {
+        return 'Retrieved ' + (evt.documents_found || 0) + ' documents'
+          + (evt.query ? ' for "' + evt.query.substring(0, 40) + '"' : '');
+      }
+      if (e === 'MemoryRecallCompleted') return 'Memory recall — ' + (evt.chunks_included || 0) + ' chunks';
+      if (e === 'SessionSummaryCreated') return 'Session summary generated';
+      if (e === 'SubAgentSpawned') return 'Spawned sub-agent: ' + (evt.child_agent_name || '?');
+      if (e === 'SubAgentCompleted') return 'Sub-agent completed: ' + (evt.child_agent_name || '?');
+      if (e === 'SubAgentFailed') return 'Sub-agent failed: ' + (evt.child_agent_name || '?');
+      if (evt.content) return typeof evt.content === 'string' ? evt.content.substring(0, 120) : JSON.stringify(evt.content).substring(0, 120);
+      if (evt.phase_name) return 'phase: ' + evt.phase_name;
+      return e;
+    },
+
+    eventDuration(evt) {
+      const e = evt.event;
+      if (e === 'ToolCallCompleted' && evt.tool && evt.tool.duration_ms != null) return this.formatMs(evt.tool.duration_ms);
+      if (e === 'ModelCallCompleted' && evt.metrics && evt.metrics.duration != null) return this.formatDuration(evt.metrics.duration);
+      if (e === 'RunCompleted' && evt.metrics && evt.metrics.duration != null) return this.formatDuration(evt.metrics.duration);
+      if (e === 'PhaseCompleted' && evt.duration_ms != null) return this.formatMs(evt.duration_ms);
+      if (e === 'KnowledgeRetrievalCompleted' && evt.duration_ms != null) return this.formatMs(evt.duration_ms);
+      if (e === 'MemoryRecallCompleted' && evt.duration_ms != null) return this.formatMs(evt.duration_ms);
       return '';
     },
 
@@ -1027,30 +1620,89 @@ function obsApp() {
       return colors[stepType] || 'var(--border)';
     },
 
-    // Bar chart renderer (inline SVG)
+    // Chart bucket label for header
+    chartBucketLabel() {
+      const bk = this.chartResolvedBucket || 'hour';
+      const rng = this.chartRange || 'auto';
+      const labels = {'5min':'5 min','30min':'30 min','hour':'1 hr','day':'1 day'};
+      return (labels[bk] || bk) + ' buckets' + (rng !== 'auto' ? ' · ' + rng + ' range' : '');
+    },
+
+    // Tooltip handlers — called from SVG bar onmouseenter
+    showChartTooltip(evt, bucket) {
+      const rect = evt.target.closest('.chart-container').getBoundingClientRect();
+      this.chartTooltipX = evt.clientX - rect.left + 12;
+      this.chartTooltipY = evt.clientY - rect.top - 10;
+      // Flip if near right edge
+      if (this.chartTooltipX > rect.width - 160) this.chartTooltipX -= 180;
+      const d = new Date(bucket.ts * 1000);
+      const end = new Date((bucket.ts + this.chartBucketSize) * 1000);
+      const fmt = (dt) => dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+      const dateFmt = d.toLocaleDateString([], {month:'short', day:'numeric'});
+      let html = '<div class="chart-tooltip-time">' + dateFmt + ' ' + fmt(d) + ' – ' + fmt(end) + '</div>';
+      html += '<div class="chart-tooltip-row"><span>Runs</span><span>' + (bucket.count || 0) + '</span></div>';
+      if (bucket.errors > 0) html += '<div class="chart-tooltip-row"><span>Errors</span>'
+        + '<span style="color:var(--error)">' + bucket.errors + '</span></div>';
+      html += '<div class="chart-tooltip-row"><span>Tokens</span><span>' + this.formatNumber(bucket.tokens || 0) + '</span></div>';
+      html += '<div class="chart-tooltip-row"><span>Cost</span><span>$' + (bucket.cost || 0).toFixed(4) + '</span></div>';
+      this.chartTooltipHtml = html;
+      this.chartTooltipVisible = true;
+    },
+
+    // Bar chart renderer (inline SVG with local time labels + interactive tooltip)
     renderBarChart(timeline) {
       if (!timeline || timeline.length === 0) {
-        return '<svg viewBox="0 0 400 160"><text x="200" y="80" fill="var(--text-muted)" '
-          + 'text-anchor="middle" font-size="12">no data</text></svg>';
+        return '<svg viewBox="0 0 480 160"><text x="240" y="80" fill="var(--text-muted)" '
+          + 'text-anchor="middle" font-family="var(--font)" font-size="12">no data</text></svg>';
       }
+      const W = 480, H = 160, pad = 30, top = 10;
+      const chartH = H - pad - top;
+      const n = timeline.length;
+      const gap = Math.max(1, Math.min(3, Math.floor(200 / n)));
+      const barW = Math.max(2, (W - 20) / n - gap);
       const maxVal = Math.max(...timeline.map(t => t.count || 0), 1);
-      const barW = Math.max(8, Math.floor(380 / timeline.length) - 4);
       let bars = '';
+      // Determine label step — show ~10-15 labels max
+      const labelStep = Math.max(1, Math.ceil(n / 12));
       timeline.forEach((t, i) => {
-        const h = Math.max(2, ((t.count || 0) / maxVal) * 130);
-        const x = i * (barW + 4) + 10;
-        const y = 140 - h;
-        const fill = (t.count || 0) > 0 ? 'var(--accent)' : 'var(--border)';
-        bars += '<rect x="' + x + '" y="' + y + '" width="' + barW
-          + '" height="' + h + '" rx="2" fill="' + fill
-          + '" opacity="0.8"><title>' + (t.label||'') + ': '
-          + (t.count||0) + '</title></rect>';
-        if (timeline.length <= 24) {
-          bars += '<text x="' + (x + barW/2) + '" y="155" fill="var(--text-muted)"'
-            + ' text-anchor="middle" font-size="9">' + (t.label||'') + '</text>';
+        const x = 10 + i * (barW + gap);
+        const val = t.count || 0;
+        const errVal = t.errors || 0;
+        const h = val > 0 ? Math.max(4, (val / maxVal) * chartH) : 1;
+        const y = top + chartH - h;
+        // JSON-encode bucket data for tooltip
+        const bdata = JSON.stringify({ts:t.ts,count:val,errors:errVal,tokens:t.tokens||0,cost:t.cost||0}).replace(/"/g, '&quot;');
+        if (val > 0) {
+          // Main bar
+          bars += '<rect class="bar" x="' + x + '" y="' + y + '" width="' + barW
+            + '" height="' + h + '" rx="1.5" fill="var(--accent)" opacity="0.8"'
+            + ' onmouseenter="document.__obsTooltip(event,' + bdata + ')"'
+            + ' onmouseleave="document.__obsTooltipHide()" />';
+          // Error overlay (red portion at bottom of bar)
+          if (errVal > 0) {
+            const errH = Math.max(3, (errVal / maxVal) * chartH);
+            bars += '<rect x="' + x + '" y="' + (top + chartH - errH)
+              + '" width="' + barW + '" height="' + errH
+              + '" rx="1.5" fill="var(--error)" opacity="0.7" pointer-events="none" />';
+          }
+        } else {
+          // Empty bucket — thin tick
+          bars += '<rect x="' + x + '" y="' + (top + chartH - 1)
+            + '" width="' + barW + '" height="1" fill="var(--border)" opacity="0.3" />';
+        }
+        // Local time labels
+        if (i % labelStep === 0) {
+          const d = new Date(t.ts * 1000);
+          const lbl = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+          const lblColor = val > 0 ? 'var(--text)' : 'var(--text-muted)';
+          bars += '<text x="' + (x + barW/2) + '" y="' + (H - 4) + '" fill="' + lblColor + '"'
+            + ' text-anchor="middle" font-family="var(--font)" font-size="8">' + lbl + '</text>';
         }
       });
-      return '<svg viewBox="0 0 ' + (timeline.length * (barW + 4) + 20) + ' 160" preserveAspectRatio="none">' + bars + '</svg>';
+      // Baseline axis
+      bars += '<line x1="10" y1="' + (top + chartH) + '" x2="' + (W - 10) + '" y2="' + (top + chartH)
+        + '" stroke="var(--border)" stroke-width="0.5" />';
+      return '<svg viewBox="0 0 ' + W + ' ' + H + '">' + bars + '</svg>';
     },
 
     // Diff renderer
@@ -1065,6 +1717,72 @@ function obsApp() {
 
     escapeHtml(str) {
       return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    },
+
+    // Chat methods
+    async sendChat() {
+      const text = this.chatInput.trim();
+      if (!text || this.chatSending) return;
+      this.chatMessages.push({ role: 'user', content: text, tokens: null, cost: null });
+      this.chatInput = '';
+      this.chatSending = true;
+      this.$nextTick(() => this.scrollChatToBottom());
+      try {
+        const resp = await fetch('/obs/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, session_id: this.chatSessionId }),
+        });
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: 'Request failed' }));
+          this.chatMessages.push({ role: 'error', content: err.error || 'Error ' + resp.status, tokens: null, cost: null });
+        } else {
+          const data = await resp.json();
+          this.chatMessages.push({
+            role: 'assistant',
+            content: data.content || '',
+            tokens: data.tokens ? data.tokens.total_tokens : null,
+            cost: data.cost || null,
+          });
+          // Refresh metrics so the new run shows in overview
+          this.fetchMetrics();
+        }
+      } catch (e) {
+        this.chatMessages.push({ role: 'error', content: 'Connection error: ' + e.message, tokens: null, cost: null });
+      }
+      this.chatSending = false;
+      this.$nextTick(() => this.scrollChatToBottom());
+    },
+
+    async resetChat() {
+      try {
+        await fetch('/obs/api/chat/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: this.chatSessionId }),
+        });
+      } catch {}
+      this.chatMessages = [];
+      this.chatSessionId = 'obs-chat-' + Date.now();
+    },
+
+    scrollChatToBottom() {
+      const el = this.$refs.chatMessages;
+      if (el) el.scrollTop = el.scrollHeight;
+    },
+
+    renderMarkdown(text) {
+      if (!text) return '';
+      let html = this.escapeHtml(text);
+      // Code blocks
+      html = html.replace(/```([\\s\\S]*?)```/g, '<pre>$1</pre>');
+      // Inline code
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      // Bold
+      html = html.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+      // Line breaks
+      html = html.replace(/\\n/g, '<br>');
+      return html;
     },
   };
 }
