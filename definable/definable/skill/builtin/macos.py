@@ -46,6 +46,7 @@ class MacOS(Skill):
     enable_applescript: Whether to expose the AppleScript execution tool.
     enable_file_write: Whether to expose file-write and file-move tools.
     enable_input: Whether to expose mouse/keyboard input tools.
+    enable_shell: Whether to expose the shell command execution tool.
 
   Example::
 
@@ -54,6 +55,9 @@ class MacOS(Skill):
 
     # Restricted to specific apps
     MacOS(allowed_apps={"Safari", "TextEdit", "Terminal"})
+
+    # Full power — shell, camera, screen recording
+    MacOS(enable_shell=True)
   """
 
   name = "macos"
@@ -69,6 +73,7 @@ class MacOS(Skill):
     enable_applescript: bool = True,
     enable_file_write: bool = True,
     enable_input: bool = True,
+    enable_shell: bool = False,
   ) -> None:
     super().__init__()
     self._bridge_host = bridge_host
@@ -79,6 +84,7 @@ class MacOS(Skill):
     self._enable_applescript = enable_applescript
     self._enable_file_write = enable_file_write
     self._enable_input = enable_input
+    self._enable_shell = enable_shell
     self._client: Optional["BridgeClient"] = None
 
   @property
@@ -96,6 +102,11 @@ class MacOS(Skill):
       parts.append("File write and move operations are disabled.")
     if not self._enable_applescript:
       parts.append("AppleScript execution is disabled.")
+    if self._enable_shell:
+      parts.append("Shell command execution is enabled — you can run terminal commands.")
+    else:
+      parts.append("Shell command execution is disabled.")
+    parts.append("You can use the camera and screen recording tools for visual capture.")
     parts.append("If the bridge is not running, tools will return a friendly error — tell the user to start the Definable Desktop Bridge app.")
     return " ".join(parts)
 
@@ -876,6 +887,155 @@ class MacOS(Skill):
         return f"Send notification failed: {exc}"
 
     all_tools.append(send_notification)
+
+    # ── Shell (gated by enable_shell) ─────────────────────────────────────
+
+    if skill._enable_shell:
+
+      @tool
+      async def run_shell(command: str, cwd: str = "", timeout: float = 30) -> str:
+        """Execute a shell command and return its output.
+
+        Use for automation tasks that require terminal commands (e.g. ``ls``,
+        ``curl``, ``brew``, ``git``). The command is split and run as a
+        subprocess — not through a shell interpreter.
+
+        Args:
+          command: The command to execute (space-separated, e.g. "ls -la /tmp").
+          cwd: Working directory (default: bridge process cwd).
+          timeout: Timeout in seconds (default: 30, max: 120).
+
+        Returns:
+          Command stdout on success, or stderr/error on failure.
+        """
+        try:
+          parts = command.split()
+          if not parts:
+            return "Error: empty command."
+          client = skill._get_client()
+          result = await client.run_shell(
+            command=parts,
+            cwd=cwd or None,
+            timeout=min(timeout, 120),
+          )
+          if result.get("success"):
+            stdout = result.get("stdout", "")
+            return stdout or "(no output)"
+          stderr = result.get("stderr", "")
+          return f"Command failed (exit {result.get('exit_code', '?')}): {stderr}"
+        except Exception as exc:
+          if "connect" in str(exc).lower() or "connection" in str(exc).lower():
+            return skill._bridge_error_msg(skill._bridge_host, skill._bridge_port)
+          return f"Shell command failed: {exc}"
+
+      all_tools.append(run_shell)
+
+    # ── Camera ──────────────────────────────────────────────────────────
+
+    @tool
+    async def list_cameras() -> str:
+      """List available camera devices on this Mac.
+
+      Returns:
+        A list of cameras with their IDs and positions, or an error string.
+      """
+      try:
+        client = skill._get_client()
+        cameras = await client.camera_list()
+        if not cameras:
+          return "No cameras found."
+        lines = [f"[{c.get('id', '?')}] {c.get('name', '?')} ({c.get('position', '?')})" for c in cameras]
+        return "\n".join(lines)
+      except Exception as exc:
+        if "connect" in str(exc).lower() or "connection" in str(exc).lower():
+          return skill._bridge_error_msg(skill._bridge_host, skill._bridge_port)
+        return f"List cameras failed: {exc}"
+
+    all_tools.append(list_cameras)
+
+    @tool
+    async def camera_snap(facing: str = "front", save_path: Optional[str] = None) -> str:
+      """Take a photo with the Mac's camera.
+
+      Args:
+        facing: Camera to use — "front" (default, FaceTime) or "back".
+        save_path: If set, save the JPEG to this absolute file path (e.g. "/tmp/selfie.jpg").
+
+      Returns:
+        A base64-encoded JPEG data URI, or an error string. If save_path was
+        provided, the image is also written to disk by the bridge.
+      """
+      try:
+        client = skill._get_client()
+        jpeg_bytes = await client.camera_snap(
+          facing=facing,
+          max_width=512,
+          quality=0.6,
+          out_path=save_path,
+        )
+        b64 = base64.b64encode(jpeg_bytes).decode()
+        prefix = f"Saved to {save_path}. " if save_path else ""
+        return f"{prefix}data:image/jpeg;base64,{b64}"
+      except Exception as exc:
+        if "connect" in str(exc).lower() or "connection" in str(exc).lower():
+          return skill._bridge_error_msg(skill._bridge_host, skill._bridge_port)
+        return f"Camera snap failed: {exc}"
+
+    all_tools.append(camera_snap)
+
+    @tool
+    async def camera_clip(facing: str = "front", duration_seconds: int = 3) -> str:
+      """Record a short video clip with the Mac's camera.
+
+      Args:
+        facing: Camera to use — "front" or "back".
+        duration_seconds: Recording duration (default: 3, max: 30).
+
+      Returns:
+        Path to the saved MP4 file, or an error string.
+      """
+      try:
+        client = skill._get_client()
+        result = await client.camera_clip(
+          facing=facing,
+          duration_ms=min(duration_seconds, 30) * 1000,
+        )
+        path = result.get("path", "")
+        size = result.get("size_bytes", 0)
+        return f"Recorded clip: {path} ({size:,} bytes)" if path else f"Recording failed: {result}"
+      except Exception as exc:
+        if "connect" in str(exc).lower() or "connection" in str(exc).lower():
+          return skill._bridge_error_msg(skill._bridge_host, skill._bridge_port)
+        return f"Camera clip failed: {exc}"
+
+    all_tools.append(camera_clip)
+
+    @tool
+    async def screen_record(duration_seconds: int = 10, display: int = 0) -> str:
+      """Record the screen for a given duration.
+
+      Args:
+        duration_seconds: Recording duration (default: 10, max: 60).
+        display: Display index (0 = primary, 1 = secondary, etc.).
+
+      Returns:
+        Path to the saved MP4 file, or an error string.
+      """
+      try:
+        client = skill._get_client()
+        result = await client.screen_record(
+          screen_index=display,
+          duration_ms=min(duration_seconds, 60) * 1000,
+        )
+        path = result.get("path", "")
+        size = result.get("size_bytes", 0)
+        return f"Screen recording: {path} ({size:,} bytes)" if path else f"Recording failed: {result}"
+      except Exception as exc:
+        if "connect" in str(exc).lower() or "connection" in str(exc).lower():
+          return skill._bridge_error_msg(skill._bridge_host, skill._bridge_port)
+        return f"Screen record failed: {exc}"
+
+    all_tools.append(screen_record)
 
     return all_tools
 

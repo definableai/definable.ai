@@ -1,0 +1,63 @@
+# ruff: noqa: E501
+"""Full Power Desktop Agent — all capabilities enabled.
+
+An unrestricted agent with shell, camera, screen recording, file writes,
+and AppleScript. Use for trusted automation tasks like setting up a dev
+environment, running builds, or orchestrating complex workflows.
+
+Requirements:
+    ~/.definable/bin/desktop-bridge serve   (bridge must be running)
+    export OPENAI_API_KEY=sk-...
+
+Usage:
+    .venv/bin/python definable/examples/desktop/05_full_power_agent.py
+"""
+
+import asyncio
+import os
+
+from definable.agent import Agent
+from definable.agent.interface import TelegramInterface
+from definable.model.openai import OpenAIChat
+from definable.skill.builtin.macos import MacOS
+
+
+async def main() -> None:
+  # All gates open — 35 tools
+  skill = MacOS(
+    enable_input=True,
+    enable_file_write=True,
+    enable_applescript=True,
+    enable_shell=True,
+  )
+
+  agent = Agent(
+    model=OpenAIChat(id="gpt-5.2"),
+    skills=[skill],
+    instructions=(
+      "You are a full-power macOS automation agent with shell access, "
+      "camera, screen recording, file I/O, and complete input control. "
+      "You can run terminal commands, take photos, record the screen, "
+      "read/write files, and control any app.\n\n"
+      "Workflow:\n"
+      "1. Screenshot to see the current state\n"
+      "2. Plan your actions\n"
+      "3. Execute step by step\n"
+      "4. Screenshot to verify each step\n\n"
+      "Be careful with destructive operations. Prefer non-destructive "
+      "approaches when possible."
+    ),
+  )
+  telegram = TelegramInterface(
+    agent=agent,
+    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+  )
+  # result = await agent.arun(
+  #   "Take a photo with the camera and save it to /tmp/selfie.png, then take a screenshot of my desktop and tell me what apps are open."
+  # )
+  # print(result.content)
+  await agent.aserve(telegram)
+
+
+if __name__ == "__main__":
+  asyncio.run(main())
