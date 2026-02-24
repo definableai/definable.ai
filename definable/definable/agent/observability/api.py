@@ -1,6 +1,8 @@
 """Observability API router — all /obs/api/* endpoints."""
 
-from __future__ import annotations
+# NOTE: Do NOT use `from __future__ import annotations` here.
+# FastAPI needs runtime access to the `Request` type annotation to inject it
+# as a dependency rather than treating it as a query parameter.
 
 import asyncio
 import contextlib
@@ -209,8 +211,8 @@ def create_observability_router(
   # --- Metrics timeline ---
   @router.get("/metrics/timeline")
   async def obs_metrics_timeline(
-    bucket: str = Query("hour", regex="^(hour|day)$"),
-    range_param: str = Query("24h", alias="range", regex="^(24h|7d|30d)$"),
+    bucket: str = Query("hour", pattern="^(hour|day)$"),
+    range_param: str = Query("24h", alias="range", pattern="^(24h|7d|30d)$"),
   ) -> Dict[str, Any]:
     range_hours = {"24h": 24, "7d": 168, "30d": 720}.get(range_param, 24)
     all_events = list(collector.buffer)
