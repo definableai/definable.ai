@@ -160,7 +160,7 @@ class Agent:
     model: Union[str, "Model"],
     # ── Layers ──────────────────────────────────────────────
     memory: Union["Memory", bool, None] = False,
-    knowledge: Union["Knowledge", bool, None] = False,
+    knowledge: Union["Knowledge", str, bool, None] = False,
     thinking: Union[bool, "Thinking", None] = None,
     deep_research: Union[bool, "DeepResearchConfig", "DeepResearch", None] = None,
     # ── Tools ───────────────────────────────────────────────
@@ -475,14 +475,51 @@ class Agent:
     # Future: initialize connections, warm up caches, etc.
 
   def _shutdown(self) -> None:
-    """Cleanup resources."""
+    """Cleanup resources (sync-safe).
+
+    Closes memory, drains pending memory tasks, and shuts down
+    agent-owned toolkits when called outside an async event loop.
+    If an event loop is already running (e.g. sync context manager
+    used inside async code), logs a warning — use ``_ashutdown()``
+    or ``async with`` instead.
+    """
     # Teardown skills
     for skill in self.skills:
       with contextlib.suppress(Exception):
         skill.teardown()
     if self._trace_writer:
       self._trace_writer.shutdown()
+    # Best-effort async resource cleanup from sync context
+    self._sync_close_async_resources()
     self._started = False
+
+  def _sync_close_async_resources(self) -> None:
+    """Close memory, toolkits, and drain tasks from a sync context."""
+
+    async def _cleanup() -> None:
+      await self._drain_memory_tasks()
+      for toolkit in self._agent_owned_toolkits:
+        with contextlib.suppress(Exception):
+          await toolkit.shutdown()
+      self._agent_owned_toolkits.clear()
+      if self.memory:
+        with contextlib.suppress(Exception):
+          await self.memory.close()
+
+    try:
+      asyncio.get_running_loop()
+      # Running inside an async context — can't nest asyncio.run()
+      from definable.utils.log import log_warning
+
+      log_warning(
+        "Agent._shutdown() cannot close async resources (memory, toolkits) "
+        "from inside a running event loop. Use 'async with Agent(...)' or "
+        "await agent._ashutdown() instead."
+      )
+    except RuntimeError:
+      # No running loop — safe to create one
+      with contextlib.suppress(Exception):
+        asyncio.run(_cleanup())
 
   async def _ashutdown(self) -> None:
     """Async cleanup."""
@@ -2548,6 +2585,7 @@ class Agent:
 
       # Run the loop, collect events
       final_content: Optional[str] = None
+      final_parsed: Any = None
       final_metrics: Optional[Metrics] = None
 
       async for event in loop.run():
@@ -2556,6 +2594,7 @@ class Agent:
 
         if isinstance(event, RunCompletedEvent):
           final_content = event.content
+          final_parsed = event.parsed
           final_metrics = event.metrics
         elif isinstance(event, RunPausedEvent):
           # Build paused RunOutput
@@ -2585,6 +2624,7 @@ class Agent:
         agent_name=self.agent_name,
         input=run_input,
         content=final_content,
+        parsed=final_parsed,
         tools=loop.tool_executions or None,
         metrics=final_metrics,
         messages=output_messages,
@@ -2735,18 +2775,26 @@ class Agent:
     # Memory instance — pass through
     return memory
 
-  def _resolve_knowledge(self, knowledge: "Knowledge | bool | None") -> Optional["Knowledge"]:
+  def _resolve_knowledge(self, knowledge: "Knowledge | str | bool | None") -> Optional["Knowledge"]:
     """Resolve knowledge param to Knowledge | None.
 
     Accepts:
       - False/None → None
-      - True → ValueError
+      - True → ValueError (ambiguous — no path to load from)
+      - str → Knowledge.from_path(path) with auto-configured RAG pipeline
       - Knowledge instance → pass through (has agent-integration fields)
     """
     if knowledge is False or knowledge is None:
       return None
     if knowledge is True:
-      raise ValueError("knowledge=True is not supported. Pass a Knowledge instance (Agent(knowledge=Knowledge(vector_db=..., top_k=5))).")
+      raise ValueError(
+        "knowledge=True is not supported. Pass a path string or Knowledge instance:"
+        " Agent(knowledge='./docs/') or Agent(knowledge=Knowledge(vector_db=..., top_k=5))."
+      )
+    if isinstance(knowledge, str):
+      from definable.knowledge.base import Knowledge as _Knowledge
+
+      return _Knowledge.from_path(knowledge)
 
     # Knowledge instance — pass through directly
     return knowledge

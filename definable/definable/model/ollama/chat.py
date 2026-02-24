@@ -207,7 +207,7 @@ class Ollama(Model):
 
     assistant_message.metrics.stop_timer()
 
-    model_response = self._parse_provider_response(provider_response)
+    model_response = self._parse_provider_response(provider_response, response_format=response_format)
     return model_response
 
   async def ainvoke(
@@ -235,7 +235,7 @@ class Ollama(Model):
 
     assistant_message.metrics.stop_timer()
 
-    model_response = self._parse_provider_response(provider_response)
+    model_response = self._parse_provider_response(provider_response, response_format=response_format)
     return model_response
 
   def invoke_stream(
@@ -320,6 +320,18 @@ class Ollama(Model):
 
     if response.get("done"):
       model_response.response_usage = self._get_metrics(response)
+
+    # Parse structured output if response_format is a Pydantic model
+    response_format = kwargs.get("response_format")
+    if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
+      if model_response.content:
+        try:
+          parsed_data = json.loads(model_response.content)
+          model_response.parsed = response_format.model_validate(parsed_data)
+        except json.JSONDecodeError as e:
+          log_warning(f"Failed to parse JSON from structured output: {e}")
+        except Exception as e:
+          log_warning(f"Failed to validate structured output against schema: {e}")
 
     return model_response
 

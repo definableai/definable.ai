@@ -132,6 +132,7 @@ class AgentLoop:
     tool_round = 0
     max_tool_rounds = self._config.max_tool_rounds
     final_content: Optional[str] = None
+    final_parsed: Any = None
     total_metrics: Optional["Metrics"] = None
 
     try:
@@ -144,8 +145,9 @@ class AgentLoop:
         tool_round += 1
         if tool_round > max_tool_rounds:
           log_warning(f"Agent loop hit max_tool_rounds={max_tool_rounds}. Forcing stop to prevent infinite tool-call loop.")
-          content, metrics = await self._force_final_answer()
+          content, metrics, parsed = await self._force_final_answer()
           final_content = content
+          final_parsed = parsed
           if metrics is not None:
             total_metrics = metrics if total_metrics is None else total_metrics + metrics
           break
@@ -161,7 +163,7 @@ class AgentLoop:
 
         if self._streaming:
           # Streaming: yield RunContentEvent deltas inline
-          content, tool_calls, metrics = "", [], None
+          content, tool_calls, metrics, parsed = "", [], None, None
           accumulated_content = ""
           accumulated_tool_calls: list[dict] = []
           accumulated_metrics: Optional["Metrics"] = None
@@ -189,6 +191,23 @@ class AgentLoop:
                 accumulated_metrics = chunk.response_usage
               else:
                 accumulated_metrics = accumulated_metrics + chunk.response_usage
+            # Capture parsed from final chunk if provider set it
+            if hasattr(chunk, "parsed") and chunk.parsed is not None:
+              parsed = chunk.parsed
+
+          # Parse structured output from accumulated content if not already parsed from chunks
+          if parsed is None and self._context.output_schema is not None and accumulated_content:
+            import json
+
+            from pydantic import BaseModel
+
+            response_format = self._context.output_schema
+            if isinstance(response_format, type) and issubclass(response_format, BaseModel):
+              try:
+                parsed_data = json.loads(accumulated_content)
+                parsed = response_format.model_validate(parsed_data)
+              except (json.JSONDecodeError, Exception):
+                pass  # Non-critical: content is still available as string
 
           # Add assistant message to history
           assistant_msg = Message(
@@ -206,7 +225,7 @@ class AgentLoop:
           metrics = accumulated_metrics
         else:
           # Non-streaming
-          content, tool_calls, metrics = await self._call_model()
+          content, tool_calls, metrics, parsed = await self._call_model()
 
         completed_evt = self._make_model_call_completed(content, tool_calls, metrics)
         yield completed_evt
@@ -217,6 +236,7 @@ class AgentLoop:
         # 5. If no tool calls -> done
         if not tool_calls:
           final_content = content
+          final_parsed = parsed
           break
 
         # 6. Parallel tool dispatch
@@ -227,6 +247,7 @@ class AgentLoop:
         # 7. Check stop_after_tool_call
         if any(r.should_stop for r in batch.results):
           final_content = content
+          final_parsed = parsed
           break
 
         # 8. Check HITL pause
@@ -254,6 +275,7 @@ class AgentLoop:
         agent_id=self._agent_id,
         agent_name=self._agent_name,
         content=final_content,
+        parsed=final_parsed,
         metrics=total_metrics,
       )
 
@@ -309,8 +331,8 @@ class AgentLoop:
   # Model calls
   # ------------------------------------------------------------------
 
-  async def _call_model(self) -> tuple[str, list[dict], Optional["Metrics"]]:
-    """Non-streaming model call with retry. Returns (content, tool_calls, metrics)."""
+  async def _call_model(self) -> tuple[str, list[dict], Optional["Metrics"], Any]:
+    """Non-streaming model call with retry. Returns (content, tool_calls, metrics, parsed)."""
     response = await self._call_model_with_retry()
 
     # Add assistant message to conversation history
@@ -327,6 +349,7 @@ class AgentLoop:
       response.content or "",
       response.tool_calls or [],
       response.response_usage,
+      response.parsed,
     )
 
   async def _call_model_with_retry(self) -> "ModelResponse":
@@ -356,7 +379,7 @@ class AgentLoop:
     # Unreachable, but keeps type checkers happy
     raise RuntimeError("Exhausted retries")  # pragma: no cover
 
-  async def _force_final_answer(self) -> tuple[str, Optional["Metrics"]]:
+  async def _force_final_answer(self) -> tuple[str, Optional["Metrics"], Any]:
     """Inject stop message and call model without tools for a final answer."""
     self._messages.append(
       Message(
@@ -384,7 +407,7 @@ class AgentLoop:
     completed_evt = self._make_model_call_completed(final_response.content or "", [], final_response.response_usage)
     self._emit_fn(completed_evt)
 
-    return final_response.content or "", final_response.response_usage
+    return final_response.content or "", final_response.response_usage, final_response.parsed
 
   # ------------------------------------------------------------------
   # Tool dispatch

@@ -210,3 +210,49 @@ class TestPublicExport:
     from definable.model import resolve_model_string as fn
 
     assert callable(fn)
+
+
+# ---------------------------------------------------------------------------
+# Missing dependency error messages
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestMissingDependencyHints:
+  """ImportError for missing optional deps includes install instructions."""
+
+  def test_anthropic_import_error_has_install_hint(self):
+    """'anthropic/...' with missing SDK shows pip install definable[anthropic]."""
+    with patch("definable.model.utils.import_module", side_effect=ImportError("No module named 'anthropic'")):
+      with pytest.raises(ImportError, match=r'pip install "definable\[anthropic\]"'):
+        resolve_model_string("anthropic/claude-sonnet-4-20250514")
+
+  def test_google_import_error_has_install_hint(self):
+    """'google/...' with missing SDK shows pip install definable[google]."""
+    with patch("definable.model.utils.import_module", side_effect=ImportError("No module named 'google'")):
+      with pytest.raises(ImportError, match=r'pip install "definable\[google\]"'):
+        resolve_model_string("google/gemini-2.0-flash")
+
+  def test_mistral_import_error_has_install_hint(self):
+    """'mistral/...' with missing SDK shows pip install definable[mistral]."""
+    with patch("definable.model.utils.import_module", side_effect=ImportError("No module named 'mistralai'")):
+      with pytest.raises(ImportError, match=r'pip install "definable\[mistral\]"'):
+        resolve_model_string("mistral/mistral-large-latest")
+
+  def test_ollama_import_error_has_install_hint(self):
+    """'ollama/...' with missing SDK shows pip install definable[ollama]."""
+    with patch("definable.model.utils.import_module", side_effect=ImportError("No module named 'ollama'")):
+      with pytest.raises(ImportError, match=r'pip install "definable\[ollama\]"'):
+        resolve_model_string("ollama/llama3")
+
+  def test_openai_import_error_no_extra_hint(self):
+    """'openai/...' import error re-raises without extra hint (core dep)."""
+    with patch("definable.model.utils.import_module", side_effect=ImportError("No module named 'openai'")):
+      with pytest.raises(ImportError, match="No module named 'openai'"):
+        resolve_model_string("openai/gpt-4o")
+
+  def test_bare_model_import_error_no_extra_hint(self):
+    """Bare model ID import error re-raises without extra hint."""
+    with patch("definable.model.utils.import_module", side_effect=ImportError("No module named 'openai'")):
+      with pytest.raises(ImportError, match="No module named 'openai'"):
+        resolve_model_string("gpt-4o")
