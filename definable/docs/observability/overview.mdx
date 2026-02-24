@@ -1,0 +1,138 @@
+---
+title: Observability Dashboard
+sidebarTitle: Overview
+description: Live monitoring dashboard for Definable agents — events, traces, metrics, and run comparison.
+icon: chart-line
+---
+
+The observability module provides a hidden-by-default browser dashboard that exposes real-time and historical insight into your agent's behavior. Enable it with a single flag and open `/obs/` in your browser.
+
+## Quick Start
+
+```python
+from definable.agent import Agent
+
+agent = Agent(
+  model="openai/gpt-4o-mini",
+  observability=True,  # enables the dashboard
+)
+
+agent.serve(enable_server=True)
+# Open http://localhost:8000/obs/
+```
+
+That's it. The dashboard mounts on the same server as your agent API — no extra ports, no extra processes.
+
+## What You Get
+
+The dashboard provides seven views accessible from the sidebar:
+
+| View | What it shows |
+|------|-------------|
+| **Overview** | Total runs, success rate, token usage, cost, run cadence chart |
+| **Live Events** | Real-time event stream from the agent pipeline (SSE) |
+| **Sessions** | Historical trace sessions from JSONL files |
+| **Run Detail** | Phase timeline, tool calls, input/output for a single run |
+| **Compare** | Side-by-side diff of two runs (tokens, cost, content, tools) |
+| **Tools** | Per-tool call counts, error rates, average latency |
+| **Models** | Per-model token usage, cost breakdown |
+
+## Configuration
+
+Use `ObservabilityConfig` for fine-grained control:
+
+```python
+from definable.agent import Agent
+from definable.agent.observability import ObservabilityConfig
+
+agent = Agent(
+  model="openai/gpt-4o-mini",
+  observability=ObservabilityConfig(
+    enabled=True,
+    trace_dir="./my-traces",   # where JSONL trace files live
+    buffer_size=5000,          # live event ring buffer size
+    theme="light",             # "dark" (default) or "light"
+  ),
+)
+```
+
+### Options
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | `bool` | `False` | Whether the dashboard is active |
+| `trace_dir` | `str` | `"./traces"` | Directory for JSONL trace files |
+| `buffer_size` | `int` | `10000` | Maximum events in the live ring buffer |
+| `theme` | `str` | `"dark"` | Default dashboard theme |
+
+## Composing with Tracing
+
+Observability composes with the existing `Tracing` system. The `ObservabilityExporter` is automatically added to your exporter chain:
+
+```python
+from definable.agent import Agent
+from definable.agent.tracing.base import Tracing
+from definable.agent.tracing.jsonl import JSONLExporter
+
+agent = Agent(
+  model="openai/gpt-4o-mini",
+  tracing=Tracing(exporters=[JSONLExporter(trace_dir="./traces")]),
+  observability=True,
+)
+# Both JSONLExporter and ObservabilityExporter receive events
+```
+
+This also works with `debug=True` — all three exporters coexist.
+
+## API Endpoints
+
+When enabled, these endpoints are available under `/obs/api/`:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/obs/api/health` | GET | Health check with buffer/client stats |
+| `/obs/api/events` | GET | SSE stream of live events |
+| `/obs/api/sessions` | GET | List historical trace sessions |
+| `/obs/api/sessions/{id}` | GET | List runs within a session |
+| `/obs/api/runs/{id}` | GET | Full replay data for a run |
+| `/obs/api/compare?a=...&b=...` | GET | Side-by-side run comparison |
+| `/obs/api/metrics` | GET | Aggregated metrics snapshot |
+| `/obs/api/metrics/timeline` | GET | Time-series buckets |
+| `/obs/api/events/export/{id}` | GET | Download session as JSONL |
+
+The dashboard UI at `/obs/` consumes these endpoints — you can also use them directly for custom integrations.
+
+## Themes
+
+The dashboard ships with two themes:
+
+- **Dark** (default): Black background with orange accents — terminal aesthetic
+- **Light**: White background with dark accents
+
+Toggle between them using the sun/moon button in the dashboard header, or set the default via config:
+
+```python
+ObservabilityConfig(enabled=True, theme="light")
+```
+
+Theme preference is saved in `localStorage` and persists across sessions.
+
+## FAQ
+
+<AccordionGroup>
+  <Accordion title="How do I disable observability?">
+    Don't pass `observability=True` (or pass `observability=False`). The dashboard routes are never mounted and no exporter is created. Zero overhead when disabled.
+  </Accordion>
+
+  <Accordion title="How do I export trace data?">
+    Use the `/obs/api/events/export/{session_id}` endpoint to download a session as a JSONL file. You can also access the JSONL files directly in your `trace_dir`.
+  </Accordion>
+
+  <Accordion title="Does it add latency to my agent?">
+    Minimal. The `ObservabilityExporter` appends to a ring buffer and fans out to SSE clients via non-blocking queue puts. Event serialization happens in the existing tracing pipeline. The dashboard is served as static HTML with no server-side rendering.
+  </Accordion>
+
+  <Accordion title="Can I use it without the serve endpoint?">
+    The dashboard requires `agent.serve(enable_server=True)` because it mounts on the FastAPI app. For programmatic access to metrics and events, you can use the `ObservabilityExporter` directly in your code.
+  </Accordion>
+</AccordionGroup>

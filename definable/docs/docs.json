@@ -248,6 +248,10 @@
             "pages": ["replay/overview"]
           },
           {
+            "group": "Observability",
+            "pages": ["observability/overview"]
+          },
+          {
             "group": "Advanced",
             "pages": [
               "advanced/error-handling",
