@@ -51,64 +51,21 @@
       "Write(.workspace/**)",
       "Write(.claude/reports/**)",
       "Write(.claude/memory/**)",
-      "Write(.claude/hooks/**)",
       "Write(.claude/commands/**)",
       "Write(definable/**)",
       "Edit(.env.test)",
       "Edit(.workspace/**)",
       "Edit(.claude/reports/**)",
       "Edit(.claude/memory/**)",
-      "Edit(.claude/hooks/**)",
       "Edit(.claude/commands/**)",
       "Edit(definable/**)",
-      "Read(.claude/memory/**)"
-    ]
-  },
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "input=$(cat); cmd=$(echo \"$input\" | jq -r '.tool_input.command // empty'); if echo \"$cmd\" | grep -qiE '(rm -rf /|rm -rf \\.|mkfs|dd if=|:(){ :|:& };:|curl.*\\| *bash|git reset --hard|git checkout --)'; then echo '{\"block\": true, \"message\": \"Dangerous command blocked.\"}' >&2; exit 2; fi",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "input=$(cat); exit_code=$(echo \"$input\" | jq -r '.tool_result.exitCode // 0'); if [ \"$exit_code\" != \"0\" ]; then echo '{\"feedback\": \"Non-zero exit. Check if this is a real failure.\"}'; fi",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "input=$(cat); file=$(echo \"$input\" | jq -r '.tool_input.file_path // empty'); if [ -n \"$file\" ] && echo \"$file\" | grep -q '\\.py$'; then cd /Users/hash/work/definable.ai && .venv/bin/ruff format \"$file\" 2>/dev/null && .venv/bin/ruff check --fix \"$file\" 2>/dev/null; fi; exit 0",
-            "timeout": 10
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/post-task-review.sh\"",
-            "timeout": 120
-          }
-        ]
-      }
+      "Read(.claude/memory/**)",
+      "Write(.agents/**)",
+      "Edit(.agents/**)",
+      "Read(.agents/**)",
+      "Write(docs/**)",
+      "Edit(docs/**)",
+      "Read(docs/**)"
     ]
   },
   "env": {

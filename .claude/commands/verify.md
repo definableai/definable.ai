@@ -57,15 +57,7 @@ Source `.env.test` first, then run examples for each changed module:
 
 Use `timeout 45` for each example. Skip if the required API key is missing.
 
-### Step 5: Run Scenarios
-Run all scenario scripts in `.claude/hooks/scenarios/`:
-```
-.venv/bin/python .claude/hooks/scenarios/scenario_knowledge_pipeline.py
-.venv/bin/python .claude/hooks/scenarios/scenario_guardrails_and_middleware.py
-```
-For scenarios requiring OPENAI_API_KEY, only run if the key is set.
-
-### Step 6: Summary
+### Step 5: Summary
 Print a clear summary:
 ```
 === Verification Summary ===
@@ -74,5 +66,4 @@ Ruff Lint:    PASS/FAIL
 Mypy:         PASS/WARN (advisory)
 Imports:      PASS/FAIL
 Examples:     X/Y passed
-Scenarios:    X/Y passed
 ```

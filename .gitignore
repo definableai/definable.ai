@@ -190,3 +190,9 @@ servers.json
 .claude/server/.env
 .workspace/
 .env.test
+
+# Agent team (ephemeral pipeline state)
+.agents/queue/task.md
+.agents/queue/plan-status.txt
+.agents/handoffs/
+.agents/archive/
