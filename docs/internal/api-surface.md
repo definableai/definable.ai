@@ -22,6 +22,8 @@ agent = Agent(
     guardrails=Guardrails(input=[max_tokens(500)]),
     deep_research=True,              # or DeepResearchConfig(...)
     audio_transcriber=True,          # or OpenAITranscriber(language="en")
+    security=SecurityConfig(...),    # or True for defaults
+    usage=True,                      # or UsageTracker(...)
     config=AgentConfig(...),         # advanced settings
 )
 
@@ -240,6 +242,186 @@ from definable.reader.audio import normalize_audio_format, OPENAI_INPUT_AUDIO_FO
 out_bytes, out_fmt = normalize_audio_format(raw_bytes, "oga")
 ```
 
+## Evaluation
+
+```python
+from definable.agent.eval import (
+    BaseEval, EvalCase, EvalSuite,
+    AccuracyEval, PerformanceEval, ReliabilityEval, AgentAsJudgeEval,
+    EvalResult, AccuracyResult, PerformanceResult, ReliabilityResult, JudgeResult,
+)
+
+# Accuracy: LLM-judged output scoring (1-10)
+eval = AccuracyEval(judge_model="openai/gpt-4o-mini", threshold=7.0)
+result = await eval.arun(agent, EvalCase(input="What is 2+2?", expected="4"))
+
+# Performance: latency + memory profiling
+eval = PerformanceEval(duration_threshold_ms=5000, memory_threshold_mb=100, runs=3)
+
+# Reliability: tool call verification
+eval = ReliabilityEval(expected_tools=["search_web"], strict=False)
+
+# Custom judge: numeric or binary mode
+eval = AgentAsJudgeEval(criteria="Must be concise", mode="numeric", threshold=8.0)
+
+# Batch evaluation
+suite = await eval.arun_batch(agent, [EvalCase(...), EvalCase(...)])
+# suite.pass_rate, suite.passed, suite.failed, suite.total
+
+# Team evaluation
+result = await eval.arun_team(team, EvalCase(...))
+```
+
+## Security
+
+```python
+from definable.agent.security import (
+    SecurityConfig, ToolPolicy, ToolPolicyGuardrail, DEFAULT_DANGEROUS_TOOLS,
+    RateLimitConfig, RateLimitHook, SlidingWindowRateLimiter,
+    ContentDefenseConfig, ContentDefenseGuardrail, PromptInjectionDetector,
+    InjectionScanResult, xml_wrap_content,
+    SSRFGuard, SSRFGuardConfig, SSRFBlockedError, is_private_ip, resolve_and_check,
+    EnvSanitizeConfig, DANGEROUS_ENV_VARS, sanitize_env, is_env_safe,
+    SecurityReport, SecurityFinding, SecuritySeverity, security_audit,
+)
+
+# Unified config — all features optional
+agent = Agent(model=model, security=SecurityConfig(
+    tool_policy=ToolPolicy(mode="allowlist", allowed_tools={"search"}),
+    rate_limit=RateLimitConfig(max_requests=10, window_seconds=60),
+    content_defense=ContentDefenseConfig(injection_detection=True),
+    ssrf_guard=SSRFGuardConfig(enabled=True),
+    env_sanitize=EnvSanitizeConfig(),
+))
+
+# security=True → default SecurityConfig
+agent = Agent(model=model, security=True)
+
+# Security audit
+report = await agent.security_audit()  # SecurityReport with score, findings
+```
+
+## Usage Tracking
+
+```python
+from definable.agent import UsageTracker, UsageSnapshot
+
+# Enable via Agent constructor
+agent = Agent(model=model, usage=True)
+output = await agent.arun("Hello")
+
+# Access tracking
+tracker = agent.usage_tracker  # UsageTracker
+print(tracker.session_total)   # UsageSnapshot (input_tokens, output_tokens, estimated_cost)
+print(tracker.last_run)        # Most recent run snapshot
+print(tracker.run_count)       # Number of recorded runs
+```
+
+## Knowledge — Hybrid Search & Scoring
+
+```python
+from definable.knowledge import (
+    FTSIndex, HybridSearchConfig,  # Full-text + hybrid search
+    TemporalDecay, MMRConfig,       # Scoring strategies
+    FallbackEmbedder,               # Multi-provider embedder failover
+)
+
+# Hybrid search (vector + BM25)
+fts = FTSIndex(db_path=":memory:")
+await fts.initialize()
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    fts_index=fts,
+    hybrid_config=HybridSearchConfig(vector_weight=0.6, text_weight=0.4),
+)
+
+# Temporal decay (exponential by age)
+knowledge = Knowledge(vector_db=db, temporal_decay=TemporalDecay(half_life_days=30.0))
+
+# MMR diversity (relevance vs diversity balance)
+knowledge = Knowledge(vector_db=db, mmr=MMRConfig(lambda_param=0.7))
+
+# Fallback embedder
+from definable.embedder import OpenAIEmbedder, VoyageAIEmbedder
+embedder = FallbackEmbedder(providers=[OpenAIEmbedder(), VoyageAIEmbedder()])
+```
+
+## Team
+
+```python
+from definable.agent.team import Team, TeamMode, Task, TaskList, TaskStatus
+
+team = Team(
+    name="my-team",
+    model="openai/gpt-4o",                  # leader model (string shorthand or Model)
+    members=[agent_a, agent_b],             # List[Agent | Team]
+    mode=TeamMode.coordinate,               # coordinate | route | collaborate | tasks
+    instructions="...",                      # leader instructions
+    max_iterations=10,                       # tasks mode only
+    share_member_interactions=False,         # share member outputs across delegates
+    tools=[extra_tool],                      # additional leader tools
+    output_schema=MyModel,                   # structured output
+    debug=False,
+)
+
+result = await team.arun("instruction", session_id="...", user_id="...")
+# Returns RunOutput (same as agent.arun)
+
+# Events
+team.events.on(MemberDelegatedEvent, handler)  # EventBus with .on() method
+
+# Also from top-level
+from definable.agent import Team, TeamMode
+```
+
+## Workflow
+
+```python
+from definable.agent.workflow import (
+    Workflow, Step, Steps, Parallel, Loop, Condition, Router,
+    StepInput, StepOutput, WorkflowOutput,
+)
+
+workflow = Workflow(
+    name="pipeline",
+    steps=[                                  # List[Step] or single BaseStep
+        Step(name="s1", agent=agent_a),
+        Step(name="s2", agent=agent_b),
+    ],
+    session_state={"key": "value"},         # shared state across steps
+    debug=False,
+)
+
+result: WorkflowOutput = await workflow.arun("input")
+# result.content, result.success, result.duration_ms
+# result.get_step_output("s1") → StepOutput
+# result.get_step_content("s1") → str
+
+# Step types:
+Step(name="x", agent=agent)                     # single agent/team/callable
+Steps(steps=[...])                               # sequential (chaining context)
+Parallel(steps=[...], max_concurrency=3)         # concurrent (same input)
+Loop(steps=[...], end_condition=fn, max_iterations=5)  # iterative
+Condition(condition=fn, true_steps=s1, false_steps=s2) # if/else branching
+Router(selector=fn, routes={"a": s1, "b": s2})  # N-way routing
+
+# Events
+workflow.events.on(StepCompletedEvent, handler)
+
+# Also from top-level
+from definable.agent import Workflow, Step, Steps, Parallel, Loop, Condition, Router
+```
+
+## Desktop Events
+
+```python
+from definable.agent.interface.desktop import BridgeCallEvent, DesktopActionEvent
+
+# Events emitted by BridgeClient when on_event callback is set
+# BridgeCallEvent: endpoint, method, status_code, duration_ms, error
+# DesktopActionEvent: category, action, target, value, result, error
+```
+
 ## Known Gotchas
 - `knowledge=True` → ValueError (unlike memory=True which works)
 - `pii_filter()` is OUTPUT guardrail, not input
@@ -248,3 +430,6 @@ out_bytes, out_fmt = normalize_audio_format(raw_bytes, "oga")
 - sync `run()` breaks after 2-3 sequential multi-turn calls
 - `InMemoryVectorDB(dimensions=N)` — dimensions param deprecated/ignored
 - `CallInterface(provider="plivo", pipeline="managed")` → ValueError (Plivo has no ConversationRelay)
+- `FTSIndex` requires explicit `await fts.initialize()` before use
+- `FallbackEmbedder(providers=[])` → ValueError (requires at least one provider)
+- `ToolPolicy(mode="allowlist")` with no `allowed_tools` blocks all tools

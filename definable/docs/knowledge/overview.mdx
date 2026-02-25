@@ -28,8 +28,12 @@ flowchart LR
 
 ````mermaid
 flowchart LR
-  Query --> Embedder --> VectorDB --> Reranker --> Results
+  Query --> Embedder --> VectorDB --> HybridMerge["Hybrid Merge"] --> Reranker --> TemporalDecay["Temporal Decay"] --> MMR["MMR Diversity"] --> Results
 ````
+
+<Note>
+Hybrid merge, temporal decay, and MMR are optional. Without them, the pipeline is simply Vector Search → Reranker → Results. See [Hybrid Search & Scoring](/knowledge/hybrid-search) for details.
+</Note>
 
 ## Quick Start
 
@@ -128,6 +132,9 @@ Each step in the pipeline is pluggable:
   <Card title="Vector Databases" icon="database" href="/knowledge/vector-databases">
     Store and search embeddings with seven backends: InMemory, PgVector, Qdrant, ChromaDb, MongoDb, RedisDB, and PineconeDb.
   </Card>
+  <Card title="Hybrid Search" icon="magnifying-glass-chart" href="/knowledge/hybrid-search">
+    Combine vector + full-text search, MMR diversity, and temporal decay.
+  </Card>
   <Card title="Agent Integration" icon="robot" href="/knowledge/agent-integration">
     Connect knowledge to agents via middleware or toolkits.
   </Card>
@@ -157,6 +164,22 @@ Each step in the pipeline is pluggable:
 
 <ParamField path="auto_detect_reader" type="bool" default="true">
   Automatically detect the correct reader based on the source.
+</ParamField>
+
+<ParamField path="fts_index" type="FTSIndex">
+  Full-text search index for hybrid vector + keyword search. See [Hybrid Search](/knowledge/hybrid-search).
+</ParamField>
+
+<ParamField path="hybrid_config" type="HybridSearchConfig">
+  Configuration for merging vector and full-text search results (weights, merge strategy).
+</ParamField>
+
+<ParamField path="temporal_decay" type="TemporalDecay">
+  Exponential score decay based on document age. See [Hybrid Search](/knowledge/hybrid-search#temporal-decay).
+</ParamField>
+
+<ParamField path="mmr" type="MMRConfig">
+  Maximal Marginal Relevance for diversity reranking. See [Hybrid Search](/knowledge/hybrid-search#mmr-maximal-marginal-relevance).
 </ParamField>
 
 ## Managing Documents

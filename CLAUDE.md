@@ -78,6 +78,15 @@ Check `.claude/memory/` before every significant action — especially `project-
 | `browser/` | Embodiment — acting in the browser | BrowserToolkit |
 | `reader/` | Sensory input — file parsing | BaseReader |
 | `reader/audio.py` | The ear — audio transcription + format normalization | AudioTranscriber, OpenAITranscriber, normalize_audio_format |
+| `agent/security/` | The immune shield — production security hardening | SecurityConfig, ToolPolicy, RateLimitHook, PromptInjectionDetector, SSRFGuard |
+| `agent/eval/` | Self-assessment — quality measurement | AccuracyEval, PerformanceEval, ReliabilityEval, AgentAsJudgeEval |
+| `agent/usage.py` | Metabolism tracking — token and cost accounting | UsageTracker, UsageSnapshot |
+| `agent/team/` | The collective — multi-agent coordination | Team, TeamMode, TaskList |
+| `agent/workflow/` | The blueprint — multi-step orchestration | Workflow, Step, Steps, Parallel, Loop, Condition, Router |
+| `agent/interface/cli/tui/` | The face — terminal user interface | DefinableApp, MainScreen, EventRouter |
+| `knowledge/fts/` | Full-text recall — BM25 keyword search | FTSIndex, HybridSearcher |
+| `knowledge/scoring/` | Relevance tuning — advanced scoring | TemporalDecay, MMRConfig, mmr_rerank |
+| `knowledge/embedder/fallback.py` | Redundant perception — embedder failover | FallbackEmbedder |
 
 ### How the Organs Connect
 
@@ -87,16 +96,32 @@ Agent ──┬── Model (the voice — lazy client, global HTTP pool)
         ├── Thinking (the inner monologue — always|auto|never)
         ├── Memory (what was said — session history, auto-summarization)
         ├── Knowledge (what is known — top_k, trigger, context_format → VectorDB)
+        │     ├── FTSIndex (full-text search via SQLite FTS5)
+        │     ├── HybridSearchConfig (vector + text merge: rrf|weighted)
+        │     ├── TemporalDecay (score decay by document age)
+        │     ├── MMRConfig (diversity reranking)
+        │     └── FallbackEmbedder (multi-provider failover)
         ├── DeepResearch (deep curiosity → DeepResearchConfig)
-        ├── Tracing (self-awareness → JSONLExporter, etc.)
+        ├── Tracing (self-awareness → JSONLExporter, DebugExporter)
         ├── AudioTranscriber (the ear — voice→text before pipeline, Whisper default)
+        ├── Security (the immune shield → SecurityConfig)
+        │     ├── ToolPolicy (deny/allowlist/full — auto-injects ToolGuardrail)
+        │     ├── ContentDefenseConfig (prompt injection detection — auto-injects InputGuardrail)
+        │     ├── RateLimitHook (sliding window throttling for interfaces)
+        │     ├── SSRFGuard (private IP blocking for tool HTTP calls)
+        │     └── EnvSanitizeConfig (dangerous env var stripping)
+        ├── UsageTracker (metabolism — token/cost tracking per run and session)
+        ├── Eval (self-assessment → AccuracyEval, PerformanceEval, ReliabilityEval, AgentAsJudgeEval)
         ├── Toolkits[] (extended capabilities → MCPToolkit | BrowserToolkit)
         ├── Tools[] (specific actions → Function via @tool)
         ├── Skills[] (learned behaviors → instructions + tools)
         ├── Guardrails (self-regulation → input/output/tool checks)
         ├── Middleware[] (reflexes → chain, skipped in streaming)
-        └── Interfaces[] (communication channels → Telegram, Discord, Desktop)
-              └── Auth (identity verification → APIKeyAuth, JWTAuth, AllowlistAuth)
+        ├── Team (the collective → coordinate/route/collaborate/tasks)
+        ├── Workflow (the blueprint → Step, Steps, Parallel, Loop, Condition, Router)
+        └── Interfaces[] (communication channels → Telegram, Discord, Slack, Call, Desktop, CLI)
+              ├── Auth (identity verification → APIKeyAuth, JWTAuth, AllowlistAuth)
+              └── CLI (auto TUI/REPL — Textual-based terminal UI with streaming, metrics, slash commands)
 ```
 
 ---
@@ -266,6 +291,122 @@ r2 = await agent.arun("follow-up", messages=r1.messages)
 # Or use Memory for persistent continuity
 ```
 
+### Security — The Immune Shield
+
+```python
+from definable.agent.security import SecurityConfig, ToolPolicy
+agent = Agent(model=model, security=SecurityConfig(
+    tool_policy=ToolPolicy(mode="allowlist", allowed_tools={"search"}),
+))
+# Or: agent = Agent(model=model, security=True)  # default config
+
+# Security audit
+report = await agent.security_audit()  # SecurityReport with score, findings
+```
+
+### Evaluation — Self-Assessment
+
+```python
+from definable.agent.eval import AccuracyEval, EvalCase, EvalSuite
+eval = AccuracyEval(judge_model="openai/gpt-4o-mini", threshold=7.0)
+result = await eval.arun(agent, EvalCase(input="What is 2+2?", expected="4"))
+suite = await eval.arun_batch(agent, [case1, case2])  # suite.pass_rate
+```
+
+### Usage Tracking — Metabolism
+
+```python
+agent = Agent(model=model, usage=True)
+output = await agent.arun("Hello")
+print(agent.usage_tracker.session_total)  # UsageSnapshot with tokens + cost
+```
+
+### Team — The Collective
+
+```python
+from definable.agent.team import Team, TeamMode
+
+researcher = Agent(model="openai/gpt-4o", instructions="Research specialist.")
+writer = Agent(model="openai/gpt-4o", instructions="Technical writer.")
+
+team = Team(
+    name="content-team",
+    model="openai/gpt-4o",             # leader model
+    members=[researcher, writer],
+    mode=TeamMode.coordinate,           # coordinate | route | collaborate | tasks
+    instructions="Produce well-researched technical content.",
+    max_iterations=10,                  # tasks mode only
+    share_member_interactions=False,    # pass member outputs to subsequent delegates
+    debug=False,
+)
+result = await team.arun("Write about quantum computing")
+# Modes: coordinate (leader picks members), route (single specialist),
+#   collaborate (all parallel, leader synthesizes), tasks (autonomous task list)
+```
+
+### Workflow — The Blueprint
+
+```python
+from definable.agent.workflow import Workflow, Step, Steps, Parallel, Loop, Condition, Router
+
+# Sequential steps — each receives previous step's output
+workflow = Workflow(
+    name="research-pipeline",
+    steps=[
+        Step(name="researcher", agent=researcher),
+        Step(name="writer", agent=writer),
+    ],
+)
+result = await workflow.arun("Write about quantum computing")
+# result.content, result.success, result.get_step_output("researcher")
+
+# Parallel execution
+Parallel(name="analysis", steps=[
+    Step(name="technical", agent=tech_agent),
+    Step(name="business", agent=biz_agent),
+])
+
+# Iterative loop with end condition
+Loop(
+    name="improve",
+    steps=[Step(name="generate", agent=gen), Step(name="evaluate", agent=eval_agent)],
+    end_condition=lambda outputs: any("APPROVED" in (o.content or "") for o in outputs),
+    max_iterations=5,
+)
+
+# Conditional branching
+Condition(
+    name="quality-gate",
+    condition=lambda ctx: "PASS" in (ctx.get_last_step_content() or ""),
+    true_steps=Step(name="publish", agent=publisher),
+    false_steps=Step(name="rewrite", agent=writer),
+)
+
+# Dynamic routing
+Router(
+    name="support",
+    selector=lambda ctx: "technical" if "bug" in (ctx.input or "") else "general",
+    routes={"technical": Step(name="tech", agent=tech), "general": Step(name="gen", agent=gen_agent)},
+)
+```
+
+### Knowledge — Hybrid Search & Scoring
+
+```python
+from definable.knowledge import FTSIndex, HybridSearchConfig, TemporalDecay, MMRConfig, FallbackEmbedder
+
+# Hybrid search (vector + BM25 full-text)
+fts = FTSIndex()
+await fts.initialize()  # REQUIRED before use
+knowledge = Knowledge(vector_db=db, fts_index=fts, hybrid_config=HybridSearchConfig())
+
+# Temporal decay + diversity
+knowledge = Knowledge(vector_db=db, temporal_decay=TemporalDecay(half_life_days=30.0), mmr=MMRConfig(lambda_param=0.7))
+
+# Embedder failover
+embedder = FallbackEmbedder(providers=[OpenAIEmbedder(), VoyageAIEmbedder()])
+```
+
 ---
 
 ## VI. Scar Tissue — Known Wounds and How to Avoid Them
@@ -283,6 +424,15 @@ These are injuries the organism has already suffered. Learn from them. Never rep
 | `mock_model.call_count` | Not incremented with `side_effect`. Use `len(mock.call_history)`. |
 | `audio_transcriber` clears audio | After transcription, `msg.audio` is set to `None` so non-audio models don't receive `input_audio` blocks. |
 | OGA/OGG format for OpenAI | Telegram sends `.oga` (Opus in OGG). OpenAI's `input_audio` API only accepts `wav`/`mp3`. Use `normalize_audio_format()` or `audio_transcriber=True`. |
+| `FTSIndex` without `initialize()` | Must call `await fts.initialize()` before any search/add operations. |
+| `FallbackEmbedder(providers=[])` | Raises ValueError. At least one provider required. |
+| `ToolPolicy(mode="allowlist")` empty | Blocks all tools if `allowed_tools` is not set or empty. |
+| `security=True` guardrail injection | ToolPolicy auto-injects ToolGuardrail; ContentDefense auto-injects InputGuardrail — don't duplicate. |
+| `Team(model=None)` | Requires a model on Team or at least one member. Otherwise `ValueError`. |
+| `Team.arun()` returns `RunOutput` | Not `TeamOutput`. Same `RunOutput` as `agent.arun()`. |
+| `Workflow.arun()` returns `WorkflowOutput` | Different from `RunOutput`. Has `.step_outputs`, `.get_step_output(name)`. |
+| `Step` needs exactly one executor | Set `agent=`, `team=`, or `executor=`. Not multiple, not none. |
+| `CLIInterface(mode="tui")` without textual | Raises `ImportError`. Install with `pip install definable[cli]`. |
 
 ---
 

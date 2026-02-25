@@ -133,6 +133,30 @@ def __getattr__(name: str):
     from definable.agent.interface.slack.config import SlackConfig
 
     return SlackConfig
+  if name == "WebSocketInterface":
+    from definable.agent.interface.websocket.interface import WebSocketInterface
+
+    return WebSocketInterface
+  if name == "WebSocketConfig":
+    from definable.agent.interface.websocket.config import WebSocketConfig
+
+    return WebSocketConfig
+  if name == "WhatsAppInterface":
+    from definable.agent.interface.whatsapp.interface import WhatsAppInterface
+
+    return WhatsAppInterface
+  if name == "WhatsAppConfig":
+    from definable.agent.interface.whatsapp.config import WhatsAppConfig
+
+    return WhatsAppConfig
+  if name == "EmailInterface":
+    from definable.agent.interface.email.interface import EmailInterface
+
+    return EmailInterface
+  if name == "EmailConfig":
+    from definable.agent.interface.email.config import EmailConfig
+
+    return EmailConfig
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -179,4 +203,13 @@ __all__ = [
   "InterfaceStoppedEvent",
   "InterfaceRestartedEvent",
   "InterfaceErrorEvent",
+  # WebSocket (lazy-loaded)
+  "WebSocketInterface",  # noqa: F822
+  "WebSocketConfig",  # noqa: F822
+  # WhatsApp (lazy-loaded)
+  "WhatsAppInterface",  # noqa: F822
+  "WhatsAppConfig",  # noqa: F822
+  # Email (lazy-loaded)
+  "EmailInterface",  # noqa: F822
+  "EmailConfig",  # noqa: F822
 ]

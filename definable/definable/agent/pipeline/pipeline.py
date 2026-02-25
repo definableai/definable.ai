@@ -200,6 +200,37 @@ class Pipeline:
 
     return decorator
 
+  def remove_hook(self, spec: str, callback: Optional[Callable] = None) -> bool:
+    """Remove a hook by spec (and optionally by callback).
+
+    If callback is None, removes ALL hooks for that spec.
+    If callback is provided, removes only that specific callback.
+
+    Args:
+      spec: Hook specification string (e.g. "before:invoke_loop").
+      callback: Specific callback to remove. If None, removes all.
+
+    Returns:
+      True if any hooks were removed, False otherwise.
+    """
+    if spec not in self._hooks:
+      return False
+
+    if callback is None:
+      # Remove all hooks for this spec
+      del self._hooks[spec]
+      return True
+
+    # Remove specific callback
+    original_len = len(self._hooks[spec])
+    self._hooks[spec] = [(p, cb) for p, cb in self._hooks[spec] if cb is not callback]
+    removed = len(self._hooks[spec]) < original_len
+
+    if not self._hooks[spec]:
+      del self._hooks[spec]
+
+    return removed
+
   # ── Execution ───────────────────────────────────────────────
 
   async def execute(

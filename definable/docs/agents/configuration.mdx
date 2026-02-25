@@ -287,6 +287,47 @@ When `audio_transcriber` is set:
 Without `audio_transcriber`, voice messages from interfaces arrive as raw `Audio` objects. Most models (GPT-4o-mini, Claude, DeepSeek) will reject `input_audio` blocks — only `gpt-4o-audio-preview` supports them natively.
 </Warning>
 
+## Security
+
+Security features are configured directly on the `Agent` constructor:
+
+```python
+from definable.agent import Agent
+from definable.agent.security import SecurityConfig, ToolPolicy
+
+# Simple enable (default config)
+agent = Agent(model=model, security=True)
+
+# Full configuration
+agent = Agent(
+    model=model,
+    security=SecurityConfig(
+        tool_policy=ToolPolicy(mode="allowlist", allowed_tools={"search_web"}),
+    ),
+)
+
+# Security audit
+report = await agent.security_audit()
+print(f"Score: {report.score}/100")
+```
+
+See [Security](/agents/security) for full documentation on tool policies, rate limiting, prompt injection detection, SSRF protection, and security audits.
+
+## Usage Tracking
+
+Track token usage and estimated cost across agent runs:
+
+```python
+from definable.agent import Agent
+
+agent = Agent(model=model, usage=True)
+output = await agent.arun("Hello")
+
+print(agent.usage_tracker.session_total)  # Cumulative tokens + cost
+print(agent.usage_tracker.last_run)       # Most recent run
+print(agent.usage_tracker.run_count)      # Total runs tracked
+```
+
 ## Deep Research
 
 The deep research layer is configured directly on the `Agent` constructor:

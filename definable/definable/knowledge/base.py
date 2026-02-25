@@ -12,7 +12,11 @@ from definable.knowledge.reranker import Reranker
 
 if TYPE_CHECKING:
   from definable.knowledge.chunker.base import Chunker
+  from definable.knowledge.fts.hybrid import HybridSearchConfig
+  from definable.knowledge.fts.index import FTSIndex
   from definable.knowledge.reader.base import Reader
+  from definable.knowledge.scoring.mmr import MMRConfig
+  from definable.knowledge.scoring.temporal import TemporalDecay
   from definable.model.base import Model
   from definable.model.message import Message
   from definable.vectordb.base import VectorDB
@@ -65,6 +69,14 @@ class Knowledge:
 
   # Configuration
   auto_detect_reader: bool = True
+
+  # Scoring & diversity
+  temporal_decay: Optional["TemporalDecay"] = None
+  mmr: Optional["MMRConfig"] = None
+
+  # Hybrid search (vector + full-text)
+  fts_index: Optional["FTSIndex"] = None
+  hybrid_config: Optional["HybridSearchConfig"] = None
 
   # Agent integration fields (absorbed from KnowledgeConfig)
   top_k: int = 5
@@ -255,6 +267,12 @@ class Knowledge:
     else:
       await vector_db.ainsert(content_hash, documents)
 
+    # 6. Also index in FTS if configured
+    if self.fts_index is not None:
+      if not self.fts_index._initialized:
+        await self.fts_index.initialize()
+      await self.fts_index.add(content_hash, documents)
+
     return [doc.id for doc in documents if doc.id is not None]
 
   def search(
@@ -267,6 +285,9 @@ class Knowledge:
   ) -> List[Document]:
     """
     Search the knowledge base.
+
+    Pipeline: Vector search → Reranker → Temporal decay → MMR diversity.
+    When hybrid search is configured: Vector + FTS → merge → Reranker → decay → MMR.
 
     Args:
       query: Search query text
@@ -289,6 +310,16 @@ class Knowledge:
     if rerank and self.reranker and results:
       results = self.reranker.rerank(query, results)
 
+    # 3. Temporal decay — downweight old documents
+    if self.temporal_decay is not None and results:
+      results = self.temporal_decay.apply(results)
+
+    # 4. MMR diversity reranking
+    if self.mmr is not None and results:
+      from definable.knowledge.scoring.mmr import mmr_rerank
+
+      results = mmr_rerank(None, results, config=self.mmr, top_k=top_k)
+
     return results[:top_k]
 
   async def asearch(
@@ -300,6 +331,8 @@ class Knowledge:
     limit: Optional[int] = None,
   ) -> List[Document]:
     """Async version of search.
+
+    Pipeline: Vector search → Hybrid merge → Reranker → Temporal decay → MMR diversity.
 
     Args:
       query: Search query text
@@ -318,9 +351,27 @@ class Knowledge:
     vector_db = self._require_vector_db()
     results = await vector_db.asearch(query, limit=fetch_k, filters=filter)
 
-    # 2. Rerank if requested
+    # 2. Hybrid merge — combine vector results with FTS results
+    if self.fts_index is not None and self.fts_index._initialized:
+      from definable.knowledge.fts.hybrid import HybridSearchConfig as _HSConfig, HybridSearcher
+
+      config = self.hybrid_config or _HSConfig()
+      searcher = HybridSearcher(fts_index=self.fts_index, config=config)
+      results = await searcher.merge(results, query, limit=fetch_k)
+
+    # 3. Rerank if requested
     if rerank and self.reranker and results:
       results = await self.reranker.arerank(query, results)
+
+    # 4. Temporal decay — downweight old documents
+    if self.temporal_decay is not None and results:
+      results = self.temporal_decay.apply(results)
+
+    # 5. MMR diversity reranking
+    if self.mmr is not None and results:
+      from definable.knowledge.scoring.mmr import mmr_rerank
+
+      results = mmr_rerank(None, results, config=self.mmr, top_k=top_k)
 
     return results[:top_k]
 

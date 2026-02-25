@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
-import time
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from definable.utils.log import log_error, log_info
 
@@ -56,10 +55,25 @@ class AgentRuntime:
     from definable.agent.trigger.webhook import Webhook
 
     has_webhooks = any(isinstance(t, Webhook) for t in agent._triggers)
+    has_server_interface = self._has_server_interface()
     if enable_server is None:
-      self.enable_server = has_webhooks
+      self.enable_server = has_webhooks or has_server_interface
     else:
       self.enable_server = enable_server
+
+  def _has_server_interface(self) -> bool:
+    """Check if any registered interface needs the HTTP server.
+
+    Detects interfaces with ``needs_server()`` or ``create_router()``
+    (duck typing for router-based interfaces like WebSocket, WhatsApp, Call).
+    """
+    all_ifaces = self.gateway.interfaces if self.gateway else self.interfaces
+    for iface in all_ifaces:
+      if hasattr(iface, "needs_server") and iface.needs_server():
+        return True
+      if hasattr(iface, "create_router"):
+        return True
+    return False
 
   async def start(self) -> None:
     """Start the runtime and block until shutdown."""
@@ -77,12 +91,10 @@ class AgentRuntime:
     if has_interfaces:
       tasks.append(asyncio.create_task(self._run_interfaces()))
 
-    # 3. Cron scheduler (if any cron triggers)
-    from definable.agent.trigger.cron import Cron
-
-    cron_triggers = [t for t in self.agent._triggers if isinstance(t, Cron)]
-    if cron_triggers:
-      tasks.append(asyncio.create_task(self._run_cron_scheduler(cron_triggers)))
+    # 3. Scheduler (cron, interval, oneshot triggers)
+    schedulable = self._get_schedulable_triggers()
+    if schedulable:
+      tasks.append(asyncio.create_task(self._run_scheduler(schedulable)))
 
     if not tasks:
       log_error(f"[{self.name}] No interfaces, triggers, or server configured. Nothing to run.")
@@ -121,7 +133,8 @@ class AgentRuntime:
 
     from definable.agent.runtime.server import AgentServer
 
-    server = AgentServer(self.agent, self.host, self.port, dev=self.dev)
+    all_ifaces = list(self.gateway.interfaces) if self.gateway else list(self.interfaces)
+    server = AgentServer(self.agent, self.host, self.port, dev=self.dev, interfaces=all_ifaces)
     app = server.create_app()
 
     config = uvicorn.Config(
@@ -152,39 +165,45 @@ class AgentRuntime:
 
       await supervise_interfaces(*self.interfaces, name=self.name)
 
-  async def _run_cron_scheduler(self, cron_triggers: list) -> None:
-    """Run the cron scheduler loop.
+  def _get_schedulable_triggers(self) -> list:
+    """Return all triggers that the Scheduler can manage."""
+    from definable.agent.trigger.interval import Interval
+    from definable.agent.trigger.oneshot import OneShot
 
-    Tracks next fire time per trigger.  Sleeps until the next soonest
-    trigger (capped at 60s).  Each execution is fire-and-forget.
+    schedulable_types: tuple = (Interval, OneShot)
+    try:
+      from definable.agent.trigger.cron import Cron
+
+      schedulable_types = (Cron, Interval, OneShot)
+    except ImportError:
+      pass
+    return [t for t in self.agent._triggers if isinstance(t, schedulable_types)]
+
+  async def _run_scheduler(self, triggers: list) -> None:
+    """Run the Scheduler loop for all time-based triggers.
+
+    Uses the new Scheduler system instead of the legacy cron-only loop.
     """
-    from definable.agent.trigger.base import TriggerEvent
+    from definable.agent.scheduler.scheduler import Scheduler
     from definable.agent.trigger.executor import TriggerExecutor
 
     executor = TriggerExecutor(self.agent)
-    now = time.time()
+    scheduler = Scheduler(tick_interval=1.0)
 
-    # Initialize next-fire times
-    next_fire: Dict[int, float] = {}
-    for trigger in cron_triggers:
-      next_fire[id(trigger)] = trigger.next_run(now)
-      log_info(f"[{self.name}] Cron scheduled: {trigger.name}")
+    for trigger in triggers:
+      scheduler.add(trigger)
+      log_info(f"[{self.name}] Scheduled: {trigger.name}")
 
-    while not self._shutdown_event.is_set():
-      now = time.time()
+    # Run until shutdown
+    async def _stop_on_shutdown() -> None:
+      await self._shutdown_event.wait()
+      scheduler.stop()
 
-      for trigger in cron_triggers:
-        tid = id(trigger)
-        if now >= next_fire[tid]:
-          # Fire!
-          event = TriggerEvent(source=trigger.name)
-          asyncio.create_task(executor.execute(trigger, event))
-          next_fire[tid] = trigger.next_run(now)
-
-      # Sleep until next soonest trigger (max 60s)
-      soonest = min(next_fire.values())
-      sleep_time = max(0.1, min(soonest - time.time(), 60.0))
-      await asyncio.sleep(sleep_time)
+    stop_task = asyncio.create_task(_stop_on_shutdown())
+    try:
+      await scheduler.start(executor)
+    finally:
+      stop_task.cancel()
 
   def _install_signal_handlers(self) -> None:
     """Install SIGINT/SIGTERM handlers for graceful shutdown."""
@@ -202,7 +221,6 @@ class AgentRuntime:
 
   def _print_banner(self) -> None:
     """Print a startup banner with runtime configuration."""
-    from definable.agent.trigger.cron import Cron
     from definable.agent.trigger.webhook import Webhook
 
     lines = [
@@ -225,9 +243,9 @@ class AgentRuntime:
     if webhooks:
       lines.append(f"  Webhooks: {', '.join(t.name for t in webhooks)}")
 
-    crons = [t for t in self.agent._triggers if isinstance(t, Cron)]
-    if crons:
-      lines.append(f"  Cron jobs: {', '.join(t.name for t in crons)}")
+    scheduled = self._get_schedulable_triggers()
+    if scheduled:
+      lines.append(f"  Scheduled: {', '.join(t.name for t in scheduled)}")
 
     if self.enable_server:
       lines.append(f"  Server: http://{self.host}:{self.port}")
@@ -236,6 +254,25 @@ class AgentRuntime:
 
     if self.agent._auth is not None:
       lines.append(f"  Auth: {type(self.agent._auth).__name__}")
+
+    if self._has_server_interface():
+      all_srv_ifaces = self.gateway.interfaces if self.gateway else self.interfaces
+      for iface in all_srv_ifaces:
+        if hasattr(iface, "create_router"):
+          platform = getattr(iface.config, "platform", type(iface).__name__)
+          if platform == "call":
+            call_cfg = getattr(iface, "_call_config", None)
+            if call_cfg:
+              lines.append(f"  Call: {call_cfg.phone_number} (pipeline={call_cfg.pipeline_mode})")
+            else:
+              lines.append("  Call: routes mounted")
+          elif platform == "websocket":
+            ws_path = getattr(iface.config, "path", "/ws")
+            lines.append(f"  WebSocket: ws://{self.host}:{self.port}{ws_path}")
+          elif platform == "whatsapp":
+            lines.append(f"  WhatsApp: {getattr(iface.config, 'webhook_path', '/whatsapp/webhook')}")
+          else:
+            lines.append(f"  {platform}: routes mounted")
 
     obs_config = getattr(self.agent, "_observability_config", None)
     if obs_config is not None and obs_config.enabled and self.enable_server:

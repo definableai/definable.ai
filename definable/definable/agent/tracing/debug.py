@@ -18,6 +18,7 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.events import BaseRunOutputEvent
+  from definable.agent.interface.desktop.events import BridgeCallEvent, DesktopActionEvent
   from definable.agent.run.agent import (
     ModelCallCompletedEvent,
     ModelCallStartedEvent,
@@ -67,6 +68,7 @@ class DebugExporter:
     return self._console
 
   def export(self, event: "BaseRunOutputEvent") -> None:
+    from definable.agent.interface.desktop.events import BridgeCallEvent, DesktopActionEvent
     from definable.agent.run.agent import (
       ModelCallCompletedEvent,
       ModelCallStartedEvent,
@@ -88,6 +90,10 @@ class DebugExporter:
       self._handle_tool_call_completed(event)
     elif isinstance(event, RunCompletedEvent):
       self._handle_run_completed(event)
+    elif isinstance(event, DesktopActionEvent):
+      self._handle_desktop_action(event)
+    elif isinstance(event, BridgeCallEvent):
+      self._handle_bridge_call(event)
 
   def flush(self) -> None:
     if self._console is not None:
@@ -223,3 +229,24 @@ class DebugExporter:
         expand=False,
       )
     )
+
+  def _handle_desktop_action(self, event: "DesktopActionEvent") -> None:
+    console = self._get_console()
+    parts = [f"[bold blue]{event.category}[/bold blue]/[cyan]{event.action}[/cyan]"]
+    if event.target:
+      parts.append(f"target={_truncate(event.target, 60)}")
+    if event.value:
+      parts.append(f"value={_truncate(event.value, 60)}")
+    if event.result:
+      parts.append(f"-> {_truncate(event.result, 80)}")
+    if event.error:
+      parts.append(f"[red]error={_truncate(event.error, 80)}[/red]")
+    console.print(f"  [blue]Desktop:[/blue] {' | '.join(parts)}")
+
+  def _handle_bridge_call(self, event: "BridgeCallEvent") -> None:
+    console = self._get_console()
+    status = f"[green]{event.status_code}[/green]" if 200 <= event.status_code < 300 else f"[red]{event.status_code}[/red]"
+    parts = [f"[dim]Bridge {event.method} {event.endpoint}[/dim] {status} ({event.duration_ms:.0f}ms)"]
+    if event.error:
+      parts.append(f"[red]{_truncate(event.error, 80)}[/red]")
+    console.print(f"  {' '.join(parts)}")

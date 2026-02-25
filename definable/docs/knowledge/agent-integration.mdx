@@ -111,6 +111,26 @@ These parameters are passed directly to the `Knowledge` constructor:
   Description shown in the layer guide injected into the system prompt. If `None`, uses the default description.
 </ParamField>
 
+### Scoring & Hybrid Search
+
+These optional parameters enable advanced retrieval strategies. See [Hybrid Search & Scoring](/knowledge/hybrid-search) for full documentation.
+
+<ParamField path="fts_index" type="FTSIndex">
+  Full-text search index for hybrid vector + BM25 keyword search.
+</ParamField>
+
+<ParamField path="hybrid_config" type="HybridSearchConfig">
+  Merge strategy and weights for combining vector and text search results.
+</ParamField>
+
+<ParamField path="temporal_decay" type="TemporalDecay">
+  Exponential score decay based on document age. Useful for time-sensitive content.
+</ParamField>
+
+<ParamField path="mmr" type="MMRConfig">
+  Maximal Marginal Relevance — balances relevance with diversity to reduce duplicate results.
+</ParamField>
+
 ## Trigger Modes
 
 The `trigger` parameter controls when the knowledge base is queried:

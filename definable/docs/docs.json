@@ -78,7 +78,11 @@
                   "agents/deep-research",
                   "agents/multi-turn",
                   "agents/middleware",
-                  "agents/tracing"
+                  "agents/tracing",
+                  "agents/evaluation",
+                  "agents/security",
+                  "agents/teams",
+                  "agents/workflows"
                 ]
               },
               {
@@ -200,6 +204,7 @@
               "knowledge/overview",
               "knowledge/documents",
               "knowledge/agent-integration",
+              "knowledge/hybrid-search",
               {
                 "group": "Pipeline",
                 "icon": "diagram-project",

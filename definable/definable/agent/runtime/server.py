@@ -20,18 +20,29 @@ class AgentServer:
     - ``POST /run`` — invoke the agent with ``{input, session_id, user_id}``
     - ``GET /health`` — health check
     - Webhook routes from registered triggers
+    - Call interface routes (when CallInterface is registered)
 
   Args:
     agent: The Agent instance to serve.
     host: Host to bind to.
     port: Port to listen on.
+    interfaces: Optional list of interfaces (from runtime) to scan for CallInterface.
   """
 
-  def __init__(self, agent: "Agent", host: str = "0.0.0.0", port: int = 8000, *, dev: bool = False) -> None:
+  def __init__(
+    self,
+    agent: "Agent",
+    host: str = "0.0.0.0",
+    port: int = 8000,
+    *,
+    dev: bool = False,
+    interfaces: Optional[list] = None,
+  ) -> None:
     self.agent = agent
     self.host = host
     self.port = port
     self.dev = dev
+    self._interfaces = interfaces or []
     self._app: Optional[Any] = None
 
   def create_app(self) -> Any:
@@ -116,6 +127,9 @@ class AgentServer:
     # --- Webhook routes ---
     self._register_webhooks(app)
 
+    # --- Interface routes (WebSocket, WhatsApp, Call, etc.) ---
+    self._mount_interface_routes(app)
+
     # --- Observability dashboard (conditionally mounted) ---
     self._mount_observability(app)
 
@@ -176,6 +190,26 @@ class AgentServer:
       return dashboard_html
 
     log_info("Observability dashboard mounted at /obs/")
+
+  def _mount_interface_routes(self, app: Any) -> None:
+    """Mount routes for any interface that exposes a create_router() method.
+
+    Scans both the agent's interfaces and the runtime-provided
+    interfaces. Supports CallInterface, WebSocketInterface, WhatsAppInterface,
+    and any future interface implementing ``create_router()``.
+    """
+    # Combine agent-registered and runtime-provided interfaces
+    all_interfaces = list(getattr(self.agent, "_interfaces", []) or [])
+    for iface in self._interfaces:
+      if iface not in all_interfaces:
+        all_interfaces.append(iface)
+
+    for iface in all_interfaces:
+      if hasattr(iface, "create_router"):
+        router = iface.create_router()
+        app.include_router(router)
+        platform = getattr(iface.config, "platform", type(iface).__name__)
+        log_info(f"Mounted {platform} interface routes")
 
   def _register_webhooks(self, app: Any) -> None:
     """Register webhook trigger routes on the FastAPI app."""

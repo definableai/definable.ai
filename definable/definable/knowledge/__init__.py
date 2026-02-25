@@ -24,6 +24,14 @@ __all__ = [
   "Document",
   "Reader",
   "ReaderConfig",
+  # Scoring & diversity
+  "TemporalDecay",  # noqa: F822
+  "MMRConfig",  # noqa: F822
+  # Hybrid search
+  "FTSIndex",  # noqa: F822
+  "HybridSearchConfig",  # noqa: F822
+  # Embedder fallback
+  "FallbackEmbedder",  # noqa: F822
   # Deprecated re-exports — use definable.embedder, definable.chunker, definable.reranker, definable.vectordb
   "Embedder",
   "OpenAIEmbedder",
@@ -120,6 +128,32 @@ def __getattr__(name: str):
     from definable.knowledge.reranker.cohere import CohereReranker
 
     return CohereReranker
+
+  # --- Scoring & diversity ---
+  if name == "TemporalDecay":
+    from definable.knowledge.scoring.temporal import TemporalDecay
+
+    return TemporalDecay
+  if name == "MMRConfig":
+    from definable.knowledge.scoring.mmr import MMRConfig
+
+    return MMRConfig
+
+  # --- Hybrid search ---
+  if name == "FTSIndex":
+    from definable.knowledge.fts.index import FTSIndex
+
+    return FTSIndex
+  if name == "HybridSearchConfig":
+    from definable.knowledge.fts.hybrid import HybridSearchConfig
+
+    return HybridSearchConfig
+
+  # --- Embedder fallback ---
+  if name == "FallbackEmbedder":
+    from definable.knowledge.embedder.fallback import FallbackEmbedder
+
+    return FallbackEmbedder
 
   # --- Readers ---
   if name == "TextReader":

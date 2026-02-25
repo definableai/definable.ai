@@ -1,0 +1,321 @@
+---
+title: Workflows
+sidebarTitle: Workflows
+description: Multi-step agent orchestration with sequential, parallel, loop, conditional, and routed execution.
+icon: diagram-project
+---
+
+Workflows compose agents, teams, and callables into multi-step pipelines. Six composable step types let you build everything from linear chains to complex branching logic.
+
+## Quick Start
+
+```python
+from definable.agent import Agent
+from definable.agent.workflow import Workflow, Step
+
+researcher = Agent(model="openai/gpt-4o", instructions="You are a research specialist.")
+writer = Agent(model="openai/gpt-4o", instructions="You are a technical writer.")
+
+workflow = Workflow(
+    name="research-pipeline",
+    steps=[
+        Step(name="researcher", agent=researcher),
+        Step(name="writer", agent=writer),
+    ],
+)
+
+result = await workflow.arun("Write about quantum computing")
+print(result.content)
+print(f"Duration: {result.duration_ms:.0f}ms")
+```
+
+Each step receives the previous step's output as context automatically.
+
+## Step Types
+
+### Step
+
+The basic execution unit. Wraps an Agent, Team, or callable.
+
+```python
+from definable.agent.workflow import Step
+
+# Agent step
+step = Step(name="researcher", agent=my_agent)
+
+# Team step
+step = Step(name="analysis-team", team=my_team)
+
+# Callable step (sync or async)
+async def process(step_input):
+    data = step_input.get_last_step_content()
+    return f"Processed: {data}"
+
+step = Step(name="processor", executor=process)
+```
+
+<ParamField path="agent" type="Agent">
+  Agent to execute. Mutually exclusive with `team` and `executor`.
+</ParamField>
+
+<ParamField path="team" type="Team">
+  Team to execute. Mutually exclusive with `agent` and `executor`.
+</ParamField>
+
+<ParamField path="executor" type="Callable">
+  Custom function `(StepInput) -> str | RunOutput`. Mutually exclusive with `agent` and `team`.
+</ParamField>
+
+<ParamField path="timeout" type="float">
+  Maximum execution time in seconds. `None` for no limit.
+</ParamField>
+
+<ParamField path="retries" type="int" default="0">
+  Number of retry attempts on failure.
+</ParamField>
+
+<ParamField path="input_builder" type="Callable[[StepInput], str]">
+  Custom function to build the prompt from step context. Default combines original input with previous step output.
+</ParamField>
+
+### Steps (Sequential)
+
+Executes steps in order, chaining context from each step to the next. Stops on failure.
+
+```python
+from definable.agent.workflow import Steps, Step
+
+pipeline = Steps(steps=[
+    Step(name="draft", agent=drafter),
+    Step(name="review", agent=reviewer),
+    Step(name="polish", agent=editor),
+])
+```
+
+### Parallel
+
+Executes multiple steps concurrently. All steps receive the same input (no chaining).
+
+```python
+from definable.agent.workflow import Parallel, Step
+
+analysis = Parallel(
+    name="multi-analysis",
+    steps=[
+        Step(name="technical", agent=tech_analyst),
+        Step(name="business", agent=biz_analyst),
+        Step(name="legal", agent=legal_analyst),
+    ],
+    max_concurrency=3,  # Optional: limit concurrent executions
+)
+```
+
+Results are combined as `[step_name]: content` in the output.
+
+### Loop
+
+Runs steps repeatedly until an end condition is met or max iterations reached.
+
+```python
+from definable.agent.workflow import Loop, Step
+
+refinement = Loop(
+    name="improve",
+    steps=[
+        Step(name="generate", agent=generator),
+        Step(name="evaluate", agent=evaluator),
+    ],
+    end_condition=lambda outputs: any("APPROVED" in (o.content or "") for o in outputs),
+    max_iterations=5,
+)
+```
+
+<ParamField path="end_condition" type="Callable[[List[StepOutput]], bool]">
+  Called after each iteration with all iteration outputs. Return `True` to stop. Supports sync and async callables.
+</ParamField>
+
+<ParamField path="max_iterations" type="int" default="3">
+  Maximum number of iterations before stopping.
+</ParamField>
+
+### Condition
+
+If/else branching based on a condition function.
+
+```python
+from definable.agent.workflow import Condition, Step
+
+gate = Condition(
+    name="quality-gate",
+    condition=lambda ctx: "PASS" in (ctx.get_last_step_content() or ""),
+    true_steps=Step(name="publish", agent=publisher),
+    false_steps=Step(name="rewrite", agent=writer),
+)
+```
+
+<ParamField path="condition" type="Callable[[StepInput], bool]">
+  Receives step context, returns `True` for the true branch, `False` for false. Supports sync and async.
+</ParamField>
+
+<ParamField path="true_steps" type="Step | List[Step]">
+  Steps executed when condition is `True`. Can be a single step or a list.
+</ParamField>
+
+<ParamField path="false_steps" type="Step | List[Step]">
+  Steps executed when condition is `False`. Optional — if not set, the condition is skipped.
+</ParamField>
+
+### Router
+
+Dynamic N-way routing based on a selector function.
+
+```python
+from definable.agent.workflow import Router, Step
+
+support = Router(
+    name="support-router",
+    selector=lambda ctx: "technical" if "bug" in (ctx.input or "") else "general",
+    routes={
+        "technical": Step(name="tech_support", agent=tech_agent),
+        "general": Step(name="general_support", agent=general_agent),
+        "billing": Step(name="billing_support", agent=billing_agent),
+    },
+)
+```
+
+<ParamField path="selector" type="Callable[[StepInput], str | List[str]]">
+  Returns one or more route names. Returning multiple names executes those routes in parallel.
+</ParamField>
+
+<ParamField path="routes" type="Dict[str, Step]">
+  Mapping of route names to steps.
+</ParamField>
+
+## Composing Steps
+
+All step types are composable — nest them freely:
+
+```python
+workflow = Workflow(
+    name="full-pipeline",
+    steps=[
+        # Step 1: Research in parallel
+        Parallel(name="research", steps=[
+            Step(name="web", agent=web_researcher),
+            Step(name="papers", agent=paper_reader),
+        ]),
+        # Step 2: Write based on research
+        Step(name="writer", agent=writer),
+        # Step 3: Quality gate
+        Condition(
+            name="quality-check",
+            condition=lambda ctx: "APPROVED" in (ctx.get_last_step_content() or ""),
+            true_steps=Step(name="publish", agent=publisher),
+            false_steps=Loop(
+                name="revise",
+                steps=[
+                    Step(name="rewrite", agent=writer),
+                    Step(name="review", agent=reviewer),
+                ],
+                end_condition=lambda outputs: any("APPROVED" in (o.content or "") for o in outputs),
+                max_iterations=3,
+            ),
+        ),
+    ],
+)
+```
+
+## Step Context
+
+Each step receives a `StepInput` with context from previous steps:
+
+```python
+from definable.agent.workflow import Step, StepInput
+
+async def custom_step(ctx: StepInput):
+    # Access original input
+    original = ctx.input
+
+    # Access previous step's output
+    prev = ctx.get_last_step_content()
+
+    # Access a specific previous step by name
+    research = ctx.get_step_content("researcher")
+
+    # Access shared session state
+    api_key = ctx.session_state.get("api_key")
+
+    return f"Processed with context from: {research}"
+
+step = Step(name="processor", executor=custom_step)
+```
+
+## Workflow Output
+
+`WorkflowOutput` provides access to all step results:
+
+```python
+result = await workflow.arun("Research AI trends")
+
+result.content       # Final step's content
+result.success       # True if all steps succeeded
+result.duration_ms   # Total execution time
+result.step_outputs  # List[StepOutput] for each step
+
+# Access specific step results
+research = result.get_step_output("researcher")
+print(research.content)
+print(research.duration_ms)
+```
+
+## Session State
+
+Share data across steps via session state:
+
+```python
+workflow = Workflow(
+    name="stateful",
+    steps=[...],
+    session_state={"api_key": "...", "mode": "production"},
+)
+
+# Override per-run
+result = await workflow.arun("Go", session_state={"mode": "staging"})
+```
+
+## Events
+
+Subscribe to workflow events via the event bus:
+
+```python
+from definable.agent.workflow import (
+    WorkflowRunStartedEvent,
+    StepCompletedEvent,
+    LoopIterationEvent,
+)
+
+workflow.events.on(StepCompletedEvent, lambda e: print(f"Step {e.step_name}: {e.duration_ms:.0f}ms"))
+```
+
+| Event | When |
+|-------|------|
+| `WorkflowRunStartedEvent` | Workflow begins |
+| `WorkflowRunCompletedEvent` | Workflow completes |
+| `WorkflowRunErrorEvent` | Workflow fails |
+| `StepStartedEvent` | A step begins |
+| `StepCompletedEvent` | A step completes |
+| `StepErrorEvent` | A step fails |
+| `StepSkippedEvent` | A step is skipped (e.g., unmatched Condition branch) |
+| `LoopIterationEvent` | Loop completes an iteration |
+
+## Imports
+
+```python
+from definable.agent.workflow import (
+    Workflow, Step, Steps, Parallel, Loop, Condition, Router,
+    StepInput, StepOutput, WorkflowOutput,
+)
+
+# Also available from top-level agent package
+from definable.agent import Workflow, Step, Steps, Parallel, Loop, Condition, Router
+```

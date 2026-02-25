@@ -1,13 +1,13 @@
-# Project Profile -- Definable v0.3.1
+# Project Profile -- Definable v0.3.2
 
-> Last updated: 2026-02-25 (eval run #6)
+> Last updated: 2026-02-25 (post-docs-agent update)
 
 ## Package Info
 - **Name**: definable
-- **Version**: 0.3.1 (editable install)
+- **Version**: 0.3.2 (editable install)
 - **Python**: >=3.12 (3.12.10 in .venv)
-- **Source**: `definable/definable/` (215+ .py files)
-- **Tests**: `definable/tests/` (1800+ tests)
+- **Source**: `definable/definable/` (400+ .py files)
+- **Tests**: `definable/tests/` (3097+ tests, 122 test files)
 
 ## Key Correct Import Paths (verified eval run #6)
 
@@ -19,6 +19,42 @@ from definable import Perplexity, OpenRouter  # no extra deps
 from definable import Memory, Knowledge, Document, Guardrails, Thinking, Tracing
 from definable import Pipeline, ToolRetry, DebugConfig, SubAgentPolicy
 from definable import AgentRunException, StopAgentRun, RetryAgentRun
+
+# Security
+from definable.agent.security import (
+    SecurityConfig, ToolPolicy, ToolPolicyGuardrail, DEFAULT_DANGEROUS_TOOLS,
+    RateLimitConfig, RateLimitHook, SlidingWindowRateLimiter,
+    ContentDefenseConfig, ContentDefenseGuardrail, PromptInjectionDetector,
+    SSRFGuard, SSRFGuardConfig, SSRFBlockedError, security_audit, SecurityReport,
+    EnvSanitizeConfig, sanitize_env, is_env_safe,
+)
+
+# Evaluation
+from definable.agent.eval import (
+    BaseEval, EvalCase, EvalSuite,
+    AccuracyEval, PerformanceEval, ReliabilityEval, AgentAsJudgeEval,
+    EvalResult, AccuracyResult, PerformanceResult, ReliabilityResult, JudgeResult,
+)
+
+# Usage Tracking
+from definable.agent import UsageTracker, UsageSnapshot
+
+# Knowledge — Hybrid Search & Scoring
+from definable.knowledge import FTSIndex, HybridSearchConfig, TemporalDecay, MMRConfig, FallbackEmbedder
+
+# Team
+from definable.agent.team import Team, TeamMode, Task, TaskList, TaskStatus
+from definable.agent import Team, TeamMode  # also from top-level
+
+# Workflow
+from definable.agent.workflow import (
+    Workflow, Step, Steps, Parallel, Loop, Condition, Router,
+    StepInput, StepOutput, WorkflowOutput,
+)
+from definable.agent import Workflow, Step, Steps, Parallel, Loop, Condition, Router  # also from top-level
+
+# Desktop Events
+from definable.agent.interface.desktop import BridgeCallEvent, DesktopActionEvent
 
 # Agents
 from definable.agent import Agent, AgentConfig, MockModel, create_test_agent, AgentTestCase
@@ -70,7 +106,7 @@ from definable.exceptions import (
 )
 ```
 
-## Agent API (v0.3.1)
+## Agent API (v0.3.2)
 
 ```python
 agent = Agent(
@@ -89,6 +125,8 @@ agent = Agent(
     sub_agents=True,                      # or SubAgentPolicy(...)
     deep_research=True,                   # or DeepResearchConfig(...)
     observability=True,                   # or ObservabilityConfig(...)
+    security=SecurityConfig(...),         # or True for defaults
+    usage=True,                           # or UsageTracker(...)
     config=AgentConfig(...),              # Optional advanced settings
 )
 
@@ -114,6 +152,15 @@ agent.use(RetryMiddleware(max_retries=3))
 - `output_schema` not `response_model` for structured output
 - System message sent as system-role Message in messages list (not separate kwarg)
 - Multiple `asyncio.run()` calls can break HTTP connection pool -- use single async function
+- `FTSIndex` requires explicit `await fts.initialize()` before use
+- `FallbackEmbedder(providers=[])` raises ValueError (needs at least one provider)
+- `ToolPolicy(mode="allowlist")` with no `allowed_tools` blocks all tools
+- `security=True` auto-injects guardrails — don't duplicate ToolGuardrail/InputGuardrail
+- `Team(model=None)` requires model on Team or at least one member, otherwise ValueError
+- `Team.arun()` returns `RunOutput` (same as agent), NOT a TeamOutput
+- `Workflow.arun()` returns `WorkflowOutput` (NOT RunOutput) — has `.step_outputs`, `.get_step_output(name)`
+- `Step` needs exactly one of `agent=`, `team=`, or `executor=`
+- `CLIInterface(mode="tui")` without textual raises ImportError — `pip install definable[cli]`
 
 ## Pipeline Architecture (8 phases)
 Prepare -> Recall -> Think -> GuardInput -> Compose -> InvokeLoop -> GuardOutput -> Store

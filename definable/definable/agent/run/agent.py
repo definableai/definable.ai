@@ -191,6 +191,10 @@ class RunEvent(str, Enum):
   sub_agent_failed = "SubAgentFailed"
   sub_agent_killed = "SubAgentKilled"
 
+  # Compression events
+  compression_started = "CompressionStarted"
+  compression_completed = "CompressionCompleted"
+
   # Pipeline phase events
   phase_started = "PhaseStarted"
   phase_completed = "PhaseCompleted"
@@ -568,6 +572,25 @@ class ModelCallCompletedEvent(BaseAgentRunEvent):
 
 
 @dataclass
+class CompressionStartedEvent(BaseAgentRunEvent):
+  """Emitted when tool result compression begins."""
+
+  event: str = RunEvent.compression_started.value
+  tool_results_count: int = 0
+
+
+@dataclass
+class CompressionCompletedEvent(BaseAgentRunEvent):
+  """Emitted when tool result compression finishes."""
+
+  event: str = RunEvent.compression_completed.value
+  tool_results_compressed: int = 0
+  original_size: int = 0
+  compressed_size: int = 0
+  duration_ms: float = 0.0
+
+
+@dataclass
 class SubAgentSpawnedEvent(BaseAgentRunEvent):
   """Emitted when a sub-agent is spawned by the parent."""
 
@@ -673,6 +696,8 @@ RunOutputEvent = Union[
   OutputModelResponseCompletedEvent,
   ModelCallStartedEvent,
   ModelCallCompletedEvent,
+  CompressionStartedEvent,
+  CompressionCompletedEvent,
   SubAgentSpawnedEvent,
   SubAgentCompletedEvent,
   SubAgentFailedEvent,
@@ -731,6 +756,8 @@ RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.output_model_response_completed.value: OutputModelResponseCompletedEvent,
   RunEvent.model_call_started.value: ModelCallStartedEvent,
   RunEvent.model_call_completed.value: ModelCallCompletedEvent,
+  RunEvent.compression_started.value: CompressionStartedEvent,
+  RunEvent.compression_completed.value: CompressionCompletedEvent,
   RunEvent.custom_event.value: CustomEvent,
   # Sub-agent events
   RunEvent.sub_agent_spawned.value: SubAgentSpawnedEvent,

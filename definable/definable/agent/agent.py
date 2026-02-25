@@ -177,6 +177,12 @@ class Agent:
     sub_agents: Union[bool, "SubAgentPolicy", None] = None,
     # ── Media ────────────────────────────────────────────────
     audio_transcriber: Union[bool, Any, None] = None,
+    # ── Security ──────────────────────────────────────────────
+    security: Union[bool, Any, None] = None,
+    # ── Usage Tracking ───────────────────────────────────────
+    usage: Union[bool, Any, None] = None,
+    # ── Plugins ──────────────────────────────────────────────
+    plugins: Optional[List[Any]] = None,
     # ── Support ─────────────────────────────────────────────
     readers: Union[List["BaseReader"], bool, None] = None,
     guardrails: Optional["Guardrails"] = None,
@@ -344,6 +350,56 @@ class Agent:
       self._audio_transcriber = audio_transcriber
     else:
       self._audio_transcriber = None
+
+    # Security layer — accepts True (default), SecurityConfig, or None
+    from definable.agent.security import SecurityConfig as _SecurityConfig
+
+    if security is True:
+      self._security: Optional[_SecurityConfig] = _SecurityConfig()
+    elif isinstance(security, _SecurityConfig):
+      self._security = security
+    else:
+      self._security = None
+
+    # Auto-inject security guardrails if security is configured
+    if self._security is not None:
+      from definable.agent.guardrail.base import Guardrails as _Guardrails
+
+      if self.guardrails is None:
+        self.guardrails = _Guardrails()
+      if self._security.tool_policy is not None:
+        from definable.agent.security.tool_policy import ToolPolicyGuardrail
+
+        self.guardrails.tool.append(ToolPolicyGuardrail(policy=self._security.tool_policy))
+      if self._security.content_defense is not None and self._security.content_defense.injection_detection:
+        from definable.agent.security.content_defense import ContentDefenseGuardrail
+
+        cd = self._security.content_defense
+        self.guardrails.input.append(
+          ContentDefenseGuardrail(
+            sensitivity=cd.injection_sensitivity,
+            extra_patterns=cd.extra_patterns,
+          )
+        )
+
+    # Usage tracking — accepts True (default tracker), UsageTracker instance, or None
+    from definable.agent.usage import UsageTracker as _UsageTracker
+
+    if usage is True:
+      self._usage_tracker: Optional[_UsageTracker] = _UsageTracker()
+    elif isinstance(usage, _UsageTracker):
+      self._usage_tracker = usage
+    else:
+      self._usage_tracker = None
+
+    # Plugin registry — stores plugins, loads them lazily on first arun()
+    from definable.agent.plugin.registry import PluginRegistry as _PluginRegistry
+
+    self._plugin_registry: _PluginRegistry = _PluginRegistry()
+    self._plugins_loaded = False
+    if plugins:
+      for p in plugins:
+        self._plugin_registry.add(p)
 
     # Convert skill_registry to skills (eager/lazy based on size)
     if skill_registry is not None:
@@ -851,6 +907,11 @@ class Agent:
     Returns:
         RunOutput with response, metrics, tool executions, and messages.
     """
+    # Load plugins on first run (async lifecycle)
+    if not self._plugins_loaded and len(self._plugin_registry) > 0:
+      await self._plugin_registry.load_all(self)
+      self._plugins_loaded = True
+
     # Build initial LoopState from arguments
     state = self._build_initial_state(
       instruction,
@@ -3181,6 +3242,89 @@ class Agent:
         loop.create_task(executor.execute(trigger, event))
     except RuntimeError:
       pass  # No running loop — skip
+
+  # --- Security ---
+
+  @property
+  def security(self) -> Optional[Any]:
+    """Return the SecurityConfig, or None if not configured."""
+    return self._security
+
+  async def security_audit(self) -> Any:
+    """Run a security audit on this agent's configuration.
+
+    Returns a SecurityReport with findings and a score (0–100).
+    """
+    from definable.agent.security.audit import security_audit
+
+    return await security_audit(self)
+
+  # --- Usage Tracking ---
+
+  @property
+  def usage_tracker(self) -> Optional[Any]:
+    """Return the UsageTracker, or None if not configured."""
+    return self._usage_tracker
+
+  # --- Scheduler ---
+
+  @property
+  def scheduler(self) -> Optional[Any]:
+    """Return a Scheduler for this agent's triggers, or None if no schedulable triggers exist."""
+    from definable.agent.trigger.interval import Interval
+    from definable.agent.trigger.oneshot import OneShot
+
+    try:
+      from definable.agent.trigger.cron import Cron
+
+      schedulable_types = (Cron, Interval, OneShot)
+    except ImportError:
+      schedulable_types = (Interval, OneShot)  # type: ignore[assignment]
+
+    schedulable = [t for t in self._triggers if isinstance(t, schedulable_types)]
+    if not schedulable:
+      return None
+
+    from definable.agent.scheduler.scheduler import Scheduler
+
+    sched = Scheduler()
+    for trigger in schedulable:
+      sched.add(trigger)
+    return sched
+
+  # --- Plugins ---
+
+  @property
+  def plugin_registry(self) -> Any:
+    """Return the PluginRegistry."""
+    return self._plugin_registry
+
+  def use_plugin(self, plugin: Any) -> "Agent":
+    """Register a plugin (loaded on next arun()).
+
+    Args:
+      plugin: Plugin instance to register.
+
+    Returns:
+      Self for chaining.
+    """
+    self._plugin_registry.add(plugin)
+    self._plugins_loaded = False  # Force reload on next run
+    return self
+
+  async def remove_plugin(self, name: str) -> "Agent":
+    """Unload and remove a plugin by name.
+
+    Args:
+      name: Plugin name to remove.
+
+    Returns:
+      Self for chaining.
+    """
+    if self._plugin_registry.is_loaded(name):
+      await self._plugin_registry.unload_one(name, self)
+    self._plugin_registry.remove(name)
+    return self
 
   # --- Interfaces ---
 

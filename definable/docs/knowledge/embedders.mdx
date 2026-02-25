@@ -114,6 +114,32 @@ texts = ["First document", "Second document", "Third document"]
 embeddings, usages = await embedder.async_get_embeddings_batch_and_usage(texts)
 ```
 
+## FallbackEmbedder
+
+Automatically fail over across multiple embedding providers. If the primary provider fails (rate limit, auth error, timeout), the next one is tried.
+
+```python
+from definable.knowledge import FallbackEmbedder
+from definable.embedder import OpenAIEmbedder, VoyageAIEmbedder
+
+embedder = FallbackEmbedder(providers=[
+    OpenAIEmbedder(),       # Primary
+    VoyageAIEmbedder(),     # Fallback
+])
+
+# Use with Knowledge
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=embedder,
+)
+```
+
+The fallback embedder inherits `dimensions` from the primary provider and automatically switches providers on failure. Call `embedder.reset()` to return to the primary provider.
+
+<Note>
+Errors are classified by type (auth, rate limit, timeout, network) using duck typing on exception class names and messages — no provider SDK imports needed.
+</Note>
+
 ## Creating a Custom Embedder
 
 Subclass `Embedder` and implement the embedding methods:

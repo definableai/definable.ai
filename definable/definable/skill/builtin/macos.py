@@ -19,7 +19,7 @@ Example::
 """
 
 import base64
-from typing import TYPE_CHECKING, List, Optional, Set
+from typing import TYPE_CHECKING, Callable, List, Optional, Set
 
 from definable.skill.base import Skill
 from definable.tool.decorator import tool
@@ -74,6 +74,7 @@ class MacOS(Skill):
     enable_file_write: bool = True,
     enable_input: bool = True,
     enable_shell: bool = False,
+    on_event: Optional[Callable] = None,
   ) -> None:
     super().__init__()
     self._bridge_host = bridge_host
@@ -85,6 +86,7 @@ class MacOS(Skill):
     self._enable_file_write = enable_file_write
     self._enable_input = enable_input
     self._enable_shell = enable_shell
+    self._on_event = on_event
     self._client: Optional["BridgeClient"] = None
 
   @property
@@ -119,6 +121,7 @@ class MacOS(Skill):
         host=self._bridge_host,
         port=self._bridge_port,
         token=self._bridge_token,
+        on_event=self._on_event,
       )
     return self._client
 

@@ -1,0 +1,217 @@
+---
+title: Teams
+sidebarTitle: Teams
+description: Coordinate multiple agents with four execution modes — coordinate, route, collaborate, and tasks.
+icon: people-group
+---
+
+Teams compose multiple agents under a leader that orchestrates their execution. The leader gets auto-injected tools for delegation and task management — no manual wiring needed.
+
+## Quick Start
+
+```python
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+
+researcher = Agent(model="openai/gpt-4o", instructions="You are a research specialist.")
+writer = Agent(model="openai/gpt-4o", instructions="You are a technical writer.")
+
+team = Team(
+    name="content-team",
+    model="openai/gpt-4o",
+    members=[researcher, writer],
+    mode=TeamMode.coordinate,
+    instructions="Produce well-researched technical content.",
+)
+
+result = await team.arun("Write an article about quantum computing.")
+print(result.content)
+```
+
+## Execution Modes
+
+### Coordinate (default)
+
+The leader picks which members to delegate to, crafts targeted tasks for each, and synthesizes their responses into a final output.
+
+```python
+team = Team(
+    model="openai/gpt-4o",
+    members=[researcher, writer, editor],
+    mode=TeamMode.coordinate,
+)
+```
+
+Best for: tasks where the leader needs judgment about which specialists to involve.
+
+### Route
+
+The leader routes the request to a single specialist and returns their response directly — no synthesis step.
+
+```python
+team = Team(
+    model="openai/gpt-4o",
+    members=[tech_support, billing_support, general_support],
+    mode=TeamMode.route,
+)
+```
+
+Best for: classification and dispatch (support tickets, query routing).
+
+### Collaborate
+
+All members receive the same task and execute in parallel. The leader synthesizes all responses.
+
+```python
+team = Team(
+    model="openai/gpt-4o",
+    members=[analyst_a, analyst_b, analyst_c],
+    mode=TeamMode.collaborate,
+)
+```
+
+Best for: tasks that benefit from multiple perspectives (analysis, brainstorming, review).
+
+### Tasks
+
+The leader decomposes the goal into a shared task list, delegates tasks to members, and loops autonomously until all work is complete.
+
+```python
+team = Team(
+    model="openai/gpt-4o",
+    members=[researcher, designer, developer],
+    mode=TeamMode.tasks,
+    max_iterations=10,
+)
+```
+
+Best for: complex, multi-step projects with dependencies between subtasks.
+
+## Constructor Reference
+
+<ParamField path="name" type="str">
+  Human-readable team name. Auto-generated if not set.
+</ParamField>
+
+<ParamField path="model" type="str | Model">
+  Model for the leader agent. Accepts string shorthand (`"openai/gpt-4o"`) or a Model instance.
+</ParamField>
+
+<ParamField path="members" type="List[Agent | Team]">
+  Agents (or nested teams) that the leader can delegate to. Each member should have a unique `agent_name` in its config.
+</ParamField>
+
+<ParamField path="mode" type="TeamMode" default="coordinate">
+  Execution mode: `coordinate`, `route`, `collaborate`, or `tasks`.
+</ParamField>
+
+<ParamField path="instructions" type="str">
+  Instructions for the leader agent. Appended to auto-generated mode-specific prompts.
+</ParamField>
+
+<ParamField path="max_iterations" type="int" default="10">
+  Maximum delegation rounds (relevant for `tasks` mode).
+</ParamField>
+
+<ParamField path="share_member_interactions" type="bool" default="false">
+  When `true`, member responses are shared with subsequent delegations for context.
+</ParamField>
+
+<ParamField path="tools" type="List[Function]">
+  Additional tools for the leader (on top of auto-injected delegation tools).
+</ParamField>
+
+<ParamField path="output_schema" type="Type[BaseModel]">
+  Pydantic model for structured output from the leader's final response.
+</ParamField>
+
+<ParamField path="debug" type="bool" default="false">
+  Enable debug logging for team operations.
+</ParamField>
+
+## Events
+
+Subscribe to team events via the event bus:
+
+```python
+from definable.agent.team import (
+    TeamRunStartedEvent,
+    TeamRunCompletedEvent,
+    MemberDelegatedEvent,
+    MemberCompletedEvent,
+)
+
+team.events.on(MemberDelegatedEvent, lambda e: print(f"Delegated to {e.member_name}"))
+team.events.on(MemberCompletedEvent, lambda e: print(f"{e.member_name} done"))
+
+result = await team.arun("Research AI trends")
+```
+
+| Event | When |
+|-------|------|
+| `TeamRunStartedEvent` | Team run begins |
+| `TeamRunCompletedEvent` | Team run finishes |
+| `TeamRunErrorEvent` | Team run fails |
+| `MemberDelegatedEvent` | Leader delegates to a member |
+| `MemberCompletedEvent` | Member finishes its task |
+| `MemberErrorEvent` | Member execution fails |
+| `MemberRoutedEvent` | Route mode selects a member |
+| `TaskCreatedEvent` | Task mode creates a task |
+| `TaskStatusChangedEvent` | Task status changes |
+| `TaskIterationEvent` | Task mode completes an iteration |
+
+## Nested Teams
+
+Teams can contain other teams as members, enabling hierarchical coordination:
+
+```python
+research_team = Team(
+    name="research",
+    model="openai/gpt-4o",
+    members=[web_researcher, paper_reader],
+    mode=TeamMode.collaborate,
+)
+
+content_team = Team(
+    name="content",
+    model="openai/gpt-4o",
+    members=[research_team, writer, editor],
+    mode=TeamMode.coordinate,
+)
+```
+
+## Structured Output
+
+```python
+from pydantic import BaseModel
+
+class Report(BaseModel):
+    title: str
+    summary: str
+    recommendations: list[str]
+
+result = await team.arun("Analyze market trends", output_schema=Report)
+```
+
+## Evaluation
+
+All eval types support team evaluation via `arun_team`:
+
+```python
+from definable.agent.eval import AccuracyEval, EvalCase
+
+eval = AccuracyEval(threshold=7.0)
+result = await eval.arun_team(team, EvalCase(
+    input="Research quantum computing advances",
+    expected="A comprehensive summary...",
+))
+```
+
+## Imports
+
+```python
+from definable.agent.team import Team, TeamMode
+
+# Also available from top-level agent package
+from definable.agent import Team, TeamMode
+```

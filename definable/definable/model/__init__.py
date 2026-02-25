@@ -80,6 +80,23 @@ def __getattr__(name: str):
     from definable.model.utils import resolve_model_string
 
     return resolve_model_string
+  # --- Resilience ---
+  if name == "ResilientModel":
+    from definable.model.resilience.resilient import ResilientModel
+
+    return ResilientModel
+  if name == "KeyPool":
+    from definable.model.resilience.key_pool import KeyPool
+
+    return KeyPool
+  if name == "FailoverChain":
+    from definable.model.resilience.failover import FailoverChain
+
+    return FailoverChain
+  if name == "FailoverEntry":
+    from definable.model.resilience.failover import FailoverEntry
+
+    return FailoverEntry
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -107,4 +124,9 @@ __all__ = [
   "OpenRouter",
   # Lazy — Utilities
   "resolve_model_string",
+  # Lazy — Resilience
+  "ResilientModel",  # noqa: F822
+  "KeyPool",  # noqa: F822
+  "FailoverChain",  # noqa: F822
+  "FailoverEntry",  # noqa: F822
 ]

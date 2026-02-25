@@ -131,6 +131,58 @@ def __getattr__(name: str):
     from definable.agent import pipeline as _pipeline
 
     return getattr(_pipeline, name)
+  if name in ("Team", "TeamMode"):
+    from definable.agent import team as _team
+
+    return getattr(_team, name)
+  if name in ("Workflow", "Step", "Steps", "Parallel", "Loop", "Condition", "Router"):
+    from definable.agent import workflow as _workflow
+
+    return getattr(_workflow, name)
+  _eval_names = (
+    "BaseEval",
+    "EvalCase",
+    "EvalSuite",
+    "AccuracyEval",
+    "PerformanceEval",
+    "ReliabilityEval",
+    "AgentAsJudgeEval",
+    "EvalResult",
+    "AccuracyResult",
+    "PerformanceResult",
+    "ReliabilityResult",
+    "JudgeResult",
+  )
+  if name in _eval_names:
+    from definable.agent import eval as _eval
+
+    return getattr(_eval, name)
+  if name in ("SecurityConfig", "ToolPolicy", "SecurityReport", "SecurityFinding", "SecuritySeverity"):
+    from definable.agent import security as _security
+
+    return getattr(_security, name)
+  if name == "UsageTracker":
+    from definable.agent.usage import UsageTracker
+
+    return UsageTracker
+  if name == "UsageSnapshot":
+    from definable.agent.usage import UsageSnapshot
+
+    return UsageSnapshot
+  # --- Scheduler ---
+  if name in ("Scheduler", "ScheduledJob", "JobStatus"):
+    from definable.agent import scheduler as _scheduler
+
+    return getattr(_scheduler, name)
+  if name in ("Interval", "OneShot"):
+    from definable.agent import trigger as _trigger
+
+    return getattr(_trigger, name)
+  # --- Plugins ---
+  if name in ("Plugin", "PluginRegistry"):
+    from definable.agent import plugin as _plugin
+
+    return getattr(_plugin, name)
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -182,4 +234,47 @@ __all__ = [
   "ToolRetry",
   "DebugConfig",
   "SubAgentPolicy",
+  # Team
+  "Team",  # noqa: F822
+  "TeamMode",  # noqa: F822
+  # Workflow
+  "Workflow",  # noqa: F822
+  "Step",  # noqa: F822
+  "Steps",  # noqa: F822
+  "Parallel",  # noqa: F822
+  "Loop",  # noqa: F822
+  "Condition",  # noqa: F822
+  "Router",  # noqa: F822
+  # Eval
+  "BaseEval",  # noqa: F822
+  "EvalCase",  # noqa: F822
+  "EvalSuite",  # noqa: F822
+  "AccuracyEval",  # noqa: F822
+  "PerformanceEval",  # noqa: F822
+  "ReliabilityEval",  # noqa: F822
+  "AgentAsJudgeEval",  # noqa: F822
+  "EvalResult",  # noqa: F822
+  "AccuracyResult",  # noqa: F822
+  "PerformanceResult",  # noqa: F822
+  "ReliabilityResult",  # noqa: F822
+  "JudgeResult",  # noqa: F822
+  # Security
+  "SecurityConfig",  # noqa: F822
+  "ToolPolicy",  # noqa: F822
+  "SecurityReport",  # noqa: F822
+  "SecurityFinding",  # noqa: F822
+  "SecuritySeverity",  # noqa: F822
+  # Usage tracking
+  "UsageTracker",  # noqa: F822
+  "UsageSnapshot",  # noqa: F822
+  # Scheduler
+  "Scheduler",  # noqa: F822
+  "ScheduledJob",  # noqa: F822
+  "JobStatus",  # noqa: F822
+  # Triggers
+  "Interval",  # noqa: F822
+  "OneShot",  # noqa: F822
+  # Plugins
+  "Plugin",  # noqa: F822
+  "PluginRegistry",  # noqa: F822
 ]

@@ -21,16 +21,34 @@ Agent ──┬── Model (lazy client, global HTTP pool) — or string shorth
         ├── Thinking (trigger: always|auto|never)
         ├── Memory (session history, auto-summarization, store: SQLite/File/InMemory)
         ├── Knowledge (top_k, trigger, context_format — wraps VectorDB)
+        │     ├── FTSIndex (SQLite FTS5, hybrid search)
+        │     ├── HybridSearchConfig (vector + text merge: rrf|weighted)
+        │     ├── TemporalDecay (exponential score decay by document age)
+        │     ├── MMRConfig (diversity reranking: lambda_param balance)
+        │     └── FallbackEmbedder (multi-provider failover)
         ├── DeepResearch → DeepResearchConfig
-        ├── Tracing (exporters: JSONLExporter, etc.)
+        ├── Tracing (exporters: JSONLExporter, DebugExporter)
         ├── AudioTranscriber (voice→text, runs in arun before pipeline)
+        ├── Security → SecurityConfig (all optional)
+        │     ├── ToolPolicy → ToolPolicyGuardrail (deny/allowlist/full)
+        │     ├── RateLimitConfig → RateLimitHook (sliding window)
+        │     ├── ContentDefenseConfig → ContentDefenseGuardrail (injection detection)
+        │     ├── SSRFGuardConfig → SSRFGuard (private IP blocking)
+        │     └── EnvSanitizeConfig → sanitize_env (dangerous var stripping)
+        ├── UsageTracker (token/cost tracking per run and session)
+        ├── Eval → agent/eval (4 eval types: Accuracy, Performance, Reliability, Judge)
         ├── Toolkits[] → MCPToolkit | BrowserToolkit
         ├── Tools[] → Function (decorator-based)
         ├── Skills[] → Skill (instructions + tools)
         ├── Guardrails → input/output/tool checks
+        ├── Pipeline → 8 phases (Prepare→Recall→Think→GuardInput→Compose→InvokeLoop→GuardOutput→Store)
         ├── Middleware[] → chain (skipped in streaming)
-        └── Interfaces[] → Telegram, Discord, Slack, Call, Desktop
+        ├── Team → agent/team (coordinate/route/collaborate/tasks)
+        ├── Workflow → agent/workflow (Step, Steps, Parallel, Loop, Condition, Router)
+        └── Interfaces[] → Telegram, Discord, Slack, Call, Desktop, CLI
               ├── Auth → APIKeyAuth, JWTAuth, AllowlistAuth
+              ├── CLI → CLIInterface (auto-detects TUI vs REPL)
+              │     └── TUI → Textual-based terminal UI (streaming, widgets, metrics)
               └── Call → CallInterface (Twilio/Plivo, managed/cascading/realtime)
                     ├── Telephony → TwilioProvider, PlivoProvider
                     ├── STT → DeepgramSTT
@@ -51,7 +69,7 @@ Agent ──┬── Model (lazy client, global HTTP pool) — or string shorth
 
 ## Key Patterns
 - **String shorthand**: `model="openai/gpt-4o-mini"` resolves at Agent init
-- **Boolean shortcuts**: `memory=True` → InMemoryStore, `tracing=True` → default exporters, `audio_transcriber=True` → OpenAITranscriber
+- **Boolean shortcuts**: `memory=True` → InMemoryStore, `tracing=True` → default exporters, `audio_transcriber=True` → OpenAITranscriber, `security=True` → default SecurityConfig, `usage=True` → UsageTracker
 - **Exception**: `knowledge=True` raises ValueError (requires vector_db)
 - **Middleware chain**: `__call__(context, next_handler)` protocol — NOT before/after hooks
 - **Document metadata**: Always `meta_data` (NOT `metadata`) — this is a known quirk, don't "fix" it

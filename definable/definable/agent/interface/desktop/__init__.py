@@ -14,6 +14,7 @@ Quick Start::
 
 from definable.agent.interface.desktop.bridge_client import BridgeClient
 from definable.agent.interface.desktop.config import DesktopConfig
+from definable.agent.interface.desktop.events import BridgeCallEvent, DesktopActionEvent
 from definable.agent.interface.desktop.interface import DesktopInterface
 
-__all__ = ["BridgeClient", "DesktopConfig", "DesktopInterface"]
+__all__ = ["BridgeClient", "BridgeCallEvent", "DesktopActionEvent", "DesktopConfig", "DesktopInterface"]

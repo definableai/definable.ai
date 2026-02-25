@@ -1,0 +1,241 @@
+---
+title: Hybrid Search & Scoring
+sidebarTitle: Hybrid Search
+description: Combine vector similarity with full-text search, MMR diversity, and temporal decay for better retrieval.
+icon: magnifying-glass-chart
+---
+
+The Knowledge module supports advanced retrieval strategies beyond basic vector similarity search. Combine full-text search (BM25), diversity reranking (MMR), and temporal decay to get better, more diverse, and fresher results.
+
+## Hybrid Search (Vector + Full-Text)
+
+Hybrid search merges vector similarity results with BM25 full-text search for better recall, especially for keyword-heavy queries.
+
+```python
+from definable.knowledge import Knowledge, FTSIndex, HybridSearchConfig
+from definable.vectordb import InMemoryVectorDB
+
+fts = FTSIndex()  # SQLite FTS5-backed
+await fts.initialize()
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    fts_index=fts,
+    hybrid_config=HybridSearchConfig(
+        vector_weight=0.6,   # 60% vector similarity
+        text_weight=0.4,     # 40% BM25 text match
+    ),
+)
+
+# Documents are automatically indexed in both stores
+await knowledge.aadd("Python was created by Guido van Rossum in 1991.")
+await knowledge.aadd("JavaScript was created by Brendan Eich in 1995.")
+
+# Hybrid search merges both result sets
+results = await knowledge.asearch("Who created Python?", top_k=5)
+```
+
+### HybridSearchConfig
+
+<ParamField path="vector_weight" type="float" default="0.6">
+  Weight for vector similarity scores in the merged results.
+</ParamField>
+
+<ParamField path="text_weight" type="float" default="0.4">
+  Weight for BM25 full-text search scores.
+</ParamField>
+
+<ParamField path="merge_strategy" type="str" default="rrf">
+  `"rrf"` (Reciprocal Rank Fusion) or `"weighted"` (normalized score combination).
+</ParamField>
+
+<ParamField path="rrf_k" type="int" default="60">
+  RRF smoothing constant. Higher values reduce the impact of rank differences.
+</ParamField>
+
+<ParamField path="fts_fetch_multiplier" type="int" default="3">
+  Fetch this many times `limit` from FTS to ensure good coverage before merging.
+</ParamField>
+
+### FTSIndex
+
+The full-text search index uses SQLite FTS5 for fast keyword matching.
+
+```python
+from definable.knowledge import FTSIndex
+
+fts = FTSIndex(
+    db_path=":memory:",            # Or a file path for persistence
+    table_name="fts_documents",    # FTS5 virtual table name
+)
+await fts.initialize()
+
+# Standalone usage
+await fts.add("hash123", documents)
+results = await fts.search("Python programming", limit=10)
+# Returns: List[Tuple[doc_id, bm25_score, content]]
+```
+
+<Note>
+When used with `Knowledge`, the FTS index is populated automatically during `aadd()` — no manual indexing needed.
+</Note>
+
+### Merge Strategies
+
+**RRF (Reciprocal Rank Fusion)** — default. Combines rankings from both sources using `score = sum(1 / (k + rank))`. Works well when score distributions differ between vector and text search.
+
+**Weighted** — normalizes both score sets to [0, 1] then combines: `score = vector_weight * vector_score + text_weight * text_score`. Best when scores are comparable.
+
+## MMR (Maximal Marginal Relevance)
+
+MMR reranking balances relevance with diversity. It prevents returning near-duplicate results by penalizing documents that are too similar to already-selected ones.
+
+```python
+from definable.knowledge import Knowledge, MMRConfig
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    mmr=MMRConfig(
+        lambda_param=0.7,  # 70% relevance, 30% diversity
+    ),
+)
+```
+
+<ParamField path="lambda_param" type="float" default="0.5">
+  Balance between relevance (1.0 = pure relevance) and diversity (0.0 = maximum diversity).
+</ParamField>
+
+<ParamField path="enabled" type="bool" default="true">
+  Whether MMR reranking is active.
+</ParamField>
+
+The MMR algorithm uses greedy iterative selection:
+1. Compute relevance score for each document (cosine similarity to query embedding, or Jaccard text similarity as fallback)
+2. For each selection step: `MMR = lambda * relevance - (1 - lambda) * max_similarity_to_selected`
+3. Select the document with the highest MMR score
+
+<Note>
+MMR works best with embeddings. If documents lack embeddings, it falls back to Jaccard text similarity, which is less accurate but still provides diversity.
+</Note>
+
+## Temporal Decay
+
+Score documents lower as they age. Useful for news, social media, and other time-sensitive content.
+
+```python
+from definable.knowledge import Knowledge, TemporalDecay
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    temporal_decay=TemporalDecay(
+        half_life_days=30.0,  # Score halves every 30 days
+    ),
+)
+```
+
+<ParamField path="half_life_days" type="float" default="30.0">
+  Number of days until a document's score is halved. Smaller values = faster decay.
+</ParamField>
+
+<ParamField path="enabled" type="bool" default="true">
+  Whether temporal decay is active.
+</ParamField>
+
+### Timestamps
+
+Temporal decay reads timestamps from document metadata:
+
+```python
+from definable.knowledge import Document
+import time
+
+doc = Document(
+    content="Breaking news: ...",
+    meta_data={
+        "inserted_at": time.time(),  # Primary timestamp
+        # or "created_at": time.time()  # Fallback
+    },
+)
+```
+
+### Evergreen Documents
+
+Mark documents as evergreen to exempt them from decay:
+
+```python
+doc = Document(
+    content="Company mission statement",
+    meta_data={"evergreen": True},
+)
+```
+
+## Combining Strategies
+
+All scoring strategies compose. The search pipeline applies them in order:
+
+```
+Vector Search → Hybrid Merge → Reranker → Temporal Decay → MMR
+```
+
+```python
+from definable.knowledge import (
+    Knowledge, FTSIndex, HybridSearchConfig,
+    TemporalDecay, MMRConfig,
+)
+from definable.knowledge.reranker import CohereReranker
+from definable.vectordb import InMemoryVectorDB
+
+fts = FTSIndex()
+await fts.initialize()
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    reranker=CohereReranker(),
+    fts_index=fts,
+    hybrid_config=HybridSearchConfig(vector_weight=0.6, text_weight=0.4),
+    temporal_decay=TemporalDecay(half_life_days=14.0),
+    mmr=MMRConfig(lambda_param=0.7),
+    top_k=10,
+)
+
+# Full pipeline: vector → hybrid merge → rerank → decay → diversity
+results = await knowledge.asearch("latest AI developments")
+```
+
+## Fallback Embedder
+
+Automatically fail over across multiple embedding providers:
+
+```python
+from definable.knowledge import FallbackEmbedder
+from definable.embedder import OpenAIEmbedder, VoyageAIEmbedder
+
+embedder = FallbackEmbedder(providers=[
+    OpenAIEmbedder(),       # Primary
+    VoyageAIEmbedder(),     # Fallback
+])
+
+knowledge = Knowledge(
+    vector_db=InMemoryVectorDB(),
+    embedder=embedder,
+)
+```
+
+The fallback embedder:
+- Tries providers in order (primary first)
+- Automatically classifies errors (auth, rate limit, timeout, network)
+- Switches to the next provider on failure
+- Call `embedder.reset()` to return to the primary provider
+
+## Imports
+
+```python
+# Hybrid search
+from definable.knowledge import FTSIndex, HybridSearchConfig
+
+# Scoring
+from definable.knowledge import TemporalDecay, MMRConfig
+
+# Fallback embedder
+from definable.knowledge import FallbackEmbedder
+```

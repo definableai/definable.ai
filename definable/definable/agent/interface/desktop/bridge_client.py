@@ -10,10 +10,12 @@ Example::
         await client.click(x=500, y=400)
 """
 
+import asyncio
 import base64
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from time import time
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -131,11 +133,13 @@ class BridgeClient:
     port: int = 7777,
     token: Optional[str] = None,
     timeout: float = 30.0,
+    on_event: Optional[Callable] = None,
   ) -> None:
     self._base_url = f"http://{host}:{port}"
     self._token = token
     self._timeout = timeout
     self._client: Optional[httpx.AsyncClient] = None
+    self._on_event = on_event
 
   # --- Lifecycle ---
 
@@ -177,6 +181,7 @@ class BridgeClient:
     """POST to the bridge and return the unwrapped ``data`` field.
 
     The bridge wraps all responses in ``{"ok": true, "data": ...}``.
+    Emits a :class:`BridgeCallEvent` on every call when ``on_event`` is set.
 
     Raises:
       httpx.ConnectError: Bridge is not reachable.
@@ -184,12 +189,64 @@ class BridgeClient:
       RuntimeError: Bridge returned ``ok=false``.
     """
     client = self._get_client()
-    response = await client.post(path, json=data or {})
-    response.raise_for_status()
-    body = response.json()
-    if not body.get("ok", False):
-      raise RuntimeError(f"Bridge error: {body.get('error', 'unknown')}")
-    return body.get("data", {})
+    t0 = time()
+    status_code = 0
+    error = ""
+    try:
+      response = await client.post(path, json=data or {})
+      status_code = response.status_code
+      response.raise_for_status()
+      body = response.json()
+      if not body.get("ok", False):
+        error = body.get("error", "unknown")
+        raise RuntimeError(f"Bridge error: {error}")
+      return body.get("data", {})
+    except Exception as exc:
+      if not error:
+        error = str(exc)
+      raise
+    finally:
+      self._emit_bridge_call(path, status_code, (time() - t0) * 1000, error)
+
+  def _emit_bridge_call(self, endpoint: str, status_code: int, duration_ms: float, error: str) -> None:
+    """Fire BridgeCallEvent — best-effort, never raises."""
+    if self._on_event is None:
+      return
+    try:
+      from definable.agent.interface.desktop.events import BridgeCallEvent
+
+      event = BridgeCallEvent(
+        endpoint=endpoint,
+        status_code=status_code,
+        duration_ms=round(duration_ms, 2),
+        error=error,
+      )
+      result = self._on_event(event)
+      if asyncio.iscoroutine(result):
+        asyncio.ensure_future(result)
+    except Exception:
+      pass  # Best-effort — never kill the caller
+
+  def _emit_action(self, category: str, action: str, target: str = "", value: str = "", result: str = "", error: str = "") -> None:
+    """Fire DesktopActionEvent — best-effort, never raises."""
+    if self._on_event is None:
+      return
+    try:
+      from definable.agent.interface.desktop.events import DesktopActionEvent
+
+      event = DesktopActionEvent(
+        category=category,
+        action=action,
+        target=target,
+        value=value,
+        result=result,
+        error=error,
+      )
+      cb_result = self._on_event(event)
+      if asyncio.iscoroutine(cb_result):
+        asyncio.ensure_future(cb_result)
+    except Exception:
+      pass  # Best-effort
 
   # --- Health ---
 
@@ -223,7 +280,9 @@ class BridgeClient:
       JPEG image as raw bytes.
     """
     result = await self._post("/screen/capture", {"display": display, "region": region, "maxWidth": max_width})
-    return base64.b64decode(result["image"])
+    data = base64.b64decode(result["image"])
+    self._emit_action("screen", "screenshot", target=f"display={display}", result=f"{len(data)} bytes")
+    return data
 
   async def ocr_screen(
     self,
@@ -237,7 +296,10 @@ class BridgeClient:
     Returns:
       Dict with ``text`` (str) and ``elements`` (list of ``{text, bounds}``).
     """
-    return await self._post("/screen/ocr", {"region": region})
+    result = await self._post("/screen/ocr", {"region": region})
+    elem_count = len(result.get("elements", []))
+    self._emit_action("screen", "ocr", result=f"{elem_count} elements")
+    return result
 
   async def find_text_on_screen(self, text: str, nth: int = 0) -> Optional[ElementBounds]:
     """Find the nth occurrence of text on screen.
@@ -251,8 +313,12 @@ class BridgeClient:
     """
     try:
       result = await self._post("/screen/find_text", {"text": text, "nth": nth})
-      return ElementBounds(x=result["x"], y=result["y"], width=result["width"], height=result["height"])
+      bounds = ElementBounds(x=result["x"], y=result["y"], width=result["width"], height=result["height"])
+      cx, cy = bounds.center
+      self._emit_action("screen", "find_text", target=text, result=f"found at ({cx:.0f},{cy:.0f})")
+      return bounds
     except Exception:
+      self._emit_action("screen", "find_text", target=text, result="not found")
       return None
 
   # --- Input ---
@@ -275,6 +341,7 @@ class BridgeClient:
       modifiers: Keys held during click (e.g. ``["cmd"]``, ``["shift"]``).
     """
     await self._post("/input/click", {"x": x, "y": y, "button": button, "clicks": clicks, "modifiers": modifiers or []})
+    self._emit_action("input", "click", target=f"({x:.0f},{y:.0f})", value=f"{button} x{clicks}")
 
   async def type_text(self, text: str) -> None:
     """Type text at the current cursor position.
@@ -283,6 +350,7 @@ class BridgeClient:
       text: Text to type.
     """
     await self._post("/input/type", {"text": text})
+    self._emit_action("input", "type_text", value=text[:100])
 
   async def press_key(self, key: str, modifiers: Optional[List[str]] = None) -> None:
     """Press a key combination.
@@ -292,6 +360,8 @@ class BridgeClient:
       modifiers: Modifier keys (e.g. ``["cmd", "shift"]``).
     """
     await self._post("/input/key", {"key": key, "modifiers": modifiers or []})
+    mod_str = "+".join(modifiers) + "+" if modifiers else ""
+    self._emit_action("input", "press_key", value=f"{mod_str}{key}")
 
   async def mouse_move(self, x: float, y: float) -> None:
     """Move the mouse cursor.
@@ -301,6 +371,7 @@ class BridgeClient:
       y: Y coordinate.
     """
     await self._post("/input/mouse_move", {"x": x, "y": y})
+    self._emit_action("input", "mouse_move", target=f"({x:.0f},{y:.0f})")
 
   async def scroll(self, x: float, y: float, dx: float = 0, dy: float = -3) -> None:
     """Scroll at the given position.
@@ -312,6 +383,7 @@ class BridgeClient:
       dy: Vertical scroll delta (negative = down).
     """
     await self._post("/input/scroll", {"x": x, "y": y, "dx": dx, "dy": dy})
+    self._emit_action("input", "scroll", target=f"({x:.0f},{y:.0f})", value=f"dx={dx},dy={dy}")
 
   async def drag(self, from_x: float, from_y: float, to_x: float, to_y: float, duration: float = 0.5) -> None:
     """Drag from one position to another.
@@ -324,6 +396,7 @@ class BridgeClient:
       duration: Drag duration in seconds.
     """
     await self._post("/input/drag", {"from_x": from_x, "from_y": from_y, "to_x": to_x, "to_y": to_y, "duration": duration})
+    self._emit_action("input", "drag", target=f"({from_x:.0f},{from_y:.0f})->({to_x:.0f},{to_y:.0f})")
 
   # --- Apps ---
 
@@ -335,7 +408,7 @@ class BridgeClient:
     """
     result = await self._post("/apps/list")
     apps = result if isinstance(result, list) else result.get("apps", [])
-    return [
+    info_list = [
       AppInfo(
         name=a["name"],
         bundle_id=a.get("bundle_id", a.get("bundleId", "")),
@@ -344,6 +417,8 @@ class BridgeClient:
       )
       for a in apps
     ]
+    self._emit_action("app", "list_apps", result=f"{len(info_list)} apps")
+    return info_list
 
   async def open_app(self, name: str) -> int:
     """Launch or activate an application.
@@ -355,7 +430,9 @@ class BridgeClient:
       PID of the launched/activated process.
     """
     result = await self._post("/apps/open", {"name": name})
-    return int(result.get("pid", result.get("PID", -1)))
+    pid = int(result.get("pid", result.get("PID", -1)))
+    self._emit_action("app", "open_app", target=name, result=f"pid={pid}")
+    return pid
 
   async def quit_app(self, name: str, force: bool = False) -> None:
     """Quit an application.
@@ -365,6 +442,7 @@ class BridgeClient:
       force: If ``True``, force-quit (SIGKILL). Otherwise graceful quit.
     """
     await self._post("/apps/quit", {"name": name, "force": force})
+    self._emit_action("app", "quit_app", target=name, value="force" if force else "graceful")
 
   async def activate_app(self, name: str) -> None:
     """Bring an application to the foreground.
@@ -373,6 +451,7 @@ class BridgeClient:
       name: Application name.
     """
     await self._post("/apps/activate", {"name": name})
+    self._emit_action("app", "activate_app", target=name)
 
   async def open_url(self, url: str) -> None:
     """Open a URL in the default browser.
@@ -381,6 +460,7 @@ class BridgeClient:
       url: URL to open.
     """
     await self._post("/apps/open_url", {"url": url})
+    self._emit_action("app", "open_url", value=url)
 
   async def open_file(self, path: str) -> None:
     """Open a file with its default application.
@@ -389,6 +469,7 @@ class BridgeClient:
       path: Absolute path to the file.
     """
     await self._post("/apps/open_file", {"path": path})
+    self._emit_action("app", "open_file", target=path)
 
   # --- Windows ---
 
@@ -416,6 +497,7 @@ class BridgeClient:
           minimized=w.get("minimized", False),
         )
       )
+    self._emit_action("window", "list_windows", result=f"{len(windows)} windows")
     return windows
 
   async def focus_window(self, window_id: Optional[int] = None, title: Optional[str] = None) -> None:
@@ -426,6 +508,7 @@ class BridgeClient:
       title: Window title substring to match.
     """
     await self._post("/windows/focus", {"window_id": window_id, "title": title})
+    self._emit_action("window", "focus_window", target=title or str(window_id or ""))
 
   async def resize_window(self, window_id: int, x: float, y: float, width: float, height: float) -> None:
     """Resize and reposition a window.
@@ -438,6 +521,7 @@ class BridgeClient:
       height: New height.
     """
     await self._post("/windows/resize", {"window_id": window_id, "x": x, "y": y, "width": width, "height": height})
+    self._emit_action("window", "resize_window", target=str(window_id), value=f"{width:.0f}x{height:.0f}")
 
   async def close_window(self, window_id: int) -> None:
     """Close a window.
@@ -446,6 +530,7 @@ class BridgeClient:
       window_id: Window ID.
     """
     await self._post("/windows/close", {"window_id": window_id})
+    self._emit_action("window", "close_window", target=str(window_id))
 
   # --- Accessibility ---
 
@@ -457,7 +542,9 @@ class BridgeClient:
     """
     try:
       result = await self._post("/ax/get_focused_element")
-      return _parse_ui_element(result)
+      elem = _parse_ui_element(result)
+      self._emit_action("accessibility", "get_focused_element", result=f"{elem.role} '{elem.title}'")
+      return elem
     except Exception:
       return None
 
@@ -471,7 +558,9 @@ class BridgeClient:
     Returns:
       Nested dict representing the UI tree.
     """
-    return await self._post("/ax/get_ui_tree", {"app": app, "depth": depth})
+    result = await self._post("/ax/get_ui_tree", {"app": app, "depth": depth})
+    self._emit_action("accessibility", "get_ui_tree", target=app, value=f"depth={depth}")
+    return result
 
   async def find_ui_element(self, app: str, role: Optional[str] = None, title: Optional[str] = None) -> Optional[UIElement]:
     """Find a UI element in an application.
@@ -486,8 +575,11 @@ class BridgeClient:
     """
     try:
       result = await self._post("/ax/find_element", {"app": app, "role": role, "title": title})
-      return _parse_ui_element(result)
+      elem = _parse_ui_element(result)
+      self._emit_action("accessibility", "find_element", target=app, value=f"role={role} title={title}", result=f"{elem.role} '{elem.title}'")
+      return elem
     except Exception:
+      self._emit_action("accessibility", "find_element", target=app, value=f"role={role} title={title}", result="not found")
       return None
 
   async def click_ui_element(self, app: str, role: Optional[str] = None, title: Optional[str] = None) -> None:
@@ -499,6 +591,7 @@ class BridgeClient:
       title: Element title or label.
     """
     await self._post("/ax/perform_action", {"app": app, "role": role, "title": title, "action": "AXPress"})
+    self._emit_action("accessibility", "click_element", target=app, value=f"role={role} title={title}")
 
   async def set_ui_value(self, app: str, role: str, title: str, value: str) -> None:
     """Set the value of a UI element (e.g. a text field).
@@ -510,6 +603,7 @@ class BridgeClient:
       value: New value to set.
     """
     await self._post("/ax/set_value", {"app": app, "role": role, "title": title, "value": value})
+    self._emit_action("accessibility", "set_value", target=app, value=f"{role} '{title}' = '{value[:50]}'")
 
   # --- AppleScript ---
 
@@ -522,7 +616,10 @@ class BridgeClient:
     Returns:
       Dict with ``output`` (str) and ``error`` (str or None).
     """
-    return await self._post("/applescript/run", {"script": script})
+    result = await self._post("/applescript/run", {"script": script})
+    error = result.get("error", "")
+    self._emit_action("applescript", "run", value=script[:100], result=result.get("output", "")[:100], error=error or "")
+    return result
 
   # --- Shell ---
 
@@ -551,7 +648,12 @@ class BridgeClient:
       data["env"] = env
     if timeout is not None:
       data["timeout"] = timeout
-    return await self._post("/shell/run", data)
+    result = await self._post("/shell/run", data)
+    cmd_str = " ".join(command)[:100]
+    exit_code = result.get("exit_code", "?")
+    stderr = "" if result.get("success") else result.get("stderr", "")[:100]
+    self._emit_action("shell", "run", value=cmd_str, result=f"exit={exit_code}", error=stderr)
+    return result
 
   # --- Camera ---
 
@@ -562,7 +664,9 @@ class BridgeClient:
       List of dicts with ``id``, ``name``, ``position``.
     """
     result = await self._post("/camera/list")
-    return result if isinstance(result, list) else []
+    devices = result if isinstance(result, list) else []
+    self._emit_action("camera", "list_devices", result=f"{len(devices)} cameras")
+    return devices
 
   async def camera_snap(
     self,
@@ -590,7 +694,10 @@ class BridgeClient:
     if out_path is not None:
       payload["out_path"] = out_path
     result = await self._post("/camera/snap", payload)
-    return base64.b64decode(result["image"])
+    data = base64.b64decode(result["image"])
+    target = out_path or facing
+    self._emit_action("camera", "snap", target=target, result=f"{len(data)} bytes")
+    return data
 
   async def camera_clip(
     self,
@@ -610,7 +717,7 @@ class BridgeClient:
     Returns:
       Dict with ``path``, ``duration_ms``, ``has_audio``.
     """
-    return await self._post(
+    result = await self._post(
       "/camera/clip",
       {
         "facing": facing,
@@ -619,6 +726,8 @@ class BridgeClient:
         "out_path": out_path,
       },
     )
+    self._emit_action("camera", "clip", target=facing, value=f"{duration_ms}ms", result=result.get("path", ""))
+    return result
 
   # --- Screen Recording ---
 
@@ -642,7 +751,7 @@ class BridgeClient:
     Returns:
       Dict with ``path``, ``has_audio``.
     """
-    return await self._post(
+    result = await self._post(
       "/screen/record",
       {
         "screen_index": screen_index,
@@ -652,6 +761,8 @@ class BridgeClient:
         "out_path": out_path,
       },
     )
+    self._emit_action("screen", "record", target=f"display={screen_index}", value=f"{duration_ms}ms", result=result.get("path", ""))
+    return result
 
   # --- Files ---
 
@@ -666,7 +777,9 @@ class BridgeClient:
       List of dicts with ``name``, ``path``, ``kind``, ``size``.
     """
     result = await self._post("/files/list", {"path": path, "recursive": recursive})
-    return result if isinstance(result, list) else result.get("files", [])
+    files = result if isinstance(result, list) else result.get("files", [])
+    self._emit_action("file", "list_files", target=path, result=f"{len(files)} files")
+    return files
 
   async def read_file(self, path: str) -> str:
     """Read a file as text.
@@ -678,7 +791,9 @@ class BridgeClient:
       File content as a string.
     """
     result = await self._post("/files/read", {"path": path})
-    return str(result.get("content", ""))
+    content = str(result.get("content", ""))
+    self._emit_action("file", "read_file", target=path, result=f"{len(content)} chars")
+    return content
 
   async def write_file(self, path: str, content: str) -> None:
     """Write text content to a file.
@@ -688,6 +803,7 @@ class BridgeClient:
       content: Text content to write.
     """
     await self._post("/files/write", {"path": path, "content": content})
+    self._emit_action("file", "write_file", target=path, result=f"{len(content)} chars")
 
   async def move_file(self, from_path: str, to_path: str) -> None:
     """Move or rename a file.
@@ -697,6 +813,7 @@ class BridgeClient:
       to_path: Destination path.
     """
     await self._post("/files/move", {"from": from_path, "to": to_path})
+    self._emit_action("file", "move_file", target=from_path, value=to_path)
 
   async def delete_file(self, path: str, to_trash: bool = True) -> None:
     """Delete a file.
@@ -706,6 +823,7 @@ class BridgeClient:
       to_trash: Move to Trash (default) instead of permanent deletion.
     """
     await self._post("/files/delete", {"path": path, "toTrash": to_trash})
+    self._emit_action("file", "delete_file", target=path, value="trash" if to_trash else "permanent")
 
   async def file_info(self, path: str) -> Dict[str, Any]:
     """Get metadata for a file.
@@ -716,7 +834,9 @@ class BridgeClient:
     Returns:
       Dict with ``size``, ``created``, ``modified``, ``kind``.
     """
-    return await self._post("/files/info", {"path": path})
+    result = await self._post("/files/info", {"path": path})
+    self._emit_action("file", "file_info", target=path)
+    return result
 
   # --- Clipboard ---
 
@@ -727,7 +847,9 @@ class BridgeClient:
       Current clipboard text, or empty string if not text.
     """
     result = await self._post("/clipboard/get")
-    return str(result.get("text", ""))
+    text = str(result.get("text", ""))
+    self._emit_action("clipboard", "get", result=f"{len(text)} chars")
+    return text
 
   async def set_clipboard(self, text: str) -> None:
     """Set the clipboard text content.
@@ -736,6 +858,7 @@ class BridgeClient:
       text: Text to put on the clipboard.
     """
     await self._post("/clipboard/set", {"text": text})
+    self._emit_action("clipboard", "set", value=text[:100])
 
   # --- System ---
 
@@ -745,7 +868,9 @@ class BridgeClient:
     Returns:
       Dict with ``hostname``, ``os_version``, ``cpu``, ``memory_gb``.
     """
-    return await self._post("/system/info")
+    result = await self._post("/system/info")
+    self._emit_action("system", "info", result=result.get("hostname", ""))
+    return result
 
   async def get_volume(self) -> int:
     """Get system output volume level (0-100).
@@ -754,7 +879,9 @@ class BridgeClient:
       Current volume as integer 0-100.
     """
     result = await self._post("/system/volume")
-    return int(result.get("volume", 0))
+    vol = int(result.get("volume", 0))
+    self._emit_action("system", "get_volume", result=str(vol))
+    return vol
 
   async def set_volume(self, volume: int) -> None:
     """Set system output volume level.
@@ -763,6 +890,7 @@ class BridgeClient:
       volume: Volume level 0-100.
     """
     await self._post("/system/set_volume", {"volume": max(0, min(100, volume))})
+    self._emit_action("system", "set_volume", value=str(volume))
 
   async def get_battery(self) -> Dict[str, Any]:
     """Get battery status.
@@ -770,7 +898,9 @@ class BridgeClient:
     Returns:
       Dict with ``level`` (int 0-100), ``charging`` (bool), ``time_remaining`` (int minutes or -1).
     """
-    return await self._post("/system/battery")
+    result = await self._post("/system/battery")
+    self._emit_action("system", "get_battery", result=f"{result.get('level', '?')}%")
+    return result
 
   async def send_notification(self, title: str, message: str) -> None:
     """Send a macOS notification.
@@ -780,6 +910,7 @@ class BridgeClient:
       message: Notification body.
     """
     await self._post("/notifications/send", {"title": title, "message": message})
+    self._emit_action("system", "send_notification", target=title, value=message[:100])
 
   async def set_dark_mode(self, enabled: bool) -> None:
     """Enable or disable dark mode.
@@ -788,10 +919,12 @@ class BridgeClient:
       enabled: ``True`` for dark mode, ``False`` for light mode.
     """
     await self._post("/system/set_dark_mode", {"enabled": enabled})
+    self._emit_action("system", "set_dark_mode", value="on" if enabled else "off")
 
   async def lock_screen(self) -> None:
     """Lock the screen."""
     await self._post("/system/lock")
+    self._emit_action("system", "lock_screen")
 
 
 # ---------------------------------------------------------------------------

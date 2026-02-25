@@ -6,6 +6,7 @@ Yields RunOutputEvent instances throughout execution.
 
 import asyncio
 from dataclasses import dataclass, field
+from time import time
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, Optional
 
 from definable.agent.cancellation import CancellationToken
@@ -13,6 +14,8 @@ from definable.model.message import Message
 from definable.model.response import ToolExecution
 from definable.agent.events import (
   BaseRunOutputEvent,
+  CompressionCompletedEvent,
+  CompressionStartedEvent,
   ModelCallCompletedEvent,
   ModelCallStartedEvent,
   RunCompletedEvent,
@@ -155,7 +158,28 @@ class AgentLoop:
         # 3. Compression check
         if self._compression_manager is not None:
           if await self._compression_manager.ashould_compress(self._messages, self._tools_dicts, model=self._model):
+            uncompressed_count = len([m for m in self._messages if m.role == "tool" and m.compressed_content is None])
+            yield CompressionStartedEvent(
+              run_id=self._context.run_id,
+              session_id=self._context.session_id,
+              agent_id=self._agent_id,
+              agent_name=self._agent_name,
+              tool_results_count=uncompressed_count,
+            )
+            compress_start = time()
             await self._compression_manager.acompress(self._messages)
+            compress_duration = (time() - compress_start) * 1000
+            stats = self._compression_manager.stats
+            yield CompressionCompletedEvent(
+              run_id=self._context.run_id,
+              session_id=self._context.session_id,
+              agent_id=self._agent_id,
+              agent_name=self._agent_name,
+              tool_results_compressed=stats.get("tool_results_compressed", 0),
+              original_size=stats.get("original_size", 0),
+              compressed_size=stats.get("compressed_size", 0),
+              duration_ms=compress_duration,
+            )
 
         # 4. Model call (streaming or non-streaming)
         started_evt = self._make_model_call_started()
