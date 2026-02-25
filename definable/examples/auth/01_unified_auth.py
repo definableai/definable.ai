@@ -96,7 +96,7 @@ if _telegram_ids:
 if _discord_ids:
   _providers.append(AllowlistAuth(user_ids=_discord_ids, platforms={"discord"}))  # type: ignore[arg-type]
 
-agent.auth = CompositeAuth(*_providers)
+agent.auth = CompositeAuth(*_providers)  # type: ignore[assignment]
 
 
 # ---------------------------------------------------------------------------

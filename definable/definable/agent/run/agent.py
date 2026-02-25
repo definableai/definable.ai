@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 if TYPE_CHECKING:
   from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
+  from definable.agent.interface.desktop.events import BridgeCallEvent, DesktopActionEvent
   from definable.agent.interface.gateway import (
     InterfaceErrorEvent,
     InterfaceRestartedEvent,
@@ -199,6 +200,10 @@ class RunEvent(str, Enum):
   interface_stopped = "InterfaceStopped"
   interface_restarted = "InterfaceRestarted"
   interface_error = "InterfaceError"
+
+  # Desktop bridge events
+  bridge_call = "BridgeCall"
+  desktop_action = "DesktopAction"
 
 
 @dataclass
@@ -681,6 +686,8 @@ RunOutputEvent = Union[
   CustomEvent,
   "GuardrailCheckedEvent",
   "GuardrailBlockedEvent",
+  "BridgeCallEvent",
+  "DesktopActionEvent",
 ]
 
 # Map event string to dataclass

@@ -179,36 +179,36 @@ async def generate_events():
 
   # Run 1: Multi-tool parallel — weather for multiple cities
   r1 = await agent.arun("What's the weather in Tokyo, London, and New York right now?")
-  print(f"[1] Weather (3 cities): {r1.content[:100]}...")
+  print(f"[1] Weather (3 cities): {(r1.content or '')[:100]}...")
 
   # Run 2: Math + currency conversion
   r2 = await agent.arun("Calculate 2^16, the square root of 144, and convert $1000 USD to EUR and JPY.")
-  print(f"[2] Math + Currency: {r2.content[:100]}...")
+  print(f"[2] Math + Currency: {(r2.content or '')[:100]}...")
 
   # Run 3: Multi-turn with memory — population query then follow-up
   r3 = await agent.arun("What's the population of Japan, India, Brazil, and Germany?")
-  print(f"[3] Populations: {r3.content[:100]}...")
+  print(f"[3] Populations: {(r3.content or '')[:100]}...")
 
   r4 = await agent.arun(
     "Which of those countries I just asked about has the largest population? And what's the total combined population?",
     messages=r3.messages,
   )
-  print(f"[4] Follow-up: {r4.content[:100]}...")
+  print(f"[4] Follow-up: {(r4.content or '')[:100]}...")
 
   # Run 4: Database + report (complex multi-step)
   r5 = await agent.arun("Look up our company's revenue, customer data, and churn metrics. Then generate a comprehensive Q4 performance report.")
-  print(f"[5] DB + Report: {r5.content[:100]}...")
+  print(f"[5] DB + Report: {(r5.content or '')[:100]}...")
 
   # Run 5: Translation chain (multiple languages)
   r6 = await agent.arun("Translate 'Our quarterly results exceeded all expectations' into Spanish, French, Japanese, and German.")
-  print(f"[6] Translations (4 langs): {r6.content[:100]}...")
+  print(f"[6] Translations (4 langs): {(r6.content or '')[:100]}...")
 
   # Run 6: Structured output
   r7 = await agent.arun(
     "Get the weather in Paris and analyze it. Return a structured city analysis.",
     output_schema=CityAnalysis,
   )
-  print(f"[7] Structured (CityAnalysis): {r7.content[:100]}...")
+  print(f"[7] Structured (CityAnalysis): {(r7.content or '')[:100]}...")
 
   # Run 7: Complex analysis — multiple DB queries + calculations + report
   r8 = await agent.arun(
@@ -216,29 +216,29 @@ async def generate_events():
     "employee. Also convert our total Q4 revenue of $12.3M to EUR and GBP. "
     "Then generate a headcount efficiency report."
   )
-  print(f"[8] Complex analysis: {r8.content[:100]}...")
+  print(f"[8] Complex analysis: {(r8.content or '')[:100]}...")
 
   # Run 8: Another structured output
   r9 = await agent.arun(
     "Search for our revenue, employee count, products, and customer data. Give me a structured company snapshot with a health score from 0-10.",
     output_schema=CompanySnapshot,
   )
-  print(f"[9] Structured (CompanySnapshot): {r9.content[:100]}...")
+  print(f"[9] Structured (CompanySnapshot): {(r9.content or '')[:100]}...")
 
   # Run 9: Weather + translate combo
   r10 = await agent.arun("Check the weather in Berlin and Mumbai, then translate the results to Portuguese.")
-  print(f"[10] Weather + Translate: {r10.content[:100]}...")
+  print(f"[10] Weather + Translate: {(r10.content or '')[:100]}...")
 
   # Run 10: Pure calculation chain
   r11 = await agent.arun("Calculate these: (1) 15% of 12300000, (2) 12300000 / 342, (3) 1247 * 0.89, (4) (12300000 - 10100000) / 10100000 * 100")
-  print(f"[11] Calc chain: {r11.content[:100]}...")
+  print(f"[11] Calc chain: {(r11.content or '')[:100]}...")
 
   # Run 11: Multi-turn follow-up on the analysis
   r12 = await agent.arun(
     "Based on our earlier conversation about Q4 revenue, generate a report comparing Q4 vs Q3 performance and convert the revenue difference to JPY.",
     messages=r8.messages,
   )
-  print(f"[12] Follow-up analysis: {r12.content[:100]}...")
+  print(f"[12] Follow-up analysis: {(r12.content or '')[:100]}...")
 
   print("\n--- Done. 12 runs with diverse tool calls. ---")
 

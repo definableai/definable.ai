@@ -161,7 +161,7 @@ class RequestLoggerPhase(BasePhase):
   _name = "request_logger"
 
   async def execute(self, state: LoopState) -> AsyncGenerator[Tuple[LoopState, Optional[BaseRunOutputEvent]], None]:
-    preview = (state.raw_instruction or "")[:80]
+    preview = str(state.raw_instruction or "")[:80]
     print(f"  [RequestLogger] run_id={state.run_id[:8]}... input='{preview}'")
     state.extra["request_logged"] = True
     yield state, None

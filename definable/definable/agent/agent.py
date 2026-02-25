@@ -178,7 +178,7 @@ class Agent:
     # ── Media ────────────────────────────────────────────────
     audio_transcriber: Union[bool, Any, None] = None,
     # ── Support ─────────────────────────────────────────────
-    readers: Optional[List["BaseReader"]] = None,
+    readers: Union[List["BaseReader"], bool, None] = None,
     guardrails: Optional["Guardrails"] = None,
   ):
     """
