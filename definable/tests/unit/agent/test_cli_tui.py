@@ -9,6 +9,8 @@ Phase 6 tests: footer bar, prompt spinner, Ctrl+C/L confirmation, status indicat
 """
 
 import pytest
+
+pytest.importorskip("textual")
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from definable.agent.interface.cli.config import CLIConfig
@@ -1267,7 +1269,7 @@ class TestPromptInputHistory:
     assert pi.read_only is True
     pi.set_enabled(True)
     assert pi._enabled is True
-    assert pi.read_only is False
+    assert pi.read_only is False  # type: ignore[unreachable]
 
 
 # ── System Message Widget ───────────────────────────────────────────
@@ -1595,7 +1597,7 @@ class TestMainScreenSessions:
     screen._conversation.rebuild_from_messages = AsyncMock()
     screen._session_tabs = MagicMock()
     screen._status_bar = MagicMock()
-    screen.notify = MagicMock()
+    screen.notify = MagicMock()  # type: ignore[method-assign]
 
     old_counter = screen._session_counter
     chat_id = await screen._create_session()
@@ -1616,7 +1618,7 @@ class TestMainScreenSessions:
     screen._conversation.rebuild_from_messages = AsyncMock()
     screen._session_tabs = MagicMock()
     screen._status_bar = MagicMock()
-    screen.notify = MagicMock()
+    screen.notify = MagicMock()  # type: ignore[method-assign]
 
     chat_id = await screen._create_session(name="Research")
     assert screen._session_names[chat_id] == "Research"
@@ -1629,7 +1631,7 @@ class TestMainScreenSessions:
     iface = CLIInterface(mode="repl")
     screen = MainScreen(interface=iface, model_name="gpt-4o")
     screen._conversation = MagicMock()
-    screen.notify = MagicMock()
+    screen.notify = MagicMock()  # type: ignore[method-assign]
 
     await screen._switch_session("cli")  # same as active
     # notify should NOT have been called (no switch happened)
@@ -1649,7 +1651,7 @@ class TestMainScreenSessions:
     screen._conversation.rebuild_from_messages = AsyncMock()
     screen._session_tabs = MagicMock()
     screen._status_bar = MagicMock()
-    screen.notify = MagicMock()
+    screen.notify = MagicMock()  # type: ignore[method-assign]
 
     await screen._switch_session("cli-2")
     assert screen._active_chat_id == "cli-2"

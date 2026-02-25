@@ -18,6 +18,10 @@ import pytest
 
 from definable.knowledge.chunker.semantic import SemanticChunker
 from definable.knowledge.document import Document
+from definable.knowledge.embedder.base import Embedder
+
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -25,15 +29,20 @@ from definable.knowledge.document import Document
 # ---------------------------------------------------------------------------
 
 
-class MockEmbedder:
+@dataclass
+class MockEmbedder(Embedder):
   """Returns fixed embeddings for testing semantic boundaries."""
 
-  def __init__(self, embeddings=None):
-    self._embeddings = embeddings or {}
-    self._default_dim = 3
-    self._call_count = 0
+  dimensions: int = 3
+  _embeddings: Dict[str, List[float]] = field(default_factory=dict)
+  _call_count: int = 0
 
-  def get_embedding(self, text: str) -> list:
+  def __init__(self, embeddings: Optional[Dict[str, List[float]]] = None, **kwargs: Any):
+    self._embeddings = embeddings or {}
+    self._call_count = 0
+    self.dimensions = 3
+
+  def get_embedding(self, text: str) -> List[float]:
     self._call_count += 1
     if text in self._embeddings:
       return self._embeddings[text]
@@ -41,31 +50,74 @@ class MockEmbedder:
     h = hash(text) % 1000
     return [float(h % 10) / 10, float((h // 10) % 10) / 10, float((h // 100) % 10) / 10]
 
+  def get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
+    return self.get_embedding(text), None
 
-class SimilarEmbedder:
+  async def async_get_embedding(self, text: str) -> List[float]:
+    return self.get_embedding(text)
+
+  async def async_get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
+    return self.get_embedding(text), None
+
+
+@dataclass
+class SimilarEmbedder(Embedder):
   """Returns the same embedding for all text — everything is similar."""
 
-  def get_embedding(self, text: str) -> list:
+  dimensions: int = 3
+
+  def get_embedding(self, text: str) -> List[float]:
     return [1.0, 0.0, 0.0]
 
+  def get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
+    return self.get_embedding(text), None
 
-class DissimilarEmbedder:
+  async def async_get_embedding(self, text: str) -> List[float]:
+    return self.get_embedding(text)
+
+  async def async_get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
+    return self.get_embedding(text), None
+
+
+@dataclass
+class DissimilarEmbedder(Embedder):
   """Returns alternating orthogonal embeddings — everything is dissimilar."""
 
-  def __init__(self):
-    self._count = 0
+  dimensions: int = 3
+  _count: int = 0
 
-  def get_embedding(self, text: str) -> list:
+  def get_embedding(self, text: str) -> List[float]:
     self._count += 1
     if self._count % 2 == 0:
       return [1.0, 0.0, 0.0]
     return [0.0, 1.0, 0.0]
 
+  def get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
+    return self.get_embedding(text), None
 
-class FailingEmbedder:
+  async def async_get_embedding(self, text: str) -> List[float]:
+    return self.get_embedding(text)
+
+  async def async_get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
+    return self.get_embedding(text), None
+
+
+@dataclass
+class FailingEmbedder(Embedder):
   """Raises an error on get_embedding."""
 
-  def get_embedding(self, text: str) -> list:
+  dimensions: int = 3
+
+  def get_embedding(self, text: str) -> List[float]:
+    raise RuntimeError("Embedding service unavailable")
+
+  def get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
+    raise RuntimeError("Embedding service unavailable")
+
+  async def async_get_embedding(self, text: str) -> List[float]:
+    raise RuntimeError("Embedding service unavailable")
+
+  async def async_get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
     raise RuntimeError("Embedding service unavailable")
 
 

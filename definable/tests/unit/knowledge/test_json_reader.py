@@ -97,6 +97,7 @@ class TestJSONReaderFile:
     path = write_json({"key": "value"})
     reader = JSONReader()
     docs = reader.read(path)
+    assert docs[0].source is not None
     assert str(path) in docs[0].source
 
   def test_array_items_indexed(self):
@@ -346,6 +347,7 @@ class TestJSONReaderNaming:
   def test_name_fallback_no_source(self):
     reader = JSONReader()
     docs = reader.read_string('[{"a": 1}]', source="")
+    assert docs[0].name is not None
     assert "json_0" in docs[0].name
 
 

@@ -92,6 +92,7 @@ class TestToolPolicyGuardrail:
     guardrail = ToolPolicyGuardrail(ToolPolicy(mode="allowlist", allowed_tools={"search"}))
     result = await guardrail.check("delete_file", {}, context)
     assert result.action == "block"
+    assert result.message is not None
     assert "not in the allowlist" in result.message
 
   @pytest.mark.asyncio
@@ -105,6 +106,7 @@ class TestToolPolicyGuardrail:
     guardrail = ToolPolicyGuardrail(ToolPolicy(mode="full", block_dangerous=True))
     result = await guardrail.check("shell_command", {}, context)
     assert result.action == "block"
+    assert result.message is not None
     assert "dangerous" in result.message
 
   @pytest.mark.asyncio

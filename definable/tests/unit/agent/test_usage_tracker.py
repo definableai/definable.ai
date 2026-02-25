@@ -64,7 +64,7 @@ class TestUsageTracker:
     assert tracker.last_run is None
     tracker.record_run(Metrics(input_tokens=10, output_tokens=5, total_tokens=15, cost=0.001))
     assert tracker.last_run is not None
-    assert tracker.last_run.input_tokens == 10
+    assert tracker.last_run.input_tokens == 10  # type: ignore[unreachable]
 
   def test_run_count(self):
     tracker = UsageTracker()

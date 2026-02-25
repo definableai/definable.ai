@@ -112,7 +112,7 @@ class TestResilientModelInvoke:
     assert result.content == "ok"
 
   def test_key_rotated_event_emitted(self):
-    events = []
+    events: list[Any] = []
     inner = FakeModel()
     inner._invoke_side_effect = [
       ModelRateLimitError("rate limited"),
@@ -136,7 +136,7 @@ class TestResilientModelInvoke:
     assert model.id == "fallback"
 
   def test_failover_event_emitted(self):
-    events = []
+    events: list[Any] = []
     primary = FakeModel(id="primary")
     primary._invoke_side_effect = ModelProviderError("down", status_code=500)
     fallback = FakeModel(id="fallback")

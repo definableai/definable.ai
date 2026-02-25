@@ -128,7 +128,7 @@ class TestRegistryLoading:
     reg = PluginRegistry()
     alpha = AlphaPlugin()
     reg.add(alpha)
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     assert reg.is_loaded("alpha")
     assert alpha.loaded is True
 
@@ -137,7 +137,7 @@ class TestRegistryLoading:
     reg = PluginRegistry()
     reg.add(BetaPlugin())
     reg.add(AlphaPlugin())
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     # Both should be loaded (alpha first due to dep)
     assert reg.loaded_names == ["alpha", "beta"]
 
@@ -147,7 +147,7 @@ class TestRegistryLoading:
     reg.add(GammaPlugin())
     reg.add(AlphaPlugin())
     reg.add(BetaPlugin())
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     assert reg.loaded_names == ["alpha", "beta", "gamma"]
 
   @pytest.mark.asyncio
@@ -155,8 +155,8 @@ class TestRegistryLoading:
     reg = PluginRegistry()
     alpha = AlphaPlugin()
     reg.add(alpha)
-    await reg.load_all(None)
-    await reg.unload_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
+    await reg.unload_all(None)  # type: ignore[arg-type]
     assert not reg.is_loaded("alpha")
     assert alpha.loaded is False
 
@@ -164,7 +164,7 @@ class TestRegistryLoading:
   async def test_load_one(self):
     reg = PluginRegistry()
     reg.add(AlphaPlugin())
-    await reg.load_one("alpha", None)
+    await reg.load_one("alpha", None)  # type: ignore[arg-type]
     assert reg.is_loaded("alpha")
 
   @pytest.mark.asyncio
@@ -172,20 +172,20 @@ class TestRegistryLoading:
     reg = PluginRegistry()
     reg.add(BetaPlugin())
     with pytest.raises(ValueError, match="requires"):
-      await reg.load_one("beta", None)
+      await reg.load_one("beta", None)  # type: ignore[arg-type]
 
   @pytest.mark.asyncio
   async def test_load_one_not_registered(self):
     reg = PluginRegistry()
     with pytest.raises(KeyError, match="not registered"):
-      await reg.load_one("nope", None)
+      await reg.load_one("nope", None)  # type: ignore[arg-type]
 
   @pytest.mark.asyncio
   async def test_unload_one(self):
     reg = PluginRegistry()
     reg.add(AlphaPlugin())
-    await reg.load_all(None)
-    await reg.unload_one("alpha", None)
+    await reg.load_all(None)  # type: ignore[arg-type]
+    await reg.unload_one("alpha", None)  # type: ignore[arg-type]
     assert not reg.is_loaded("alpha")
 
   @pytest.mark.asyncio
@@ -193,9 +193,9 @@ class TestRegistryLoading:
     reg = PluginRegistry()
     reg.add(AlphaPlugin())
     reg.add(BetaPlugin())
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     with pytest.raises(RuntimeError, match="depend on it"):
-      await reg.unload_one("alpha", None)
+      await reg.unload_one("alpha", None)  # type: ignore[arg-type]
 
   @pytest.mark.asyncio
   async def test_load_idempotent(self):
@@ -203,9 +203,9 @@ class TestRegistryLoading:
     reg = PluginRegistry()
     alpha = AlphaPlugin()
     reg.add(alpha)
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     # Load again should not raise
-    await reg.load_one("alpha", None)
+    await reg.load_one("alpha", None)  # type: ignore[arg-type]
     assert reg.is_loaded("alpha")
 
 
@@ -215,7 +215,7 @@ class TestRegistryValidation:
     reg = PluginRegistry()
     reg.add(BetaPlugin())  # requires "alpha" which isn't registered
     with pytest.raises(ValueError, match="requires"):
-      await reg.load_all(None)
+      await reg.load_all(None)  # type: ignore[arg-type]
 
   @pytest.mark.asyncio
   async def test_conflict_detection(self):
@@ -223,7 +223,7 @@ class TestRegistryValidation:
     reg.add(AlphaPlugin())
     reg.add(ConflictPlugin())
     with pytest.raises(ValueError, match="conflicts"):
-      await reg.load_all(None)
+      await reg.load_all(None)  # type: ignore[arg-type]
 
   @pytest.mark.asyncio
   async def test_shared_modifies_warns(self, capsys):
@@ -231,7 +231,7 @@ class TestRegistryValidation:
     reg = PluginRegistry()
     reg.add(SharedModPlugin("mod-a"))
     reg.add(SharedModPlugin("mod-b"))
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     captured = capsys.readouterr()
     assert "Multiple plugins modify" in captured.out
 
@@ -269,7 +269,7 @@ class TestRegistryCycleDetection:
     reg.add(CycA())
     reg.add(CycB())
     with pytest.raises(ValueError, match="cycle"):
-      await reg.load_all(None)
+      await reg.load_all(None)  # type: ignore[arg-type]
 
 
 class TestRegistryEnableDisable:
@@ -284,7 +284,7 @@ class TestRegistryEnableDisable:
     reg = PluginRegistry()
     reg.add(AlphaPlugin())
     reg.disable("alpha")
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     assert not reg.is_loaded("alpha")
 
   def test_enable(self):
@@ -303,7 +303,7 @@ class TestRegistryEnableDisable:
     reg.add(ConflictPlugin())
     reg.disable("conflict")
     # Should not raise — conflict plugin is disabled
-    await reg.load_all(None)
+    await reg.load_all(None)  # type: ignore[arg-type]
     assert reg.is_loaded("alpha")
     assert reg.is_loaded("beta")
 

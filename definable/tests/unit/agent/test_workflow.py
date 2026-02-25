@@ -73,7 +73,7 @@ def _make_mock_team(name: str = "mock_team", response: str = "team response") ->
 class TestStepStatus:
   def test_values(self):
     assert StepStatus.pending == "pending"
-    assert StepStatus.running == "running"
+    assert StepStatus.running == "running"  # type: ignore[unreachable]
     assert StepStatus.completed == "completed"
     assert StepStatus.failed == "failed"
     assert StepStatus.skipped == "skipped"
@@ -729,7 +729,7 @@ class TestLoop:
     loop = Loop(
       name="async_loop",
       steps=[Step(name="step", executor=AsyncMock(return_value="ok"))],
-      end_condition=async_condition,
+      end_condition=async_condition,  # type: ignore[arg-type]
       max_iterations=10,
     )
     si = StepInput(input="test")
@@ -872,7 +872,7 @@ class TestCondition:
 
     cond = Condition(
       name="async_gate",
-      condition=async_check,
+      condition=async_check,  # type: ignore[arg-type]
       true_steps=Step(name="true_step", agent=agent),
     )
     si = StepInput(input="yes")
@@ -1031,7 +1031,7 @@ class TestRouter:
 
     router = Router(
       name="async",
-      selector=async_selector,
+      selector=async_selector,  # type: ignore[arg-type]
       routes={"route_a": Step(name="a", agent=agent)},
     )
     si = StepInput(input="test")
@@ -1258,7 +1258,7 @@ class TestWorkflow:
 
     workflow = Workflow(
       name="error-test",
-      steps=42,  # type: ignore[arg-type] — invalid steps type
+      steps=42,  # type: ignore[arg-type]  # invalid steps type
     )
     workflow.events.on(object, lambda e: events.append(e))
 

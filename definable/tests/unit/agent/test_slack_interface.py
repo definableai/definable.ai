@@ -1,5 +1,6 @@
 """Tests for the Slack interface implementation."""
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -91,8 +92,8 @@ class TestSlackConfig:
   def test_with_updates(self):
     config = SlackConfig(bot_token="xoxb-test", app_token="xapp-test")
     updated = config.with_updates(typing_reaction="brain")
-    assert updated.typing_reaction == "brain"
-    assert config.typing_reaction == "hourglass_flowing_sand"  # original unchanged
+    assert updated.typing_reaction == "brain"  # type: ignore[attr-defined]
+    assert config.typing_reaction == "hourglass_flowing_sand"  # type: ignore[attr-defined]  # original unchanged
 
   def test_events_path_default(self):
     config = SlackConfig(bot_token="xoxb-test", app_token="xapp-test")
@@ -593,7 +594,7 @@ class TestSendResponse:
   def _make_msg(self, **overrides):
     from definable.agent.interface.message import InterfaceMessage
 
-    defaults = {
+    defaults: dict = {
       "platform": "slack",
       "platform_user_id": "U123",
       "platform_chat_id": "1.0",
@@ -607,7 +608,7 @@ class TestSendResponse:
       },
     }
     defaults.update(overrides)
-    return InterfaceMessage(**defaults)
+    return InterfaceMessage(**defaults)  # type: ignore[arg-type]
 
   @pytest.mark.asyncio
   async def test_send_text_response(self, interface):
@@ -1899,7 +1900,7 @@ class TestShortcutDispatch:
   @pytest.mark.asyncio
   async def test_unhandled_shortcut_no_error(self, interface):
     shortcut = {"callback_id": "unknown"}
-    body = {}
+    body: dict[str, Any] = {}
     await interface._on_shortcut(shortcut, body)
 
   @pytest.mark.asyncio

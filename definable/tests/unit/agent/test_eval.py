@@ -274,8 +274,8 @@ class TestAccuracyEval:
     assert result.success is True
     assert result.score == 9.0
     assert result.eval_name == "accuracy"
-    assert result.expected == "4"
-    assert result.actual == "The answer is 4"
+    assert result.expected == "4"  # type: ignore[attr-defined]
+    assert result.actual == "The answer is 4"  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_fail(self):
@@ -312,7 +312,7 @@ class TestAccuracyEval:
 
     result = await ev.arun(agent, EvalCase(input="q", expected="a"))
     assert result.success is False  # 8 < 9.0 threshold
-    assert result.threshold == 9.0
+    assert result.threshold == 9.0  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_team_eval(self):
@@ -322,7 +322,7 @@ class TestAccuracyEval:
 
     result = await ev.evaluate_team(team, EvalCase(input="q", expected="a"))
     assert result.success is True
-    assert result.actual == "Team result"
+    assert result.actual == "Team result"  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_batch(self):
@@ -387,10 +387,10 @@ class TestPerformanceEval:
 
     result = await ev.arun(agent, EvalCase(input="hello"))
     assert result.success is True
-    assert result.runs == 2
-    assert len(result.durations) == 2
-    assert result.duration_ms > 0
-    assert result.peak_memory_mb >= 0
+    assert result.runs == 2  # type: ignore[attr-defined]
+    assert len(result.durations) == 2  # type: ignore[attr-defined]
+    assert result.duration_ms > 0  # type: ignore[attr-defined]
+    assert result.peak_memory_mb >= 0  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_duration_threshold_pass(self):
@@ -441,7 +441,7 @@ class TestPerformanceEval:
 
     result = await ev.evaluate_team(team, EvalCase(input="hello"))
     assert result.success is True
-    assert result.runs == 1
+    assert result.runs == 1  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_agent_failure_still_records(self):
@@ -451,8 +451,8 @@ class TestPerformanceEval:
     ev = PerformanceEval(runs=2)
 
     result = await ev.arun(agent, EvalCase(input="hello"))
-    assert result.runs == 2
-    assert len(result.durations) == 2
+    assert result.runs == 2  # type: ignore[attr-defined]
+    assert len(result.durations) == 2  # type: ignore[attr-defined]
 
 
 # ═════════════════════════════════════════════════════════════
@@ -475,7 +475,7 @@ class TestReliabilityEval:
 
     result = await ev.arun(agent, EvalCase(input="Research AI"))
     assert result.success is True
-    assert result.missing_tools == []
+    assert result.missing_tools == []  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_missing_tool(self):
@@ -488,7 +488,7 @@ class TestReliabilityEval:
 
     result = await ev.arun(agent, EvalCase(input="Research AI"))
     assert result.success is False
-    assert "summarize" in result.missing_tools
+    assert "summarize" in result.missing_tools  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_extra_tools_permissive(self):
@@ -504,7 +504,7 @@ class TestReliabilityEval:
 
     result = await ev.arun(agent, EvalCase(input="test"))
     assert result.success is True  # Extra is OK in permissive mode
-    assert "extra_tool" in result.extra_tools
+    assert "extra_tool" in result.extra_tools  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_extra_tools_strict(self):
@@ -580,7 +580,7 @@ class TestReliabilityEval:
     ev = ReliabilityEval(expected_tools=["search_web"])
     result = await ev.arun(agent, EvalCase(input="test"))
     assert result.success is True
-    assert "search_web" in result.actual_tools
+    assert "search_web" in result.actual_tools  # type: ignore[attr-defined]
 
 
 # ═════════════════════════════════════════════════════════════
@@ -598,8 +598,8 @@ class TestAgentAsJudgeEval:
     result = await ev.arun(agent, EvalCase(input="Summarize"))
     assert result.success is True
     assert result.score == 9.0
-    assert result.criteria == "Must be concise"
-    assert result.mode == "numeric"
+    assert result.criteria == "Must be concise"  # type: ignore[attr-defined]
+    assert result.mode == "numeric"  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_numeric_fail(self):
@@ -619,7 +619,7 @@ class TestAgentAsJudgeEval:
 
     result = await ev.arun(agent, EvalCase(input="Write something"))
     assert result.success is True
-    assert result.mode == "binary"
+    assert result.mode == "binary"  # type: ignore[attr-defined]
     assert result.score == 10.0
 
   @pytest.mark.asyncio
@@ -649,7 +649,7 @@ class TestAgentAsJudgeEval:
     case = EvalCase(input="q", metadata={"criteria": "Custom criteria"})
     result = await ev.arun(agent, case)
     assert result.success is True
-    assert result.criteria == "Custom criteria"
+    assert result.criteria == "Custom criteria"  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_team_eval(self):

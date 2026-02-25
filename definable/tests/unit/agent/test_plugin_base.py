@@ -76,7 +76,7 @@ class TestPluginDefaults:
     import asyncio
 
     p = DummyPlugin()
-    asyncio.run(p.on_unload(None))
+    asyncio.run(p.on_unload(None))  # type: ignore[arg-type]
 
 
 class TestPluginProperties:

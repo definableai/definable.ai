@@ -210,7 +210,7 @@ class TestTaskList:
     assert t2.status == TaskStatus.blocked
 
     tl.update_task(t1.id, status="completed")
-    assert t2.status == TaskStatus.pending
+    assert t2.status == TaskStatus.pending  # type: ignore[comparison-overlap]
 
   def test_failed_dependency_cascades(self):
     tl = TaskList()
@@ -277,8 +277,8 @@ class TestTaskList:
     assert t3.status == TaskStatus.blocked
 
     tl.update_task(t1.id, status="completed")
-    assert t2.status == TaskStatus.pending
-    assert t3.status == TaskStatus.blocked  # Still blocked on t2
+    assert t2.status == TaskStatus.pending  # type: ignore[comparison-overlap]
+    assert t3.status == TaskStatus.blocked  # type: ignore[comparison-overlap,unreachable]  # Still blocked on t2
 
     tl.update_task(t2.id, status="completed")
     assert t3.status == TaskStatus.pending
@@ -419,8 +419,9 @@ class TestTeamTools:
     async def run_fn(name, task):
       return f"result from {name}"
 
-    tool = build_delegate_tool(members, run_fn)
+    tool = build_delegate_tool(members, run_fn)  # type: ignore[arg-type]
     assert tool.name == "delegate_to_member"
+    assert tool.description is not None
     assert "alice" in tool.description
     assert "bob" in tool.description
     assert tool.parameters["properties"]["member_name"]["enum"] == ["alice", "bob"]
@@ -431,7 +432,7 @@ class TestTeamTools:
     members = {
       "alice": MagicMock(instructions="Research expert", tools=[MagicMock(name="search"), MagicMock(name="read")]),
     }
-    tool = build_member_info_tool(members)
+    tool = build_member_info_tool(members)  # type: ignore[arg-type]
     assert tool.name == "get_member_information"
 
   @pytest.mark.asyncio
@@ -440,8 +441,8 @@ class TestTeamTools:
 
     run_fn = AsyncMock(return_value="the result")
     members = {"alice": MagicMock(instructions="Expert", tools=[])}
-    tool = build_delegate_tool(members, run_fn)
-
+    tool = build_delegate_tool(members, run_fn)  # type: ignore[arg-type]
+    assert tool.entrypoint is not None
     result = await tool.entrypoint("alice", "do research")
     assert result == "the result"
     run_fn.assert_awaited_once_with("alice", "do research")
@@ -451,8 +452,8 @@ class TestTeamTools:
     from definable.agent.team._tools import build_member_info_tool
 
     members = {"alice": MagicMock(instructions="Research expert", tools=[])}
-    tool = build_member_info_tool(members)
-
+    tool = build_member_info_tool(members)  # type: ignore[arg-type]
+    assert tool.entrypoint is not None
     result = await tool.entrypoint()
     assert "alice" in result
     assert "Research expert" in result
@@ -469,7 +470,7 @@ class TestTeamTools:
     async def emit_fn(event):
       pass
 
-    tools = build_task_tools(tl, members, run_fn, emit_fn)
+    tools = build_task_tools(tl, members, run_fn, emit_fn)  # type: ignore[arg-type]
     tool_names = [t.name for t in tools]
     assert "create_task" in tool_names
     assert "execute_task" in tool_names
@@ -487,9 +488,9 @@ class TestTeamTools:
     async def emit_fn(event):
       events.append(event)
 
-    tools = build_task_tools(tl, {"alice": MagicMock()}, AsyncMock(), emit_fn)
+    tools = build_task_tools(tl, {"alice": MagicMock()}, AsyncMock(), emit_fn)  # type: ignore[arg-type]
     create_fn = next(t for t in tools if t.name == "create_task")
-
+    assert create_fn.entrypoint is not None
     result = await create_fn.entrypoint("My Task", "description", "alice", "")
     assert "Task created" in result
     assert len(tl.tasks) == 1
@@ -509,14 +510,16 @@ class TestTeamTools:
 
     run_fn = AsyncMock(return_value="research complete")
     alice = MagicMock()
-    tools = build_task_tools(tl, {"alice": alice}, run_fn, emit_fn)
+    tools = build_task_tools(tl, {"alice": alice}, run_fn, emit_fn)  # type: ignore[arg-type]
 
     # Create and execute a task
     create_fn = next(t for t in tools if t.name == "create_task")
+    assert create_fn.entrypoint is not None
     await create_fn.entrypoint("Research AI", "", "alice", "")
     task_id = tl.tasks[0].id
 
     execute_fn = next(t for t in tools if t.name == "execute_task")
+    assert execute_fn.entrypoint is not None
     result = await execute_fn.entrypoint(task_id)
     assert "completed" in result
     assert tl.tasks[0].status == TaskStatus.completed
@@ -527,11 +530,13 @@ class TestTeamTools:
     from definable.agent.team._tools import build_task_tools
 
     tl = TaskList()
-    tools = build_task_tools(tl, {"alice": MagicMock()}, AsyncMock(), AsyncMock())
+    tools = build_task_tools(tl, {"alice": MagicMock()}, AsyncMock(), AsyncMock())  # type: ignore[arg-type]
     create_fn = next(t for t in tools if t.name == "create_task")
+    assert create_fn.entrypoint is not None
     await create_fn.entrypoint("Unassigned task", "", "", "")
 
     execute_fn = next(t for t in tools if t.name == "execute_task")
+    assert execute_fn.entrypoint is not None
     result = await execute_fn.entrypoint(tl.tasks[0].id)
     assert "no assignee" in result.lower()
 
@@ -540,14 +545,16 @@ class TestTeamTools:
     from definable.agent.team._tools import build_task_tools
 
     tl = TaskList()
-    tools = build_task_tools(tl, {"alice": MagicMock()}, AsyncMock(), AsyncMock())
+    tools = build_task_tools(tl, {"alice": MagicMock()}, AsyncMock(), AsyncMock())  # type: ignore[arg-type]
     create_fn = next(t for t in tools if t.name == "create_task")
+    assert create_fn.entrypoint is not None
     await create_fn.entrypoint("First", "", "alice", "")
     first_id = tl.tasks[0].id
     await create_fn.entrypoint("Second", "", "alice", first_id)
     second_id = tl.tasks[1].id
 
     execute_fn = next(t for t in tools if t.name == "execute_task")
+    assert execute_fn.entrypoint is not None
     result = await execute_fn.entrypoint(second_id)
     assert "blocked" in result.lower()
 
@@ -557,11 +564,13 @@ class TestTeamTools:
 
     tl = TaskList()
     run_fn = AsyncMock(side_effect=RuntimeError("member crashed"))
-    tools = build_task_tools(tl, {"alice": MagicMock()}, run_fn, AsyncMock())
+    tools = build_task_tools(tl, {"alice": MagicMock()}, run_fn, AsyncMock())  # type: ignore[arg-type]
     create_fn = next(t for t in tools if t.name == "create_task")
+    assert create_fn.entrypoint is not None
     await create_fn.entrypoint("Risky task", "", "alice", "")
 
     execute_fn = next(t for t in tools if t.name == "execute_task")
+    assert execute_fn.entrypoint is not None
     result = await execute_fn.entrypoint(tl.tasks[0].id)
     assert "failed" in result.lower()
     assert tl.tasks[0].status == TaskStatus.failed
@@ -573,9 +582,10 @@ class TestTeamTools:
     tl = TaskList()
     tl.create_task("A", assignee="alice")
     tl.create_task("B", assignee="bob")
-    tools = build_task_tools(tl, {"alice": MagicMock(), "bob": MagicMock()}, AsyncMock(), AsyncMock())
+    tools = build_task_tools(tl, {"alice": MagicMock(), "bob": MagicMock()}, AsyncMock(), AsyncMock())  # type: ignore[arg-type]
 
     status_fn = next(t for t in tools if t.name == "get_task_status")
+    assert status_fn.entrypoint is not None
     result = await status_fn.entrypoint()
     assert "A" in result
     assert "B" in result
@@ -585,8 +595,9 @@ class TestTeamTools:
     from definable.agent.team._tools import build_task_tools
 
     tl = TaskList()
-    tools = build_task_tools(tl, {}, AsyncMock(), AsyncMock())
+    tools = build_task_tools(tl, {}, AsyncMock(), AsyncMock())  # type: ignore[arg-type]
     complete_fn = next(t for t in tools if t.name == "mark_goal_complete")
+    assert complete_fn.entrypoint is not None
     await complete_fn.entrypoint("Everything done!")
     assert tl.goal_complete is True
     assert tl.completion_summary == "Everything done!"
@@ -677,7 +688,7 @@ class TestTeamAsAgent:
     from definable.agent.team.team import _TeamAsAgent
 
     inner = Team(name="inner")
-    inner.arun = AsyncMock(return_value=MagicMock(content="team result"))
+    inner.arun = AsyncMock(return_value=MagicMock(content="team result"))  # type: ignore[method-assign]
 
     wrapper = _TeamAsAgent(inner)
     result = await wrapper.arun("hello")
@@ -734,16 +745,17 @@ class TestTeamCoordinate:
     leader_model = MockModel(side_effect=leader_side_effect)
     member_model = MockModel(responses=["Quantum computing uses qubits and superposition."])
 
-    researcher = Agent(model=member_model, name="researcher", instructions="You are a research specialist.")
+    researcher = Agent(model=member_model, name="researcher", instructions="You are a research specialist.")  # type: ignore[arg-type]
     team = Team(
       name="content-team",
-      model=leader_model,
+      model=leader_model,  # type: ignore[arg-type]
       members=[researcher],
       mode=TeamMode.coordinate,
     )
 
     result = await team.arun("Write about quantum computing")
     assert result is not None
+    assert result.content is not None
     assert "quantum computing" in result.content.lower()
 
   @pytest.mark.asyncio
@@ -756,7 +768,7 @@ class TestTeamCoordinate:
 
     team = Team(
       name="event-team",
-      model=leader_model,
+      model=leader_model,  # type: ignore[arg-type]
       members=[],
       mode=TeamMode.coordinate,
     )
@@ -820,16 +832,17 @@ class TestTeamRoute:
     leader_model = MockModel(side_effect=leader_side_effect)
     member_model = MockModel(responses=["Gravity is the force of attraction between masses."])
 
-    specialist = Agent(model=member_model, name="specialist", instructions="Physics expert.")
+    specialist = Agent(model=member_model, name="specialist", instructions="Physics expert.")  # type: ignore[arg-type]
 
     team = Team(
       name="router-team",
-      model=leader_model,
+      model=leader_model,  # type: ignore[arg-type]
       members=[specialist],
       mode=TeamMode.route,
     )
 
     result = await team.arun("Explain gravity")
+    assert result.content is not None
     assert "gravity" in result.content.lower() or "force" in result.content.lower()
 
 
@@ -848,14 +861,14 @@ class TestTeamCollaborate:
     m1 = MockModel(responses=["Perspective A"])
     m2 = MockModel(responses=["Perspective B"])
 
-    agent1 = Agent(model=m1, name="analyst-1", instructions="Analyst 1")
-    agent2 = Agent(model=m2, name="analyst-2", instructions="Analyst 2")
+    agent1 = Agent(model=m1, name="analyst-1", instructions="Analyst 1")  # type: ignore[arg-type]
+    agent2 = Agent(model=m2, name="analyst-2", instructions="Analyst 2")  # type: ignore[arg-type]
 
     leader_model = MockModel(responses=["Combined analysis: A and B together yield a complete picture."])
 
     team = Team(
       name="collab-team",
-      model=leader_model,
+      model=leader_model,  # type: ignore[arg-type]
       members=[agent1, agent2],
       mode=TeamMode.collaborate,
     )

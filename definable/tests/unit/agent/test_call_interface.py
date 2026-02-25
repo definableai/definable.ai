@@ -17,6 +17,8 @@ Tests cover:
 import asyncio
 import base64
 import json
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -79,9 +81,9 @@ class TestCallConfig:
   def test_with_updates(self):
     config = CallConfig(phone_number="+1555")
     updated = config.with_updates(language="fr-FR", voice="Celine")
-    assert updated.language == "fr-FR"
-    assert updated.voice == "Celine"
-    assert updated.phone_number == "+1555"
+    assert updated.language == "fr-FR"  # type: ignore[attr-defined]
+    assert updated.voice == "Celine"  # type: ignore[attr-defined]
+    assert updated.phone_number == "+1555"  # type: ignore[attr-defined]
 
   def test_frozen(self):
     config = CallConfig(phone_number="+1555")
@@ -801,13 +803,13 @@ class TestDeepgramSTT:
 
     await stt.close()
 
-    assert stt._connected is False
-    assert stt._ws is None
+    assert stt._connected is False  # type: ignore[unreachable]
+    assert stt._ws is None  # type: ignore[unreachable]
     # Should have sent CloseStream and then close
-    mock_ws.send.assert_called_once()
-    sent_data = json.loads(mock_ws.send.call_args[0][0])
-    assert sent_data["type"] == "CloseStream"
-    mock_ws.close.assert_called_once()
+    mock_ws.send.assert_called_once()  # type: ignore[unreachable]
+    sent_data = json.loads(mock_ws.send.call_args[0][0])  # type: ignore[unreachable]
+    assert sent_data["type"] == "CloseStream"  # type: ignore[unreachable]
+    mock_ws.close.assert_called_once()  # type: ignore[unreachable]
 
   @pytest.mark.asyncio
   async def test_keepalive_cancellation(self):
@@ -960,9 +962,9 @@ class TestCartesiaTTS:
 
     await tts.close()
 
-    assert tts._connected is False
-    assert tts._ws is None
-    mock_ws.close.assert_called_once()
+    assert tts._connected is False  # type: ignore[unreachable]
+    assert tts._ws is None  # type: ignore[unreachable]
+    mock_ws.close.assert_called_once()  # type: ignore[unreachable]
 
   def test_context_counter_increment(self):
     from definable.agent.interface.call.tts.cartesia import CartesiaTTS
@@ -1675,9 +1677,9 @@ class TestOpenAIRealtimeProvider:
 
     await provider.close()
 
-    assert provider._connected is False
-    assert provider._ws is None
-    mock_ws.close.assert_called_once()
+    assert provider._connected is False  # type: ignore[unreachable]
+    assert provider._ws is None  # type: ignore[unreachable]
+    mock_ws.close.assert_called_once()  # type: ignore[unreachable]
 
   @pytest.mark.asyncio
   async def test_close_when_disconnected_noop(self):
@@ -1796,6 +1798,7 @@ class TestOpenAIRealtimeProvider:
 
     assert len(events) == 1
     assert events[0].type == "tool_call"
+    assert events[0].tool_call is not None
     assert events[0].tool_call["id"] == "call_99"
     assert events[0].tool_call["name"] == "my_tool"
     assert events[0].tool_call["arguments"] == '{"query": "test"}'
@@ -1926,39 +1929,39 @@ class TestOpenAIRealtimeProvider:
 # ============================================================
 
 
-class _MockRealtimeProvider:
+class _MockRealtimeProvider(RealtimeProvider):
   """Mock realtime provider for testing RealtimePipeline."""
 
-  def __init__(self, events=None):
+  def __init__(self, events=None):  # type: ignore[assignment]
     self.connected = False
     self.closed = False
-    self.audio_received = []
-    self.tool_results = []
-    self.truncate_calls = []
-    self._events = events or []
-    self._connect_kwargs = {}
+    self.audio_received: list[bytes] = []
+    self.tool_results: list[dict[str, Any]] = []
+    self.truncate_calls: list[dict[str, Any]] = []
+    self._events: list[RealtimeEvent] = events or []
+    self._connect_kwargs: dict[str, Any] = {}
 
-  async def connect(self, **kwargs):
+  async def connect(self, **kwargs: Any) -> None:  # type: ignore[override]
     self.connected = True
     self._connect_kwargs = kwargs
 
-  async def send_audio(self, audio_bytes):
+  async def send_audio(self, audio_bytes: bytes) -> None:
     self.audio_received.append(audio_bytes)
 
-  async def receive_events(self):
+  async def receive_events(self) -> AsyncIterator[RealtimeEvent]:  # type: ignore[override]
     for event in self._events:
       yield event
 
-  async def send_tool_result(self, call_id, result):
+  async def send_tool_result(self, call_id: str, result: str) -> None:
     self.tool_results.append({"call_id": call_id, "result": result})
 
-  async def send_truncate(self, item_id, audio_end_ms):
+  async def send_truncate(self, item_id: str, audio_end_ms: int) -> None:
     self.truncate_calls.append({"item_id": item_id, "audio_end_ms": audio_end_ms})
 
-  async def interrupt(self):
+  async def interrupt(self) -> None:
     pass
 
-  async def close(self):
+  async def close(self) -> None:
     self.closed = True
 
 

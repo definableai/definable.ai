@@ -9,7 +9,7 @@ from definable.knowledge.embedder.fallback import (
   FallbackEmbedder,
   classify_error,
 )
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -40,11 +40,7 @@ class MockEmbedder(Embedder):
 class FailingEmbedder(Embedder):
   name: str = "failing"
   dimensions: int = 3
-  error: Exception = None  # type: ignore[assignment]
-
-  def __post_init__(self):
-    if self.error is None:
-      self.error = RuntimeError("embed failed")
+  error: Exception = field(default_factory=lambda: RuntimeError("embed failed"))
 
   def get_embedding(self, text: str) -> List[float]:
     raise self.error

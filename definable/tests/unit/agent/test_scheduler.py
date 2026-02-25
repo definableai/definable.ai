@@ -93,7 +93,7 @@ class TestScheduledJob:
     assert job.is_runnable is True
     job.record_run()
     assert job.is_runnable is False
-    assert job.status == JobStatus.COMPLETED
+    assert job.status == JobStatus.COMPLETED  # type: ignore[unreachable]
 
   def test_record_run(self):
     job = ScheduledJob(trigger=Interval(seconds=60))
@@ -117,7 +117,7 @@ class TestScheduledJob:
     job.pause()
     assert job.status == JobStatus.PAUSED
     job.resume()
-    assert job.status == JobStatus.ACTIVE
+    assert job.status == JobStatus.ACTIVE  # type: ignore[comparison-overlap]
 
   def test_resume_only_from_paused(self):
     job = ScheduledJob(trigger=Interval(seconds=60))
@@ -319,7 +319,7 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(stop_soon())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     assert len(executor.executions) >= 1
     assert job.run_count >= 1
@@ -337,7 +337,7 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(stop_soon())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     assert len(executor.executions) == 0
 
@@ -355,7 +355,7 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(stop_soon())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     assert job.failure_count >= 1
     assert job.last_error is not None
@@ -374,7 +374,7 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(stop_soon())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     assert trigger.fired is True
     assert job.status == JobStatus.COMPLETED
@@ -394,7 +394,7 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(stop_soon())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     assert len(executor.executions) == 0
 
@@ -414,16 +414,16 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(check_and_stop())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     assert running_during is True
     assert scheduler.is_running is False
 
   @pytest.mark.asyncio
   async def test_callbacks(self):
-    started = []
-    completed = []
-    failed = []
+    started: list[ScheduledJob] = []
+    completed: list[ScheduledJob] = []
+    failed: list[tuple[ScheduledJob, str]] = []
 
     scheduler = Scheduler(tick_interval=0.05)
     scheduler.on_job_started = started.append
@@ -440,7 +440,7 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(stop_soon())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     assert len(started) >= 1
     assert len(completed) >= 1
@@ -462,7 +462,7 @@ class TestSchedulerLoop:
       scheduler.stop()
 
     asyncio.create_task(stop_soon())
-    await scheduler.start(executor)
+    await scheduler.start(executor)  # type: ignore[arg-type]
 
     # All should eventually fire
     assert len(executor.executions) >= 3

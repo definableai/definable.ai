@@ -63,6 +63,7 @@ class TestTemporalDecay:
       ),
     ]
     result = decay.apply(docs, now=now)
+    assert result[0].reranking_score is not None
     assert result[0].reranking_score < 0.6  # Should be ~0.5
 
   def test_sorts_by_decayed_score(self):
@@ -95,4 +96,5 @@ class TestTemporalDecay:
       ),
     ]
     result = decay.apply(docs, now=now)
+    assert result[0].reranking_score is not None
     assert result[0].reranking_score < 0.6
