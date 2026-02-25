@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import signal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from definable.utils.log import log_error, log_info
 
@@ -50,6 +50,7 @@ class AgentRuntime:
     self.dev = dev
     self.gateway = gateway
     self._shutdown_event = asyncio.Event()
+    self._uv_server: Any = None
 
     # Auto-detect server need
     from definable.agent.trigger.webhook import Webhook
@@ -81,10 +82,12 @@ class AgentRuntime:
     self._install_signal_handlers()
 
     tasks: List[asyncio.Task] = []
+    server_task: Optional[asyncio.Task] = None
 
     # 1. HTTP server (if enabled)
     if self.enable_server:
-      tasks.append(asyncio.create_task(self._run_server()))
+      server_task = asyncio.create_task(self._run_server())
+      tasks.append(server_task)
 
     # 2. Interface supervisor (gateway or direct interfaces)
     has_interfaces = bool(self.interfaces) or (self.gateway is not None and bool(self.gateway.interfaces))
@@ -107,9 +110,23 @@ class AgentRuntime:
     try:
       done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-      # If shutdown was requested, cancel remaining tasks
+      # Signal uvicorn to exit gracefully so its lifespan handler
+      # can complete without a CancelledError traceback.
+      if self._uv_server is not None:
+        self._uv_server.should_exit = True
+
+      # Cancel non-server pending tasks immediately
       for task in pending:
-        task.cancel()
+        if task is not server_task:
+          task.cancel()
+
+      # Wait for the server to finish its graceful shutdown (with a timeout),
+      # then cancel any stragglers.
+      if server_task is not None and not server_task.done():
+        _, still_pending = await asyncio.wait({server_task}, timeout=3.0)
+        for task in still_pending:
+          task.cancel()
+
       await asyncio.gather(*pending, return_exceptions=True)
 
       # Re-raise exceptions from completed tasks (except shutdown)
@@ -144,14 +161,9 @@ class AgentRuntime:
       log_level="info" if self.dev else "warning",
     )
     uv_server = uvicorn.Server(config)
+    self._uv_server = uv_server
 
-    # Override shutdown to respect our signal
-    original_shutdown = uv_server.shutdown
-
-    async def graceful_shutdown() -> None:
-      self._shutdown_event.set()
-      await original_shutdown()
-
+    # Wire uvicorn's exit signal into our shutdown event
     uv_server.handle_exit = lambda *_: self._shutdown_event.set()  # type: ignore[method-assign]
 
     await uv_server.serve()
