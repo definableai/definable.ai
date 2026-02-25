@@ -6,10 +6,9 @@ import contextlib
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import HorizontalGroup, VerticalGroup
 from textual.events import Key
 from textual.timer import Timer
-from textual.widget import Widget
 from textual.widgets import Static, TextArea
 
 from definable.agent.interface.cli.tui.messages import (
@@ -38,22 +37,28 @@ class PromptInput(TextArea):
   """
 
   BINDINGS = [
-    Binding("enter", "submit", "Submit", show=False),
+    Binding("enter", "submit", "Submit", show=False, priority=True),
+    Binding("shift+enter,ctrl+j", "newline", "New line", show=False, priority=True),
     Binding("escape", "blur", "Unfocus", show=False),
   ]
 
   DEFAULT_CSS = """
   PromptInput {
+    width: 1fr;
     height: auto;
     min-height: 1;
-    max-height: 12;
+    max-height: 50vh;
     border: none;
-    padding: 0;
+    padding: 0 1 0 0;
     background: transparent;
   }
 
   PromptInput:focus {
     border: none;
+  }
+
+  PromptInput:blur {
+    text-opacity: 50%;
   }
   """
 
@@ -70,6 +75,10 @@ class PromptInput(TextArea):
     self._history_index: int = -1
     self._history_temp: str = ""  # stores current input when navigating history
     self._slash_completing = False
+
+  def action_newline(self) -> None:
+    """Insert a newline (Shift+Enter or Ctrl+J)."""
+    self.insert("\n")
 
   def action_submit(self) -> None:
     """Submit the current text."""
@@ -204,39 +213,48 @@ class PromptInput(TextArea):
     return list(self._history)
 
 
-class Prompt(Widget):
+class PromptContainer(VerticalGroup):
+  """Wrapper around the prompt input with focus-aware border."""
+
+  DEFAULT_CSS = """
+  PromptContainer {
+    height: auto;
+    border: tall transparent;
+    margin: 0 0 1 0;
+
+    &:focus-within {
+      border: tall $secondary;
+    }
+
+    #text-prompt {
+      height: auto;
+    }
+
+    #prompt-ind {
+      width: auto;
+      padding: 0 1;
+      text-opacity: 30%;
+    }
+
+    &:focus-within #prompt-ind {
+      text-opacity: 100%;
+    }
+  }
+  """
+
+
+class Prompt(VerticalGroup):
   """Full prompt bar with indicator and input area."""
 
   DEFAULT_CSS = """
   Prompt {
     dock: bottom;
     height: auto;
-    min-height: 3;
-    max-height: 14;
-    padding: 1 1 0 1;
-    background: $surface;
-    border-top: solid $primary-darken-2;
-  }
-
-  Prompt Horizontal {
-    height: auto;
-  }
-
-  Prompt .prompt-indicator {
-    width: 4;
-    height: 1;
-    color: $accent;
-    text-style: bold;
     padding: 0;
-  }
-
-  Prompt .prompt-input-container {
-    width: 1fr;
-    height: auto;
   }
   """
 
-  def __init__(self, indicator: str = ">>>") -> None:
+  def __init__(self, indicator: str = "\u276f") -> None:
     super().__init__()
     self._indicator = indicator
     self._input: PromptInput | None = None
@@ -245,10 +263,11 @@ class Prompt(Widget):
     self._running = False
 
   def compose(self) -> ComposeResult:
-    with Horizontal():
-      yield Static(self._indicator, id="prompt-ind", classes="prompt-indicator")
-      self._input = PromptInput()
-      yield self._input
+    with PromptContainer(id="prompt-container"):
+      with HorizontalGroup(id="text-prompt"):
+        yield Static(self._indicator, id="prompt-ind", classes="prompt-indicator")
+        self._input = PromptInput()
+        yield self._input
 
   def on_mount(self) -> None:
     """Focus the input on mount."""

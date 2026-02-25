@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Vertical
-from textual.widget import Widget
-from textual.widgets import Static
+from textual.containers import VerticalGroup
+from textual.widgets import Markdown
 
 
-class SystemMessage(Widget):
+class SystemMessage(VerticalGroup):
   """A system/command output message in the conversation.
 
   Used for displaying slash command output (/help, /info, /tools, etc.)
@@ -20,18 +19,16 @@ class SystemMessage(Widget):
     margin: 0 0 1 0;
     padding: 0 1;
     height: auto;
-  }
+    border-left: thick $primary-darken-3;
 
-  SystemMessage .system-label {
-    width: 4;
-    color: $text-disabled;
-    text-style: bold italic;
-  }
+    Markdown {
+      margin: 0;
+      padding: 0;
+    }
 
-  SystemMessage .system-body {
-    width: 1fr;
-    height: auto;
-    padding: 0 0 0 1;
+    Markdown > MarkdownBlock:last-child {
+      margin-bottom: 0;
+    }
   }
 
   SystemMessage .system-content {
@@ -45,9 +42,7 @@ class SystemMessage(Widget):
     self._label = label
 
   def compose(self) -> ComposeResult:
-    with Vertical():
-      yield Static(self._label, classes="system-label")
-      yield Static(self._content, classes="system-content")
+    yield Markdown(self._content, classes="system-content")
 
   @property
   def content(self) -> str:

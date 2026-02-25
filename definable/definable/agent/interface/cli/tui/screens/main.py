@@ -687,8 +687,11 @@ class MainScreen(Screen):
   @on(RunCompleted)
   async def handle_run_completed(self, event: RunCompleted) -> None:
     """Agent run completed — show final metrics."""
-    # Ensure response is finished
     if self._conversation is not None:
+      # If content wasn't streamed (non-streaming arun), display it now
+      if event.content and self._conversation._current_response is None:
+        await self._conversation.start_response(run_id=event.run_id)
+        await self._conversation.append_to_response(event.content)
       await self._conversation.finish_response()
 
     if self._status_bar is not None:

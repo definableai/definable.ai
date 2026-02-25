@@ -34,9 +34,11 @@ class Conversation(VerticalScroll):
 
   DEFAULT_CSS = """
   Conversation {
+    layout: stream;
     height: 1fr;
-    padding: 1 0;
-    scrollbar-size: 1 1;
+    padding: 0 1 0 1;
+    scrollbar-size-vertical: 1;
+    align: left bottom;
   }
   """
 

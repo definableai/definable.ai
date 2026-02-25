@@ -11,27 +11,12 @@ Header {
   dock: top;
 }
 
-/* Conversation area */
+/* Conversation scrollbar colors */
 Conversation {
   scrollbar-background: $surface;
   scrollbar-color: $primary-darken-2;
   scrollbar-color-hover: $primary;
   scrollbar-color-active: $primary;
-}
-
-/* User messages */
-UserMessage {
-  border-left: thick $accent;
-}
-
-/* Agent responses */
-AgentResponse {
-  border-left: thick $success-darken-1;
-}
-
-AgentResponse Markdown {
-  margin: 0;
-  padding: 0;
 }
 
 /* Code blocks inside markdown get subtle background */
@@ -42,36 +27,13 @@ AgentResponse MarkdownFence {
   border: round $primary-darken-3;
 }
 
-/* Tool call blocks */
-ToolCallBlock Collapsible {
-  border-left: thick $primary-darken-2;
-  margin-left: 1;
-}
-
-ToolCallBlock Collapsible.-collapsed > CollapsibleTitle {
+/* Tool call header collapsed state */
+ToolCallBlock ToolCallHeader {
   color: $text-muted;
 }
 
-ToolCallBlock .tool-section-label {
-  margin-top: 1;
-}
-
 /* Thinking blocks */
-ThinkingBlock Collapsible {
-  border-left: thick $secondary-darken-2;
-  margin-left: 1;
-}
-
-ThinkingBlock RichLog {
-  background: transparent;
-}
-
-/* System messages */
-SystemMessage {
-  border-left: thick $text-disabled;
-}
-
-SystemMessage .system-content {
+ThinkingBlock ThinkingHeader {
   color: $text-muted;
 }
 
@@ -89,7 +51,7 @@ SearchBar Input {
   background: $surface-darken-1;
 }
 
-/* Search match highlighting — high contrast for accessibility */
+/* Search match highlighting */
 .search-match {
   background: $primary 25%;
 }
@@ -121,7 +83,7 @@ FooterBar {
 
 /* Status bar separator styling */
 StatusBar .status-separator {
-  color: $text-disabled;
+  color: $foreground-darken-3;
 }
 
 /* Tool call diff rendering */

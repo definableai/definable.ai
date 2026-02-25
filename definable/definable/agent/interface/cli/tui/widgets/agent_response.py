@@ -2,71 +2,50 @@
 
 from __future__ import annotations
 
-from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.widget import Widget
-from textual.widgets import Markdown, Static
+from textual.widgets import Markdown
 from textual.widgets.markdown import MarkdownStream
 
 
-class AgentResponse(Widget):
+class AgentResponse(Markdown):
   """A streaming agent response in the conversation.
 
-  Uses Textual's MarkdownStream for true progressive rendering —
+  Extends Markdown directly for proper layout: stream rendering.
+  Uses Textual's MarkdownStream for progressive rendering —
   fragments are queued and batched automatically, so the UI stays
   responsive even at high token throughput.
   """
 
   DEFAULT_CSS = """
   AgentResponse {
-    margin: 0 0 1 0;
-    padding: 0 1;
-    height: auto;
-  }
+    min-height: 1;
+    padding: 0 1 0 0;
+    overflow-x: auto;
+    layout: stream;
 
-  AgentResponse .agent-label {
-    width: 4;
-    color: $success;
-    text-style: bold;
-  }
-
-  AgentResponse .agent-body {
-    width: 1fr;
-    height: auto;
-  }
-
-  AgentResponse Markdown {
-    margin: 0;
-    padding: 0;
+    MarkdownBlock:last-child {
+      margin-bottom: 0;
+    }
   }
   """
 
-  def __init__(self, run_id: str = "") -> None:
-    super().__init__()
+  def __init__(self, run_id: str = "", markdown: str | None = None) -> None:
+    super().__init__(markdown)
     self.run_id = run_id
     self._content = ""
-    self._markdown: Markdown | None = None
     self._stream: MarkdownStream | None = None
     self._finished = False
 
-  def compose(self) -> ComposeResult:
-    with Horizontal():
-      yield Static("AI", classes="agent-label")
-      with Vertical(classes="agent-body"):
-        self._markdown = Markdown("", classes="agent-markdown")
-        yield self._markdown
-
-  def on_mount(self) -> None:
-    """Initialize the markdown stream on mount."""
-    if self._markdown is not None:
-      self._stream = Markdown.get_stream(self._markdown)
-      self._stream.start()
+  @property
+  def stream(self) -> MarkdownStream:
+    """Lazy-initialize the markdown stream."""
+    if self._stream is None:
+      self._stream = self.get_stream(self)
+    return self._stream
 
   async def append_chunk(self, text: str) -> None:
     """Append a streaming chunk of markdown content."""
     self._content += text
-    if self._stream is not None:
-      await self._stream.write(text)
+    await self.stream.write(text)
 
   async def finish(self) -> None:
     """Mark the response as complete."""

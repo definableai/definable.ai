@@ -40,7 +40,8 @@ from definable.utils.log import log_error, log_info
 if TYPE_CHECKING:
   from definable.agent.interface.hooks import InterfaceHook
   from definable.agent.interface.identity import IdentityResolver
-  from definable.agent.interface.session import SessionManager
+  from definable.agent.interface.session import InterfaceSession, SessionManager
+  from definable.agent.run.agent import RunOutput
   from definable.agent.run.base import BaseRunOutputEvent
 
 
@@ -315,6 +316,50 @@ class CLIInterface(BaseInterface):
       platform_chat_id="cli",
       platform_message_id=str(uuid4()),
     )
+
+  async def _run_agent(self, message: InterfaceMessage, session: InterfaceSession) -> RunOutput:
+    """Run the agent, using streaming in TUI mode for real-time display."""
+    from definable.agent.run.agent import RunOutput
+
+    if self.active_mode != "tui":
+      return await super()._run_agent(message, session)
+
+    # TUI mode: use arun_stream so RunContentEvent events flow to the EventRouter
+    user_id = message.platform_user_id
+    if self._identity_resolver is not None:
+      resolved = await self._safe_resolve_identity(message.platform, message.platform_user_id)
+      if resolved is not None:
+        user_id = resolved
+    elif "auth_context" in message.metadata:
+      user_id = message.metadata["auth_context"].user_id
+
+    assert self.agent is not None
+    run_session_id = session.session_id
+    if getattr(self.agent, "_session_id_explicit", False):
+      run_session_id = self.agent.session_id
+
+    # Consume the stream — events are emitted to EventStream automatically
+    last_event = None
+    async for event in self.agent.arun_stream(
+      instruction=message.text or "",
+      messages=session.messages,
+      session_id=run_session_id,
+      user_id=user_id,
+      images=message.images,
+    ):
+      last_event = event
+
+    # Extract RunOutput from the final RunCompletedEvent
+    from definable.agent.events import RunCompletedEvent
+
+    if isinstance(last_event, RunCompletedEvent):
+      output = getattr(last_event, "output", None)
+      if isinstance(output, RunOutput):
+        return output
+
+    # Fallback: build a minimal RunOutput from the last event
+    content = getattr(last_event, "content", None) if last_event else None
+    return RunOutput(content=str(content) if content else "")
 
   async def _send_response(
     self,

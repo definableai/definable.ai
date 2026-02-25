@@ -3,29 +3,39 @@
 from __future__ import annotations
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal
-from textual.widget import Widget
-from textual.widgets import Static
+from textual.containers import HorizontalGroup
+from textual.widgets import Markdown, Static
 
 
-class UserMessage(Widget):
-  """A user message in the conversation."""
+class UserMessage(HorizontalGroup):
+  """A user message in the conversation.
+
+  Uses HorizontalGroup with a prompt indicator and Markdown content,
+  matching the Toad TUI pattern for proper layout in VerticalScroll.
+  """
 
   DEFAULT_CSS = """
   UserMessage {
-    margin: 0 0 1 0;
-    padding: 0 1;
+    border-left: blank $secondary;
+    background: $secondary 15%;
+    padding: 1 1 1 0;
+    margin: 1 1 1 0;
     height: auto;
+
+    Markdown {
+      padding: 0 2 0 0;
+    }
+
+    Markdown > MarkdownBlock:last-child {
+      margin-bottom: 0;
+    }
   }
 
-  UserMessage .user-label {
-    width: 4;
-    color: $accent;
+  UserMessage .user-indicator {
+    width: auto;
+    padding: 0 1;
+    color: $secondary;
     text-style: bold;
-  }
-
-  UserMessage .user-content {
-    width: 1fr;
   }
   """
 
@@ -34,6 +44,5 @@ class UserMessage(Widget):
     self._text = text
 
   def compose(self) -> ComposeResult:
-    with Horizontal():
-      yield Static("You", classes="user-label")
-      yield Static(self._text, classes="user-content")
+    yield Static("\u276f", classes="user-indicator")
+    yield Markdown(self._text)

@@ -47,11 +47,20 @@ class EventRouter:
     self._total_tokens = 0
     self._streamed_run_id: Optional[str] = None
 
+  def _post(self, message) -> None:
+    """Post a Textual message to the active screen.
+
+    Messages must be posted to the screen (not the app) so that
+    ``@on()`` handlers on ``MainScreen`` receive them.
+    """
+    screen = self._app.screen
+    screen.post_message(message)
+
   def handle(self, event: "BaseRunOutputEvent") -> None:
     """Route a pipeline event to the appropriate Textual message.
 
     This is a sync handler — called directly by EventStream.
-    Posts messages to the Textual app's message queue.
+    Posts messages to the active screen's message queue.
     """
     try:
       self._dispatch(event)
@@ -96,7 +105,7 @@ class EventRouter:
       if isinstance(input_text, dict):
         input_text = str(input_text)
       self._streamed_run_id = run_id
-      self._app.post_message(RunStarted(run_id=run_id, input_text=str(input_text or "")))
+      self._post(RunStarted(run_id=run_id, input_text=str(input_text or "")))
       return
 
     if isinstance(event, PipelineRunCompleted):
@@ -117,7 +126,7 @@ class EventRouter:
       if self._run_start_time is not None:
         total_time = (time.monotonic() - self._run_start_time) * 1000
 
-      self._app.post_message(
+      self._post(
         RunCompleted(
           run_id=run_id,
           content=str(content),
@@ -132,13 +141,13 @@ class EventRouter:
     if isinstance(event, RunErrorEvent):
       run_id = getattr(event, "run_id", "")
       error_msg = getattr(event, "content", "") or getattr(event, "error_type", "") or "Unknown error"
-      self._app.post_message(RunError(run_id=run_id, error=str(error_msg)))
+      self._post(RunError(run_id=run_id, error=str(error_msg)))
       self._streamed_run_id = None
       return
 
     if isinstance(event, RunCancelledEvent):
       run_id = getattr(event, "run_id", "")
-      self._app.post_message(RunError(run_id=run_id, error="Cancelled"))
+      self._post(RunError(run_id=run_id, error="Cancelled"))
       self._streamed_run_id = None
       return
 
@@ -149,13 +158,13 @@ class EventRouter:
         if self._first_token_time is None:
           self._first_token_time = time.monotonic()
         run_id = self._streamed_run_id or ""
-        self._app.post_message(StreamChunk(text=str(content), run_id=run_id))
+        self._post(StreamChunk(text=str(content), run_id=run_id))
       return
 
     # --- Reasoning/thinking ---
     if isinstance(event, ReasoningStartedEvent):
       run_id = getattr(event, "run_id", "")
-      self._app.post_message(ThinkingStarted(run_id=run_id))
+      self._post(ThinkingStarted(run_id=run_id))
       return
 
     if isinstance(event, (ReasoningStepEvent, ReasoningContentDeltaEvent)):
@@ -165,12 +174,12 @@ class EventRouter:
       else:
         text = getattr(event, "delta", "") or getattr(event, "reasoning_content", "") or getattr(event, "content", "") or ""
       if text:
-        self._app.post_message(ThinkingChunk(text=str(text)))
+        self._post(ThinkingChunk(text=str(text)))
       return
 
     if isinstance(event, ReasoningCompletedEvent):
       run_id = getattr(event, "run_id", "")
-      self._app.post_message(ThinkingCompleted(run_id=run_id))
+      self._post(ThinkingCompleted(run_id=run_id))
       return
 
     # --- Tool calls ---
@@ -184,7 +193,7 @@ class EventRouter:
         import json
 
         arguments = json.dumps(arguments, indent=2)
-      self._app.post_message(
+      self._post(
         ToolCallStarted(
           tool_name=str(tool_name),
           arguments=str(arguments),
@@ -203,7 +212,7 @@ class EventRouter:
       # Convert seconds to ms if present
       if duration is not None:
         duration = duration * 1000
-      self._app.post_message(
+      self._post(
         ToolCallCompleted(
           tool_name=str(tool_name),
           result=str(result),
@@ -218,7 +227,7 @@ class EventRouter:
       tool_name = getattr(tool, "tool_name", "") or "" if tool else ""
       error_msg = getattr(tool, "result", "") or getattr(event, "content", "") or ""
       call_id = getattr(tool, "tool_call_id", "") or "" if tool else ""
-      self._app.post_message(
+      self._post(
         ToolCallCompleted(
           tool_name=str(tool_name),
           result="",
@@ -232,7 +241,7 @@ class EventRouter:
     if isinstance(event, ModelCallStartedEvent):
       self._turn_count += 1
       model_id = getattr(event, "model_id", "") or ""
-      self._app.post_message(
+      self._post(
         ModelCallUpdate(
           turn=self._turn_count,
           model_id=str(model_id),
@@ -248,7 +257,7 @@ class EventRouter:
         in_tokens = getattr(metrics, "input_tokens", 0) or 0
         out_tokens = getattr(metrics, "output_tokens", 0) or 0
         self._total_tokens += in_tokens + out_tokens
-      self._app.post_message(
+      self._post(
         ModelCallUpdate(
           turn=self._turn_count,
           input_tokens=in_tokens,
@@ -259,13 +268,13 @@ class EventRouter:
 
     # --- Knowledge ---
     if isinstance(event, KnowledgeRetrievalStartedEvent):
-      self._app.post_message(KnowledgeUpdate(status="searching"))
+      self._post(KnowledgeUpdate(status="searching"))
       return
 
     if isinstance(event, KnowledgeRetrievalCompletedEvent):
       docs = getattr(event, "documents", []) or []
       duration = getattr(event, "duration_ms", 0) or 0
-      self._app.post_message(
+      self._post(
         KnowledgeUpdate(
           status="complete",
           doc_count=len(docs),
@@ -276,13 +285,13 @@ class EventRouter:
 
     # --- Memory ---
     if isinstance(event, MemoryRecallStartedEvent):
-      self._app.post_message(MemoryUpdate(status="recalling"))
+      self._post(MemoryUpdate(status="recalling"))
       return
 
     if isinstance(event, MemoryRecallCompletedEvent):
       entries = getattr(event, "entries", []) or []
       duration = getattr(event, "duration_ms", 0) or 0
-      self._app.post_message(
+      self._post(
         MemoryUpdate(
           status="recalled",
           entry_count=len(entries),
@@ -292,12 +301,12 @@ class EventRouter:
       return
 
     if isinstance(event, MemoryUpdateStartedEvent):
-      self._app.post_message(MemoryUpdate(status="updating"))
+      self._post(MemoryUpdate(status="updating"))
       return
 
     if isinstance(event, MemoryUpdateCompletedEvent):
       duration = getattr(event, "duration_ms", 0) or 0
-      self._app.post_message(
+      self._post(
         MemoryUpdate(
           status="updated",
           duration_ms=duration,

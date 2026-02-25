@@ -635,7 +635,14 @@ class Agent:
     if self.memory:
       with contextlib.suppress(Exception):
         await self.memory.close()
-    self._shutdown()
+    # Sync-only cleanup (skills, trace writer) — skip _sync_close_async_resources
+    # since we already handled async resources above.
+    for skill in self.skills:
+      with contextlib.suppress(Exception):
+        skill.teardown()
+    if self._trace_writer:
+      self._trace_writer.shutdown()
+    self._started = False
 
   async def _ensure_toolkits_initialized(self) -> None:
     """Initialize any AsyncLifecycleToolkit instances that aren't yet initialized.

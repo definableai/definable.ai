@@ -252,7 +252,10 @@ class TestEventRouter:
     from definable.agent.interface.cli.tui.router import EventRouter
 
     app = MagicMock()
-    app.post_message = MagicMock()
+    screen = MagicMock()
+    screen.post_message = MagicMock()
+    app.screen = screen
+    app.post_message = screen.post_message
     return EventRouter(app), app
 
   def test_run_started_event(self):
@@ -697,15 +700,15 @@ class TestToolCallAutoExpand:
     block = ToolCallBlock(tool_name="search", call_id="c1", tools_expand="both")
     assert block.tools_expand == "both"
 
-  def test_icon_running(self):
-    from definable.agent.interface.cli.tui.widgets.tool_call import _ICON_RUNNING
+  def test_icon_pending(self):
+    from definable.agent.interface.cli.tui.widgets.tool_call import _ICON_PENDING
 
-    assert _ICON_RUNNING == "\u25b6"
+    assert _ICON_PENDING == "\u25b6"
 
   def test_icon_success(self):
     from definable.agent.interface.cli.tui.widgets.tool_call import _ICON_SUCCESS
 
-    assert _ICON_SUCCESS == "\u2713"
+    assert _ICON_SUCCESS == "\u2714"
 
   def test_icon_error(self):
     from definable.agent.interface.cli.tui.widgets.tool_call import _ICON_ERROR
@@ -901,7 +904,10 @@ class TestRouterTokenAccumulation:
     from definable.agent.interface.cli.tui.router import EventRouter
 
     app = MagicMock()
-    app.post_message = MagicMock()
+    screen = MagicMock()
+    screen.post_message = MagicMock()
+    app.screen = screen
+    app.post_message = screen.post_message
     return EventRouter(app), app
 
   def test_model_completed_emits_tokens(self):
@@ -1922,8 +1928,8 @@ class TestToolCallBlockEnhanced:
     from definable.agent.interface.cli.tui.widgets.tool_call import ToolCallBlock
 
     block = ToolCallBlock(tool_name="test")
-    block._body = MagicMock()
-    block._collapsible = MagicMock()
+    block._content_area = MagicMock()
+    block._header = MagicMock()
     # Create a result longer than 2000 chars
     long_result = "x" * 3000
     block.complete(result=long_result)
