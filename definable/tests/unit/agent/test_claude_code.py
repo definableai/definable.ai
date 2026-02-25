@@ -642,6 +642,7 @@ class TestControlHandler:
     agent = ClaudeCodeAgent()
     request = ControlRequest(id="req-1", subtype="can_use_tool", tool_name="Read", input={})
     response = await agent._handle_control(request, run_context)
+    assert isinstance(response, dict)
     assert response["behavior"] == "allow"
 
   @pytest.mark.asyncio
@@ -652,6 +653,7 @@ class TestControlHandler:
     agent = ClaudeCodeAgent(guardrails=Guardrails(tool=[tool_blocklist({"Bash"})]))
     request = ControlRequest(id="req-1", subtype="can_use_tool", tool_name="Bash", input={"command": "rm -rf /"})
     response = await agent._handle_control(request, run_context)
+    assert isinstance(response, dict)
     assert response["behavior"] == "deny"
 
   @pytest.mark.asyncio
@@ -662,6 +664,7 @@ class TestControlHandler:
     agent._ensure_initialized()
     request = ControlRequest(id="req-2", subtype="tool_call", tool_name="mcp__definable__deploy", input={"branch": "main"})
     response = await agent._handle_control(request, run_context)
+    assert isinstance(response, dict)
     assert "result" in response
     assert "Deployed main" in response["result"]["content"][0]["text"]
 
@@ -672,6 +675,7 @@ class TestControlHandler:
     agent = ClaudeCodeAgent()
     request = ControlRequest(id="req-3", subtype="unknown_subtype")
     response = await agent._handle_control(request, run_context)
+    assert isinstance(response, dict)
     assert response["behavior"] == "allow"
 
 
@@ -1017,6 +1021,7 @@ class TestKnowledgeAsyncFix:
     context = RunContext(run_id="r1", session_id="s1")
     result = await agent._knowledge_retrieve(context, "test")
 
+    assert result is not None
     assert "[1] fallback doc" in result
 
 
@@ -1068,6 +1073,7 @@ class TestToolkitInitialization:
 
     agent = ClaudeCodeAgent(toolkits=[mock_toolkit])
     agent._ensure_initialized()
+    assert agent._tool_bridge is not None
     assert agent._tool_bridge.tool_count == 0  # No direct tools
 
     await agent._ensure_toolkits_initialized()
@@ -1128,7 +1134,8 @@ class TestLifecycleCleanup:
     agent = ClaudeCodeAgent(memory=True)
     async with agent:
       mock_close = AsyncMock()
-      agent._memory_manager.close = mock_close
+      assert agent._memory_manager is not None
+      agent._memory_manager.close = mock_close  # type: ignore[method-assign]
 
     mock_close.assert_called_once()
 
@@ -1176,6 +1183,7 @@ class TestLifecycleCleanup:
     assert agent.agent_id == "my-agent"
     # Default generates a uuid-based id
     agent2 = ClaudeCodeAgent()
+    assert agent2.agent_id is not None
     assert agent2.agent_id.startswith("claude-code-")
 
 
@@ -1206,6 +1214,7 @@ class TestBridgeDependencyInjection:
     bridge = ToolBridge(skills=[skill])
     registered_fn = bridge._tools.get("my_tool")
     assert registered_fn is not None
+    assert registered_fn._dependencies is not None
     assert registered_fn._dependencies["db_url"] == "sqlite:///test.db"
     assert registered_fn._dependencies["api_key"] == "xxx"
     assert registered_fn._dependencies["existing"] == "dep"
@@ -1277,7 +1286,7 @@ class TestMCPPassthrough:
         ]
       )
     )
-    toolkit.initialize = AsyncMock()
+    toolkit.initialize = AsyncMock()  # type: ignore[method-assign]
 
     agent = ClaudeCodeAgent(toolkits=[toolkit])
     agent._ensure_initialized()
@@ -1472,6 +1481,7 @@ class TestMCPPassthrough:
     agent._ensure_initialized()
 
     # Custom tool is in bridge
+    assert agent._tool_bridge is not None
     assert agent._tool_bridge.tool_count == 1
     assert "deploy" in agent._tool_bridge._tools
 
@@ -1600,6 +1610,7 @@ class TestArunStream:
 
     tool_events = [e for e in events if isinstance(e, ToolCallStartedEvent)]
     assert len(tool_events) == 1
+    assert tool_events[0].tool is not None
     assert tool_events[0].tool.tool_name == "Bash"
 
   @pytest.mark.asyncio
@@ -1716,7 +1727,9 @@ class TestHITL:
     request = ControlRequest(id="req-1", subtype="can_use_tool", tool_name="Bash", input={"command": "rm -rf /"})
     response = await agent._handle_control(request, run_context)
     assert isinstance(response, RunPausedEvent)
+    assert response.requirements is not None
     assert len(response.requirements) == 1
+    assert response.requirements[0].tool_execution is not None
     assert response.requirements[0].tool_execution.tool_name == "Bash"
     assert response.requirements[0].tool_execution.tool_args == {"command": "rm -rf /"}
 
@@ -1779,6 +1792,7 @@ class TestHITL:
     assert result.status == RunStatus.paused
     assert result.requirements is not None
     assert len(result.requirements) == 1
+    assert result.requirements[0].tool_execution is not None
     assert result.requirements[0].tool_execution.tool_name == "Bash"
     # Transport should NOT be closed (still alive for continue_run)
     mock_transport.close.assert_not_called()
@@ -1816,6 +1830,8 @@ class TestHITL:
     assert len(events) == 2
     assert isinstance(events[0], RunStartedEvent)
     assert isinstance(events[1], RunPausedEvent)
+    assert events[1].requirements is not None
+    assert events[1].requirements[0].tool_execution is not None
     assert events[1].requirements[0].tool_execution.tool_name == "Write"
     mock_transport.close.assert_not_called()
 
@@ -1871,6 +1887,7 @@ class TestHITL:
     # Swap the receive method for resume messages
     mock_transport.receive = lambda: _mock_transport_messages(resume_messages)
 
+    assert result.requirements is not None
     for req in result.requirements:
       req.confirm()
 
@@ -1933,6 +1950,7 @@ class TestHITL:
 
     mock_transport.receive = lambda: _mock_transport_messages(resume_messages)
 
+    assert result.requirements is not None
     for req in result.requirements:
       req.reject()
 
@@ -2028,6 +2046,7 @@ class TestHITL:
     mock_transport.receive = lambda: _mock_transport_messages(resume_messages)
 
     paused_event = events[1]
+    assert paused_event.requirements is not None
     for req in paused_event.requirements:
       req.confirm()
 
@@ -3064,8 +3083,10 @@ class TestHandleControlAskUserQuestion:
 
     assert isinstance(response, RunPausedEvent)
     assert response.run_id == "run-1"
+    assert response.requirements is not None
     assert len(response.requirements) == 1
     req = response.requirements[0]
+    assert req.tool_execution is not None
     assert req.tool_execution.tool_name == "AskUserQuestion"
     assert req.tool_execution.requires_user_input is True
 

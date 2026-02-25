@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from definable.agent.interface.base import BaseInterface
 from definable.agent.interface.config import InterfaceConfig
 from definable.agent.interface.gateway import (
   InterfaceErrorEvent,
@@ -19,7 +20,7 @@ from definable.agent.interface.gateway import (
   _GatewayHookBridge,
 )
 from definable.agent.interface.message import InterfaceMessage, InterfaceResponse
-from definable.agent.interface.session import InterfaceSession, SessionManager
+from definable.agent.interface.session import InterfaceSession
 from definable.agent.run.agent import RunEvent
 
 
@@ -28,23 +29,28 @@ from definable.agent.run.agent import RunEvent
 # ---------------------------------------------------------------------------
 
 
-class _StubInterface:
+class _StubInterface(BaseInterface):
   """Minimal stub satisfying the BaseInterface contract for gateway tests."""
 
   def __init__(self, platform: str = "test") -> None:
-    self.config = InterfaceConfig(platform=platform)
-    self.agent: Any = None
-    self._hooks: List[Any] = []
-    self._identity_resolver: Any = None
-    self.session_manager = SessionManager()
-    self._running = False
+    super().__init__(config=InterfaceConfig(platform=platform))
     self._serve_side_effect: Any = None
     self._serve_called = asyncio.Event()
     self.sent_responses: List[InterfaceResponse] = []
 
-  def bind(self, agent: Any) -> "_StubInterface":
+  def bind(self, agent: Any) -> "_StubInterface":  # type: ignore[override]
     self.agent = agent
-    return self
+    return self  # type: ignore[return-value]
+
+  async def _start_receiver(self) -> None:
+    """No-op for stub."""
+
+  async def _stop_receiver(self) -> None:
+    """No-op for stub."""
+
+  async def _convert_inbound(self, raw_message: Any) -> Optional[InterfaceMessage]:
+    """No-op for stub."""
+    return None
 
   async def _send_response(self, original_msg: Any, response: Any, raw_message: Any) -> None:
     """Record sent responses for assertion."""
@@ -156,7 +162,7 @@ class TestGatewayConstruction:
     assert gw._link_hook._command == "/connect"
     assert gw._link_hook._code_ttl == 120
     # Link hook should be first in hooks list
-    assert gw._hooks[0] is gw._link_hook
+    assert gw._hooks[0] is gw._link_hook  # type: ignore[comparison-overlap]
 
 
 # ===========================================================================
@@ -470,8 +476,8 @@ class TestAgentIntegration:
       model.id = "gpt-4o-mini"
       model.name = "gpt-4o-mini"
       model.provider = "OpenAI"
-      model.metrics = {}
-      model.provider_request_headers = None
+      model.metrics = {}  # type: ignore[attr-defined]
+      model.provider_request_headers = None  # type: ignore[attr-defined]
       agent = Agent(model=model)
 
     gw = agent.create_gateway()
@@ -489,8 +495,8 @@ class TestAgentIntegration:
       model.id = "gpt-4o-mini"
       model.name = "gpt-4o-mini"
       model.provider = "OpenAI"
-      model.metrics = {}
-      model.provider_request_headers = None
+      model.metrics = {}  # type: ignore[attr-defined]
+      model.provider_request_headers = None  # type: ignore[attr-defined]
       agent = Agent(model=model)
 
     iface = _StubInterface("telegram")
@@ -509,8 +515,8 @@ class TestAgentIntegration:
       model.id = "gpt-4o-mini"
       model.name = "gpt-4o-mini"
       model.provider = "OpenAI"
-      model.metrics = {}
-      model.provider_request_headers = None
+      model.metrics = {}  # type: ignore[attr-defined]
+      model.provider_request_headers = None  # type: ignore[attr-defined]
       agent = Agent(model=model)
 
     assert agent.gateway is None
@@ -638,6 +644,7 @@ class TestIdentityLinkingReply:
     result = await bridge.on_message_received(msg)
     assert result is False
     assert len(iface.sent_responses) == 1
+    assert iface.sent_responses[0].content is not None
     assert "Enter this code" in iface.sent_responses[0].content
 
   @pytest.mark.asyncio
@@ -666,6 +673,7 @@ class TestIdentityLinkingReply:
     await bridge.on_message_received(msg2)
 
     assert len(iface.sent_responses) == 2
+    assert iface.sent_responses[1].content is not None
     assert "Linked" in iface.sent_responses[1].content
 
   @pytest.mark.asyncio

@@ -147,7 +147,7 @@ class TestOpenAIParsedPopulation:
     model.name = "OpenAI"
     model.id = "gpt-4o-mini"
 
-    response = self._make_openai_response(None)
+    response = self._make_openai_response(None)  # type: ignore[arg-type]
     response.choices[0].message.content = None
 
     result = model._parse_provider_response(response, response_format=WeatherResponse)
@@ -452,7 +452,7 @@ class TestAgentLoopParsedPropagation:
 
     loop = AgentLoop(
       model=mock_model,
-      tools=[],
+      tools={},
       messages=[Message(role="user", content="What's the weather?")],
       context=context,
       config=config,
@@ -500,7 +500,7 @@ class TestAgentLoopParsedPropagation:
 
     loop = AgentLoop(
       model=mock_model,
-      tools=[],
+      tools={},
       messages=[Message(role="user", content="Hello")],
       context=context,
       config=config,

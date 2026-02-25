@@ -25,7 +25,7 @@ def _make_state(**overrides) -> LoopState:
     "context": RunContext(run_id="test-run", session_id="test-session"),
   }
   defaults.update(overrides)
-  return LoopState(**defaults)
+  return LoopState(**defaults)  # type: ignore[arg-type]
 
 
 def _mock_agent(**attrs):

@@ -33,7 +33,7 @@ def _make_state(**overrides) -> LoopState:
     "context": RunContext(run_id="test-run", session_id="test-session"),
   }
   defaults.update(overrides)
-  return LoopState(**defaults)
+  return LoopState(**defaults)  # type: ignore[arg-type]
 
 
 class NoopPhase(BasePhase):
@@ -424,6 +424,7 @@ class TestPhaseEventsAndMetrics:
 
   def test_run_output_has_phase_metrics_field(self):
     output = RunOutput(phase_metrics=[PhaseMetric(phase_name="p", duration_ms=1.0)])
+    assert output.phase_metrics is not None
     assert len(output.phase_metrics) == 1
 
 
@@ -563,7 +564,7 @@ class TestPipelineIntegration:
   @pytest.mark.asyncio
   async def test_pipeline_completes_with_all_phases(self):
     phases = [CounterPhase(f"p{i}") for i in range(4)]
-    p = Pipeline(phases=phases)
+    p = Pipeline(phases=phases)  # type: ignore[arg-type]
     state = _make_state()
     async for _ in p.execute(state):
       pass

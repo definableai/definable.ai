@@ -250,6 +250,7 @@ class TestArunWithAudioTranscription:
     assert len(transcriber.calls) == 1
 
     # The user message in history contains the transcript, audio cleared
+    assert result.messages is not None
     user_messages = [m for m in result.messages if m.role == "user"]
     assert len(user_messages) >= 1
     assert "please help me debug this" in (user_messages[-1].content or "")
@@ -266,6 +267,7 @@ class TestArunWithAudioTranscription:
 
     assert result.content == "I can see audio."
     # Audio is on the message but transcript is not set
+    assert result.messages is not None
     user_messages = [m for m in result.messages if m.role == "user"]
     assert user_messages[-1].audio is not None
     assert user_messages[-1].audio[0].transcript is None

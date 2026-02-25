@@ -87,6 +87,7 @@ class TestSubAgentPolicy:
 
   def test_restricted_models(self):
     p = SubAgentPolicy(allowed_models=["openai/gpt-4o-mini", "openai/gpt-4o"])
+    assert p.allowed_models is not None
     assert len(p.allowed_models) == 2
 
   def test_callbacks(self):
@@ -200,7 +201,7 @@ class TestAgentSubAgentIntegration:
     from definable.agent import Agent
     from definable.agent.testing import MockModel
 
-    agent = Agent(model=MockModel(responses=["hi"]), sub_agents=True)
+    agent = Agent(model=MockModel(responses=["hi"]), sub_agents=True)  # type: ignore[arg-type]
     assert agent._sub_agent_policy is not None
     assert agent._sub_agent_policy.max_concurrent == 5
 
@@ -209,7 +210,8 @@ class TestAgentSubAgentIntegration:
     from definable.agent.testing import MockModel
 
     policy = SubAgentPolicy(max_concurrent=2, inherit_knowledge=True)
-    agent = Agent(model=MockModel(responses=["hi"]), sub_agents=policy)
+    agent = Agent(model=MockModel(responses=["hi"]), sub_agents=policy)  # type: ignore[arg-type]
+    assert agent._sub_agent_policy is not None
     assert agent._sub_agent_policy.max_concurrent == 2
     assert agent._sub_agent_policy.inherit_knowledge is True
 
@@ -217,5 +219,5 @@ class TestAgentSubAgentIntegration:
     from definable.agent import Agent
     from definable.agent.testing import MockModel
 
-    agent = Agent(model=MockModel(responses=["hi"]))
+    agent = Agent(model=MockModel(responses=["hi"]))  # type: ignore[arg-type]
     assert agent._sub_agent_policy is None

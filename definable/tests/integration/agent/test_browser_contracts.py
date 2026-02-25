@@ -33,10 +33,10 @@ class _ConcreteTestBrowser(BaseBrowser):
     pass
 
   # -- Perception --
-  async def snapshot(self, **kwargs: Any) -> str:
+  async def snapshot(self, options: Any = None, selector: str | None = None, frame_selector: str | None = None) -> str:
     return "(empty)"
 
-  async def screenshot(self, name: str = "screenshot", **kwargs: Any) -> str:
+  async def screenshot(self, name: str = "screenshot", ref: str | None = None, full_page: bool = False) -> str:
     return "/tmp/screenshot.png"
 
   async def get_page_info(self) -> str:
@@ -126,7 +126,7 @@ class _ConcreteTestBrowser(BaseBrowser):
   async def fill_form(self, fields: list[dict[str, Any]]) -> str:
     return f"filled {len(fields)} fields"
 
-  async def execute_js(self, code: str, **kwargs: Any) -> str:
+  async def execute_js(self, code: str, ref: str | None = None, timeout: float | None = None) -> str:
     return "null"
 
   async def highlight(self, ref_or_selector: str) -> str:
@@ -155,7 +155,16 @@ class _ConcreteTestBrowser(BaseBrowser):
   async def wait_for_text(self, text: str, selector: str = "body", timeout: float = 10.0) -> str:
     return f"waited for {text!r}"
 
-  async def wait_for(self, **kwargs: Any) -> str:
+  async def wait_for(
+    self,
+    text: str | None = None,
+    text_gone: str | None = None,
+    selector: str | None = None,
+    url: str | None = None,
+    load_state: str | None = None,
+    fn: str | None = None,
+    timeout: float | None = None,
+  ) -> str:
     return "waited"
 
   # -- Tabs --

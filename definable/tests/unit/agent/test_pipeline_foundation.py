@@ -54,7 +54,7 @@ class EventEmittingPhase(BasePhase):
 def _make_state(**overrides) -> LoopState:
   defaults = {"run_id": "test-run", "session_id": "test-session"}
   defaults.update(overrides)
-  return LoopState(**defaults)
+  return LoopState(**defaults)  # type: ignore[arg-type]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -75,7 +75,7 @@ class TestLoopState:
   def test_default_collections_are_independent(self):
     s1 = LoopState(run_id="r1", session_id="s1")
     s2 = LoopState(run_id="r2", session_id="s2")
-    s1.new_messages.append("msg")
+    s1.new_messages.append("msg")  # type: ignore[arg-type]
     assert len(s2.new_messages) == 0
 
   def test_mutable_fields(self):
@@ -99,7 +99,7 @@ class TestLoopState:
   def test_streaming_and_cancellation(self):
     state = _make_state(streaming=True, cancellation_token="tok")
     assert state.streaming is True
-    assert state.cancellation_token == "tok"
+    assert state.cancellation_token == "tok"  # type: ignore[comparison-overlap]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -110,7 +110,7 @@ class TestLoopState:
 class TestLoopStatus:
   def test_values(self):
     assert LoopStatus.pending == "pending"
-    assert LoopStatus.running == "running"
+    assert LoopStatus.running == "running"  # type: ignore[unreachable]
     assert LoopStatus.completed == "completed"
     assert LoopStatus.paused == "paused"
     assert LoopStatus.cancelled == "cancelled"
@@ -270,9 +270,9 @@ class TestPipelineExecution:
         events.append(e)
     # Phase lifecycle events (PhaseStarted + PhaseCompleted) + the custom event
     assert len(events) == 3
-    assert events[0].event == "PhaseStarted"
-    assert events[1].data == "from_emitter"
-    assert events[2].event == "PhaseCompleted"
+    assert events[0].event == "PhaseStarted"  # type: ignore[attr-defined]
+    assert events[1].data == "from_emitter"  # type: ignore[attr-defined]
+    assert events[2].event == "PhaseCompleted"  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_execute_empty_pipeline(self):
@@ -308,7 +308,7 @@ class TestPipelineExecution:
 
       async def execute(self, state):
         raise RuntimeError("boom")
-        yield  # noqa: F841
+        yield  # type: ignore[unreachable]  # noqa: F841
 
     p = Pipeline(phases=[BrokenPhase()])
     state = _make_state()

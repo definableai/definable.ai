@@ -52,7 +52,7 @@ class TestLifecycle:
     await browser.stop()
     assert browser._page is None
     assert browser._browser is None
-    assert browser._pw is None
+    assert browser._pw is None  # type: ignore[unreachable]
 
 
 class TestNavigation:
@@ -350,7 +350,7 @@ class TestForceDisconnect:
     browser._browser = mock_browser_obj
     await browser._force_disconnect("test")
     assert browser._browser is None
-    assert browser._page is None
+    assert browser._page is None  # type: ignore[unreachable]
 
   @pytest.mark.asyncio
   async def test_connect_retry_logic(self):

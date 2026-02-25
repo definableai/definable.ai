@@ -66,6 +66,7 @@ class TestModelCallEventFields:
     )
     assert event.turn == 2
     assert event.content == "Hello!"
+    assert event.tool_calls is not None
     assert len(event.tool_calls) == 1
     assert event.model_id == "gpt-4o"
 

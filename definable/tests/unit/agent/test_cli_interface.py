@@ -151,6 +151,7 @@ class TestCLIConfig:
     assert config.prompt == "$ "
 
     updated = config.with_updates(show_banner=True)
+    assert isinstance(updated, CLIConfig)
     assert updated.show_banner is True
     assert updated.prompt == "$ "
 
@@ -519,7 +520,7 @@ class TestToolCallRenderer:
     r = ToolCallRenderer()
     console = _make_console()
     config = CLIConfig(show_tool_args=True)
-    tool = ToolExecution(tool_name="search", tool_args='{"q": "test"}')
+    tool = ToolExecution(tool_name="search", tool_args='{"q": "test"}')  # type: ignore[arg-type]
     event = ToolCallStartedEvent(tool=tool)
     r.render(event, console, config)
     output = _get_console_output(console)
@@ -530,7 +531,7 @@ class TestToolCallRenderer:
     r = ToolCallRenderer()
     console = _make_console()
     config = CLIConfig(show_tool_args=False)
-    tool = ToolExecution(tool_name="search", tool_args='{"q": "secret"}')
+    tool = ToolExecution(tool_name="search", tool_args='{"q": "secret"}')  # type: ignore[arg-type]
     event = ToolCallStartedEvent(tool=tool)
     r.render(event, console, config)
     output = _get_console_output(console)

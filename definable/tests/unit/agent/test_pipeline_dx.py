@@ -11,7 +11,7 @@ def _agent(**kw) -> Agent:
   """Create a test agent with MockModel."""
   defaults = {"model": MockModel(responses=["hello"])}
   defaults.update(kw)
-  return Agent(**defaults)
+  return Agent(**defaults)  # type: ignore[arg-type]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -158,6 +158,7 @@ class TestSubAgentPolicy:
   def test_sub_agents_policy(self):
     policy = SubAgentPolicy(max_concurrent=3, inherit_tools=False)
     agent = _agent(sub_agents=policy)
+    assert agent._sub_agent_policy is not None
     assert agent._sub_agent_policy.max_concurrent == 3
     assert agent._sub_agent_policy.inherit_tools is False
 
@@ -179,7 +180,7 @@ class TestToolRetryDX:
   def test_raise_and_catch(self):
     with pytest.raises(ToolRetry) as exc_info:
       raise ToolRetry("query too short", max_retries=5)
-    assert exc_info.value.message == "query too short"
+    assert exc_info.value.message == "query too short"  # type: ignore[unreachable]
     assert exc_info.value.max_retries == 5
 
   def test_import_from_top_level(self):

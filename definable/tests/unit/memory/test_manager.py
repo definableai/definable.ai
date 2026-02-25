@@ -64,6 +64,7 @@ class TestMemory:
     messages = await mem.get_context_messages("s1")
     assert len(messages) == 1
     assert messages[0].role == "system"
+    assert isinstance(messages[0].content, str)
     assert "User discussed weather" in messages[0].content
 
   @pytest.mark.asyncio

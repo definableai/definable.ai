@@ -150,7 +150,7 @@ class TestRefResolver:
     resolver = RefResolver()
     resolver.store({"e1": RoleRef(role="button", name="Submit")})
     page = MockPage()
-    locator = resolver.resolve(page, "e1")
+    locator = resolver.resolve(page, "e1")  # type: ignore[arg-type]
     assert locator is not None
 
   def test_resolve_css_selector(self):
@@ -158,7 +158,7 @@ class TestRefResolver:
 
     resolver = RefResolver()
     page = MockPage()
-    locator = resolver.resolve(page, "button.submit")
+    locator = resolver.resolve(page, "button.submit")  # type: ignore[arg-type]
     assert locator is not None
 
   def test_unknown_ref_raises(self):
@@ -168,7 +168,7 @@ class TestRefResolver:
     resolver.store({})
     page = MockPage()
     with pytest.raises(ValueError, match="Unknown ref"):
-      resolver.resolve(page, "e99")
+      resolver.resolve(page, "e99")  # type: ignore[arg-type]
 
   def test_at_prefix_stripped(self):
     from tests.unit.browser.conftest import MockPage
@@ -176,7 +176,7 @@ class TestRefResolver:
     resolver = RefResolver()
     resolver.store({"e1": RoleRef(role="button", name="OK")})
     page = MockPage()
-    locator = resolver.resolve(page, "@e1")
+    locator = resolver.resolve(page, "@e1")  # type: ignore[arg-type]
     assert locator is not None
 
   def test_ref_equals_stripped(self):
@@ -185,7 +185,7 @@ class TestRefResolver:
     resolver = RefResolver()
     resolver.store({"e5": RoleRef(role="link", name="Home")})
     page = MockPage()
-    locator = resolver.resolve(page, "ref=e5")
+    locator = resolver.resolve(page, "ref=e5")  # type: ignore[arg-type]
     assert locator is not None
 
   def test_store_replaces(self):

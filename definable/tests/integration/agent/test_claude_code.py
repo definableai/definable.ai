@@ -433,6 +433,7 @@ class TestToolkitIntegrationBehavioral:
 
     mock_toolkit.initialize.assert_called_once()
     # Toolkit tool should be in bridge
+    assert agent._tool_bridge is not None
     assert "tk_tool" in agent._tool_bridge._tools
 
 
