@@ -45,6 +45,8 @@ from definable.agent.interface.session import InterfaceSession, SessionManager
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+  from definable.agent.interface.call.config import CallConfig
+  from definable.agent.interface.call.interface import CallInterface
   from definable.agent.interface.cli.config import CLIConfig
   from definable.agent.interface.cli.interface import CLIInterface
   from definable.agent.interface.desktop.config import DesktopConfig
@@ -60,6 +62,8 @@ if TYPE_CHECKING:
     InterfaceStoppedEvent,
   )
   from definable.agent.interface.identity import IdentityResolver, PlatformIdentity, SQLiteIdentityResolver
+  from definable.agent.interface.slack.config import SlackConfig
+  from definable.agent.interface.slack.interface import SlackInterface
   from definable.agent.interface.telegram.config import TelegramConfig
   from definable.agent.interface.telegram.interface import TelegramInterface
 
@@ -113,6 +117,22 @@ def __getattr__(name: str):
     from definable.agent.interface import gateway as _gateway_mod
 
     return getattr(_gateway_mod, name)
+  if name == "CallInterface":
+    from definable.agent.interface.call.interface import CallInterface
+
+    return CallInterface
+  if name == "CallConfig":
+    from definable.agent.interface.call.config import CallConfig
+
+    return CallConfig
+  if name == "SlackInterface":
+    from definable.agent.interface.slack.interface import SlackInterface
+
+    return SlackInterface
+  if name == "SlackConfig":
+    from definable.agent.interface.slack.config import SlackConfig
+
+    return SlackConfig
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -136,10 +156,14 @@ __all__ = [
   "InterfaceRateLimitError",
   "InterfaceMessageError",
   # Platform implementations (lazy-loaded)
+  "CallInterface",
+  "CallConfig",
   "CLIInterface",
   "CLIConfig",
   "DesktopInterface",
   "DesktopConfig",
+  "SlackInterface",
+  "SlackConfig",
   "TelegramInterface",
   "TelegramConfig",
   "DiscordInterface",
