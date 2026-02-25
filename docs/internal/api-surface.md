@@ -122,6 +122,42 @@ from definable.skill import HTTPRequests, JSONOperations, Shell, TextProcessing
 from definable.skill import WebSearch, MacOS, SkillRegistry
 ```
 
+## Call Interface (Voice)
+
+```python
+from definable.agent.interface.call import CallInterface, CallConfig, CallSession
+
+# Managed mode (Twilio only — simplest, ~500ms latency)
+call = CallInterface(
+    agent=agent,
+    provider="twilio",          # or "plivo" (cascading/realtime only)
+    phone_number="+15551234567",
+    pipeline="managed",         # "managed" | "cascading" | "realtime"
+    welcome_message="Hello!",
+)
+
+# Cascading mode (pluggable STT/TTS, works with Twilio and Plivo)
+from definable.agent.interface.call.stt.deepgram import DeepgramSTT
+from definable.agent.interface.call.tts.cartesia import CartesiaTTS
+call = CallInterface(
+    agent=agent, provider="twilio", phone_number="+1555",
+    pipeline="cascading",
+    stt=DeepgramSTT(model="nova-3"),
+    tts=CartesiaTTS(model="sonic-2", voice_id="..."),
+)
+
+# Realtime mode (OpenAI speech-to-speech, ~200-300ms latency)
+from definable.agent.interface.call import OpenAIRealtimeProvider
+call = CallInterface(
+    agent=agent, provider="twilio", phone_number="+1555",
+    pipeline="realtime",
+    realtime=OpenAIRealtimeProvider(model="gpt-4o-realtime-preview", voice="alloy"),
+)
+
+# Plivo does NOT support managed mode — only cascading or realtime
+# CallInterface(provider="plivo", pipeline="managed") → ValueError
+```
+
 ## Auth
 
 ```python
@@ -136,6 +172,51 @@ auth = AllowlistAuth(user_ids={"user1"})     # NOT allowed_ids
 from definable.agent import MockModel, create_test_agent, AgentTestCase
 # MockModel gotcha: call_count NOT incremented with side_effect
 # Use len(mock_model.call_history) instead
+```
+
+## Slack Interface
+
+```python
+from definable.agent.interface import SlackInterface, SlackConfig
+
+# Socket Mode (development)
+slack = SlackInterface(
+    agent=agent,
+    bot_token="xoxb-...",     # required
+    app_token="xapp-...",     # required for socket mode
+    mode="socket",            # default
+)
+
+# HTTP Events API (production)
+slack = SlackInterface(
+    agent=agent,
+    bot_token="xoxb-...",
+    signing_secret="...",     # required for http mode
+    mode="http",
+)
+
+# Interactive callbacks (fluent API)
+slack.on_command("/status", handler)
+slack.on_action("button_clicked", handler)
+slack.on_view("modal_submitted", handler)
+slack.on_shortcut("quick_action", handler)
+slack.on_reaction_added(handler)
+slack.on_home_opened(handler)
+slack.on_event("channel_created", handler)
+
+# Block Kit builders
+from definable.agent.interface.slack.formatter import (
+    header_block, section_block, actions_block, button_element,
+    modal_view, home_tab_view, markdown_to_mrkdwn,
+)
+
+# API methods
+await slack.update_message(channel, ts, text="...")
+await slack.send_ephemeral(channel, user, text)
+await slack.send_blocks(channel, blocks)
+await slack.open_modal(trigger_id, view)
+await slack.publish_home(user_id, view)
+await slack.schedule_message(channel, text, post_at)
 ```
 
 ## Audio Transcription
@@ -166,3 +247,4 @@ out_bytes, out_fmt = normalize_audio_format(raw_bytes, "oga")
 - `output_schema` not `response_model` for structured output
 - sync `run()` breaks after 2-3 sequential multi-turn calls
 - `InMemoryVectorDB(dimensions=N)` — dimensions param deprecated/ignored
+- `CallInterface(provider="plivo", pipeline="managed")` → ValueError (Plivo has no ConversationRelay)

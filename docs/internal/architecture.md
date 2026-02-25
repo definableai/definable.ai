@@ -29,8 +29,13 @@ Agent ──┬── Model (lazy client, global HTTP pool) — or string shorth
         ├── Skills[] → Skill (instructions + tools)
         ├── Guardrails → input/output/tool checks
         ├── Middleware[] → chain (skipped in streaming)
-        └── Interfaces[] → Telegram, Discord, Desktop
-              └── Auth → APIKeyAuth, JWTAuth, AllowlistAuth
+        └── Interfaces[] → Telegram, Discord, Slack, Call, Desktop
+              ├── Auth → APIKeyAuth, JWTAuth, AllowlistAuth
+              └── Call → CallInterface (Twilio/Plivo, managed/cascading/realtime)
+                    ├── Telephony → TwilioProvider, PlivoProvider
+                    ├── STT → DeepgramSTT
+                    ├── TTS → CartesiaTTS
+                    └── Realtime → OpenAIRealtimeProvider
 ```
 
 ## Module Boundaries (strict)

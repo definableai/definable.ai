@@ -20,10 +20,14 @@ Everything else — sessions, hooks, agent execution, error handling, concurrenc
 
 ## Skeleton Example
 
-Here is a minimal interface for a hypothetical Slack integration:
+Here is a minimal custom interface for a WebSocket-based chat platform:
+
+<Tip>
+Looking for Slack? There's a built-in [Slack interface](/interfaces/slack) with full Block Kit, slash commands, and interactive component support.
+</Tip>
 
 ```python
-from typing import Any, Optional, List
+from typing import Any, Optional
 from definable.agent.interface import (
     BaseInterface,
     InterfaceConfig,
@@ -31,52 +35,50 @@ from definable.agent.interface import (
     InterfaceResponse,
 )
 
-class SlackConfig(InterfaceConfig):
-    platform: str = "slack"
-    bot_token: str = ""
-    app_token: str = ""
-    # Add any Slack-specific settings here
+class MyChatConfig(InterfaceConfig):
+    platform: str = "mychat"
+    api_token: str = ""
+    ws_url: str = "wss://chat.example.com/ws"
 
-class SlackInterface(BaseInterface):
-    def __init__(self, agent, config: SlackConfig, **kwargs):
-        super().__init__(agent=agent, config=config, **kwargs)
-        self._slack_client = None
+class MyChatInterface(BaseInterface):
+    def __init__(self, agent, **kwargs):
+        super().__init__(agent=agent, **kwargs)
+        self._ws = None
 
     async def _start_receiver(self) -> None:
-        """Connect to Slack via Socket Mode."""
-        from slack_sdk.web.async_client import AsyncWebClient
-        from slack_sdk.socket_mode.aiohttp import SocketModeClient
+        """Connect to the chat platform via WebSocket."""
+        import websockets
+        self._ws = await websockets.connect(self.config.ws_url)
 
-        self._slack_client = SocketModeClient(
-            app_token=self.config.app_token,
-            web_client=AsyncWebClient(token=self.config.bot_token),
-        )
+        # Start receiving messages in background
+        import asyncio
+        asyncio.create_task(self._listen())
 
-        # Register handler for incoming messages
-        self._slack_client.message_listeners.append(self._on_slack_event)
-        await self._slack_client.connect()
+    async def _listen(self) -> None:
+        """Read messages from the WebSocket and dispatch them."""
+        import json
+        async for raw in self._ws:
+            event = json.loads(raw)
+            await self.handle_platform_message(event)
 
     async def _stop_receiver(self) -> None:
-        """Disconnect from Slack."""
-        if self._slack_client:
-            await self._slack_client.disconnect()
-            self._slack_client = None
+        """Disconnect from the chat platform."""
+        if self._ws:
+            await self._ws.close()
+            self._ws = None
 
     async def _convert_inbound(self, raw_message: Any) -> Optional[InterfaceMessage]:
-        """Convert a Slack event to InterfaceMessage."""
-        event = raw_message.get("event", {})
-
+        """Convert a platform event to InterfaceMessage."""
         # Skip bot messages
-        if event.get("bot_id"):
+        if raw_message.get("is_bot"):
             return None
 
         return InterfaceMessage(
-            platform="slack",
-            platform_user_id=event.get("user", ""),
-            platform_chat_id=event.get("channel", ""),
-            platform_message_id=event.get("ts", ""),
-            text=event.get("text", ""),
-            metadata={"thread_ts": event.get("thread_ts")},
+            platform="mychat",
+            platform_user_id=raw_message.get("user_id", ""),
+            platform_chat_id=raw_message.get("room_id", ""),
+            platform_message_id=raw_message.get("msg_id", ""),
+            text=raw_message.get("text", ""),
         )
 
     async def _send_response(
@@ -85,13 +87,14 @@ class SlackInterface(BaseInterface):
         response: InterfaceResponse,
         raw_message: Any,
     ) -> None:
-        """Send the response back to Slack."""
-        if response.content and self._slack_client:
-            await self._slack_client.web_client.chat_postMessage(
-                channel=original_msg.platform_chat_id,
-                text=response.content,
-                thread_ts=original_msg.metadata.get("thread_ts"),
-            )
+        """Send the response back to the platform."""
+        import json
+        if response.content and self._ws:
+            await self._ws.send(json.dumps({
+                "type": "message",
+                "room_id": original_msg.platform_chat_id,
+                "text": response.content,
+            }))
 ```
 
 ## InterfaceMessage
@@ -179,12 +182,12 @@ When building a custom interface:
 
 ```python
 # In your polling loop or event handler:
-async def _on_slack_event(self, event):
+async def _on_platform_event(self, event):
     await self.handle_platform_message(event)
 ```
 
 The base class takes it from there — converting the message, running hooks, managing sessions, calling the agent, and invoking your `_send_response`.
 
 <Tip>
-Look at the Telegram implementation in `definable/definable/interfaces/telegram/interface.py` as a reference. It demonstrates polling, webhooks, media handling, message splitting, and error mapping.
+Look at the [Telegram](/interfaces/telegram) or [Slack](/interfaces/slack) implementations as references. Telegram demonstrates polling vs webhooks, media handling, and error mapping. Slack demonstrates Socket Mode, Block Kit interactions, slash commands, and modals.
 </Tip>

@@ -136,6 +136,8 @@
                 "pages": [
                   "interfaces/telegram",
                   "interfaces/discord",
+                  "interfaces/slack",
+                  "interfaces/call",
                   "interfaces/custom-interfaces"
                 ]
               },

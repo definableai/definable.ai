@@ -5,7 +5,7 @@ description: Connect agents to messaging platforms with automatic sessions, hook
 icon: message-bot
 ---
 
-An **Interface** connects a Definable agent to an external messaging platform — Telegram, Discord, Desktop, CLI, or any custom channel. It handles the full lifecycle: receiving messages, managing sessions, resolving user identity, running the agent, and sending responses back.
+An **Interface** connects a Definable agent to an external messaging platform — Telegram, Discord, Slack, voice phone calls, Desktop, CLI, or any custom channel. It handles the full lifecycle: receiving messages, managing sessions, resolving user identity, running the agent, and sending responses back.
 
 ## How It Works
 
@@ -152,6 +152,12 @@ interface = (
   </Card>
   <Card title="Discord" icon="discord" href="/interfaces/discord">
     Deploy to Discord with guild/DM support, attachments, and access control.
+  </Card>
+  <Card title="Slack" icon="slack" href="/interfaces/slack">
+    Deploy to Slack with Socket Mode, Block Kit interactions, and slash commands.
+  </Card>
+  <Card title="Call (Voice)" icon="phone" href="/interfaces/call">
+    Connect to phone calls via Twilio or Plivo with managed, cascading, or realtime pipelines.
   </Card>
   <Card title="Identity" icon="fingerprint" href="/interfaces/identity">
     Map users across platforms to a single canonical identity for shared memory.

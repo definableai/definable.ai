@@ -1,0 +1,504 @@
+---
+title: Slack
+description: Deploy your agent as a Slack bot with Socket Mode or HTTP Events API.
+icon: slack
+---
+
+The Slack interface connects your agent to a Slack workspace. It supports Socket Mode (for development) and HTTP Events API (for production), handles DMs and channel @mentions, threads conversations automatically, and provides rich Block Kit interactions — slash commands, buttons, modals, shortcuts, and reactions.
+
+## Setup
+
+### 1. Create a Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App**
+2. Choose **From scratch**, name your app, and select a workspace
+
+### 2. Enable Socket Mode
+
+1. Go to **Settings → Socket Mode** and enable it
+2. Generate an **App-Level Token** with the `connections:write` scope (starts with `xapp-`)
+
+### 3. Add Bot Token Scopes
+
+Go to **OAuth & Permissions → Scopes → Bot Token Scopes** and add:
+
+| Scope | Purpose |
+|-------|---------|
+| `chat:write` | Send messages |
+| `app_mentions:read` | Respond to @mentions |
+| `channels:history` | Read channel messages |
+| `im:history` | Read DMs |
+| `files:read` | Download shared files |
+| `files:write` | Upload files |
+| `users:read` | Resolve user info |
+| `reactions:write` | Add typing/done reactions |
+
+### 4. Subscribe to Events
+
+Go to **Event Subscriptions → Subscribe to bot events** and add:
+
+- `message.im` — Direct messages
+- `app_mention` — @mentions in channels
+- `message.channels` — Channel messages (if you want thread replies)
+
+### 5. Install and Run
+
+Install the app to your workspace, then copy the **Bot User OAuth Token** (starts with `xoxb-`).
+
+```bash
+export SLACK_BOT_TOKEN="xoxb-..."
+export SLACK_APP_TOKEN="xapp-..."
+```
+
+```python
+import asyncio
+import os
+from definable.agent import Agent
+from definable.agent.interface import SlackInterface
+
+agent = Agent(
+    model="openai/gpt-4o",
+    instructions="You are a helpful Slack assistant.",
+)
+
+interface = SlackInterface(
+    agent=agent,
+    bot_token=os.environ["SLACK_BOT_TOKEN"],
+    app_token=os.environ["SLACK_APP_TOKEN"],
+)
+
+asyncio.run(interface.serve_forever())
+```
+
+Your bot is now live. Mention it in a channel or send a DM to start chatting.
+
+## Installation
+
+```bash
+pip install 'definable[slack]'
+```
+
+This installs `slack-bolt` and `aiohttp` as dependencies.
+
+## SlackInterface Parameters
+
+### Authentication
+
+<ParamField path="bot_token" type="str" required>
+  Slack Bot User OAuth Token (`xoxb-...`).
+</ParamField>
+
+<ParamField path="app_token" type="str">
+  Slack App-Level Token (`xapp-...`). Required when `mode="socket"`.
+</ParamField>
+
+<ParamField path="signing_secret" type="str">
+  Signing secret for request verification. Required when `mode="http"`.
+</ParamField>
+
+### Receiver Mode
+
+<ParamField path="mode" type="str" default="socket">
+  How the bot receives events. `"socket"` for development (WebSocket, no public URL needed), `"http"` for production (Events API, requires public URL).
+</ParamField>
+
+### HTTP Events API Settings
+
+<ParamField path="events_path" type="str" default="/slack/events">
+  URL path for the Events API endpoint (HTTP mode only).
+</ParamField>
+
+<ParamField path="interactions_path" type="str" default="/slack/interactions">
+  URL path for interactive components (HTTP mode only).
+</ParamField>
+
+### Channel Behavior
+
+<ParamField path="respond_to_mentions" type="bool" default={true}>
+  Respond when @mentioned in channels.
+</ParamField>
+
+<ParamField path="respond_to_dms" type="bool" default={true}>
+  Respond to direct messages.
+</ParamField>
+
+<ParamField path="respond_to_thread_replies" type="bool" default={true}>
+  Respond when a user replies in a thread the bot started.
+</ParamField>
+
+<ParamField path="thread_replies_in_channel" type="bool" default={true}>
+  Always reply in a thread when in channels (keeps channels tidy).
+</ParamField>
+
+<ParamField path="thread_replies_in_dm" type="bool" default={false}>
+  Reply in threads in DMs. When `false`, replies appear as top-level DM messages.
+</ParamField>
+
+### Typing Indicators
+
+<ParamField path="typing_reaction" type="str" default="hourglass_flowing_sand">
+  Emoji reaction added while the agent processes. Set to `""` to disable.
+</ParamField>
+
+<ParamField path="done_reaction" type="str" default="">
+  Emoji reaction added when the agent finishes. Set to `""` to disable.
+</ParamField>
+
+### Text Formatting
+
+<ParamField path="convert_markdown" type="bool" default={true}>
+  Automatically convert standard Markdown to Slack mrkdwn format (`**bold**` → `*bold*`, `[text](url)` → `<url|text>`, etc.).
+</ParamField>
+
+<ParamField path="max_message_length" type="int" default={40000}>
+  Maximum message length. Messages exceeding this are split at paragraph/sentence boundaries.
+</ParamField>
+
+### Access Control
+
+<ParamField path="allowed_user_ids" type="List[str]">
+  Only accept messages from these Slack user IDs. All users allowed if not set.
+</ParamField>
+
+<ParamField path="allowed_channel_ids" type="List[str]">
+  Only accept messages from these channel IDs. All channels allowed if not set.
+</ParamField>
+
+### Rate Limiting & Timeouts
+
+<ParamField path="max_retries" type="int" default={3}>
+  Maximum retries for Slack API calls on rate limit (429) responses.
+</ParamField>
+
+<ParamField path="connect_timeout" type="float" default={10.0}>
+  HTTP connection timeout in seconds.
+</ParamField>
+
+<ParamField path="request_timeout" type="float" default={60.0}>
+  HTTP request timeout in seconds.
+</ParamField>
+
+### Slash Commands
+
+<ParamField path="slash_commands" type="Dict[str, str]">
+  Slash commands to register. Maps command name to description. Commands are routed through the agent pipeline by default.
+</ParamField>
+
+<ParamField path="route_commands_to_agent" type="bool" default={true}>
+  Whether slash commands are sent to the agent. When `false`, commands only dispatch to registered callbacks.
+</ParamField>
+
+## Socket Mode (Development)
+
+Socket Mode uses a WebSocket connection — no public URL, no HTTPS, no firewall configuration. Ideal for development.
+
+```python
+interface = SlackInterface(
+    agent=agent,
+    bot_token="xoxb-...",
+    app_token="xapp-...",   # required for socket mode
+    mode="socket",           # default
+)
+```
+
+<Tip>
+Socket Mode works behind NATs and firewalls with zero networking setup. Use it for local development and testing.
+</Tip>
+
+## HTTP Events API (Production)
+
+For production, use HTTP mode with Slack's Events API. Events are pushed to your server over HTTPS.
+
+```python
+interface = SlackInterface(
+    agent=agent,
+    bot_token="xoxb-...",
+    signing_secret="your-signing-secret",  # required for HTTP mode
+    mode="http",
+    events_path="/slack/events",
+    interactions_path="/slack/interactions",
+)
+```
+
+Requirements:
+- A publicly accessible HTTPS URL
+- The signing secret from your app's **Basic Information** page
+- Event subscriptions configured to point at your URL
+
+<Warning>
+The `signing_secret` is required for HTTP mode. It verifies that incoming requests are genuinely from Slack, preventing unauthorized access.
+</Warning>
+
+## Threading
+
+The Slack interface automatically manages thread context:
+
+- **Channel messages**: Replies always go to a thread (when `thread_replies_in_channel=True`)
+- **Thread replies**: When a user replies in a bot thread, the conversation continues in that thread with full history
+- **DMs**: By default, replies appear as top-level messages (set `thread_replies_in_dm=True` for threaded DMs)
+
+Each thread maintains its own session with conversation history, so multiple threads can run independent conversations simultaneously.
+
+## Media Support
+
+The interface handles Slack file uploads automatically:
+
+| Slack Type | Converted To | Notes |
+|------------|-------------|-------|
+| Images (png, jpg, gif) | `Image` | Downloaded and passed to the agent |
+| Audio files | `Audio` | Includes file metadata |
+| Documents | `File` | Includes filename and mime type |
+
+Files shared in messages are downloaded from Slack and passed to the agent's `images`, `audio`, and `files` parameters.
+
+## Block Kit Interactions
+
+### Slash Commands
+
+Register slash commands that route through the agent:
+
+```python
+interface = SlackInterface(
+    agent=agent,
+    bot_token="xoxb-...",
+    app_token="xapp-...",
+    slash_commands={
+        "/ask": "Ask the AI assistant a question",
+        "/summarize": "Summarize the current conversation",
+    },
+)
+```
+
+<Note>
+You must also register slash commands in your Slack app settings at **Features → Slash Commands**. The `slash_commands` parameter tells the interface to listen for them.
+</Note>
+
+### Custom Command Handlers
+
+Handle commands with custom logic instead of (or alongside) the agent:
+
+```python
+async def handle_status(ack, body, client):
+    await ack()
+    await client.chat_postMessage(
+        channel=body["channel_id"],
+        text="All systems operational.",
+    )
+
+interface.on_command("/status", handle_status)
+```
+
+### Buttons and Actions
+
+Register handlers for interactive components:
+
+```python
+from definable.agent.interface.slack.formatter import (
+    section_block, actions_block, button_element,
+)
+
+# Send a message with buttons
+await interface.send_blocks(
+    channel="C0123456789",
+    blocks=[
+        section_block("Would you like to proceed?"),
+        actions_block([
+            button_element("Yes", "approve_action", style="primary"),
+            button_element("No", "reject_action", style="danger"),
+        ]),
+    ],
+)
+
+# Handle button clicks
+async def on_approve(ack, body, client):
+    await ack()
+    await client.chat_postMessage(
+        channel=body["channel"]["id"],
+        text="Approved!",
+    )
+
+interface.on_action("approve_action", on_approve)
+```
+
+### Modals
+
+Open and handle modal dialogs:
+
+```python
+from definable.agent.interface.slack.formatter import (
+    modal_view, input_block, plain_text_input,
+)
+
+# Open a modal from a command or action
+async def open_feedback_modal(ack, body, client):
+    await ack()
+    await interface.open_modal(
+        body["trigger_id"],
+        modal_view(
+            "Feedback",
+            blocks=[
+                input_block("Your feedback", plain_text_input("feedback_input", multiline=True)),
+            ],
+            callback_id="feedback_submitted",
+            submit="Submit",
+        ),
+    )
+
+# Handle modal submission
+async def on_feedback(ack, body, client):
+    await ack()
+    values = body["view"]["state"]["values"]
+    # Process the submitted feedback...
+
+interface.on_view("feedback_submitted", on_feedback)
+```
+
+### Shortcuts
+
+Handle global and message shortcuts:
+
+```python
+async def on_summarize_shortcut(ack, body, client):
+    await ack()
+    # Open a modal or process the shortcut...
+
+interface.on_shortcut("summarize_message", on_summarize_shortcut)
+```
+
+### Reactions
+
+React to emoji reactions:
+
+```python
+async def on_thumbs_up(event):
+    print(f"User {event['user']} reacted with :+1: on {event['item']['ts']}")
+
+interface.on_reaction_added(on_thumbs_up)
+```
+
+### App Home Tab
+
+Publish a custom App Home tab:
+
+```python
+from definable.agent.interface.slack.formatter import (
+    home_tab_view, header_block, section_block, divider_block,
+)
+
+async def on_home(event):
+    await interface.publish_home(
+        event["user"],
+        home_tab_view([
+            header_block("Welcome to AI Assistant"),
+            divider_block(),
+            section_block("Send me a DM or @mention me in a channel to get started."),
+        ]),
+    )
+
+interface.on_home_opened(on_home)
+```
+
+## Block Kit Builders
+
+The `formatter` module provides pure-dict builders for Slack's Block Kit — no SDK dependency needed:
+
+```python
+from definable.agent.interface.slack.formatter import (
+    # Blocks
+    header_block, section_block, divider_block,
+    actions_block, context_block, image_block, input_block,
+    # Elements
+    button_element, static_select_element, plain_text_input, option_object,
+    # Text objects
+    plain_text, mrkdwn_text,
+    # Views
+    modal_view, home_tab_view,
+)
+```
+
+## Additional API Methods
+
+The interface provides methods beyond basic messaging:
+
+| Method | Description |
+|--------|-------------|
+| `update_message(channel, ts, ...)` | Edit an existing message |
+| `send_ephemeral(channel, user, text)` | Send a message only visible to one user |
+| `send_blocks(channel, blocks, ...)` | Send rich Block Kit messages |
+| `open_modal(trigger_id, view)` | Open a modal dialog |
+| `update_modal(view_id, view)` | Update an open modal |
+| `push_modal(trigger_id, view)` | Push a new view onto the modal stack |
+| `publish_home(user_id, view)` | Publish an App Home tab |
+| `schedule_message(channel, text, post_at)` | Schedule a message for later |
+| `delete_scheduled_message(channel, id)` | Cancel a scheduled message |
+| `delete_message(channel, ts)` | Delete a message |
+| `get_permalink(channel, ts)` | Get a permanent link to a message |
+| `set_topic(channel, topic)` | Set a channel's topic |
+| `pin_message(channel, ts)` | Pin a message |
+| `unpin_message(channel, ts)` | Unpin a message |
+
+## Access Control
+
+Restrict who can interact with the bot:
+
+```python
+interface = SlackInterface(
+    agent=agent,
+    bot_token="xoxb-...",
+    app_token="xapp-...",
+    allowed_user_ids=["U0123456789", "U9876543210"],   # Only these users
+    allowed_channel_ids=["C0123456789"],                 # Only these channels
+)
+```
+
+Messages from unauthorized users or channels are silently ignored.
+
+## Agent with Tools and Memory
+
+```python
+import asyncio
+import os
+from definable.agent import Agent
+from definable.agent.interface import SlackInterface
+from definable.memory import Memory, SQLiteStore
+from definable.tool.decorator import tool
+
+@tool
+def search_docs(query: str) -> str:
+    """Search the documentation for an answer."""
+    return f"Found results for: {query}"
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city."""
+    return f"Sunny, 24°C in {city}"
+
+agent = Agent(
+    model="openai/gpt-4o",
+    instructions="You are a helpful Slack assistant with search and weather tools.",
+    tools=[search_docs, get_weather],
+    memory=Memory(store=SQLiteStore("./slack_memory.db")),
+)
+
+interface = SlackInterface(
+    agent=agent,
+    bot_token=os.environ["SLACK_BOT_TOKEN"],
+    app_token=os.environ["SLACK_APP_TOKEN"],
+    done_reaction="white_check_mark",
+)
+
+asyncio.run(interface.serve_forever())
+```
+
+## Error Handling
+
+The Slack interface maps API errors to the standard exception hierarchy:
+
+| Scenario | Exception | Recovery |
+|----------|-----------|----------|
+| Invalid bot token | `InterfaceAuthenticationError` | Check token validity |
+| Rate limited (429) | `InterfaceRateLimitError` | Auto-retried up to `max_retries` |
+| Invalid channel/user | `InterfaceMessageError` | Check IDs and permissions |
+| Network failure | `InterfaceConnectionError` | Auto-reconnect (Socket Mode) |
+
+When an error occurs during message processing, the configured `error_message` is sent to the user, and all `on_error` hooks are invoked.

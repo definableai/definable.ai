@@ -1,7 +1,7 @@
 ---
 title: Interface Examples
 sidebarTitle: Interfaces
-description: Examples for Discord, multi-interface, desktop control, and gateway deployments.
+description: Examples for Discord, Slack, voice calls, multi-interface, desktop control, and gateway deployments.
 icon: comments
 ---
 
@@ -35,6 +35,109 @@ asyncio.run(discord.serve_forever())
 
 <Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/interfaces/01_discord_bot.py">
   `definable/examples/interfaces/01_discord_bot.py`
+</Card>
+
+## Voice Call Examples
+
+### Managed Mode (Twilio ConversationRelay)
+
+The simplest voice agent — Twilio handles STT/TTS natively.
+
+```python
+import asyncio
+from definable.agent import Agent
+from definable.agent.interface.call import CallInterface
+from definable.agent.runtime import AgentRuntime
+
+agent = Agent(
+  model="openai/gpt-4o-mini",
+  instructions="You are a helpful phone agent. Keep responses concise.",
+)
+
+call = CallInterface(
+  agent=agent,
+  provider="twilio",
+  phone_number="+15551234567",
+  pipeline="managed",
+  welcome_message="Hello! How can I help you today?",
+)
+
+runtime = AgentRuntime(agent, interfaces=[call], host="0.0.0.0", port=8000)
+asyncio.run(runtime.start())
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/call/01_managed_voice_agent.py">
+  `definable/examples/call/01_managed_voice_agent.py`
+</Card>
+
+### Cascading Mode (Deepgram STT + Cartesia TTS)
+
+Full control over STT and TTS providers.
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/call/02_cascading_pipeline.py">
+  `definable/examples/call/02_cascading_pipeline.py`
+</Card>
+
+### Realtime Mode (OpenAI Speech-to-Speech)
+
+Lowest latency — audio flows directly to OpenAI's Realtime API.
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/call/03_realtime_pipeline.py">
+  `definable/examples/call/03_realtime_pipeline.py`
+</Card>
+
+### Plivo + Cascading Pipeline
+
+Using Plivo as the telephony provider with Deepgram STT and Cartesia TTS.
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/call/04_plivo_cascading.py">
+  `definable/examples/call/04_plivo_cascading.py`
+</Card>
+
+## Slack Bot Examples
+
+### Minimal Slack Bot
+
+A Slack bot using Socket Mode — the simplest way to get started.
+
+```python
+import asyncio
+import os
+from definable.agent import Agent
+from definable.agent.interface import SlackInterface
+
+agent = Agent(
+  model="openai/gpt-4o-mini",
+  instructions="You are a helpful Slack assistant. Keep responses concise.",
+)
+
+interface = SlackInterface(
+  agent=agent,
+  bot_token=os.environ["SLACK_BOT_TOKEN"],
+  app_token=os.environ["SLACK_APP_TOKEN"],
+)
+
+asyncio.run(interface.serve_forever())
+```
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/slack/01_slack_bot.py">
+  `definable/examples/slack/01_slack_bot.py`
+</Card>
+
+### Slack Bot with Tools and Memory
+
+A full-featured Slack agent with tools, memory, and completion reactions.
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/slack/03_slack_with_tools.py">
+  `definable/examples/slack/03_slack_with_tools.py`
+</Card>
+
+### Slack HTTP Events API
+
+Production deployment using HTTP Events API with `AgentRuntime`.
+
+<Card title="Full source" icon="github" href="https://github.com/definable-ai/definable/blob/main/definable/examples/slack/02_slack_webhook.py">
+  `definable/examples/slack/02_slack_webhook.py`
 </Card>
 
 ## 02 — Multi-Interface with Identity Resolution
