@@ -1,0 +1,50 @@
+---
+title: Agent with Memory
+description: "Give an agent persistent memory across conversations."
+---
+
+Create an agent that remembers past conversations using a SQLite-backed memory store.
+
+<Steps>
+  <Step title="Create the agent">
+    ```python agent_memory.py
+    from definable.agent import Agent
+    from definable.memory import Memory, SQLiteStore
+
+    agent = Agent(
+        model="gpt-4o",
+        instructions="You are a helpful assistant with persistent memory.",
+        memory=Memory(store=SQLiteStore("./memory.db")),
+    )
+
+    # First conversation — the agent stores this
+    output = agent.run("My name is Alice and I work at Acme Corp.", user_id="alice")
+    print(output.content)
+
+    # Second conversation — the agent recalls
+    output = agent.run("Where do I work?", user_id="alice")
+    print(output.content)  # "You work at Acme Corp."
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    <Snippet file="install-definable.mdx" />
+  </Step>
+  <Step title="Export your API key">
+    <Snippet file="export-openai-key.mdx" />
+  </Step>
+  <Step title="Run">
+    ```bash
+    python agent_memory.py
+    ```
+
+    The agent stores facts from the first conversation and recalls them in the second.
+  </Step>
+</Steps>
+
+<Tip>
+For quick testing without persistent storage, use `memory=True`:
+
+```python
+agent = Agent(model="gpt-4o", memory=True)  # InMemoryStore
+```
+</Tip>

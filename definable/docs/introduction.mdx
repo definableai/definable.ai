@@ -1,92 +1,60 @@
 ---
-title: Introduction
-description: A production-grade Python framework for building AI agents with models, tools, knowledge, and MCP support.
+title: Definable
+sidebarTitle: Introduction
+description: "Build, run, and deploy AI agents with models, tools, knowledge, and memory."
+mode: "wide"
 ---
 
-## What is Definable?
+Definable is a production-grade Python framework for building AI agents. It gives you composable primitives — models, tools, knowledge, memory, guardrails — and an execution engine that orchestrates them into reliable agentic systems.
 
-Definable is a Python framework for building AI-powered applications. It provides a unified interface across multiple LLM providers, a powerful agent runtime with tool execution, a complete RAG pipeline for knowledge retrieval, and first-class MCP (Model Context Protocol) support.
+| Layer | What it does |
+|-------|-------------|
+| **Agent** | The execution loop. Model calls, tool orchestration, structured outputs, context management, middleware, and tracing |
+| **Capabilities** | Tools, knowledge (RAG), memory, skills, guardrails, security, evaluation |
+| **Interfaces** | Deploy agents to Telegram, Discord, Slack, WhatsApp, email, voice calls, WebSocket, or custom platforms |
+| **Runtime** | HTTP endpoints, cron scheduling, webhooks, multi-interface serving, and hot-reload dev mode |
 
-<CardGroup cols={2}>
-  <Card title="Models" icon="microchip" href="/models/overview">
-    Unified interface for OpenAI, DeepSeek, Moonshot, xAI, Anthropic, Mistral, Google Gemini, Perplexity, Ollama, OpenRouter, and any OpenAI-compatible provider. Supports streaming, structured output, vision, and audio.
-  </Card>
-  <Card title="Agents" icon="robot" href="/agents/overview">
-    Autonomous agents with tool calling, middleware, tracing, multi-turn conversations, and streaming. Built for production with retries, compression, and testing utilities.
-  </Card>
-  <Card title="Tools" icon="wrench" href="/tools/overview">
-    Define tools with a simple decorator. Supports type-safe parameters, pre/post hooks, result caching, dependency injection, and async execution.
-  </Card>
-  <Card title="Knowledge" icon="book" href="/knowledge/overview">
-    Full RAG pipeline with document readers, text chunkers, embedding providers, rerankers, and vector databases. Plug into agents automatically or on-demand.
-  </Card>
-  <Card title="MCP" icon="plug" href="/mcp/overview">
-    Connect to MCP servers over stdio, SSE, or HTTP transports. Discover and call tools, read resources, and use prompts from any MCP-compatible server.
-  </Card>
-  <Card title="Toolkits" icon="toolbox" href="/toolkits/overview">
-    Bundle related tools into reusable toolkits. Built-in toolkits for knowledge search and MCP server integration.
-  </Card>
-  <Card title="Interfaces" icon="message-bot" href="/interfaces/overview">
-    Connect agents to messaging platforms like Telegram and Discord. Automatic session management, hooks, identity resolution, and multi-interface serving.
-  </Card>
-  <Card title="Memory" icon="brain" href="/memory/overview">
-    Session-history memory with automatic recall and auto-summarization. Supports SQLite, file-based, and in-memory backends.
-  </Card>
-  <Card title="Readers" icon="file-lines" href="/readers/overview">
-    Extract text from files (PDF, DOCX, XLSX, audio) and inject into agent context automatically before LLM processing.
-  </Card>
-</CardGroup>
+## What You Can Build
 
-## Architecture Overview
+```python agent.py
+from definable.agent import Agent
+from definable.tool.decorator import tool
 
-Definable is organized into composable layers that work together:
+@tool
+def search_web(query: str) -> str:
+    """Search the web for information."""
+    return f"Results for: {query}"
 
-````mermaid
-flowchart TD
-  subgraph agentLayer [Agent]
-    direction LR
-    Middleware --- Tracing --- Config
-  end
-  subgraph modelLayer ["Model (LLM Provider)"]
-    direction LR
-    OpenAI --- DeepSeek --- Moonshot --- xAI --- Custom
-  end
-  subgraph capLayer [Capabilities]
-    direction LR
-    ToolsToolkits["Tools & Toolkits"] --- KnowledgeRAG["Knowledge (RAG)"] --- MCPNode["MCP"] --- MemoryNode["Memory"] --- ReadersNode["Readers"]
-  end
-  subgraph intLayer [Interfaces]
-    direction LR
-    Telegram --- Discord --- CustomInt["Custom"]
-  end
-  agentLayer --> modelLayer
-  agentLayer --> capLayer
-  agentLayer --> intLayer
-````
+agent = Agent(
+    model="gpt-4o",
+    tools=[search_web],
+    instructions="You are a research assistant.",
+)
 
-## Key Features
+result = agent.run("What are the latest developments in quantum computing?")
+print(result.content)
+```
 
-- **Multi-provider**: Switch between OpenAI, DeepSeek, Moonshot, xAI, Anthropic, Mistral, Google Gemini, Perplexity, Ollama, OpenRouter, or any OpenAI-compatible API with one line.
-- **Sync and async**: Every API has both synchronous and asynchronous variants.
-- **Streaming**: Stream responses token-by-token with rich event types for tool calls, reasoning, and content.
-- **Structured output**: Return Pydantic models directly from LLM calls with JSON Schema validation.
-- **Middleware**: Compose logging, retry, metrics, and custom middleware around agent execution.
-- **Full RAG pipeline**: Ingest documents from text, PDF, or URLs; chunk, embed, store, and retrieve with reranking.
-- **MCP support**: Connect to any MCP server and use its tools, resources, and prompts inside your agents.
-- **Testing**: Mock models, test agents without API calls, and assert on tool execution.
-- **Cost tracking**: Automatic token counting and cost calculation across providers.
-- **Interfaces**: Deploy agents to Telegram and Discord with sessions, hooks, identity resolution, and multi-interface serving.
-- **Memory**: Session-history memory with automatic recall and auto-summarization. 3 storage backends (SQLite, file-based, in-memory).
-- **File readers**: Extract text from PDF, DOCX, XLSX, and audio files attached to agent messages.
-- **Type-safe**: Built on Pydantic with full type annotations and mypy support.
+Single agents. Coordinated teams. Structured workflows. All built on one architecture.
 
-## Next Steps
+## Start Building
 
-<CardGroup cols={2}>
-  <Card title="Quickstart" icon="bolt" href="/quickstart">
-    Get up and running in under 5 minutes.
-  </Card>
-  <Card title="Installation" icon="download" href="/installation">
-    Detailed installation and configuration guide.
-  </Card>
-</CardGroup>
+- **[Your First Agent](/first-agent)** Build and run an agent with tools in under 20 lines of code.
+- **[Agents](/agents/overview)** The core execution loop: models, tools, and instructions.
+- **[Teams](/teams/overview)** Coordinate multiple agents to collaborate, route, or divide work.
+- **[Workflows](/workflows/overview)** Orchestrate agents through sequential, parallel, conditional, and iterative steps.
+- **[Models](/models/overview)** 10 providers, string shorthand, streaming, structured output, vision, and audio.
+- **[Knowledge](/knowledge/overview)** Full RAG pipeline: readers, chunkers, embedders, rerankers, vector databases.
+
+## Built for Production
+
+- Async-first with sync wrappers for every API.
+- 10 LLM providers with automatic key rotation and failover.
+- Token counting, cost tracking, and usage analytics.
+- Input/output/tool guardrails and security hardening.
+- Native tracing with JSONL and debug exporters.
+- Full type annotations with `py.typed` marker for mypy consumers.
+
+---
+
+**AI agents require composable architecture.** Definable is the framework for building it.

@@ -1,0 +1,58 @@
+---
+title: Anthropic
+description: "Use Claude models from Anthropic."
+---
+
+## Setup
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+```
+
+```bash
+pip install anthropic
+```
+
+## Basic Usage
+
+```python
+from definable.model.anthropic import Claude
+from definable.model.message import Message
+
+model = Claude(id="claude-sonnet-4-20250514")
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
+print(response.content)
+```
+
+## String Shorthand
+
+```python
+agent = Agent(model="anthropic/claude-sonnet-4-20250514")
+```
+
+## Parameters
+
+<ParamField path="id" type="str" default="claude-sonnet-4-20250514">
+  Model identifier. Common values: `claude-sonnet-4-20250514`, `claude-haiku-3-5-20241022`.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  Anthropic API key. Defaults to `ANTHROPIC_API_KEY`.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature (0.0 to 1.0).
+</ParamField>
+
+<ParamField path="max_tokens" type="int" default="4096">
+  Maximum output tokens.
+</ParamField>
+
+## Imports
+
+```python
+from definable.model.anthropic import Claude
+```

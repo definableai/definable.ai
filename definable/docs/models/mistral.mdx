@@ -1,0 +1,58 @@
+---
+title: Mistral
+description: "Use Mistral AI models."
+---
+
+## Setup
+
+```bash
+export MISTRAL_API_KEY="..."
+```
+
+```bash
+pip install mistralai
+```
+
+## Basic Usage
+
+```python
+from definable.model.mistral import MistralChat
+from definable.model.message import Message
+
+model = MistralChat(id="mistral-large-latest")
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
+print(response.content)
+```
+
+## String Shorthand
+
+```python
+agent = Agent(model="mistral/mistral-large-latest")
+```
+
+## Parameters
+
+<ParamField path="id" type="str" default="mistral-large-latest">
+  Model identifier.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  Mistral API key. Defaults to `MISTRAL_API_KEY`.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum output tokens.
+</ParamField>
+
+## Imports
+
+```python
+from definable.model.mistral import MistralChat
+```

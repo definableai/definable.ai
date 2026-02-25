@@ -1,0 +1,53 @@
+---
+title: WhatsApp
+sidebarTitle: WhatsApp
+description: "Connect agents to WhatsApp via the Twilio API."
+---
+
+The WhatsApp interface connects agents to WhatsApp using the Twilio WhatsApp API.
+
+## Quick Start
+
+```python
+from definable.agent import Agent
+from definable.agent.interface.whatsapp import WhatsAppInterface
+
+agent = Agent(model="gpt-4o", instructions="You are a helpful assistant.")
+
+whatsapp = WhatsAppInterface(
+    account_sid="AC...",
+    auth_token="...",
+    from_number="whatsapp:+14155238886",
+)
+
+agent.serve(whatsapp, port=8000)
+```
+
+Configure your Twilio WhatsApp webhook to point to `http://your-server:8000/whatsapp/webhook`.
+
+## Features
+
+- Automatic signature validation on incoming webhooks
+- Message splitting at 1600 characters (WhatsApp limit)
+- Status callback handling
+- Session management per phone number
+
+## Constructor Reference
+
+<ParamField path="account_sid" type="str" required>
+  Twilio account SID.
+</ParamField>
+
+<ParamField path="auth_token" type="str" required>
+  Twilio auth token. Used for webhook signature validation.
+</ParamField>
+
+<ParamField path="from_number" type="str" required>
+  Your WhatsApp sender number (format: `whatsapp:+14155238886`).
+</ParamField>
+
+## Imports
+
+```python
+from definable.agent.interface.whatsapp import WhatsAppInterface
+```

@@ -118,6 +118,9 @@ class WebSocketInterface(BaseInterface):
     """
     from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+    # Make WebSocket resolvable for string annotations (from __future__ import annotations)
+    globals()["WebSocket"] = WebSocket
+
     router = APIRouter()
 
     @router.websocket(self._ws_config.path)

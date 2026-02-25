@@ -1,0 +1,60 @@
+---
+title: Hybrid Search
+description: "Combine vector similarity with BM25 keyword search for better retrieval."
+---
+
+Hybrid search combines vector similarity (semantic) with BM25 keyword search (exact) for more accurate retrieval.
+
+<Steps>
+  <Step title="Create the knowledge base">
+    ```python hybrid_search.py
+    import asyncio
+    from definable.agent import Agent
+    from definable.knowledge import Knowledge, FTSIndex, HybridSearchConfig
+    from definable.vectordb import InMemoryVectorDB
+
+    # Create FTS index (must initialize before use)
+    fts = FTSIndex()
+
+    async def main():
+        await fts.initialize()
+
+        knowledge = Knowledge(
+            vector_db=InMemoryVectorDB(),
+            fts_index=fts,
+            hybrid_config=HybridSearchConfig(
+                merge_strategy="rrf",  # reciprocal rank fusion
+                vector_weight=0.7,
+                text_weight=0.3,
+            ),
+        )
+
+        # Add documents (auto-indexed in both vector DB and FTS)
+        await knowledge.aadd("Python 3.12 introduced new syntax features.")
+        await knowledge.aadd("Definable requires Python 3.12 or higher.")
+        await knowledge.aadd("The framework uses async/await for non-blocking I/O.")
+
+        agent = Agent(
+            model="gpt-4o",
+            knowledge=knowledge,
+            instructions="Answer using the knowledge base.",
+        )
+
+        output = await agent.arun("What Python version does Definable need?")
+        print(output.content)
+
+    asyncio.run(main())
+    ```
+  </Step>
+  <Step title="Install and run">
+    <Snippet file="install-definable.mdx" />
+
+    ```bash
+    python hybrid_search.py
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+`FTSIndex` must be initialized with `await fts.initialize()` before any search or add operations.
+</Warning>

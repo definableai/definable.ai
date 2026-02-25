@@ -1,0 +1,102 @@
+---
+title: Security Examples
+sidebarTitle: Security
+description: "Examples for tool policies, rate limiting, prompt injection detection, and security audits."
+icon: shield
+---
+
+## Basic Security
+
+Enable default security configuration:
+
+```python
+from definable.agent import Agent
+
+agent = Agent(model="gpt-4o", security=True)
+```
+
+## Tool Policy (Allowlist)
+
+Only allow specific tools:
+
+```python
+from definable.agent import Agent
+from definable.agent.security import SecurityConfig, ToolPolicy
+
+agent = Agent(
+    model="gpt-4o",
+    tools=[search_web, delete_file, read_file],
+    security=SecurityConfig(
+        tool_policy=ToolPolicy(
+            mode="allowlist",
+            allowed_tools={"search_web", "read_file"},  # delete_file is blocked
+        ),
+    ),
+)
+```
+
+## Tool Policy (Blocklist)
+
+Block specific tools:
+
+```python
+agent = Agent(
+    model="gpt-4o",
+    tools=[search_web, delete_file, read_file],
+    security=SecurityConfig(
+        tool_policy=ToolPolicy(
+            mode="blocklist",
+            blocked_tools={"delete_file"},
+        ),
+    ),
+)
+```
+
+## Security Audit
+
+Run a security audit to get a score and findings:
+
+```python
+import asyncio
+from definable.agent import Agent
+from definable.agent.security import SecurityConfig, ToolPolicy
+
+agent = Agent(
+    model="gpt-4o",
+    tools=[search_web],
+    security=SecurityConfig(
+        tool_policy=ToolPolicy(mode="allowlist", allowed_tools={"search_web"}),
+    ),
+)
+
+async def main():
+    report = await agent.security_audit()
+    print(f"Score: {report.score}/100")
+    for finding in report.findings:
+        print(f"  [{finding.severity}] {finding.message}")
+
+asyncio.run(main())
+```
+
+## Combined with Guardrails
+
+```python
+from definable.agent import Agent
+from definable.agent.security import SecurityConfig, ToolPolicy
+from definable.agent.guardrail import Guardrails, max_tokens, pii_filter
+
+agent = Agent(
+    model="gpt-4o",
+    security=SecurityConfig(
+        tool_policy=ToolPolicy(mode="allowlist", allowed_tools={"search_web"}),
+    ),
+    guardrails=Guardrails(
+        input=[max_tokens(500)],
+        output=[pii_filter()],
+    ),
+)
+```
+
+<Note>
+When `security=SecurityConfig(tool_policy=...)` is set, a `ToolPolicyGuardrail` is auto-injected into the agent's guardrails. Do not duplicate it manually.
+</Note>

@@ -1,0 +1,50 @@
+---
+title: Route Team
+description: "Classify and dispatch to a single specialist."
+---
+
+Build a team that routes incoming requests to the right specialist.
+
+<Steps>
+  <Step title="Create the team">
+    ```python route_team.py
+    import asyncio
+    from definable.agent import Agent
+    from definable.agent.team import Team, TeamMode
+
+    tech_support = Agent(
+        model="gpt-4o",
+        instructions="You are a technical support specialist. Help with bugs, errors, and technical issues.",
+    )
+    billing_support = Agent(
+        model="gpt-4o",
+        instructions="You are a billing specialist. Help with payments, invoices, and subscriptions.",
+    )
+    general_support = Agent(
+        model="gpt-4o",
+        instructions="You are a general support agent. Handle all other inquiries.",
+    )
+
+    team = Team(
+        name="support-router",
+        model="gpt-4o",
+        members=[tech_support, billing_support, general_support],
+        mode=TeamMode.route,
+        instructions="Route customer requests to the most appropriate specialist.",
+    )
+
+    async def main():
+        result = await team.arun("I'm getting a 500 error when I try to log in.")
+        print(result.content)  # Routed to tech_support
+
+    asyncio.run(main())
+    ```
+  </Step>
+  <Step title="Install and run">
+    <Snippet file="install-definable.mdx" />
+
+    ```bash
+    python route_team.py
+    ```
+  </Step>
+</Steps>

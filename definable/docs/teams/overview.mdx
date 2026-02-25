@@ -1,0 +1,74 @@
+---
+title: What are Teams?
+sidebarTitle: Overview
+description: "Teams coordinate multiple agents to collaborate, route, or divide work."
+mode: "wide"
+---
+
+A Team composes multiple agents under a leader that orchestrates their execution. The leader gets auto-injected tools for delegation and task management. No manual wiring needed.
+
+```python
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+
+researcher = Agent(model="gpt-4o", instructions="You are a research specialist.")
+writer = Agent(model="gpt-4o", instructions="You are a technical writer.")
+
+team = Team(
+    name="content-team",
+    model="gpt-4o",
+    members=[researcher, writer],
+    mode=TeamMode.coordinate,
+    instructions="Produce well-researched technical content.",
+)
+
+result = await team.arun("Write an article about quantum computing.")
+print(result.content)
+```
+
+## Execution Modes
+
+| Mode | Behavior | Best for |
+|------|----------|----------|
+| **coordinate** (default) | Leader picks members, crafts targeted tasks, synthesizes | Complex tasks requiring judgment about which specialists to involve |
+| **route** | Leader routes to a single specialist, returns their response directly | Classification and dispatch (support tickets, query routing) |
+| **collaborate** | All members execute in parallel, leader synthesizes | Multiple perspectives (analysis, brainstorming, review) |
+| **tasks** | Leader decomposes goal into task list, delegates autonomously | Multi-step projects with dependencies between subtasks |
+
+## Guides
+
+<CardGroup cols={3}>
+  <Card title="Build Teams" icon="wrench" iconType="duotone" href="/teams/building-teams">
+    Create teams with members and execution modes.
+  </Card>
+  <Card title="Run Teams" icon="play" iconType="duotone" href="/teams/running-teams">
+    Execute teams and handle responses.
+  </Card>
+  <Card title="Delegation" icon="share" iconType="duotone" href="/teams/delegation">
+    How the leader delegates to members.
+  </Card>
+</CardGroup>
+
+## Usage Examples
+
+<CardGroup cols={2}>
+  <Card title="Coordinate Team" icon="sitemap" href="/teams/usage/coordinate-team">
+    Leader picks members and synthesizes.
+  </Card>
+  <Card title="Route Team" icon="route" href="/teams/usage/route-team">
+    Classify and dispatch to a single specialist.
+  </Card>
+  <Card title="Collaborate Team" icon="users" href="/teams/usage/collaborate-team">
+    All members in parallel, leader merges.
+  </Card>
+  <Card title="Tasks Team" icon="list-check" href="/teams/usage/tasks-team">
+    Autonomous task decomposition and delegation.
+  </Card>
+</CardGroup>
+
+## Resources
+
+- [Team reference](/reference/teams/team)
+- [Team examples](/examples/teams)
+- [Agent overview](/agents/overview)
+- [Workflow orchestration](/workflows/overview)

@@ -1,0 +1,69 @@
+---
+title: Model
+description: "Reference for model classes and common parameters."
+---
+
+## Common Parameters
+
+All model classes accept these parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `id` | `str` | — | Model identifier (e.g., `"gpt-4o"`). |
+| `api_key` | `str` | env var | API key. Defaults to provider's env var. |
+| `base_url` | `str` | `None` | Override API base URL. |
+| `temperature` | `float` | `None` | Sampling temperature (0.0–2.0). |
+| `max_tokens` | `int` | `None` | Max output tokens. |
+| `top_p` | `float` | `None` | Nucleus sampling. |
+| `timeout` | `float` | `None` | Request timeout in seconds. |
+| `retries` | `int` | `0` | Retry attempts. |
+| `delay_between_retries` | `int` | `1` | Base retry delay in seconds. |
+| `exponential_backoff` | `bool` | `False` | Exponential backoff for retries. |
+| `cache_response` | `bool` | `False` | Cache responses locally. |
+| `cache_ttl` | `int` | `3600` | Cache TTL in seconds. |
+| `cache_dir` | `str` | `".cache/models"` | Cache directory. |
+
+## Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `invoke(messages, assistant_message, **kwargs)` | `ModelResponse` | Sync call. |
+| `ainvoke(messages, assistant_message, **kwargs)` | `ModelResponse` | Async call. |
+| `invoke_stream(messages, assistant_message, **kwargs)` | `Iterator[ModelResponse]` | Sync streaming. |
+| `ainvoke_stream(messages, assistant_message, **kwargs)` | `AsyncIterator[ModelResponse]` | Async streaming. |
+
+## ModelResponse
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `str` | Response text. |
+| `tool_calls` | `List[ToolCall]` | Tool calls requested by model. |
+| `usage` | `Usage` | Token usage metrics. |
+| `stop_reason` | `str` | Why generation stopped. |
+
+## Provider Classes
+
+| Import | Provider |
+|--------|----------|
+| `from definable.model.openai import OpenAIChat` | OpenAI |
+| `from definable.model.anthropic import Claude` | Anthropic |
+| `from definable.model.google import Gemini` | Google |
+| `from definable.model.deepseek import DeepSeekChat` | DeepSeek |
+| `from definable.model.mistral import MistralChat` | Mistral |
+| `from definable.model.moonshot import MoonshotChat` | Moonshot |
+| `from definable.model.xai import xAI` | xAI |
+| `from definable.model.perplexity import Perplexity` | Perplexity |
+| `from definable.model.ollama import Ollama` | Ollama |
+| `from definable.model.openrouter import OpenRouter` | OpenRouter |
+| `from definable.model.openai_like import OpenAILike` | Custom |
+
+## String Shorthand
+
+```python
+from definable.model.utils import resolve_model_string
+
+model = resolve_model_string("openai/gpt-4o")
+model = resolve_model_string("gpt-4o")  # defaults to OpenAI
+```
+
+Format: `"provider/model-id"` or bare `"model-id"` (defaults to OpenAI).

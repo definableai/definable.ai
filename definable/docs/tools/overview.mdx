@@ -1,113 +1,80 @@
 ---
-title: Tools Overview
+title: What are Tools?
 sidebarTitle: Overview
-description: Define functions that agents can call to interact with the world.
-icon: wrench
+description: "Tools are functions agents call to interact with external systems."
+mode: "wide"
 ---
 
-Tools are Python functions that agents can invoke to perform actions — search databases, call APIs, read files, do calculations, or anything else your application needs.
-
-## Defining a Tool
-
-Use the `@tool` decorator on any function:
+Tools are what make agents capable of real-world action. While LLMs alone can only generate text, agents equipped with tools can search the web, run queries, send emails, call APIs, and perform any action you define.
 
 ```python
+from definable.agent import Agent
 from definable.tool.decorator import tool
 
 @tool
 def get_weather(city: str) -> str:
     """Get the current weather for a city."""
-    return f"Sunny, 72°F in {city}"
-```
-
-That's it. Definable automatically:
-
-1. Extracts the function name as the tool name
-2. Parses the docstring as the tool description
-3. Generates a JSON Schema from the type hints
-4. Makes the tool available to any agent
-
-## Using Tools with Agents
-
-Pass tools when creating an agent:
-
-```python
-from definable.agent import Agent
-from definable.model import OpenAIChat
+    return f"The weather in {city} is sunny, 72F."
 
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o"),
+    model="gpt-4o",
     tools=[get_weather],
 )
 
-output = agent.run("What's the weather in Tokyo?")
+output = agent.run("What's the weather in San Francisco?")
 print(output.content)
-# "The weather in Tokyo is Sunny, 72°F."
 ```
 
-The agent decides when and how to call tools based on the user's request.
+<Tip>
+The `@tool` decorator converts any Python function into an agent-callable tool. Definable automatically generates the JSON Schema from type hints and docstrings.
+</Tip>
 
-## Decorator Options
+## How Tools Work
 
-The `@tool` decorator accepts several options to customize behavior:
+1. The agent sends tool definitions (JSON Schema) to the model.
+2. The model decides which tools to call based on the user's message.
+3. Tools execute and results are returned to the model.
+4. The model processes results and continues (or returns a final response).
+5. The loop repeats until the model responds without tool calls.
 
-```python
-@tool(
-    name="weather",                   # Override the tool name
-    description="Get current weather", # Override the description
-    show_result=True,                  # Show result in agent output
-    stop_after_tool_call=True,         # Return immediately after this tool
-    instructions="Use this for weather queries only.",
-)
-def get_weather(city: str) -> str:
-    """Get current weather for a city."""
-    return f"Sunny, 72°F in {city}"
-```
+<Check>
+When using `arun()`, multiple tool calls from the same model response execute concurrently.
+</Check>
 
-### All Options
+## Guides
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `name` | `str` | Function name | Tool name shown to the model |
-| `description` | `str` | From docstring | Tool description shown to the model |
-| `strict` | `bool` | `False` | Enable strict parameter validation |
-| `instructions` | `str` | `None` | Usage instructions added to system prompt |
-| `add_instructions` | `bool` | `True` | Whether to add instructions to system prompt |
-| `show_result` | `bool` | `False` | Show tool result in agent streaming output |
-| `stop_after_tool_call` | `bool` | `False` | Stop the agent loop after calling this tool |
-| `requires_confirmation` | `bool` | `False` | Pause and require user confirmation before executing |
-| `requires_user_input` | `bool` | `False` | Pause and request user input before executing |
-| `pre_hook` | `Callable` | `None` | Function to run before tool execution |
-| `post_hook` | `Callable` | `None` | Function to run after tool execution |
-| `tool_hooks` | `List[Callable]` | `None` | List of hook functions |
-| `cache_results` | `bool` | `False` | Cache results for identical arguments |
-| `cache_ttl` | `int` | `3600` | Cache time-to-live in seconds |
-
-## How Tool Calling Works
-
-When you give tools to an agent, the following happens during execution:
-
-1. The model receives the tool definitions as JSON Schema
-2. If the model decides to call a tool, it returns a `tool_calls` response with the function name and arguments
-3. Definable executes the function with the provided arguments
-4. The result is sent back to the model as a tool message
-5. The model incorporates the result and continues
-
-This loop repeats until the model produces a final text response.
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Parameters" icon="list" href="/tools/parameters">
-    Type hints, descriptions, and JSON Schema generation.
+<CardGroup cols={3}>
+  <Card title="Create Tools" icon="code" iconType="duotone" href="/tools/creating-tools/overview">
+    Write custom Python functions as tools.
   </Card>
-  <Card title="Hooks" icon="anchor" href="/tools/hooks">
-    Run logic before and after tool execution.
+  <Card title="Parameters" icon="list" iconType="duotone" href="/tools/creating-tools/parameters">
+    Type hints, descriptions, and JSON Schema.
   </Card>
-  <Card title="Caching" icon="database" href="/tools/caching">
-    Cache tool results to avoid redundant work.
+  <Card title="Hooks" icon="anchor" iconType="duotone" href="/tools/creating-tools/hooks">
+    Run logic before and after execution.
   </Card>
-  <Card title="Dependencies" icon="puzzle-piece" href="/tools/dependencies">
+  <Card title="Caching" icon="database" iconType="duotone" href="/tools/creating-tools/caching">
+    Cache results for identical arguments.
+  </Card>
+  <Card title="Async Tools" icon="bolt" iconType="duotone" href="/tools/creating-tools/async-tools">
+    Async tool functions for concurrent execution.
+  </Card>
+  <Card title="Dependencies" icon="puzzle-piece" iconType="duotone" href="/tools/creating-tools/dependencies">
     Inject services and state into tools.
   </Card>
 </CardGroup>
+
+## Toolkits & Skills
+
+| Type | What it is | Example |
+|------|-----------|---------|
+| [**Toolkit**](/toolkits/overview) | Bundle of related tools with shared lifecycle | MCPToolkit, BrowserToolkit |
+| [**Skill**](/skills/overview) | Instructions + tools for a learned behavior | GitHub, Slack, SQL Database |
+| [**MCP**](/mcp/overview) | Tools from MCP servers via stdio/HTTP | Any MCP-compatible server |
+
+## Resources
+
+- [@tool reference](/reference/tools/decorator)
+- [Tool examples](/examples/tools)
+- [Built-in skills](/skills/built-in)
+- [MCP integration](/mcp/overview)

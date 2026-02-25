@@ -1,30 +1,14 @@
 ---
 title: Quickstart
-description: Get up and running with Definable in under 5 minutes.
+description: "Five patterns to get started with Definable."
 icon: bolt
 ---
 
-## Install
+Five progressively more capable examples. Each builds on the previous.
 
-<CodeGroup>
-```bash pip
-pip install definable
-```
+## 1. Model Call
 
-```bash uv
-uv add definable
-```
-</CodeGroup>
-
-## Set Your API Key
-
-```bash
-export OPENAI_API_KEY="sk-..."
-```
-
-## Your First Model Call
-
-Call an LLM with a few lines of code:
+Call an LLM directly:
 
 ```python
 from definable.model.openai import OpenAIChat
@@ -32,28 +16,27 @@ from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o")
 response = model.invoke(
-    messages=[Message(role="user", content="Hello!")],
+    messages=[Message(role="user", content="What is the capital of France?")],
     assistant_message=Message(role="assistant", content=""),
 )
 print(response.content)
 ```
 
-## Your First Agent
+## 2. Agent with Tools
 
-Create an agent with tools that can take actions:
+Add tools so the agent can take actions:
 
 ```python
-from definable.model import OpenAIChat
-from definable.tool.decorator import tool
 from definable.agent import Agent
+from definable.tool.decorator import tool
 
 @tool
 def get_weather(city: str) -> str:
     """Get the current weather for a city."""
-    return f"The weather in {city} is sunny, 72°F."
+    return f"The weather in {city} is sunny, 72F."
 
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o"),
+    model="gpt-4o",
     tools=[get_weather],
     instructions="You are a helpful weather assistant.",
 )
@@ -62,92 +45,81 @@ output = agent.run("What's the weather in San Francisco?")
 print(output.content)
 ```
 
-## Your First RAG Query
+## 3. Agent with Knowledge (RAG)
 
-Build a knowledge base and search it:
+Ground the agent in your documents:
 
 ```python
-from definable.embedder import OpenAIEmbedder
+from definable.agent import Agent
 from definable.knowledge import Knowledge
 from definable.vectordb import InMemoryVectorDB
 
-knowledge = Knowledge(
-    vector_db=InMemoryVectorDB(),
-    embedder=OpenAIEmbedder(),
+knowledge = Knowledge(vector_db=InMemoryVectorDB())
+knowledge.add("Definable supports 10 LLM providers including OpenAI and Anthropic.")
+knowledge.add("Agents can use tools, knowledge, memory, and middleware.")
+
+agent = Agent(
+    model="gpt-4o",
+    knowledge=knowledge,
+    instructions="Answer questions using the provided knowledge.",
 )
 
-# Add documents
-knowledge.add("Definable is a Python framework for building AI agents.")
-knowledge.add("It supports OpenAI, DeepSeek, Moonshot, and xAI models.")
-
-# Search
-results = knowledge.search("What models does Definable support?")
-for doc in results:
-    print(doc.content)
+output = agent.run("What LLM providers does Definable support?")
+print(output.content)
 ```
 
-## Your First Memory-Enabled Agent
+## 4. Agent with Memory
 
-Give an agent persistent memory that works across conversations:
+Give the agent persistent memory across conversations:
 
 ```python
 from definable.agent import Agent
 from definable.memory import Memory, SQLiteStore
-from definable.model import OpenAIChat
-
-memory = Memory(store=SQLiteStore("./memory.db"))
 
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o"),
-    instructions="You are a helpful assistant with persistent memory.",
-    memory=memory,
+    model="gpt-4o",
+    instructions="You are a helpful assistant with memory.",
+    memory=Memory(store=SQLiteStore("./memory.db")),
 )
 
-# The agent remembers this across conversations
-output = agent.run("My name is Alice and I work at Acme Corp.", user_id="alice")
-
-# Later — the agent recalls the information
+output = agent.run("My name is Alice and I work at Acme.", user_id="alice")
 output = agent.run("Where do I work?", user_id="alice")
-print(output.content)  # "You work at Acme Corp."
+print(output.content)  # "You work at Acme."
 ```
 
-## Stream Responses
+## 5. Streaming
 
-Stream tokens from an agent as they are generated:
+Stream tokens as they are generated:
 
 ```python
 from definable.agent import Agent
-from definable.model.openai import OpenAIChat
 
-agent = Agent(
-    model=OpenAIChat(id="gpt-4o"),
-    instructions="You are a helpful assistant.",
-)
+agent = Agent(model="gpt-4o", instructions="You are a helpful assistant.")
 
-for event in agent.run_stream("Tell me a story."):
+for event in agent.run_stream("Tell me a story about AI."):
     if event.event == "RunContent" and event.content:
         print(event.content, end="", flush=True)
 ```
 
-## What's Next?
+## What's Next
 
-<CardGroup cols={2}>
-  <Card title="Models" icon="microchip" href="/models/overview">
-    Explore all supported LLM providers and configurations.
-  </Card>
+<CardGroup cols={3}>
   <Card title="Agents" icon="robot" href="/agents/overview">
-    Learn about the agent lifecycle, middleware, and tracing.
+    The core execution loop with tools, middleware, and tracing.
+  </Card>
+  <Card title="Teams" icon="users" href="/teams/overview">
+    Coordinate multiple agents to collaborate or divide work.
+  </Card>
+  <Card title="Workflows" icon="diagram-project" href="/workflows/overview">
+    Orchestrate agents through structured step pipelines.
+  </Card>
+  <Card title="Models" icon="microchip" href="/models/overview">
+    10 providers with streaming, structured output, and vision.
   </Card>
   <Card title="Tools" icon="wrench" href="/tools/overview">
-    Define custom tools with hooks, caching, and dependencies.
+    Custom tools with hooks, caching, and dependency injection.
   </Card>
   <Card title="Knowledge" icon="book" href="/knowledge/overview">
-    Build complete RAG pipelines with readers, chunkers, and vector databases.
-  </Card>
-  <Card title="Memory" icon="brain" href="/memory/overview">
-    Session-history memory with automatic recall and auto-summarization.
-  </Card>
-  <Card title="Interfaces" icon="message-bot" href="/interfaces/overview">
-    Deploy agents to Telegram and Discord.
+    Full RAG pipeline with readers, chunkers, and vector databases.
   </Card>
 </CardGroup>

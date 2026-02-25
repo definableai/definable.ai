@@ -1,0 +1,98 @@
+---
+title: Running Teams
+sidebarTitle: Running Teams
+description: "Execute teams and handle responses."
+---
+
+Teams use the same execution methods as agents: `run()`, `arun()`, `run_stream()`, and `arun_stream()`.
+
+## Basic Execution
+
+```python
+# Async (recommended)
+result = await team.arun("Write about quantum computing.")
+print(result.content)
+
+# Sync
+result = team.run("Write about quantum computing.")
+print(result.content)
+```
+
+<Note>
+`Team.arun()` returns a `RunOutput`, the same type as `Agent.arun()`. Not a separate `TeamOutput`.
+</Note>
+
+## Streaming
+
+```python
+async for event in team.arun_stream("Research AI trends."):
+    if event.event == "RunContent" and event.content:
+        print(event.content, end="", flush=True)
+```
+
+## Structured Output
+
+Return typed Pydantic models from the team leader:
+
+```python
+from pydantic import BaseModel
+
+class Report(BaseModel):
+    title: str
+    summary: str
+    recommendations: list[str]
+
+result = await team.arun("Analyze market trends", output_schema=Report)
+report = result.parsed  # Report instance
+```
+
+## Events
+
+Subscribe to team events:
+
+```python
+from definable.agent.team import MemberDelegatedEvent, MemberCompletedEvent
+
+team.events.on(MemberDelegatedEvent, lambda e: print(f"Delegated to {e.member_name}"))
+team.events.on(MemberCompletedEvent, lambda e: print(f"{e.member_name} done"))
+```
+
+| Event | When |
+|-------|------|
+| `TeamRunStartedEvent` | Team run begins |
+| `TeamRunCompletedEvent` | Team run finishes |
+| `TeamRunErrorEvent` | Team run fails |
+| `MemberDelegatedEvent` | Leader delegates to a member |
+| `MemberCompletedEvent` | Member finishes its task |
+| `MemberErrorEvent` | Member execution fails |
+| `MemberRoutedEvent` | Route mode selects a member |
+| `TaskCreatedEvent` | Task mode creates a task |
+| `TaskStatusChangedEvent` | Task status changes |
+| `TaskIterationEvent` | Task mode completes an iteration |
+
+## Nested Teams
+
+Teams can contain other teams as members:
+
+```python
+research_team = Team(
+    name="research",
+    model="gpt-4o",
+    members=[web_researcher, paper_reader],
+    mode=TeamMode.collaborate,
+)
+
+content_team = Team(
+    name="content",
+    model="gpt-4o",
+    members=[research_team, writer, editor],
+    mode=TeamMode.coordinate,
+)
+```
+
+## Imports
+
+```python
+from definable.agent.team import Team, TeamMode
+from definable.agent import Team, TeamMode  # also available from top-level
+```

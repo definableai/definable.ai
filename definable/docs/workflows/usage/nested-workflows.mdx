@@ -1,0 +1,63 @@
+---
+title: Nested Workflows
+description: "Compose parallel, conditional, and sequential steps into a complex pipeline."
+---
+
+Build a workflow that combines parallel research, sequential writing, and a conditional quality gate.
+
+<Steps>
+  <Step title="Create the workflow">
+    ```python nested_workflow.py
+    import asyncio
+    from definable.agent import Agent
+    from definable.agent.workflow import Workflow, Step, Parallel, Condition, Loop
+
+    web_researcher = Agent(model="gpt-4o", instructions="Research the web for current information.")
+    paper_reader = Agent(model="gpt-4o", instructions="Find and summarize academic papers.")
+    writer = Agent(model="gpt-4o", instructions="Write a comprehensive article from research.")
+    reviewer = Agent(model="gpt-4o", instructions="Review for accuracy. End with APPROVED or NEEDS_REVISION.")
+    publisher = Agent(model="gpt-4o", instructions="Format the approved article for publication.")
+
+    workflow = Workflow(
+        name="full-pipeline",
+        steps=[
+            # Step 1: Research in parallel
+            Parallel(name="research", steps=[
+                Step(name="web", agent=web_researcher),
+                Step(name="papers", agent=paper_reader),
+            ]),
+            # Step 2: Write article
+            Step(name="write", agent=writer),
+            # Step 3: Review and revise
+            Loop(
+                name="review-loop",
+                steps=[
+                    Step(name="review", agent=reviewer),
+                    Condition(
+                        name="quality-gate",
+                        condition=lambda ctx: "APPROVED" in (ctx.get_last_step_content() or ""),
+                        true_steps=Step(name="publish", agent=publisher),
+                        false_steps=Step(name="rewrite", agent=writer),
+                    ),
+                ],
+                end_condition=lambda outputs: any("APPROVED" in (o.content or "") for o in outputs),
+                max_iterations=3,
+            ),
+        ],
+    )
+
+    async def main():
+        result = await workflow.arun("Write about breakthroughs in quantum computing in 2026")
+        print(result.content)
+
+    asyncio.run(main())
+    ```
+  </Step>
+  <Step title="Install and run">
+    <Snippet file="install-definable.mdx" />
+
+    ```bash
+    python nested_workflow.py
+    ```
+  </Step>
+</Steps>

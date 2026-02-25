@@ -1,0 +1,60 @@
+---
+title: Ollama
+description: "Use local models via Ollama."
+---
+
+Run models locally with [Ollama](https://ollama.ai). No API key required.
+
+## Setup
+
+```bash
+# Install Ollama
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Pull a model
+ollama pull llama3
+```
+
+## Basic Usage
+
+```python
+from definable.model.ollama import Ollama
+from definable.model.message import Message
+
+model = Ollama(id="llama3")
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
+print(response.content)
+```
+
+## String Shorthand
+
+```python
+agent = Agent(model="ollama/llama3")
+```
+
+## Parameters
+
+<ParamField path="id" type="str" required>
+  Model name (must be pulled first with `ollama pull`).
+</ParamField>
+
+<ParamField path="host" type="str" default="http://localhost:11434">
+  Ollama server URL.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum output tokens.
+</ParamField>
+
+## Imports
+
+```python
+from definable.model.ollama import Ollama
+```

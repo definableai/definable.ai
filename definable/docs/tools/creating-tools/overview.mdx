@@ -1,0 +1,72 @@
+---
+title: Creating Tools
+sidebarTitle: Overview
+description: "Write custom Python functions as agent-callable tools."
+---
+
+Use the `@tool` decorator to convert any Python function into an agent-callable tool.
+
+```python
+from definable.tool.decorator import tool
+
+@tool
+def get_weather(city: str) -> str:
+    """Get the current weather for a city."""
+    return f"Sunny, 72F in {city}"
+```
+
+Definable automatically:
+
+1. Uses the function name as the tool name.
+2. Parses the docstring as the tool description.
+3. Generates a JSON Schema from type hints.
+4. Makes the tool available to any agent.
+
+## Decorator Options
+
+```python
+@tool(
+    name="weather",                    # Override tool name
+    description="Get current weather",  # Override description
+    show_result=True,                   # Show result in streaming output
+    stop_after_tool_call=True,          # Return immediately after this tool
+    instructions="Use for weather queries only.",
+)
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    return f"Sunny, 72F in {city}"
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `name` | `str` | Function name | Tool name shown to the model |
+| `description` | `str` | From docstring | Tool description |
+| `strict` | `bool` | `False` | Strict parameter validation |
+| `instructions` | `str` | `None` | Usage instructions added to system prompt |
+| `show_result` | `bool` | `False` | Show result in streaming output |
+| `stop_after_tool_call` | `bool` | `False` | Stop agent loop after this tool |
+| `requires_confirmation` | `bool` | `False` | Require user confirmation before executing |
+| `pre_hook` | `Callable` | `None` | Run before tool execution |
+| `post_hook` | `Callable` | `None` | Run after tool execution |
+| `cache_results` | `bool` | `False` | Cache results for identical arguments |
+| `cache_ttl` | `int` | `3600` | Cache TTL in seconds |
+
+## Learn More
+
+<CardGroup cols={3}>
+  <Card title="Parameters" icon="list" href="/tools/creating-tools/parameters">
+    Type hints, descriptions, and JSON Schema.
+  </Card>
+  <Card title="Hooks" icon="anchor" href="/tools/creating-tools/hooks">
+    Run logic before and after execution.
+  </Card>
+  <Card title="Caching" icon="database" href="/tools/creating-tools/caching">
+    Cache results for identical arguments.
+  </Card>
+  <Card title="Async Tools" icon="bolt" href="/tools/creating-tools/async-tools">
+    Non-blocking I/O operations.
+  </Card>
+  <Card title="Dependencies" icon="puzzle-piece" href="/tools/creating-tools/dependencies">
+    Inject services and state into tools.
+  </Card>
+</CardGroup>

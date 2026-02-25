@@ -1,0 +1,64 @@
+---
+title: Conditional Workflow
+sidebarTitle: Conditional
+description: "If/else branching based on step output."
+---
+
+Branch workflow execution based on a condition function that evaluates step context.
+
+```python
+from definable.agent import Agent
+from definable.agent.workflow import Workflow, Step, Condition
+
+reviewer = Agent(model="gpt-4o", instructions="Review content. End with APPROVED or REJECTED.")
+publisher = Agent(model="gpt-4o", instructions="Format and publish the approved content.")
+rewriter = Agent(model="gpt-4o", instructions="Rewrite and improve the rejected content.")
+
+workflow = Workflow(
+    name="review-pipeline",
+    steps=[
+        Step(name="draft", agent=drafter),
+        Step(name="review", agent=reviewer),
+        Condition(
+            name="quality-gate",
+            condition=lambda ctx: "APPROVED" in (ctx.get_last_step_content() or ""),
+            true_steps=Step(name="publish", agent=publisher),
+            false_steps=Step(name="rewrite", agent=rewriter),
+        ),
+    ],
+)
+```
+
+## How It Works
+
+1. `draft` and `review` steps execute sequentially.
+2. The `condition` function receives the step context.
+3. If it returns `True`, the `true_steps` branch executes.
+4. If it returns `False`, the `false_steps` branch executes.
+
+## Multiple True/False Steps
+
+Both branches accept a single step or a list:
+
+```python
+Condition(
+    name="gate",
+    condition=lambda ctx: score > 7,
+    true_steps=[
+        Step(name="polish", agent=editor),
+        Step(name="publish", agent=publisher),
+    ],
+    false_steps=Step(name="rewrite", agent=writer),
+)
+```
+
+## Async Conditions
+
+```python
+async def check_quality(ctx):
+    content = ctx.get_last_step_content()
+    # Call an external API, run evaluation, etc.
+    return "APPROVED" in content
+
+Condition(name="gate", condition=check_quality, ...)
+```

@@ -1,0 +1,126 @@
+---
+title: Team Examples
+sidebarTitle: Teams
+description: "Examples for multi-agent teams with coordinate, route, collaborate, and tasks modes."
+icon: users
+---
+
+## Coordinate Team
+
+Leader picks members and synthesizes their responses.
+
+```python
+import asyncio
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+
+researcher = Agent(model="gpt-4o", instructions="Research specialist. Find facts and data.")
+writer = Agent(model="gpt-4o", instructions="Technical writer. Write clear content.")
+
+team = Team(
+    name="content-team",
+    model="gpt-4o",
+    members=[researcher, writer],
+    mode=TeamMode.coordinate,
+    instructions="Produce well-researched technical content.",
+)
+
+async def main():
+    result = await team.arun("Write about the state of AI agents in 2026.")
+    print(result.content)
+
+asyncio.run(main())
+```
+
+## Route Team
+
+Leader classifies and dispatches to a single specialist.
+
+```python
+tech_support = Agent(model="gpt-4o", instructions="Technical support specialist.")
+billing_support = Agent(model="gpt-4o", instructions="Billing specialist.")
+general_support = Agent(model="gpt-4o", instructions="General support agent.")
+
+team = Team(
+    name="support-router",
+    model="gpt-4o",
+    members=[tech_support, billing_support, general_support],
+    mode=TeamMode.route,
+)
+
+result = await team.arun("I'm getting a 500 error on login.")
+# Routed to tech_support
+```
+
+## Collaborate Team
+
+All members work in parallel, leader synthesizes.
+
+```python
+optimist = Agent(model="gpt-4o", instructions="Optimistic analyst. Focus on opportunities.")
+pessimist = Agent(model="gpt-4o", instructions="Cautious analyst. Focus on risks.")
+realist = Agent(model="gpt-4o", instructions="Balanced analyst. Weigh both sides.")
+
+team = Team(
+    name="analysis-team",
+    model="gpt-4o",
+    members=[optimist, pessimist, realist],
+    mode=TeamMode.collaborate,
+)
+
+result = await team.arun("Analyze the impact of AI on jobs.")
+```
+
+## Tasks Team
+
+Leader decomposes into tasks and delegates autonomously.
+
+```python
+researcher = Agent(model="gpt-4o", instructions="Research specialist.")
+designer = Agent(model="gpt-4o", instructions="UX designer.")
+developer = Agent(model="gpt-4o", instructions="Developer.")
+
+team = Team(
+    name="product-team",
+    model="gpt-4o",
+    members=[researcher, designer, developer],
+    mode=TeamMode.tasks,
+    max_iterations=10,
+)
+
+result = await team.arun("Design a user onboarding flow.")
+```
+
+## Nested Teams
+
+Teams can contain other teams.
+
+```python
+research_team = Team(
+    name="research",
+    model="gpt-4o",
+    members=[web_researcher, paper_reader],
+    mode=TeamMode.collaborate,
+)
+
+content_team = Team(
+    name="content",
+    model="gpt-4o",
+    members=[research_team, writer, editor],
+    mode=TeamMode.coordinate,
+)
+```
+
+## Structured Output
+
+```python
+from pydantic import BaseModel
+
+class Report(BaseModel):
+    title: str
+    summary: str
+    recommendations: list[str]
+
+result = await team.arun("Analyze market trends", output_schema=Report)
+report = result.parsed  # Report instance
+```

@@ -1,0 +1,53 @@
+---
+title: Agent with Knowledge
+description: "Ground an agent in documents using RAG."
+---
+
+Create an agent that retrieves relevant information from a knowledge base before answering.
+
+<Steps>
+  <Step title="Create the agent">
+    ```python agent_knowledge.py
+    from definable.agent import Agent
+    from definable.knowledge import Knowledge
+    from definable.vectordb import InMemoryVectorDB
+
+    knowledge = Knowledge(vector_db=InMemoryVectorDB())
+    knowledge.add("Definable supports 10 LLM providers: OpenAI, Anthropic, Google, DeepSeek, Mistral, Moonshot, xAI, Perplexity, Ollama, and OpenRouter.")
+    knowledge.add("Agents can use tools, knowledge, memory, middleware, and tracing.")
+    knowledge.add("The @tool decorator converts Python functions into agent-callable tools.")
+
+    agent = Agent(
+        model="gpt-4o",
+        knowledge=knowledge,
+        instructions="Answer questions using the provided knowledge base. Cite specific facts.",
+    )
+
+    output = agent.run("What LLM providers does Definable support?")
+    print(output.content)
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    <Snippet file="install-definable.mdx" />
+  </Step>
+  <Step title="Export your API key">
+    <Snippet file="export-openai-key.mdx" />
+  </Step>
+  <Step title="Run">
+    ```bash
+    python agent_knowledge.py
+    ```
+
+    The agent retrieves the most relevant documents and uses them to answer accurately.
+  </Step>
+</Steps>
+
+<Tip>
+You can also use path shorthand to load an entire directory:
+
+```python
+agent = Agent(model="gpt-4o", knowledge="./docs/")
+```
+
+This auto-configures InMemoryVectorDB + OpenAIEmbedder + RecursiveChunker and loads all supported files from the directory.
+</Tip>

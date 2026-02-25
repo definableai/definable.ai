@@ -1,0 +1,46 @@
+---
+title: Perplexity
+description: "Use Perplexity Sonar models with built-in search."
+---
+
+## Setup
+
+```bash
+export PERPLEXITY_API_KEY="pplx-..."
+```
+
+## Basic Usage
+
+```python
+from definable.model.perplexity import Perplexity
+from definable.model.message import Message
+
+model = Perplexity(id="sonar-pro")
+response = model.invoke(
+    messages=[Message(role="user", content="What happened in AI this week?")],
+    assistant_message=Message(role="assistant", content=""),
+)
+print(response.content)
+```
+
+## String Shorthand
+
+```python
+agent = Agent(model="perplexity/sonar-pro")
+```
+
+## Parameters
+
+<ParamField path="id" type="str" default="sonar-pro">
+  Model identifier. Common values: `sonar-pro`, `sonar`.
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  Perplexity API key. Defaults to `PERPLEXITY_API_KEY`.
+</ParamField>
+
+## Imports
+
+```python
+from definable.model.perplexity import Perplexity
+```

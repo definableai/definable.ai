@@ -1,0 +1,71 @@
+---
+title: Memory
+description: "Reference for the Memory class and stores."
+---
+
+```python
+from definable.memory import Memory, SQLiteStore, InMemoryStore, FileStore
+```
+
+## Memory Constructor
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `store` | `MemoryStore` | `InMemoryStore()` | Storage backend. |
+| `model` | `Model` | `None` | LLM for summarization (defaults to agent's model). |
+| `enabled` | `bool` | `True` | Whether memory is active. |
+| `max_messages` | `int` | `100` | Auto-summarize threshold. |
+| `pin_count` | `int` | `2` | Earliest messages to preserve. |
+| `recent_count` | `int` | `5` | Most recent messages to preserve. |
+| `description` | `str` | `None` | Layer guide description. |
+
+## Methods
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `add(message, session_id, user_id=)` | — | Add a message. |
+| `get_entries(session_id, user_id=)` | `List[MemoryEntry]` | Retrieve entries. |
+| `get_context_messages(session_id, user_id=)` | `List[Message]` | Get as Message objects. |
+| `update(memory_id, content)` | — | Update entry content. |
+| `delete(memory_id)` | — | Delete entry. |
+| `clear(session_id)` | — | Clear session. |
+| `close()` | — | Close store connection. |
+
+## MemoryEntry
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `session_id` | `str` | — | Session identifier. |
+| `memory_id` | `str` | auto UUID | Unique ID. |
+| `user_id` | `str` | `"default"` | User identifier. |
+| `role` | `str` | `"user"` | `"user"`, `"assistant"`, or `"summary"`. |
+| `content` | `str` | `""` | Message content. |
+| `message_data` | `dict` | `None` | Structured data. |
+| `created_at` | `float` | auto | Creation timestamp. |
+| `updated_at` | `float` | auto | Update timestamp. |
+
+## Stores
+
+### SQLiteStore
+
+```python
+SQLiteStore(db_path: str)
+```
+
+Persistent SQLite-backed storage.
+
+### InMemoryStore
+
+```python
+InMemoryStore()
+```
+
+Ephemeral in-memory storage. Good for testing.
+
+### FileStore
+
+```python
+FileStore(directory: str)
+```
+
+JSON file-based storage. One file per session.

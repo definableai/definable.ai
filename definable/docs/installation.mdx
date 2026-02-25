@@ -1,71 +1,74 @@
 ---
 title: Installation
-description: Install Definable and configure your environment.
-icon: download
+description: "Install Definable and set up your environment."
 ---
 
 ## Requirements
 
 - Python **3.12** or higher
-- An API key from at least one supported LLM provider
+- An API key from at least one LLM provider
 
-## Install
+## Quick Install
 
-<CodeGroup>
-```bash pip
-pip install definable
-```
+<Snippet file="install-definable.mdx" />
 
-```bash uv
-uv add definable
-```
+## Full Setup
 
-```bash From source
-git clone https://github.com/definable-ai/definable.git
-cd definable
-pip install -e .
-```
-</CodeGroup>
+<Steps>
+  <Step title="Create a virtual environment">
+    <Snippet file="setup-venv.mdx" />
+  </Step>
+  <Step title="Install Definable">
+    <Snippet file="install-definable.mdx" />
+  </Step>
+  <Step title="Set your API key">
+    <Snippet file="export-openai-key.mdx" />
+  </Step>
+  <Step title="Verify">
+    ```python
+    from definable.agent import Agent
+
+    agent = Agent(model="gpt-4o")
+    output = agent.run("Hello!")
+    print(output.content)
+    ```
+  </Step>
+</Steps>
+
+## Optional Dependencies
+
+Install extras for specific features:
+
+| Feature | Install command |
+|---------|----------------|
+| Discord interface | `pip install 'definable[discord]'` |
+| All messaging interfaces | `pip install 'definable[interfaces]'` |
+| File readers (PDF, DOCX, XLSX) | `pip install 'definable[readers]'` |
+| HTTP server (FastAPI + Uvicorn) | `pip install 'definable[serve]'` |
+| Cron scheduling | `pip install 'definable[cron]'` |
+| JWT authentication | `pip install 'definable[jwt]'` |
+| Memory with Mem0 | `pip install 'definable[mem0-memory]'` |
+| Deep research | `pip install 'definable[research]'` |
+| CLI / TUI interface | `pip install 'definable[cli]'` |
+| Full runtime (all of the above) | `pip install 'definable[runtime]'` |
 
 ## Core Dependencies
 
-Definable installs these automatically:
+These are installed automatically with `pip install definable`:
 
 | Package | Purpose |
 |---------|---------|
 | `openai` | OpenAI API client (also used by OpenAI-compatible providers) |
 | `pydantic` | Data validation and structured outputs |
-| `httpx` | HTTP client for async requests |
+| `httpx` | Async HTTP client |
 | `tiktoken` | Token counting |
-| `rich` | Formatted logging and output |
-| `docstring-parser` | Tool description extraction |
-| `aiosqlite` | SQLite async driver for memory and identity resolution |
-
-## Optional Dependencies
-
-Some features require additional packages:
-
-| Feature | Package(s) | Install |
-|---------|------------|---------|
-| PDF reading (knowledge) | `pypdf` | `pip install pypdf` |
-| URL reading | `beautifulsoup4` | `pip install beautifulsoup4` |
-| Voyage AI embeddings | `voyageai` | `pip install voyageai` |
-| Cohere reranking | `cohere` | `pip install cohere` |
-| PgVector database | `psycopg[binary]`, `pgvector` | `pip install psycopg[binary] pgvector` |
-| Discord interface | `discord.py>=2.3.0` | `pip install 'definable[discord]'` |
-| All interfaces | `discord.py>=2.3.0` | `pip install 'definable[interfaces]'` |
-| File readers (PDF, DOCX, PPTX, XLSX, ODS, RTF) | `pypdf`, `python-docx`, `python-pptx`, `openpyxl`, `odfpy`, `striprtf` | `pip install 'definable[readers]'` |
-| PostgreSQL memory (legacy — current memory uses SQLite/File/InMemory) | `asyncpg>=0.29.0` | `pip install 'definable[postgres-memory]'` |
-| Mistral OCR | `mistralai>=1.0.0` | `pip install 'definable[mistral-ocr]'` |
-| HTTP server | `fastapi`, `uvicorn` | `pip install 'definable[serve]'` |
-| Cron scheduling | `croniter` | `pip install 'definable[cron]'` |
-| JWT authentication | `pyjwt` | `pip install 'definable[jwt]'` |
-| Dev mode (hot-reload) | `watchfiles` | `pip install watchfiles` |
-| Full runtime | All of the above | `pip install 'definable[runtime]'` |
+| `rich` | Formatted logging and terminal output |
+| `docstring-parser` | Tool description extraction from docstrings |
+| `aiosqlite` | SQLite async driver for memory and identity storage |
 
 ## Environment Variables
 
-Set API keys as environment variables. Only the keys for providers you use are required.
+Set API keys for the providers you use. Only the keys you need are required.
 
 ```bash
 # LLM Providers
@@ -73,6 +76,7 @@ export OPENAI_API_KEY="sk-..."
 export DEEPSEEK_API_KEY="sk-..."
 export MOONSHOT_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Embedding Providers
 export VOYAGE_API_KEY="pa-..."
@@ -85,34 +89,18 @@ export COHERE_API_KEY="..."
 You can also pass API keys directly when creating model instances:
 
 ```python
+from definable.model.openai import OpenAIChat
 model = OpenAIChat(id="gpt-4o", api_key="sk-...")
 ```
 </Tip>
 
-## Verify Installation
-
-```python
-import definable
-from definable.model import OpenAIChat
-from definable.model.message import Message
-
-model = OpenAIChat(id="gpt-4o")
-response = model.invoke(
-    messages=[Message(role="user", content="Hello!")],
-    assistant_message=Message(role="assistant", content=""),
-)
-print(response.content)
-```
-
-If you see a response, you are ready to go.
-
 ## Next Steps
 
 <CardGroup cols={2}>
-  <Card title="Quickstart" icon="bolt" href="/quickstart">
-    Build your first model call, agent, and RAG query.
+  <Card title="Your First Agent" icon="bolt" href="/first-agent">
+    Build and run an agent with tools in 15 lines.
   </Card>
   <Card title="Models" icon="microchip" href="/models/overview">
-    Explore all supported LLM providers.
+    Explore all 10 supported LLM providers.
   </Card>
 </CardGroup>

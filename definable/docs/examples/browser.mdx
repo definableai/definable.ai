@@ -1,0 +1,83 @@
+---
+title: Browser Examples
+sidebarTitle: Browser
+description: "Examples for browser automation with Playwright CDP."
+icon: globe
+---
+
+## Basic Browser Agent
+
+Navigate and extract information from web pages.
+
+```python
+import asyncio
+from definable.agent import Agent
+from definable.browser import BrowserToolkit, BrowserConfig
+
+async def main():
+    config = BrowserConfig(headless=False)
+    async with BrowserToolkit(config=config) as toolkit:
+        agent = Agent(
+            model="gpt-4o",
+            toolkits=[toolkit],
+            instructions="Use browser_snapshot before interacting with any page.",
+        )
+        result = await agent.arun("Go to news.ycombinator.com and list the top 3 stories")
+        print(result.content)
+
+asyncio.run(main())
+```
+
+```bash
+pip install 'definable[browser]'
+playwright install chromium
+```
+
+## Connect to Existing Browser
+
+Attach to an already-running Chrome instance:
+
+```bash
+# Launch Chrome with remote debugging
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 --no-first-run
+```
+
+```python
+config = BrowserConfig(cdp_url="http://127.0.0.1:9222")
+async with BrowserToolkit(config=config) as toolkit:
+    agent = Agent(model="gpt-4o", toolkits=[toolkit])
+    result = await agent.arun("What page am I on?")
+```
+
+## Persistent Profile
+
+Keep cookies and login state across runs:
+
+```python
+config = BrowserConfig(user_data_dir="/tmp/my-browser-profile")
+```
+
+## Form Filling
+
+```python
+result = await agent.arun("""
+    Go to https://example.com/signup
+    Fill in the email field with "test@example.com"
+    Fill in the password field with "secure123"
+    Click the submit button
+""")
+```
+
+## Combined with MCP
+
+```python
+from definable.mcp import MCPToolkit, MCPConfig
+
+async with BrowserToolkit(config=config) as browser:
+    async with MCPToolkit(config=MCPConfig(...)) as mcp:
+        agent = Agent(
+            model="gpt-4o",
+            toolkits=[browser, mcp],
+        )
+```

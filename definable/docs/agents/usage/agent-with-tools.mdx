@@ -1,0 +1,52 @@
+---
+title: Agent with Tools
+description: "Build an agent that uses custom tools to take actions."
+---
+
+Create an agent with multiple tools. The agent decides which tools to call based on the user's message.
+
+<Steps>
+  <Step title="Create the agent">
+    ```python agent_tools.py
+    from definable.agent import Agent
+    from definable.tool.decorator import tool
+
+    @tool
+    def search_web(query: str) -> str:
+        """Search the web for information."""
+        return f"Top result for '{query}': Example search result."
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Get the current weather for a city."""
+        return f"The weather in {city} is sunny, 72F."
+
+    @tool
+    def calculate(expression: str) -> str:
+        """Evaluate a math expression."""
+        return str(eval(expression))
+
+    agent = Agent(
+        model="gpt-4o",
+        tools=[search_web, get_weather, calculate],
+        instructions="You are a helpful assistant. Use tools when needed.",
+    )
+
+    output = agent.run("What's 42 * 17, and what's the weather in Paris?")
+    print(output.content)
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    <Snippet file="install-definable.mdx" />
+  </Step>
+  <Step title="Export your API key">
+    <Snippet file="export-openai-key.mdx" />
+  </Step>
+  <Step title="Run">
+    ```bash
+    python agent_tools.py
+    ```
+
+    The agent will call `calculate` and `get_weather` in parallel, then combine the results into a single response.
+  </Step>
+</Steps>

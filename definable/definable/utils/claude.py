@@ -262,7 +262,7 @@ def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
   return None
 
 
-def format_messages(messages: List[Message], compress_tool_results: bool = False) -> Tuple[List[Dict[str, Union[str, list]]], str]:
+def format_messages(messages: List[Message], compress_tool_results: bool = False) -> Tuple[List[Any], str]:
   """
   Process the list of messages and separate them into API messages and system messages.
 
@@ -314,7 +314,7 @@ def format_messages(messages: List[Message], compress_tool_results: bool = False
         content.append(
           ThinkingBlock(
             thinking=message.reasoning_content,
-            signature=message.provider_data.get("signature"),
+            signature=str(message.provider_data.get("signature", "")),
             type="thinking",
           )
         )
@@ -322,7 +322,7 @@ def format_messages(messages: List[Message], compress_tool_results: bool = False
       if message.redacted_reasoning_content is not None:
         from anthropic.types import RedactedThinkingBlock
 
-        content.append(RedactedThinkingBlock(data=message.redacted_reasoning_content, type="redacted_reasoning_content"))
+        content.append(RedactedThinkingBlock(data=message.redacted_reasoning_content, type="redacted_thinking"))
 
       if isinstance(message.content, str) and message.content and len(message.content.strip()) > 0:
         content.append(TextBlock(text=message.content, type="text"))

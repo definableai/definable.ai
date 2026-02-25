@@ -1,0 +1,73 @@
+---
+title: Multi-Platform Agent
+description: "Serve one agent across Telegram, Discord, and Slack simultaneously."
+---
+
+Deploy a single agent to multiple messaging platforms with shared memory and identity resolution.
+
+<Steps>
+  <Step title="Create the agent">
+    ```python multi_platform.py
+    import asyncio
+    import os
+    from definable.agent import Agent
+    from definable.agent.interface import TelegramInterface, DiscordInterface, SlackInterface
+    from definable.memory import Memory, SQLiteStore
+    from definable.tool.decorator import tool
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Get the current weather for a city."""
+        return f"Sunny, 24C in {city}"
+
+    agent = Agent(
+        model="gpt-4o",
+        instructions="You are a helpful assistant available on multiple platforms.",
+        tools=[get_weather],
+        memory=Memory(store=SQLiteStore("./shared_memory.db")),
+    )
+
+    telegram = TelegramInterface(
+        agent=agent,
+        bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    discord = DiscordInterface(
+        agent=agent,
+        bot_token=os.environ["DISCORD_BOT_TOKEN"],
+    )
+
+    slack = SlackInterface(
+        agent=agent,
+        bot_token=os.environ["SLACK_BOT_TOKEN"],
+        app_token=os.environ["SLACK_APP_TOKEN"],
+    )
+
+    # Serve all interfaces with agent.serve()
+    agent.serve(telegram, discord, slack, port=8000)
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    ```bash
+    pip install 'definable[interfaces]'
+    ```
+  </Step>
+  <Step title="Set environment variables">
+    ```bash
+    export TELEGRAM_BOT_TOKEN="..."
+    export DISCORD_BOT_TOKEN="..."
+    export SLACK_BOT_TOKEN="xoxb-..."
+    export SLACK_APP_TOKEN="xapp-..."
+    export OPENAI_API_KEY="sk-..."
+    ```
+  </Step>
+  <Step title="Run">
+    ```bash
+    python multi_platform.py
+    ```
+
+    The agent is now live on all three platforms simultaneously with shared memory.
+  </Step>
+</Steps>
+
+See [Multi-Interface](/interfaces/multi-interface) for identity resolution and shared session management.

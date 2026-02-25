@@ -40,23 +40,16 @@ try:
     ContentBlockDeltaEvent,
     ContentBlockStartEvent,
     ContentBlockStopEvent,
-    MessageDeltaUsage,
     # MessageDeltaEvent,  # Currently broken
     MessageStopEvent,
     Usage,
   )
-  from anthropic.types import (
-    Message as AnthropicMessage,
-  )
-
 except ImportError as e:
   raise ImportError("`anthropic` not installed. Please install it with `pip install anthropic`") from e
 
 # Import Beta types
 try:
   from anthropic.types.beta import BetaRawContentBlockDeltaEvent, BetaTextDelta
-  from anthropic.types.beta.beta_message import BetaMessage
-  from anthropic.types.beta.beta_usage import BetaUsage
 except ImportError as e:
   raise ImportError("`anthropic` not installed or missing beta components. Please install with `pip install anthropic`") from e
 
@@ -130,7 +123,7 @@ class Claude(Model):
   http_client: Optional[Union[httpx.Client, httpx.AsyncClient]] = None
   client_params: Optional[Dict[str, Any]] = None
 
-  client: Optional[AnthropicClient] = None
+  client: Optional[AnthropicClient] = None  # type: ignore[assignment]
   async_client: Optional[AsyncAnthropicClient] = None
 
   def __post_init__(self):
@@ -601,7 +594,7 @@ class Claude(Model):
           messages=chat_messages,
           **request_kwargs,
         ) as stream:
-          for chunk in stream:
+          for chunk in stream:  # type: ignore[assignment]
             yield self._parse_provider_response_delta(chunk, response_format=response_format)
 
       assistant_message.metrics.stop_timer()
@@ -709,7 +702,7 @@ class Claude(Model):
           messages=chat_messages,
           **request_kwargs,
         ) as stream:
-          async for chunk in stream:
+          async for chunk in stream:  # type: ignore[assignment]
             yield self._parse_provider_response_delta(chunk, response_format=response_format)
 
       assistant_message.metrics.stop_timer()
@@ -735,7 +728,7 @@ class Claude(Model):
 
   def _parse_provider_response(
     self,
-    response: Union[AnthropicMessage, BetaMessage],
+    response: Any,
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     **kwargs,
   ) -> ModelResponse:
@@ -846,40 +839,34 @@ class Claude(Model):
 
   def _parse_provider_response_delta(  # type: ignore[override]
     self,
-    response: Union[
-      ContentBlockStartEvent,
-      ContentBlockDeltaEvent,
-      ContentBlockStopEvent,
-      MessageStopEvent,
-      BetaRawContentBlockDeltaEvent,
-      BetaRawContentBlockStartEvent,
-      ParsedBetaContentBlockStopEvent,
-      ParsedBetaMessageStopEvent,
-    ],
+    response: Any,
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
   ) -> ModelResponse:
     """
     Parse the Claude streaming response into ModelProviderResponse objects.
     """
     model_response = ModelResponse()
+    # Untyped alias: isinstance narrows `response` but `_evt` stays Any,
+    # avoiding union-attr errors from Anthropic SDK's complex event types.
+    _evt: Any = response
 
     if isinstance(response, (ContentBlockStartEvent, BetaRawContentBlockStartEvent)):
-      if response.content_block.type == "redacted_reasoning_content":
-        model_response.redacted_reasoning_content = response.content_block.data
+      if _evt.content_block.type == "redacted_reasoning_content":
+        model_response.redacted_reasoning_content = _evt.content_block.data
 
     if isinstance(response, (ContentBlockDeltaEvent, BetaRawContentBlockDeltaEvent)):
-      if response.delta.type == "text_delta":
-        model_response.content = response.delta.text
-      elif response.delta.type == "thinking_delta":
-        model_response.reasoning_content = response.delta.thinking
-      elif response.delta.type == "signature_delta":
+      if _evt.delta.type == "text_delta":
+        model_response.content = _evt.delta.text
+      elif _evt.delta.type == "thinking_delta":
+        model_response.reasoning_content = _evt.delta.thinking
+      elif _evt.delta.type == "signature_delta":
         model_response.provider_data = {
-          "signature": response.delta.signature,
+          "signature": _evt.delta.signature,
         }
 
     elif isinstance(response, (ContentBlockStopEvent, ParsedBetaContentBlockStopEvent)):
-      if response.content_block.type == "tool_use":
-        tool_use = response.content_block
+      if _evt.content_block.type == "tool_use":
+        tool_use = _evt.content_block
         tool_name = tool_use.name
         tool_input = tool_use.input
 
@@ -904,7 +891,7 @@ class Claude(Model):
 
       accumulated_text = ""
 
-      for block in response.message.content:
+      for block in _evt.message.content:
         if block.type == "text":
           accumulated_text += block.text
 
@@ -935,8 +922,8 @@ class Claude(Model):
             log_warning(f"Unexpected error parsing structured output in stream: {e}")
 
       # Capture context management information if present
-      if self.context_management is not None and hasattr(response.message, "context_management"):
-        context_mgmt = response.message.context_management
+      if self.context_management is not None and hasattr(_evt.message, "context_management"):
+        context_mgmt = _evt.message.context_management
         if context_mgmt is not None:
           model_response.provider_data = model_response.provider_data or {}
           if hasattr(context_mgmt, "model_dump"):
@@ -946,22 +933,22 @@ class Claude(Model):
 
     if (
       isinstance(response, (MessageStopEvent, ParsedBetaMessageStopEvent))
-      and hasattr(response, "message")
-      and hasattr(response.message, "usage")
-      and response.message.usage is not None
+      and hasattr(_evt, "message")
+      and hasattr(_evt.message, "usage")
+      and _evt.message.usage is not None
     ):
-      model_response.response_usage = self._get_metrics(response.message.usage)
+      model_response.response_usage = self._get_metrics(_evt.message.usage)
 
     # Capture the Beta response
     try:
-      if isinstance(response, BetaRawContentBlockDeltaEvent) and isinstance(response.delta, BetaTextDelta) and response.delta.text is not None:
-        model_response.content = response.delta.text
+      if isinstance(response, BetaRawContentBlockDeltaEvent) and isinstance(_evt.delta, BetaTextDelta) and _evt.delta.text is not None:
+        model_response.content = _evt.delta.text
     except Exception as e:
       log_error(f"Error parsing Beta response: {e}")
 
     return model_response
 
-  def _get_metrics(self, response_usage: Union[Usage, MessageDeltaUsage, BetaUsage]) -> Metrics:
+  def _get_metrics(self, response_usage: Any) -> Metrics:
     """
     Parse the given Anthropic-specific usage into a Metrics object.
     """

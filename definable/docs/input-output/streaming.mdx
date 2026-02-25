@@ -1,0 +1,86 @@
+---
+title: Streaming
+sidebarTitle: Streaming
+description: "Stream responses token-by-token from models and agents."
+---
+
+Streaming displays tokens as they are generated instead of waiting for the full response. This dramatically improves perceived latency.
+
+## Agent Streaming
+
+<CodeGroup>
+```python Sync
+for event in agent.run_stream("Tell me a story."):
+    if event.event == "RunContent" and event.content:
+        print(event.content, end="", flush=True)
+```
+
+```python Async
+async for event in agent.arun_stream("Tell me a story."):
+    if event.event == "RunContent" and event.content:
+        print(event.content, end="", flush=True)
+```
+</CodeGroup>
+
+## Event Types
+
+| Event | Description |
+|-------|-------------|
+| `RunStarted` | Agent execution began |
+| `RunContent` | A chunk of the agent's text response |
+| `RunContentCompleted` | Content generation done |
+| `ToolCallStarted` | A tool call is about to execute |
+| `ToolCallCompleted` | A tool call finished |
+| `ToolCallError` | A tool call failed |
+| `ReasoningStarted` | Thinking phase began |
+| `ReasoningStep` | A reasoning step |
+| `RunCompleted` | Entire run finished (includes final `RunOutput`) |
+| `RunError` | Run failed |
+
+## Full Event Handling
+
+```python
+for event in agent.run_stream("Research quantum computing."):
+    match event.event:
+        case "RunContent":
+            print(event.content, end="", flush=True)
+        case "ToolCallStarted":
+            print(f"\n> Calling {event.tool.tool_name}...")
+        case "ToolCallCompleted":
+            print(f"  Done: {event.content[:80]}")
+        case "RunCompleted":
+            print(f"\n\nTokens: {event.metrics.total_tokens}")
+```
+
+## Model Streaming
+
+Stream directly from a model:
+
+<CodeGroup>
+```python Sync
+from definable.model.openai import OpenAIChat
+from definable.model.message import Message
+
+model = OpenAIChat(id="gpt-4o")
+
+for chunk in model.invoke_stream(
+    messages=[Message(role="user", content="Explain DNS.")],
+    assistant_message=Message(role="assistant", content=""),
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+
+```python Async
+async for chunk in model.ainvoke_stream(
+    messages=[Message(role="user", content="Explain DNS.")],
+    assistant_message=Message(role="assistant", content=""),
+):
+    if chunk.content:
+        print(chunk.content, end="", flush=True)
+```
+</CodeGroup>
+
+<Tip>
+The `RunCompleted` event in agent streaming contains the full `RunOutput` object in `event.output`, giving you access to aggregated metrics and the complete message history.
+</Tip>

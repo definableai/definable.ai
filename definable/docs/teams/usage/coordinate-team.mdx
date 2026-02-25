@@ -1,0 +1,56 @@
+---
+title: Coordinate Team
+description: "Leader picks members and synthesizes their responses."
+---
+
+Build a team where the leader selects which members to delegate to based on the task.
+
+<Steps>
+  <Step title="Create the team">
+    ```python coordinate_team.py
+    import asyncio
+    from definable.agent import Agent
+    from definable.agent.team import Team, TeamMode
+
+    researcher = Agent(
+        model="gpt-4o",
+        instructions="You are a research specialist. Find facts, data, and sources.",
+    )
+    writer = Agent(
+        model="gpt-4o",
+        instructions="You are a technical writer. Write clear, well-structured content.",
+    )
+    editor = Agent(
+        model="gpt-4o",
+        instructions="You are an editor. Polish prose, fix errors, improve clarity.",
+    )
+
+    team = Team(
+        name="content-team",
+        model="gpt-4o",
+        members=[researcher, writer, editor],
+        mode=TeamMode.coordinate,
+        instructions="Produce well-researched, polished technical articles.",
+    )
+
+    async def main():
+        result = await team.arun("Write a 500-word article about AI agents in production.")
+        print(result.content)
+
+    asyncio.run(main())
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    <Snippet file="install-definable.mdx" />
+  </Step>
+  <Step title="Export your API key">
+    <Snippet file="export-openai-key.mdx" />
+  </Step>
+  <Step title="Run">
+    ```bash
+    python coordinate_team.py
+    ```
+
+    The leader delegates to the researcher first, passes findings to the writer, then sends the draft to the editor.
+  </Step>
+</Steps>

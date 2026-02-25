@@ -1,11 +1,12 @@
 ---
-title: Models Overview
+title: What are Models?
 sidebarTitle: Overview
-description: Unified interface for calling LLMs across multiple providers.
+description: "Unified interface for calling LLMs across 10 providers."
 icon: microchip
+mode: "wide"
 ---
 
-Models are the foundation of Definable. The `Model` base class provides a consistent interface for invoking any supported LLM provider, whether synchronously, asynchronously, or via streaming.
+Models provide a consistent interface for invoking any supported LLM provider. Call synchronously, asynchronously, or via streaming — with the same API regardless of provider.
 
 ## Supported Providers
 
@@ -190,11 +191,23 @@ Supported providers: `openai`, `deepseek`, `moonshot`, `xai`, `anthropic`, `mist
 
 ## Next Steps
 
-<CardGroup cols={2}>
-  <Card title="Streaming" icon="bars-staggered" href="/models/streaming">
+<CardGroup cols={3}>
+  <Card title="String Shorthand" icon="text" href="/models/model-as-string">
+    Use string format instead of class imports.
+  </Card>
+  <Card title="Model Resilience" icon="shield" href="/models/resilience">
+    Key rotation, failover, and rate limit handling.
+  </Card>
+  <Card title="Streaming" icon="bars-staggered" href="/input-output/streaming">
     Stream responses token-by-token.
   </Card>
-  <Card title="Structured Output" icon="code" href="/models/structured-output">
+  <Card title="Structured Output" icon="code" href="/input-output/structured-output">
     Return Pydantic models from LLM calls.
+  </Card>
+  <Card title="Multimodal" icon="image" href="/input-output/multimodal">
+    Images, audio, video, and files.
+  </Card>
+  <Card title="Metrics & Pricing" icon="chart-line" href="/models/metrics-and-pricing">
+    Token counting and cost calculation.
   </Card>
 </CardGroup>

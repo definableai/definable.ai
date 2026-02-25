@@ -1,0 +1,81 @@
+---
+title: Telegram Bot
+description: "Deploy an agent as a Telegram bot with tools and voice support."
+---
+
+Build a Telegram bot with tools, memory, and voice note transcription.
+
+<Steps>
+  <Step title="Create the bot">
+    Open Telegram and message [@BotFather](https://t.me/BotFather):
+    1. Send `/newbot`
+    2. Choose a name and username
+    3. Copy the bot token
+  </Step>
+  <Step title="Create the agent">
+    ```python telegram_bot.py
+    import asyncio
+    import os
+    from definable.agent import Agent
+    from definable.agent.interface import TelegramInterface
+    from definable.memory import Memory, SQLiteStore
+    from definable.tool.decorator import tool
+
+    @tool
+    def get_weather(city: str) -> str:
+        """Get the current weather for a city."""
+        return f"Sunny, 24C in {city}"
+
+    agent = Agent(
+        model="gpt-4o",
+        instructions="You are a helpful Telegram assistant with weather tools.",
+        tools=[get_weather],
+        memory=Memory(store=SQLiteStore("./telegram_memory.db")),
+        audio_transcriber=True,  # Transcribe voice notes via Whisper
+    )
+
+    interface = TelegramInterface(
+        agent=agent,
+        bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+    )
+
+    asyncio.run(interface.serve_forever())
+    ```
+  </Step>
+  <Step title="Install dependencies">
+    <Snippet file="install-definable.mdx" />
+  </Step>
+  <Step title="Set environment variables">
+    ```bash
+    export TELEGRAM_BOT_TOKEN="123456:ABC-DEF..."
+    export OPENAI_API_KEY="sk-..."
+    ```
+  </Step>
+  <Step title="Run">
+    ```bash
+    python telegram_bot.py
+    ```
+
+    Open Telegram, find your bot, and start chatting. The bot:
+    - Calls the weather tool when asked about weather
+    - Remembers conversations across messages
+    - Transcribes voice notes to text automatically
+  </Step>
+</Steps>
+
+## Production Deployment
+
+For production, switch to webhook mode:
+
+```python
+interface = TelegramInterface(
+    agent=agent,
+    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
+    mode="webhook",
+    webhook_url="https://your-domain.com/webhook/telegram",
+    webhook_secret=os.environ.get("WEBHOOK_SECRET"),
+    max_concurrent_requests=20,
+)
+```
+
+See [Telegram reference](/interfaces/telegram) for all configuration options.

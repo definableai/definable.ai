@@ -1,0 +1,53 @@
+---
+title: Model as String
+sidebarTitle: String Shorthand
+description: "Use string shorthand instead of importing model classes."
+---
+
+Instead of importing model classes, pass a string to `Agent(model=...)`:
+
+```python
+from definable.agent import Agent
+
+# Full format: "provider/model-id"
+agent = Agent(model="openai/gpt-4o")
+agent = Agent(model="anthropic/claude-sonnet-4-20250514")
+agent = Agent(model="google/gemini-2.0-flash-001")
+agent = Agent(model="deepseek/deepseek-chat")
+
+# Bare model name defaults to OpenAI
+agent = Agent(model="gpt-4o")
+agent = Agent(model="gpt-4o-mini")
+```
+
+## Supported Providers
+
+| Provider | Format | Example |
+|----------|--------|---------|
+| OpenAI | `openai/model-id` | `openai/gpt-4o` |
+| Anthropic | `anthropic/model-id` | `anthropic/claude-sonnet-4-20250514` |
+| Google Gemini | `google/model-id` | `google/gemini-2.0-flash-001` |
+| DeepSeek | `deepseek/model-id` | `deepseek/deepseek-chat` |
+| Mistral | `mistral/model-id` | `mistral/mistral-large-latest` |
+| Moonshot | `moonshot/model-id` | `moonshot/moonshot-v1-8k` |
+| xAI | `xai/model-id` | `xai/grok-3` |
+| Perplexity | `perplexity/model-id` | `perplexity/sonar-pro` |
+| Ollama | `ollama/model-id` | `ollama/llama3` |
+| OpenRouter | `openrouter/model-id` | `openrouter/meta-llama/llama-3-70b` |
+
+## When to Use Class Imports
+
+Use the class-based approach when you need to configure model-specific options:
+
+```python
+from definable.model.openai import OpenAIChat
+
+model = OpenAIChat(
+    id="gpt-4o",
+    api_key="sk-...",          # Custom API key
+    strict_output=False,       # Disable strict JSON mode
+    base_url="https://...",    # Custom endpoint
+)
+```
+
+String shorthand uses default configuration for each provider.

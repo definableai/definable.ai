@@ -1,0 +1,104 @@
+---
+title: Workflow
+description: "Reference for Workflow and step types."
+---
+
+```python
+from definable.agent.workflow import Workflow, Step, Steps, Parallel, Loop, Condition, Router
+```
+
+## Workflow
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | — | Workflow name. |
+| `steps` | `List[Step]` | — | Step list (sequential by default). |
+| `session_state` | `Dict` | `None` | Shared state across steps. |
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `arun(input, **kwargs)` | `WorkflowOutput` | Execute the workflow. |
+
+## WorkflowOutput
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `content` | `str` | Final step's content. |
+| `success` | `bool` | All steps succeeded. |
+| `duration_ms` | `float` | Total execution time. |
+| `step_outputs` | `List[StepOutput]` | Per-step results. |
+| `get_step_output(name)` | `StepOutput` | Get specific step result. |
+
+## Step
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | — | Step name (used for result access). |
+| `agent` | `Agent` | `None` | Agent executor. Mutually exclusive with `team`, `executor`. |
+| `team` | `Team` | `None` | Team executor. |
+| `executor` | `Callable` | `None` | Custom callable `(StepInput) -> str`. |
+| `timeout` | `float` | `None` | Max execution seconds. |
+| `retries` | `int` | `0` | Retry attempts. |
+| `input_builder` | `Callable` | `None` | Custom prompt builder. |
+
+## Steps (Sequential)
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `steps` | `List[Step]` | Steps executed in order with context chaining. |
+
+## Parallel
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | — | Group name. |
+| `steps` | `List[Step]` | — | Steps executed concurrently. |
+| `max_concurrency` | `int` | `None` | Limit concurrent steps. |
+
+## Loop
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | — | Loop name. |
+| `steps` | `List[Step]` | — | Steps per iteration. |
+| `end_condition` | `Callable` | — | `(List[StepOutput]) -> bool`. Return `True` to stop. |
+| `max_iterations` | `int` | `3` | Max iterations. |
+
+## Condition
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str` | — | Condition name. |
+| `condition` | `Callable` | — | `(StepInput) -> bool`. |
+| `true_steps` | `Step \| List[Step]` | — | Steps when `True`. |
+| `false_steps` | `Step \| List[Step]` | `None` | Steps when `False`. |
+
+## Router
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `name` | `str` | Router name. |
+| `selector` | `Callable` | `(StepInput) -> str \| List[str]`. Returns route name(s). |
+| `routes` | `Dict[str, Step]` | Route name to step mapping. |
+
+## StepInput
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `input` | `str` | Original workflow input. |
+| `get_last_step_content()` | `str` | Previous step's output. |
+| `get_step_content(name)` | `str` | Specific step's output by name. |
+| `session_state` | `Dict` | Shared session state. |
+
+## Events
+
+| Event | When |
+|-------|------|
+| `WorkflowRunStartedEvent` | Workflow begins. |
+| `WorkflowRunCompletedEvent` | Workflow completes. |
+| `WorkflowRunErrorEvent` | Workflow fails. |
+| `StepStartedEvent` | Step begins. |
+| `StepCompletedEvent` | Step completes. |
+| `StepErrorEvent` | Step fails. |
+| `StepSkippedEvent` | Step skipped. |
+| `LoopIterationEvent` | Loop iteration completes. |

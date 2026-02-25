@@ -156,16 +156,42 @@ interface = (
   <Card title="Slack" icon="slack" href="/interfaces/slack">
     Deploy to Slack with Socket Mode, Block Kit interactions, and slash commands.
   </Card>
+  <Card title="WebSocket" icon="bolt" href="/interfaces/websocket">
+    Real-time bidirectional communication via JSON WebSocket protocol.
+  </Card>
+  <Card title="WhatsApp" icon="comment-sms" href="/interfaces/whatsapp">
+    Connect to WhatsApp via the Twilio WhatsApp API.
+  </Card>
+  <Card title="Email" icon="envelope" href="/interfaces/email">
+    IMAP polling + SMTP sending with thread tracking.
+  </Card>
   <Card title="Call (Voice)" icon="phone" href="/interfaces/call">
-    Connect to phone calls via Twilio or Plivo with managed, cascading, or realtime pipelines.
+    Voice calls via Twilio ConversationRelay.
   </Card>
   <Card title="Identity" icon="fingerprint" href="/interfaces/identity">
-    Map users across platforms to a single canonical identity for shared memory.
+    Map users across platforms to a single canonical identity.
   </Card>
   <Card title="Multi-Interface" icon="server" href="/interfaces/multi-interface">
-    Run multiple interfaces concurrently with automatic restart and graceful shutdown.
+    Run multiple interfaces concurrently with automatic restart.
   </Card>
   <Card title="Custom Interfaces" icon="code" href="/interfaces/custom-interfaces">
     Build your own interface for any messaging platform.
+  </Card>
+</CardGroup>
+
+## Usage Examples
+
+<CardGroup cols={2}>
+  <Card title="Telegram Bot" icon="paper-plane" href="/interfaces/usage/telegram-bot">
+    Step-by-step: agent with tools, memory, and voice notes.
+  </Card>
+  <Card title="Discord Bot" icon="discord" href="/interfaces/usage/discord-bot">
+    Step-by-step: agent with tools and persistent memory.
+  </Card>
+  <Card title="Slack Bot" icon="slack" href="/interfaces/usage/slack-bot">
+    Step-by-step: agent with tools and slash commands.
+  </Card>
+  <Card title="Multi-Platform" icon="server" href="/interfaces/usage/multi-platform">
+    Serve one agent across Telegram, Discord, and Slack.
   </Card>
 </CardGroup>

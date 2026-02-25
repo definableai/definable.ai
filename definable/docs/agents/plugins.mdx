@@ -1,0 +1,197 @@
+---
+title: Plugins
+sidebarTitle: Plugins
+description: "Extend agent behavior with composable, dependency-aware plugins."
+---
+
+Plugins hook into the agent pipeline to add logging, metrics, caching, or custom behavior. They load in dependency order and unload cleanly.
+
+## Quick Start
+
+```python
+from definable.agent import Agent
+from definable.agent.plugin.builtin import LoggingPlugin, MetricsPlugin, CachingPlugin
+
+metrics = MetricsPlugin()
+
+agent = Agent(
+    model="gpt-4o",
+    plugins=[LoggingPlugin(), metrics, CachingPlugin()],
+)
+
+output = await agent.arun("Hello")
+print(metrics.last.total_duration_ms)  # e.g., 250.5
+```
+
+Plugins are loaded lazily on the first `arun()` call. They register hooks on the agent's pipeline phases.
+
+## Built-in Plugins
+
+### LoggingPlugin
+
+Logs pipeline phase transitions and run lifecycle events.
+
+```python
+from definable.agent.plugin.builtin import LoggingPlugin
+
+plugin = LoggingPlugin(
+    verbose=False,  # True for full state details
+    log_fn=None,    # Custom log function (default: log_info)
+)
+```
+
+Registers `before:*` and `after:*` hooks on all pipeline phases.
+
+### MetricsPlugin
+
+Collects per-run timing metrics: phase durations, tool call count, total duration.
+
+```python
+from definable.agent.plugin.builtin import MetricsPlugin
+
+metrics = MetricsPlugin(max_history=100)
+
+agent = Agent(model="gpt-4o", plugins=[metrics])
+await agent.arun("Hello")
+
+print(metrics.last.total_duration_ms)     # Latest run
+print(metrics.last.phase_durations)       # {"prepare": 5.2, "invoke_loop": 200.1, ...}
+print(metrics.last.tool_call_count)       # 3
+print(metrics.average_duration_ms)        # Average across all runs
+print(len(metrics.history))               # Run count
+```
+
+### CachingPlugin
+
+LRU cache for identical prompts. Cache key is SHA-256 of system prompt + user messages.
+
+```python
+from definable.agent.plugin.builtin import CachingPlugin
+
+cache = CachingPlugin(
+    max_size=256,       # Max cached responses
+    ttl_seconds=0,      # 0 = no expiry
+)
+
+agent = Agent(model="gpt-4o", plugins=[cache])
+
+r1 = await agent.arun("What is 2+2?")  # Hits model
+r2 = await agent.arun("What is 2+2?")  # Returns cached response
+
+print(cache.hit_count)   # 1
+print(cache.miss_count)  # 1
+print(cache.size)        # 1
+cache.clear()            # Reset cache and counters
+```
+
+## Creating Custom Plugins
+
+Subclass `Plugin` and implement `name` and `on_load`:
+
+```python
+from definable.agent.plugin import Plugin
+
+class RateLimitPlugin(Plugin):
+    def __init__(self, max_calls_per_minute: int = 60):
+        self._limit = max_calls_per_minute
+        self._calls: list[float] = []
+
+    @property
+    def name(self) -> str:
+        return "rate-limit"
+
+    @property
+    def description(self) -> str:
+        return f"Rate limits to {self._limit} calls/minute."
+
+    @property
+    def modifies(self):
+        return frozenset({"invoke_loop"})
+
+    async def on_load(self, agent):
+        agent.pipeline.hook("before:invoke_loop", self._check_rate, priority=100)
+
+    async def on_unload(self, agent):
+        agent.pipeline.remove_hook("before:invoke_loop", self._check_rate)
+
+    async def _check_rate(self, state, agent):
+        import time
+        now = time.time()
+        self._calls = [t for t in self._calls if now - t < 60]
+        if len(self._calls) >= self._limit:
+            raise RuntimeError("Rate limit exceeded")
+        self._calls.append(now)
+```
+
+## Plugin Properties
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `name` | `str` | Yes | Unique plugin identifier |
+| `version` | `str` | No | Semantic version (default: `"0.1.0"`) |
+| `description` | `str` | No | Human-readable description |
+| `requires` | `FrozenSet[str]` | No | Plugin names that must load first |
+| `conflicts` | `FrozenSet[str]` | No | Plugin names that cannot coexist |
+| `modifies` | `FrozenSet[str]` | No | Pipeline phases this plugin modifies |
+
+## Plugin Registry
+
+Manage plugins programmatically:
+
+```python
+agent = Agent(model="gpt-4o")
+
+# Add plugins after construction
+agent.plugin_registry.add(LoggingPlugin())
+agent.plugin_registry.add(MetricsPlugin())
+
+# Check state
+print(agent.plugin_registry.plugin_names)   # ["logging", "metrics"]
+print(agent.plugin_registry.loaded_names)   # [] (not loaded yet)
+
+# Plugins load on first arun()
+await agent.arun("Hello")
+print(agent.plugin_registry.loaded_names)   # ["logging", "metrics"]
+
+# Disable without unloading
+agent.plugin_registry.disable("logging")
+
+# Unload a specific plugin
+await agent.plugin_registry.unload_one("metrics", agent)
+```
+
+## Dependencies and Conflicts
+
+Plugins declare dependencies with `requires` and conflicts with `conflicts`:
+
+```python
+class AnalyticsPlugin(Plugin):
+    @property
+    def name(self):
+        return "analytics"
+
+    @property
+    def requires(self):
+        return frozenset({"metrics"})  # MetricsPlugin must load first
+
+    @property
+    def conflicts(self):
+        return frozenset({"legacy-analytics"})  # Cannot coexist
+
+    async def on_load(self, agent):
+        metrics = agent.plugin_registry.get("metrics")
+        # Use metrics plugin...
+```
+
+The registry uses topological sort (Kahn's algorithm) to load plugins in dependency order. Missing dependencies or explicit conflicts raise `ValueError`.
+
+<Note>
+Two plugins with overlapping `modifies` sets generate a warning but load successfully. Only `conflicts` blocks loading.
+</Note>
+
+## Imports
+
+```python
+from definable.agent import Plugin, PluginRegistry
+from definable.agent.plugin.builtin import LoggingPlugin, MetricsPlugin, CachingPlugin
+```

@@ -1,0 +1,77 @@
+---
+title: Model Resilience
+sidebarTitle: Resilience
+description: "Automatic key rotation, failover, and rate limit handling."
+---
+
+`ResilientModel` wraps any model with automatic key rotation and provider failover. It handles rate limits (429) transparently.
+
+## Key Rotation
+
+Distribute load across multiple API keys:
+
+```python
+from definable.model.resilience import ResilientModel, KeyPool
+from definable.model.openai import OpenAIChat
+
+model = ResilientModel(
+    inner=OpenAIChat(id="gpt-4o"),
+    key_pool=KeyPool(
+        keys=["sk-key1", "sk-key2", "sk-key3"],
+        strategy="round_robin",  # or "lru"
+    ),
+)
+
+agent = Agent(model=model)
+```
+
+When a key gets rate-limited (HTTP 429), it enters cooldown with exponential backoff. The next key in the pool is used automatically.
+
+## Provider Failover
+
+Fall back to alternative providers when one fails:
+
+```python
+from definable.model.resilience import ResilientModel, FailoverChain, FailoverEntry
+from definable.model.openai import OpenAIChat
+from definable.model.anthropic import Claude
+
+model = ResilientModel(
+    inner=OpenAIChat(id="gpt-4o"),
+    failover=FailoverChain(entries=[
+        FailoverEntry(model=OpenAIChat(id="gpt-4o-mini"), priority=1),
+        FailoverEntry(model=Claude(id="claude-sonnet-4-20250514"), priority=2),
+    ]),
+)
+```
+
+If the primary model fails, ResilientModel tries each failover entry in priority order.
+
+## Key Pool Options
+
+<ParamField path="keys" type="List[str]" required>
+  API keys to rotate between.
+</ParamField>
+
+<ParamField path="strategy" type="str" default="round_robin">
+  Selection strategy: `round_robin` or `lru` (least recently used).
+</ParamField>
+
+<ParamField path="cooldown_seconds" type="float" default="60.0">
+  Base cooldown time for rate-limited keys.
+</ParamField>
+
+## Events
+
+```python
+from definable.model.resilience.events import KeyRotatedEvent, ProviderFailoverEvent
+
+model.events.on(KeyRotatedEvent, lambda e: print(f"Rotated to key {e.key_index}"))
+model.events.on(ProviderFailoverEvent, lambda e: print(f"Failed over to {e.provider}"))
+```
+
+## Imports
+
+```python
+from definable.model.resilience import ResilientModel, KeyPool, FailoverChain, FailoverEntry
+```

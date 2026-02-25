@@ -1,0 +1,85 @@
+---
+title: Deep Research
+sidebarTitle: Deep Research
+description: "Autonomous multi-wave research with source synthesis."
+---
+
+Deep Research gives agents the ability to autonomously search the web, read sources, extract knowledge, and synthesize findings across multiple research waves.
+
+## Enable Deep Research
+
+```python
+from definable.agent import Agent
+
+agent = Agent(model="gpt-4o", deep_research=True)
+
+output = await agent.arun("What are the latest advances in quantum computing?")
+print(output.content)  # Grounded response with citations
+```
+
+## Custom Configuration
+
+```python
+from definable.agent.research import DeepResearchConfig
+
+agent = Agent(
+    model="gpt-4o",
+    deep_research=DeepResearchConfig(
+        depth="deep",                  # "quick", "standard", or "deep"
+        search_provider="duckduckgo",  # or "google", "serpapi"
+        max_sources=30,
+        max_waves=5,
+        include_citations=True,
+    ),
+)
+```
+
+## Depth Presets
+
+| Preset | Waves | Sources | Use case |
+|--------|-------|---------|----------|
+| `quick` | 1 | 8 | Fast fact-checking |
+| `standard` | 3 | 15 | Balanced research (default) |
+| `deep` | 5 | 30 | Comprehensive analysis |
+
+## How It Works
+
+1. **Wave 1**: Generate search queries from the user's question.
+2. **Search**: Execute queries via the configured search provider.
+3. **Read**: Fetch and parse source pages concurrently.
+4. **Extract**: Use a compression model to extract Compact Knowledge Units (CKUs).
+5. **Evaluate**: Score relevance, detect contradictions, identify gaps.
+6. **Repeat**: Generate follow-up queries and research further (waves 2+).
+7. **Inject**: Final CKUs are injected into the agent's system prompt.
+
+## Configuration Reference
+
+<ParamField path="depth" type="str" default="standard">
+  Research depth: `"quick"`, `"standard"`, or `"deep"`.
+</ParamField>
+
+<ParamField path="search_provider" type="str" default="duckduckgo">
+  Search backend: `"duckduckgo"`, `"google"`, or `"serpapi"`.
+</ParamField>
+
+<ParamField path="max_sources" type="int" default="15">
+  Maximum unique sources across all waves.
+</ParamField>
+
+<ParamField path="max_waves" type="int" default="3">
+  Maximum research waves.
+</ParamField>
+
+<ParamField path="include_citations" type="bool" default="true">
+  Include source citations in the research context.
+</ParamField>
+
+<ParamField path="trigger" type="str" default="always">
+  When to research: `"always"`, `"auto"` (model decides), `"tool"` (explicit call).
+</ParamField>
+
+## Imports
+
+```python
+from definable.agent.research import DeepResearchConfig
+```

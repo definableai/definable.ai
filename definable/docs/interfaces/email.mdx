@@ -1,0 +1,69 @@
+---
+title: Email
+sidebarTitle: Email
+description: "Connect agents to email via IMAP and SMTP."
+---
+
+The Email interface connects agents to email, polling for new messages via IMAP and sending responses via SMTP.
+
+## Quick Start
+
+```python
+from definable.agent import Agent
+from definable.agent.interface.email import EmailInterface
+
+agent = Agent(model="gpt-4o", instructions="You are a helpful email assistant.")
+
+email = EmailInterface(
+    imap_host="imap.gmail.com",
+    smtp_host="smtp.gmail.com",
+    email_address="agent@example.com",
+    password="app-password",
+)
+
+agent.serve(email)
+```
+
+## Features
+
+- IMAP polling for new messages
+- SMTP sending with TLS
+- Thread tracking via In-Reply-To and References headers
+- Multipart body extraction
+- Session management per email thread
+
+## Constructor Reference
+
+<ParamField path="imap_host" type="str" required>
+  IMAP server hostname.
+</ParamField>
+
+<ParamField path="smtp_host" type="str" required>
+  SMTP server hostname.
+</ParamField>
+
+<ParamField path="email_address" type="str" required>
+  Email address to monitor.
+</ParamField>
+
+<ParamField path="password" type="str" required>
+  Email password or app-specific password.
+</ParamField>
+
+<ParamField path="imap_port" type="int" default="993">
+  IMAP port (993 for SSL).
+</ParamField>
+
+<ParamField path="smtp_port" type="int" default="587">
+  SMTP port (587 for TLS).
+</ParamField>
+
+<ParamField path="poll_interval" type="int" default="30">
+  Seconds between IMAP polls.
+</ParamField>
+
+## Imports
+
+```python
+from definable.agent.interface.email import EmailInterface
+```

@@ -1,0 +1,56 @@
+---
+title: OpenRouter
+description: "Access 100+ models through a single API."
+---
+
+[OpenRouter](https://openrouter.ai) provides access to models from OpenAI, Anthropic, Google, Meta, and more through a single API.
+
+## Setup
+
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+```
+
+## Basic Usage
+
+```python
+from definable.model.openrouter import OpenRouter
+from definable.model.message import Message
+
+model = OpenRouter(id="meta-llama/llama-3-70b")
+response = model.invoke(
+    messages=[Message(role="user", content="Hello!")],
+    assistant_message=Message(role="assistant", content=""),
+)
+print(response.content)
+```
+
+## String Shorthand
+
+```python
+agent = Agent(model="openrouter/meta-llama/llama-3-70b")
+```
+
+## Parameters
+
+<ParamField path="id" type="str" required>
+  Model identifier from the [OpenRouter model list](https://openrouter.ai/models).
+</ParamField>
+
+<ParamField path="api_key" type="str">
+  OpenRouter API key. Defaults to `OPENROUTER_API_KEY`.
+</ParamField>
+
+<ParamField path="temperature" type="float">
+  Sampling temperature.
+</ParamField>
+
+<ParamField path="max_tokens" type="int">
+  Maximum output tokens.
+</ParamField>
+
+## Imports
+
+```python
+from definable.model.openrouter import OpenRouter
+```
