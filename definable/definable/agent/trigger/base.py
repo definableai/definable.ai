@@ -46,3 +46,17 @@ class BaseTrigger(ABC):
   def name(self) -> str:
     """Human-readable trigger identifier, e.g. ``'POST /webhook'``."""
     ...
+
+  def next_run(self, base_time: float) -> float:
+    """Return the next fire time as a Unix timestamp.
+
+    Subclasses with time-based scheduling (Cron, Interval, OneShot) override
+    this.  The default returns ``base_time`` (fire immediately).
+
+    Args:
+      base_time: Unix timestamp to compute the next run from.
+
+    Returns:
+      Unix timestamp of the next scheduled execution.
+    """
+    return base_time

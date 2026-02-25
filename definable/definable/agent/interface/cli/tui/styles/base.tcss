@@ -1,0 +1,130 @@
+/* Definable TUI — Base Styles */
+
+Screen {
+  background: $background;
+}
+
+Header {
+  background: $primary-darken-3;
+  color: $text;
+  height: 1;
+  dock: top;
+}
+
+/* Conversation area */
+Conversation {
+  scrollbar-background: $surface;
+  scrollbar-color: $primary-darken-2;
+  scrollbar-color-hover: $primary;
+  scrollbar-color-active: $primary;
+}
+
+/* User messages */
+UserMessage {
+  border-left: thick $accent;
+}
+
+/* Agent responses */
+AgentResponse {
+  border-left: thick $success-darken-1;
+}
+
+AgentResponse Markdown {
+  margin: 0;
+  padding: 0;
+}
+
+/* Code blocks inside markdown get subtle background */
+AgentResponse MarkdownFence {
+  background: $surface;
+  margin: 1 0;
+  padding: 1 2;
+  border: round $primary-darken-3;
+}
+
+/* Tool call blocks */
+ToolCallBlock Collapsible {
+  border-left: thick $primary-darken-2;
+  margin-left: 1;
+}
+
+ToolCallBlock Collapsible.-collapsed > CollapsibleTitle {
+  color: $text-muted;
+}
+
+ToolCallBlock .tool-section-label {
+  margin-top: 1;
+}
+
+/* Thinking blocks */
+ThinkingBlock Collapsible {
+  border-left: thick $secondary-darken-2;
+  margin-left: 1;
+}
+
+ThinkingBlock RichLog {
+  background: transparent;
+}
+
+/* System messages */
+SystemMessage {
+  border-left: thick $text-disabled;
+}
+
+SystemMessage .system-content {
+  color: $text-muted;
+}
+
+/* Slash command completion popup */
+SlashComplete {
+  background: $surface;
+}
+
+SlashComplete .complete-header {
+  background: $surface-darken-1;
+}
+
+/* Search bar */
+SearchBar Input {
+  background: $surface-darken-1;
+}
+
+/* Search match highlighting — high contrast for accessibility */
+.search-match {
+  background: $primary 25%;
+}
+
+.search-active {
+  background: $warning 35%;
+  border-left: thick $warning;
+  text-style: bold;
+}
+
+/* Help modal */
+HelpModal > Vertical {
+  border: round $accent;
+}
+
+/* Prompt indicator states */
+Prompt .prompt-running {
+  color: $warning;
+}
+
+Prompt .prompt-ready {
+  color: $accent;
+}
+
+/* Footer bar */
+FooterBar {
+  background: $primary-darken-3;
+}
+
+/* Status bar separator styling */
+StatusBar .status-separator {
+  color: $text-disabled;
+}
+
+/* Tool call diff rendering */
+ToolCallBlock .tool-result-log {
+  background: transparent;
+}

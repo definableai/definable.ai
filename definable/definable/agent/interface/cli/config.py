@@ -12,6 +12,7 @@ class CLIConfig(InterfaceConfig):
   Extends InterfaceConfig with CLI-specific display and behavior settings.
 
   Attributes:
+    mode: Display mode — "auto" (detect best), "tui" (Textual), "repl" (Rich).
     prompt: Input prompt string shown to the user.
     show_banner: Whether to display agent info banner on startup.
     show_metrics: Whether to show token counts after runs.
@@ -24,9 +25,11 @@ class CLIConfig(InterfaceConfig):
     command_prefix: Prefix character for slash commands.
     enable_completions: Whether to enable slash-command dropdown completions.
     user_id: Default user ID for the CLI session.
+    tools_expand: When to auto-expand tool call blocks (TUI mode only).
   """
 
   platform: str = "cli"
+  mode: str = "auto"  # "auto" | "tui" | "repl"
   prompt: str = ">>> "
   show_banner: bool = True
   show_metrics: bool = True
@@ -41,3 +44,4 @@ class CLIConfig(InterfaceConfig):
   user_id: str = "cli-user"
   max_message_length: int = 100_000
   max_concurrent_requests: int = 1
+  tools_expand: str = "success"  # "always" | "success" | "fail" | "both" | "never"

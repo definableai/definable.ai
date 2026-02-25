@@ -1,9 +1,18 @@
-"""CLI interface — interactive terminal REPL for Definable agents."""
+"""CLI interface — interactive terminal for Definable agents.
+
+Supports two modes:
+- **tui**: Full Textual TUI with streaming markdown, collapsible tool calls,
+  block navigation, and a status bar. Requires ``textual`` (``pip install definable[cli]``).
+- **repl**: Simple Rich-based REPL with event rendering. Works everywhere.
+- **auto** (default): Uses TUI if textual is installed and the terminal is
+  interactive, otherwise falls back to REPL.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import sys
 import warnings
 from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import uuid4
@@ -26,7 +35,7 @@ from definable.agent.interface.cli.renderers.streaming import StreamingRenderer
 from definable.agent.interface.cli.renderers.sub_agent import SubAgentRenderer
 from definable.agent.interface.cli.renderers.tool import ToolCallRenderer
 from definable.agent.interface.message import InterfaceMessage, InterfaceResponse
-from definable.utils.log import log_error
+from definable.utils.log import log_error, log_info
 
 if TYPE_CHECKING:
   from definable.agent.interface.hooks import InterfaceHook
@@ -35,11 +44,53 @@ if TYPE_CHECKING:
   from definable.agent.run.base import BaseRunOutputEvent
 
 
+def _textual_available() -> bool:
+  """Check if textual is importable."""
+  try:
+    import textual  # noqa: F401
+
+    return True
+  except ImportError:
+    return False
+
+
+def _is_interactive_terminal() -> bool:
+  """Check if stdin/stdout are connected to an interactive terminal."""
+  return hasattr(sys.stdin, "isatty") and sys.stdin.isatty() and hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+
+def _resolve_mode(requested: str) -> str:
+  """Resolve the display mode.
+
+  Args:
+    requested: "auto", "tui", or "repl".
+
+  Returns:
+    "tui" or "repl".
+  """
+  if requested == "repl":
+    return "repl"
+  if requested == "tui":
+    if not _textual_available():
+      raise ImportError("Textual is required for TUI mode. Install it with: pip install definable[cli]")
+    return "tui"
+  # Auto mode: use TUI if available and terminal is interactive
+  if _textual_available() and _is_interactive_terminal():
+    return "tui"
+  return "repl"
+
+
 class CLIInterface(BaseInterface):
   """Interactive terminal interface for Definable agents.
 
-  Provides a rich REPL with real-time event visualization (thinking,
-  memory, knowledge, tools) using the Rich library.
+  Supports two display modes:
+
+  - **tui** — Full Textual TUI with streaming markdown, collapsible tool calls,
+    block navigation, and real-time metrics. Requires ``textual``.
+  - **repl** — Simple Rich-based REPL with event rendering. Works everywhere.
+
+  The default mode is ``"auto"`` — uses TUI if textual is installed and the
+  terminal is interactive, otherwise falls back to REPL.
 
   Example::
 
@@ -47,15 +98,22 @@ class CLIInterface(BaseInterface):
       from definable.agent.interface.cli import CLIInterface
 
       agent = Agent(model="openai/gpt-4o-mini", tools=[my_tool])
+
+      # Auto-detect best mode
       agent.serve(CLIInterface())
 
-      # With custom settings:
-      agent.serve(CLIInterface(show_thinking=False, markdown_output=False))
+      # Force TUI mode
+      agent.serve(CLIInterface(mode="tui"))
+
+      # Force REPL mode (for piped input, CI, etc.)
+      agent.serve(CLIInterface(mode="repl"))
   """
 
   def __init__(
     self,
     *,
+    # Mode selection
+    mode: str = "auto",
     # CLI-specific
     prompt: str = ">>> ",
     show_banner: bool = True,
@@ -69,6 +127,7 @@ class CLIInterface(BaseInterface):
     command_prefix: str = "/",
     enable_completions: bool = True,
     user_id: str = "cli-user",
+    tools_expand: str = "success",
     # Base config
     max_session_history: int = 50,
     session_ttl_seconds: int = 3600,
@@ -94,6 +153,7 @@ class CLIInterface(BaseInterface):
       resolved_config = config
     else:
       resolved_config = CLIConfig(
+        mode=mode,
         prompt=prompt,
         show_banner=show_banner,
         show_metrics=show_metrics,
@@ -106,6 +166,7 @@ class CLIInterface(BaseInterface):
         command_prefix=command_prefix,
         enable_completions=enable_completions,
         user_id=user_id,
+        tools_expand=tools_expand,
         max_session_history=max_session_history,
         session_ttl_seconds=session_ttl_seconds,
         max_concurrent_requests=max_concurrent_requests,
@@ -122,6 +183,9 @@ class CLIInterface(BaseInterface):
       auth=auth,
     )
     self._cli_config: CLIConfig = self.config  # type: ignore[assignment]
+    self._resolved_mode: Optional[str] = None
+
+    # REPL mode components (initialized lazily in _start_receiver)
     self._output = OutputManager(config=self._cli_config)
     self._input: Optional[InputHandler] = None
     self._is_processing = False
@@ -147,6 +211,16 @@ class CLIInterface(BaseInterface):
     # Event handler ref (for unsubscribe)
     self._event_handler: Optional[object] = None
 
+    # TUI app ref (set in TUI mode)
+    self._tui_app: Optional[object] = None
+
+  @property
+  def active_mode(self) -> str:
+    """The resolved display mode ("tui" or "repl")."""
+    if self._resolved_mode is None:
+      self._resolved_mode = _resolve_mode(self._cli_config.mode)
+    return self._resolved_mode
+
   # --- Extension API ---
 
   def add_command(self, command: BaseCommand) -> "CLIInterface":
@@ -162,7 +236,7 @@ class CLIInterface(BaseInterface):
     return self
 
   def add_renderer(self, renderer: BaseRenderer) -> "CLIInterface":
-    """Register a custom event renderer.
+    """Register a custom event renderer (REPL mode only).
 
     Args:
       renderer: Renderer instance implementing BaseRenderer protocol.
@@ -176,13 +250,19 @@ class CLIInterface(BaseInterface):
   # --- BaseInterface abstract methods ---
 
   async def _start_receiver(self) -> None:
-    """Start the REPL: banner, event subscription, input loop."""
+    """Start the interface in the resolved mode."""
     assert self.agent is not None
 
-    # Print startup banner
+    if self.active_mode == "tui":
+      # TUI mode: app is started in serve_forever(), not here.
+      # _start_receiver is only used for REPL mode setup.
+      log_info("[cli] TUI mode — receiver managed by Textual app")
+      return
+
+    # REPL mode: banner, event subscription, input loop
     self._output.print_banner(self.agent)
 
-    # Subscribe to pipeline event stream (if pipeline exists)
+    # Subscribe to pipeline event stream
     pipeline = getattr(self.agent, "pipeline", None)
     if pipeline is not None:
       event_stream = getattr(pipeline, "event_stream", None)
@@ -190,7 +270,7 @@ class CLIInterface(BaseInterface):
         self._event_handler = self._handle_event
         event_stream.subscribe(self._event_handler)
 
-    # Build completer (if enabled and prompt_toolkit is available)
+    # Build completer
     completer = None
     if self._cli_config.enable_completions:
       try:
@@ -210,8 +290,8 @@ class CLIInterface(BaseInterface):
     await self._input.start()
 
   async def _stop_receiver(self) -> None:
-    """Stop the REPL and unsubscribe from events."""
-    # Stop input
+    """Stop the interface and unsubscribe from events."""
+    # Stop REPL input
     if self._input is not None:
       await self._input.stop()
       self._input = None
@@ -242,17 +322,22 @@ class CLIInterface(BaseInterface):
     response: InterfaceResponse,
     raw_message: Any,
   ) -> None:
-    """Print agent response to terminal.
+    """Send agent response to terminal.
 
-    Skips printing if content was already streamed via RunContentEvent.
+    In TUI mode: response display is handled by widgets via events.
+    In REPL mode: prints to Rich console, avoiding double-print.
     """
-    # Finish streaming line (add newline if needed)
+    if self.active_mode == "tui":
+      # TUI mode: widgets handle display via event routing.
+      # Nothing to do here — content was streamed via events.
+      return
+
+    # REPL mode: finish streaming line
     self._streaming_renderer.finish()
 
-    # Skip if content was already streamed for this run
+    # Skip if content was already streamed
     if response.content and self._streaming_renderer.streamed_run_id is not None:
-      # Content was streamed — don't double-print
-      self._output.console.print()  # Blank line after streamed content
+      self._output.console.print()
       return
 
     # Print content that wasn't streamed
@@ -262,18 +347,16 @@ class CLIInterface(BaseInterface):
   # --- REPL callbacks ---
 
   async def _on_user_input(self, text: str) -> None:
-    """Handle a line of user input."""
+    """Handle a line of user input (REPL mode)."""
     stripped = text.strip()
     if not stripped:
       return
 
-    # Check for slash commands
     prefix = self._cli_config.command_prefix
     if stripped.startswith(prefix) and len(stripped) > len(prefix):
       await self._handle_command(stripped)
       return
 
-    # Normal message — route through BaseInterface pipeline
     self._is_processing = True
     try:
       await self.handle_platform_message({"text": stripped})
@@ -295,7 +378,6 @@ class CLIInterface(BaseInterface):
   async def _handle_command(self, text: str) -> None:
     """Parse and execute a slash command."""
     prefix = self._cli_config.command_prefix
-    # Strip prefix and split into command + args
     without_prefix = text[len(prefix) :]
     parts = without_prefix.split(maxsplit=1)
     cmd_name = parts[0].lower()
@@ -306,7 +388,6 @@ class CLIInterface(BaseInterface):
       self._output.console.print(f"[red]Unknown command: {prefix}{cmd_name}[/red] (type /help for commands)")
       return
 
-    # Build context
     assert self.agent is not None
     session = self.session_manager.get_or_create(
       platform="cli",
@@ -325,7 +406,7 @@ class CLIInterface(BaseInterface):
     except Exception as e:
       self._output.console.print(f"[red]Command error: {e}[/red]")
 
-  # --- Event rendering ---
+  # --- Event rendering (REPL mode) ---
 
   def _handle_event(self, event: "BaseRunOutputEvent") -> None:
     """Dispatch an event to the renderer registry (sync handler)."""
@@ -336,12 +417,42 @@ class CLIInterface(BaseInterface):
   async def serve_forever(self) -> None:
     """Block until the interface is stopped.
 
-    Overrides base to handle Ctrl+C gracefully:
-    first Ctrl+C during a run cancels the run,
-    second Ctrl+C (or Ctrl+C when idle) exits.
+    In TUI mode: runs the Textual app (which manages its own event loop).
+    In REPL mode: standard polling loop with Ctrl+C handling.
     """
     if self.agent is None:
       raise ValueError("Interface has no agent bound. Call bind(agent) or pass agent= to constructor.")
+
+    if self.active_mode == "tui":
+      await self._serve_tui()
+    else:
+      await self._serve_repl()
+
+  async def _serve_tui(self) -> None:
+    """Run the Textual TUI app."""
+    from definable.agent.interface.cli.tui.app import DefinableApp
+
+    assert self.agent is not None
+
+    # Initialize BaseInterface state
+    self._request_semaphore = asyncio.Semaphore(self.config.max_concurrent_requests)
+    self._running = True
+
+    app = DefinableApp(agent=self.agent, interface=self)
+    self._tui_app = app
+
+    try:
+      await app.run_async()
+    except (asyncio.CancelledError, KeyboardInterrupt):
+      pass
+    finally:
+      self._running = False
+      self._tui_app = None
+      with contextlib.suppress(Exception):
+        await self.stop()
+
+  async def _serve_repl(self) -> None:
+    """Run the REPL mode."""
     if not self._running:
       await self.start()
     try:
