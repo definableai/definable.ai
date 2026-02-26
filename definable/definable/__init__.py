@@ -46,9 +46,9 @@ from typing import TYPE_CHECKING
 # --- Eager exports (always loaded — core classes used by every consumer) ---
 
 from definable.agent.agent import Agent
+from definable.agent.compression import Compression
 from definable.agent.config import (
   AgentConfig,
-  CompressionConfig,
   ReadersConfig,
 )
 from definable.agent.research.config import DeepResearchConfig
@@ -67,6 +67,7 @@ if TYPE_CHECKING:
   from definable.agent.reasoning import Thinking
   from definable.agent.tracing import Tracing
   from definable.knowledge import Document, Knowledge
+  from definable.composio import ComposioToolkit
   from definable.mcp import MCPConfig, MCPServerConfig, MCPToolkit
   from definable.memory import Memory
   from definable.model.deepseek import DeepSeekChat
@@ -100,6 +101,8 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   "Perplexity": ("definable.model.perplexity", "Perplexity"),
   "Ollama": ("definable.model.ollama", "Ollama"),
   "OpenRouter": ("definable.model.openrouter", "OpenRouter"),
+  # Composio
+  "ComposioToolkit": ("definable.composio", "ComposioToolkit"),
   # MCP
   "MCPToolkit": ("definable.mcp", "MCPToolkit"),
   "MCPConfig": ("definable.mcp", "MCPConfig"),
@@ -144,7 +147,7 @@ __all__ = [
   # Core
   "Agent",
   "AgentConfig",
-  "CompressionConfig",
+  "Compression",
   "ReadersConfig",
   "DeepResearchConfig",
   "Toolkit",
@@ -176,6 +179,8 @@ __all__ = [
   "Perplexity",
   "Ollama",
   "OpenRouter",
+  # Lazy — Composio
+  "ComposioToolkit",
   # Lazy — MCP
   "MCPToolkit",
   "MCPConfig",

@@ -6,26 +6,31 @@ Context window compression for long-running agents that make many tool calls. Wh
 
 ```
 compression/
-├── __init__.py    # Public API — exports CompressionManager
+├── __init__.py    # Public API — exports Compression, CompressionManager
 └── manager.py     # CompressionManager implementation
 ```
 
 ## Quick start
 
-The recommended entry point is `CompressionConfig` on the agent, not `CompressionManager` directly.
+Pass `compression=True` or `compression=Compression(...)` directly to the `Agent` constructor:
 
 ```python
 from definable.agent import Agent
-from definable.agent.config import AgentConfig, CompressionConfig
+from definable.agent.compression import Compression
 
+# Enable with defaults (compress after 3 uncompressed tool results)
 agent = Agent(
   model="openai/gpt-4o-mini",
   tools=[search, browse],
-  config=AgentConfig(
-    compression=CompressionConfig(
-      enabled=True,
-      tool_results_limit=3,   # compress after 3 uncompressed tool results
-    ),
+  compression=True,
+)
+
+# Custom settings
+agent = Agent(
+  model="openai/gpt-4o-mini",
+  tools=[search, browse],
+  compression=Compression(
+    tool_results_limit=3,   # compress after 3 uncompressed tool results
   ),
 )
 
@@ -34,15 +39,14 @@ result = await agent.arun("Research the latest developments in fusion energy.")
 
 The agent loop calls `CompressionManager.ashould_compress()` after every tool round and invokes `acompress()` automatically when the threshold is crossed.
 
-## Configuration — CompressionConfig
+## Configuration — Compression
 
-`CompressionConfig` lives in `definable.agent.config` and is the primary API for enabling compression.
+`Compression` lives in `definable.agent.compression` and is the primary API for enabling compression.
 
 ```python
-from definable.agent.config import CompressionConfig
+from definable.agent.compression import Compression
 
-CompressionConfig(
-  enabled=True,                    # bool — master switch
+Compression(
   model=None,                      # str | Model | None — compression model (default: agent's model)
   tool_results_limit=3,            # int | None — compress after N uncompressed tool results
   token_limit=None,                # int | None — compress when token count exceeds this
@@ -52,8 +56,7 @@ CompressionConfig(
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `enabled` | `True` | Whether compression is active. Set `False` to disable without removing config. |
-| `model` | `None` | Model for summarization. `None` uses the agent's own model. A `Model` instance uses that model exclusively for compression calls. String model specs resolve to the agent's model. |
+| `model` | `None` | Model for summarization. `None` uses the agent's own model. A `Model` instance uses that model exclusively for compression calls. String model specs are resolved via `resolve_model_string()`. |
 | `tool_results_limit` | `3` | Trigger compression after this many uncompressed tool result messages accumulate. Set `None` to disable count-based triggering. |
 | `token_limit` | `None` | Trigger compression when the context token count reaches this threshold. Requires a model with token counting support. |
 | `instructions` | `None` | Custom prompt for the compressor. Replaces the default prompt entirely. |
@@ -73,9 +76,9 @@ from definable.model.openai import OpenAIChat
 manager = CompressionManager(
   model=OpenAIChat(id="gpt-4o-mini"),
   compress_tool_results=True,
-  compress_tool_results_limit=3,    # mirrors CompressionConfig.tool_results_limit
-  compress_token_limit=None,        # mirrors CompressionConfig.token_limit
-  compress_tool_call_instructions=None,  # mirrors CompressionConfig.instructions
+  compress_tool_results_limit=3,    # mirrors Compression.tool_results_limit
+  compress_token_limit=None,        # mirrors Compression.token_limit
+  compress_tool_call_instructions=None,  # mirrors Compression.instructions
 )
 ```
 
@@ -143,7 +146,7 @@ When `instructions` is `None`, the manager uses a built-in prompt that instructs
 To override:
 
 ```python
-CompressionConfig(
+Compression(
   instructions="Summarize the tool output in one concise sentence, preserving all URLs and numbers.",
 )
 ```
@@ -152,7 +155,7 @@ The custom `instructions` string replaces the entire system prompt sent to the c
 
 ## Integration with the agent loop
 
-The agent initializes a `CompressionManager` during `__init__` via `_init_compression()` when `config.compression.enabled` is `True`. The compression manager is then passed to the pipeline loop (`AgentLoop`) which calls `ashould_compress()` and `acompress()` after each tool round, before the next model invocation.
+The agent initializes a `CompressionManager` during `__init__` when `compression=True` or `compression=Compression(...)`. The compression manager is then passed to the pipeline loop (`AgentLoop`) which calls `ashould_compress()` and `acompress()` after each tool round, before the next model invocation.
 
 ```
 [Tool round complete]
@@ -173,7 +176,7 @@ Compression does not discard the original content — it sets `Message.compresse
 **`token_limit`** is more precise but requires the model to support token counting. Use it when you want to compress based on remaining context budget:
 
 ```python
-CompressionConfig(
+Compression(
   tool_results_limit=None,
   token_limit=80_000,  # compress at 80k tokens for a 128k context model
 )
@@ -182,7 +185,7 @@ CompressionConfig(
 **Both thresholds together** is also valid — the first to trigger wins:
 
 ```python
-CompressionConfig(
+Compression(
   tool_results_limit=5,
   token_limit=60_000,
 )
@@ -193,16 +196,25 @@ CompressionConfig(
 By default, the agent's own model compresses its tool results. For cost or latency reasons, you may prefer a smaller model for compression:
 
 ```python
-from definable.model.openai import OpenAIChat
-from definable.agent.config import CompressionConfig
+from definable.agent.compression import Compression
 
-CompressionConfig(
-  model=OpenAIChat(id="gpt-4o-mini"),  # fast, cheap, good at summarization
+Compression(
+  model="openai/gpt-4o-mini",  # string shorthand — resolved via resolve_model_string()
   tool_results_limit=3,
 )
 ```
 
-Pass a `Model` instance — string shorthand is accepted by `CompressionConfig` but resolves to the agent's model at init time.
+Or pass a `Model` instance directly:
+
+```python
+from definable.model.openai import OpenAIChat
+from definable.agent.compression import Compression
+
+Compression(
+  model=OpenAIChat(id="gpt-4o-mini"),
+  tool_results_limit=3,
+)
+```
 
 ## Gotchas
 
@@ -216,4 +228,4 @@ Pass a `Model` instance — string shorthand is accepted by `CompressionConfig` 
 
 **Token-based triggering counts the full context.** `ashould_compress()` calls `model.acount_tokens(messages, tools, response_format)` which counts all messages including system, user, and assistant turns — not just tool results. Set `token_limit` with the model's actual context window in mind.
 
-**`enabled=False` is a hard off.** Setting `config.compression = CompressionConfig(enabled=False)` prevents the `CompressionManager` from being created at all. `should_compress()` returns `False` immediately regardless of message count or token count.
+**`compression=None` is off.** Omitting the `compression` param (or passing `None`) prevents the `CompressionManager` from being created at all.

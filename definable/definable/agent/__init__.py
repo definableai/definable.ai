@@ -44,7 +44,8 @@ With Middleware:
 
 from definable.agent.agent import Agent
 from definable.agent.cancellation import AgentCancelled, CancellationToken
-from definable.agent.config import AgentConfig, CompressionConfig, ReadersConfig
+from definable.agent.compression import Compression
+from definable.agent.config import AgentConfig, ReadersConfig
 from definable.agent.event_bus import EventBus
 from definable.agent.research.config import DeepResearchConfig
 from definable.agent.middleware import (
@@ -194,7 +195,7 @@ __all__ = [
   "CancellationToken",
   "EventBus",
   "Tracing",
-  "CompressionConfig",
+  "Compression",
   "ReadersConfig",
   "DeepResearchConfig",
   "ObservabilityConfig",

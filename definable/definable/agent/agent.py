@@ -67,7 +67,7 @@ if TYPE_CHECKING:
   from pathlib import Path
 
   from definable.agent.auth.base import AuthProvider
-  from definable.agent.compression import CompressionManager
+  from definable.agent.compression import Compression, CompressionManager
   from definable.agent.observability.config import ObservabilityConfig
   from definable.agent.guardrail.base import Guardrails
   from definable.agent.interface.base import BaseInterface
@@ -163,6 +163,7 @@ class Agent:
     memory: Union["Memory", bool, None] = False,
     knowledge: Union["Knowledge", str, bool, None] = False,
     thinking: Union[bool, "Thinking", None] = None,
+    compression: Union[bool, "Compression", None] = None,
     deep_research: Union[bool, "DeepResearchConfig", "DeepResearch", None] = None,
     # ── Tools ───────────────────────────────────────────────
     tools: Optional[List[Function]] = None,
@@ -417,7 +418,7 @@ class Agent:
     # Internal state
     self._tools_dict: Dict[str, Function] = self._flatten_tools()
     self._trace_writer: Optional[TraceWriter] = self._init_tracing()
-    self._compression_manager: Optional["CompressionManager"] = self._init_compression()
+    self._compression_manager: Optional["CompressionManager"] = self._resolve_compression(compression)
     self._middleware: List[Middleware] = []
     self._interfaces: List["BaseInterface"] = []
     self._gateway: Optional["InterfaceGateway"] = None
@@ -2961,32 +2962,37 @@ class Agent:
       return tracing_param
     return config.tracing if config else None
 
-  def _init_compression(self) -> Optional["CompressionManager"]:
-    """Initialize compression manager if compression is configured."""
-    if self.config.compression and self.config.compression.enabled:
-      from definable.agent.compression import CompressionManager
+  def _resolve_compression(self, compression: Union[bool, "Compression", None]) -> Optional["CompressionManager"]:
+    """Resolve compression param into a CompressionManager (or None)."""
+    from definable.agent.compression import Compression as _Compression
 
-      # Use specified model or fall back to agent's model
-      compression_model: Optional["Model"] = None
-      config_model = self.config.compression.model
-      if config_model is None:
-        compression_model = self.model
-      elif isinstance(config_model, str):
-        # String model specs are not fully supported - use agent's model
-        # (get_model() in CompressionManager only supports 'aimlapi' provider)
-        compression_model = self.model
-      else:
-        # Model instance passed directly
-        compression_model = config_model
-
-      return CompressionManager(
-        model=compression_model,
-        compress_tool_results=True,
-        compress_tool_results_limit=self.config.compression.tool_results_limit,
-        compress_token_limit=self.config.compression.token_limit,
-        compress_tool_call_instructions=self.config.compression.instructions,
-      )
+    if compression is True:
+      return self._build_compression_manager(_Compression())
+    if isinstance(compression, _Compression):
+      return self._build_compression_manager(compression)
     return None
+
+  def _build_compression_manager(self, compression: "Compression") -> "CompressionManager":
+    """Build a CompressionManager from a Compression config."""
+    from definable.agent.compression import CompressionManager
+
+    compression_model: Optional["Model"] = None
+    if compression.model is None:
+      compression_model = self.model
+    elif isinstance(compression.model, str):
+      from definable.model.utils import resolve_model_string
+
+      compression_model = resolve_model_string(compression.model)
+    else:
+      compression_model = compression.model
+
+    return CompressionManager(
+      model=compression_model,
+      compress_tool_results=True,
+      compress_tool_results_limit=compression.tool_results_limit,
+      compress_token_limit=compression.token_limit,
+      compress_tool_call_instructions=compression.instructions,
+    )
 
   def _build_initial_state(
     self,

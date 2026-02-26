@@ -1,14 +1,14 @@
-"""Unit tests for the CompressionManager and CompressionConfig."""
+"""Unit tests for the CompressionManager and Compression."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from definable.agent.compression import Compression
 from definable.agent.compression.manager import (
   DEFAULT_COMPRESSION_PROMPT,
   CompressionManager,
 )
-from definable.agent.config import CompressionConfig
 from definable.model.message import Message
 
 
@@ -60,63 +60,60 @@ def _make_async_mock_model(response_content="compressed"):
 
 
 # ===========================================================================
-# CompressionConfig (from agent/config.py)
+# Compression (from agent/compression/__init__.py)
 # ===========================================================================
 
 
 @pytest.mark.unit
-class TestCompressionConfigDefaults:
-  """Verify CompressionConfig default field values."""
-
-  def test_enabled_defaults_true(self):
-    cfg = CompressionConfig()
-    assert cfg.enabled is True
+class TestCompressionDefaults:
+  """Verify Compression default field values."""
 
   def test_model_defaults_none(self):
-    cfg = CompressionConfig()
+    cfg = Compression()
     assert cfg.model is None
 
   def test_tool_results_limit_defaults_3(self):
-    cfg = CompressionConfig()
+    cfg = Compression()
     assert cfg.tool_results_limit == 3
 
   def test_token_limit_defaults_none(self):
-    cfg = CompressionConfig()
+    cfg = Compression()
     assert cfg.token_limit is None
 
   def test_instructions_defaults_none(self):
-    cfg = CompressionConfig()
+    cfg = Compression()
     assert cfg.instructions is None
 
 
 @pytest.mark.unit
-class TestCompressionConfigCustomValues:
-  """Verify CompressionConfig accepts custom values."""
-
-  def test_disabled(self):
-    cfg = CompressionConfig(enabled=False)
-    assert cfg.enabled is False
+class TestCompressionCustomValues:
+  """Verify Compression accepts custom values."""
 
   def test_custom_tool_results_limit(self):
-    cfg = CompressionConfig(tool_results_limit=10)
+    cfg = Compression(tool_results_limit=10)
     assert cfg.tool_results_limit == 10
 
   def test_custom_token_limit(self):
-    cfg = CompressionConfig(token_limit=4096)
+    cfg = Compression(token_limit=4096)
     assert cfg.token_limit == 4096
 
   def test_custom_instructions(self):
-    cfg = CompressionConfig(instructions="Be very brief.")
+    cfg = Compression(instructions="Be very brief.")
     assert cfg.instructions == "Be very brief."
 
   def test_string_model(self):
-    cfg = CompressionConfig(model="gpt-4o-mini")
+    cfg = Compression(model="gpt-4o-mini")
     assert cfg.model == "gpt-4o-mini"
 
   def test_object_model(self):
     sentinel = object()
-    cfg = CompressionConfig(model=sentinel)  # type: ignore[arg-type]
+    cfg = Compression(model=sentinel)  # type: ignore[arg-type]
     assert cfg.model is sentinel
+
+  def test_string_model_resolves_via_agent(self):
+    """String model in Compression is resolved to a Model via resolve_model_string in Agent."""
+    cfg = Compression(model="openai/gpt-4o-mini")
+    assert cfg.model == "openai/gpt-4o-mini"  # stored as-is; resolved at Agent init
 
 
 # ===========================================================================
@@ -677,9 +674,24 @@ class TestDefaultCompressionPrompt:
 
 @pytest.mark.unit
 class TestCompressionInit:
-  """Verify the compression package re-exports CompressionManager."""
+  """Verify the compression package re-exports Compression and CompressionManager."""
 
-  def test_import_from_package(self):
+  def test_import_compression_manager_from_package(self):
     from definable.agent.compression import CompressionManager as CM
 
     assert CM is CompressionManager
+
+  def test_import_compression_from_package(self):
+    from definable.agent.compression import Compression as C
+
+    assert C is Compression
+
+  def test_import_compression_from_agent(self):
+    from definable.agent import Compression as C
+
+    assert C is Compression
+
+  def test_import_compression_from_top_level(self):
+    from definable import Compression as C
+
+    assert C is Compression

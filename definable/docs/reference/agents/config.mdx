@@ -22,7 +22,6 @@ from definable.agent import AgentConfig
 | `session_state` | `Dict` | `None` | Default session state for tools. |
 | `dependencies` | `Dict` | `None` | Injected tool dependencies. |
 | `tracing` | `Tracing` | `None` | Tracing configuration. |
-| `compression` | `CompressionConfig` | `None` | Tool result compression. |
 | `readers` | `ReadersConfig` | `None` | File reader configuration. |
 
 ## Methods
@@ -30,15 +29,6 @@ from definable.agent import AgentConfig
 | Method | Returns | Description |
 |--------|---------|-------------|
 | `with_updates(**kwargs)` | `AgentConfig` | Create modified copy (frozen dataclass). |
-
-## CompressionConfig
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `enabled` | `bool` | `True` | Enable compression. |
-| `tool_results_limit` | `int` | `3` | Compress after N uncompressed results. |
-| `token_limit` | `int` | `None` | Token threshold for compression. |
-| `instructions` | `str` | `None` | Compression prompt. |
 
 ## ReadersConfig
 

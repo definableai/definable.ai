@@ -84,9 +84,18 @@ agent = Agent(
 
 ### Compression
 
-<ParamField path="compression" type="CompressionConfig">
-  Tool result compression to reduce token usage on long tool outputs.
-</ParamField>
+Compression is configured directly on the `Agent` constructor (not in `AgentConfig`):
+
+```python
+from definable.agent import Agent
+from definable.agent.compression import Compression
+
+# Defaults
+agent = Agent(model="openai/gpt-4o", compression=True)
+
+# Custom
+agent = Agent(model="openai/gpt-4o", compression=Compression(tool_results_limit=5))
+```
 
 ### Readers
 
@@ -197,16 +206,21 @@ custom_config = base_config.with_updates(
 
 The original `base_config` is unchanged. This pattern makes it safe to share configs across agents.
 
-## Compression Config
+## Compression
 
 Compress large tool results to save tokens:
 
 ```python
-from definable.agent import AgentConfig, CompressionConfig
+from definable.agent import Agent
+from definable.agent.compression import Compression
 
-config = AgentConfig(
-    compression=CompressionConfig(
-        enabled=True,
+# Enable with defaults (compress after 3 uncompressed tool results)
+agent = Agent(model="openai/gpt-4o", compression=True)
+
+# Custom settings
+agent = Agent(
+    model="openai/gpt-4o",
+    compression=Compression(
         tool_results_limit=3,      # Trigger compression after 3 uncompressed tool results
         token_limit=None,          # Or set a token threshold to trigger compression
         instructions="Preserve key facts and data. Remove formatting.",

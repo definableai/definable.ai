@@ -29,7 +29,7 @@ print(response.content)
 agent/
 ├── __init__.py          # 72 public exports
 ├── agent.py             # Agent class
-├── config.py            # AgentConfig, CompressionConfig, ReadersConfig
+├── config.py            # AgentConfig, ReadersConfig
 ├── middleware.py         # Middleware protocol + built-in implementations
 ├── toolkit.py           # Toolkit base class
 ├── testing.py           # MockModel, AgentTestCase, create_test_agent
@@ -130,13 +130,13 @@ agent = Agent(
 ### Configuration
 
 ```python
-from definable.agent import AgentConfig, CompressionConfig, ReadersConfig
+from definable.agent import AgentConfig, Compression, ReadersConfig
 ```
 
 | Class | Purpose |
 |-------|---------|
 | `AgentConfig` | Frozen dataclass: identity, execution limits, retry, validation |
-| `CompressionConfig` | Tool result compression (model, token/count limits) |
+| `Compression` | Tool result compression (model, token/count limits) |
 | `ReadersConfig` | File reader settings (registry, max content length) |
 
 ### Middleware

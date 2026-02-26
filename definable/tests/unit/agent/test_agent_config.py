@@ -6,7 +6,6 @@ No API calls. No external dependencies.
 
 Covers:
   - Thinking defaults and trigger values
-  - CompressionConfig defaults
   - Knowledge fields
   - Memory defaults
   - AgentConfig is frozen (immutable)
@@ -20,10 +19,7 @@ import dataclasses
 
 import pytest
 
-from definable.agent.config import (
-  AgentConfig,
-  CompressionConfig,
-)
+from definable.agent.config import AgentConfig
 from definable.agent.reasoning.thinking import Thinking
 from definable.agent.tracing import Tracing
 from definable.memory.manager import Memory
@@ -52,23 +48,6 @@ class TestThinking:
   def test_custom_instructions_stored(self):
     cfg = Thinking(instructions="Think step by step.")
     assert cfg.instructions == "Think step by step."
-
-
-@pytest.mark.unit
-class TestCompressionConfig:
-  def test_defaults(self):
-    cfg = CompressionConfig()
-    assert cfg.enabled is True
-    assert cfg.model is None
-    assert cfg.tool_results_limit == 3
-    assert cfg.token_limit is None
-    assert cfg.instructions is None
-
-  def test_custom_values(self):
-    cfg = CompressionConfig(enabled=False, tool_results_limit=5, token_limit=1000)
-    assert cfg.enabled is False
-    assert cfg.tool_results_limit == 5
-    assert cfg.token_limit == 1000
 
 
 @pytest.mark.unit

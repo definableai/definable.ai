@@ -1,11 +1,10 @@
 """Agent configuration with immutable settings."""
 
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
 
 if TYPE_CHECKING:
   from definable.agent.tracing.base import Tracing
-  from definable.model.base import Model
 
 
 # Default descriptions for the layer guide (system prompt capabilities menu)
@@ -55,41 +54,6 @@ DEFAULT_RESEARCH_DESCRIPTION = (
 
 
 @dataclass
-class CompressionConfig:
-  """
-  Configuration for tool result compression in agents.
-
-  Controls automatic compression of tool results to save context space
-  while preserving critical information during agent execution.
-
-  Attributes:
-    enabled: Whether compression is enabled.
-    model: Model instance or string to use for compression.
-           If None, uses the agent's model.
-    tool_results_limit: Compress after N uncompressed tool results.
-    token_limit: Compress when context exceeds this token threshold.
-    instructions: Custom compression prompt/instructions.
-
-  Example:
-    from definable.agent.config import AgentConfig, CompressionConfig
-
-    config = AgentConfig(
-      compression=CompressionConfig(
-        enabled=True,
-        tool_results_limit=3,
-        # model not specified - uses agent's model
-      ),
-    )
-  """
-
-  enabled: bool = True
-  model: Optional[Union[str, "Model"]] = None  # Model instance or string (default: agent's model)
-  tool_results_limit: Optional[int] = 3  # Compress after N tool results
-  token_limit: Optional[int] = None  # Or compress at token threshold
-  instructions: Optional[str] = None  # Custom compression prompt
-
-
-@dataclass
 class ReadersConfig:
   """Configuration for file readers integration with agents.
 
@@ -126,7 +90,6 @@ class AgentConfig:
       agent_id: Unique identifier for the agent instance.
       agent_name: Human-readable name for the agent.
       tracing: Tracing instance (backward compat — prefer Agent(tracing=...)).
-      compression: Tool-result compression settings.
       readers: File readers settings.
       session_state: Default session state for runs.
       dependencies: Dependencies to inject into tools.
@@ -146,9 +109,6 @@ class AgentConfig:
 
   # Tracing configuration (backward compat — prefer Agent(tracing=...))
   tracing: Optional["Tracing"] = field(default=None, hash=False)
-
-  # Compression configuration for tool results
-  compression: Optional[CompressionConfig] = field(default=None, hash=False)
 
   # File readers configuration
   readers: Optional[ReadersConfig] = field(default=None, hash=False)
@@ -186,13 +146,12 @@ class AgentConfig:
         New AgentConfig instance with updated values.
     """
     # Fields that cannot be serialized with asdict
-    non_serializable = ("tracing", "session_state", "dependencies", "compression", "readers")
+    non_serializable = ("tracing", "session_state", "dependencies", "readers")
     current = {k: v for k, v in asdict(self).items() if k not in non_serializable}
     # Handle non-serializable fields separately
     current["tracing"] = self.tracing
     current["session_state"] = self.session_state
     current["dependencies"] = self.dependencies
-    current["compression"] = self.compression
     current["readers"] = self.readers
     current.update(kwargs)
     return AgentConfig(**current)
