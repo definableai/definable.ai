@@ -41,4 +41,4 @@ agent = Agent(
 )
 
 # Serve the agent — dashboard is at /obs/
-agent.serve(CLIInterface(mode="auto"), enable_server=True)
+agent.serve(CLIInterface(mode="repl"), enable_server=True, port=8002)

@@ -155,6 +155,9 @@ These are not guidelines. These are the physics of this universe. Break them and
 
 Every change passes through all four gates or it does not enter the body:
 
+You should only run the test cases of the specific module that you have modified or created
+Identify the affected modules and run the testcases for those only.
+
 ```bash
 .venv/bin/python -m pytest definable/tests/unit/     # the cells are healthy
 .venv/bin/ruff check definable/definable/             # no mutations
