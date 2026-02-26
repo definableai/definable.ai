@@ -194,3 +194,54 @@
 - Full-stack composition stable with all 8 systems simultaneously
 - 10-turn MockModel and 5-turn LLM stress tests pass
 - MCP filesystem server: 14 tools discovered, context manager lifecycle clean
+
+## Run #7 — 2026-02-25 (full stability eval, v0.3.2 — post-expansion)
+
+| Metric | Value |
+|--------|-------|
+| Version | 0.3.2 (editable install) |
+| Branch | main |
+| Eval Scripts | 16 written (eval_00 through eval_15) |
+| Total Checks | 146 passed, 0 failed, 0 skipped |
+| Pass Rate | **100.0%** (146/146) |
+| Unit Tests (pytest) | 3625 passed, 5 skipped, 0 failed |
+| Real API Tests (OpenAI) | All passed (embeddings) |
+| MCP Tests | All passed (npx filesystem, 14 tools) |
+| New Issues Filed | 0 |
+| Stability Score | **10/10** |
+
+### Eval Matrix (all 16 evals)
+| Eval | Use Case | Pass | Fail | Skip | Status |
+|------|----------|------|------|------|--------|
+| 00 | Foundation: Imports & Circular Deps | 27 | 0 | 0 | PASS |
+| 01 | Bare Agent + MockModel | 12 | 0 | 0 | PASS |
+| 02 | Agent + @tool (dispatch) | 9 | 0 | 0 | PASS |
+| 03 | Agent + Skills (builtins+custom) | 9 | 0 | 0 | PASS |
+| 04 | Agent + Knowledge RAG | 11 | 0 | 0 | PASS |
+| 05 | Agent + Memory (stores) | 11 | 0 | 0 | PASS |
+| 06 | Agent + Guardrails (safety) | 15 | 0 | 0 | PASS |
+| 07 | Agent + Observability (tracing+middleware) | 15 | 0 | 0 | PASS |
+| 08 | Tools + Knowledge (tech support) | 5 | 0 | 0 | PASS |
+| 09 | Tools + Memory (PA) | 3 | 0 | 0 | PASS |
+| 10 | Knowledge + Memory (HR) | 3 | 0 | 0 | PASS |
+| 11 | Guardrails + Tools + Security | 12 | 0 | 0 | PASS |
+| 12 | Agent + MCP (filesystem) | 9 | 0 | 0 | PASS |
+| 13 | Full Stack (all systems wired) | 8 | 0 | 0 | PASS |
+| 14 | Multi-Turn Stress (10 turns) | 6 | 0 | 0 | PASS |
+| 15 | Error Handling (edge cases) | 12 | 0 | 0 | PASS |
+
+### What's new since Run #6
+- v0.3.2: +6 major features — Security, Knowledge Scoring, Eval, Resilience, Scheduling, Plugins, Channel Expansion, Skill Explosion, Knowledge Expansion
+- Unit test count: 302 (run #6) → 3625 (+3323 new tests from all phases)
+- All new modules verified: SecurityConfig, ToolPolicy, TemporalDecay, MMRConfig, FTSIndex, HybridSearchConfig, FallbackEmbedder, Team, TeamMode, Workflow, Step, Parallel, Scheduler, Interval, Plugin, PluginRegistry, KeyPool, UsageTracker
+- Full-stack composition stable with security + guardrails + knowledge + memory + tools + skills + tracing + usage
+- MCP live test: 14 tools from filesystem server
+- 10-turn stress test: message accumulation correct, session ID stable
+
+### API corrections discovered during eval authoring
+- `GuardrailResult`: Uses `action="allow"|"block"|"modify"|"warn"`, NOT `passed=True/False`
+- `@input_guardrail`: Decorated fn must be `async def fn(text, context)`, not single-arg
+- `regex_filter()`: Takes `List[str]`, not single string
+- `PluginRegistry.add()`, not `.register()`
+- `KeyPool._keys` is private; use `.acquire()` to get a key
+- `SlidingWindowRateLimiter.check()` is async

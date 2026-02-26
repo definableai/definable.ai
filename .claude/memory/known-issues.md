@@ -26,8 +26,14 @@
 ## Issue Categories
 
 - **Structured output**: #6, #13 (P0 -- broken end-to-end)
-- **Export consistency**: #7, #10, #12 (P1-P2 -- missing re-exports)
-- **Naming/DX**: #11, #13, #18 (P1-P2 -- confusing API / missing validation)
+- **Export consistency**: #7, #10, #12 (P1-P2 -- likely fixed by DX overhaul, need verification)
+- **Naming/DX**: #11, #13, #18 (P1-P2 -- confusing API / missing validation; #18 FIXED)
 - **Tests**: #8, #14 (P1-P2 -- broken tests)
 - **Dependencies**: #9 (P3 -- deprecated package name)
 - **Runtime**: #19 (P0 -- sync run() multi-turn breaks)
+
+## Notes (Run #7, 2026-02-25)
+- **No new issues found** — all 146 eval checks + 3625 unit tests pass
+- DX issues #10, #11, #12 likely resolved by the DX overhaul (re-exports added to definable.embedder, definable.chunker, definable.reranker; Document still uses meta_data by design)
+- #18 confirmed FIXED since run #5
+- Only open GitHub issue: #18 (can be closed)
