@@ -59,6 +59,7 @@ class CompressionManager:
   compress_tool_results_limit: Optional[int] = None
   compress_token_limit: Optional[int] = None
   compress_tool_call_instructions: Optional[str] = None
+  compress_single_result_size: Optional[int] = None
 
   stats: Dict[str, Any] = field(default_factory=dict)
 
@@ -100,6 +101,15 @@ class CompressionManager:
       if uncompressed_tools_count >= self.compress_tool_results_limit:
         log_info(f"Tool count limit hit: {uncompressed_tools_count} >= {self.compress_tool_results_limit}")
         return True
+
+    # Per-message size check
+    if self.compress_single_result_size is not None:
+      for m in messages:
+        if self._is_tool_result_message(m) and m.compressed_content is None:
+          content_len = len(str(m.content)) if m.content else 0
+          if content_len >= self.compress_single_result_size:
+            log_info(f"Single result size hit: {content_len} >= {self.compress_single_result_size}")
+            return True
 
     return False
 
@@ -185,6 +195,15 @@ class CompressionManager:
       if uncompressed_tools_count >= self.compress_tool_results_limit:
         log_info(f"Tool count limit hit: {uncompressed_tools_count} >= {self.compress_tool_results_limit}")
         return True
+
+    # Per-message size check
+    if self.compress_single_result_size is not None:
+      for m in messages:
+        if self._is_tool_result_message(m) and m.compressed_content is None:
+          content_len = len(str(m.content)) if m.content else 0
+          if content_len >= self.compress_single_result_size:
+            log_info(f"Single result size hit: {content_len} >= {self.compress_single_result_size}")
+            return True
 
     return False
 

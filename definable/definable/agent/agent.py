@@ -2992,6 +2992,7 @@ class Agent:
       compress_tool_results_limit=compression.tool_results_limit,
       compress_token_limit=compression.token_limit,
       compress_tool_call_instructions=compression.instructions,
+      compress_single_result_size=compression.single_result_size,
     )
 
   def _build_initial_state(

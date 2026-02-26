@@ -695,3 +695,213 @@ class TestCompressionInit:
     from definable import Compression as C
 
     assert C is Compression
+
+
+# ===========================================================================
+# single_result_size threshold (CompressionManager)
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestSingleResultSize:
+  """Verify compress_single_result_size triggers compression for large individual results."""
+
+  def test_should_compress_when_single_result_exceeds_size(self):
+    mgr = CompressionManager(compress_single_result_size=1000, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 2000)]
+    assert mgr.should_compress(msgs) is True
+
+  def test_should_not_compress_when_single_result_below_size(self):
+    mgr = CompressionManager(compress_single_result_size=1000, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 500)]
+    assert mgr.should_compress(msgs) is False
+
+  def test_skips_already_compressed(self):
+    mgr = CompressionManager(compress_single_result_size=1000, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 2000, compressed="already done")]
+    assert mgr.should_compress(msgs) is False
+
+  def test_none_ignored(self):
+    """When compress_single_result_size is None (default), large messages don't trigger."""
+    mgr = CompressionManager(compress_single_result_size=None, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 100_000)]
+    assert mgr.should_compress(msgs) is False
+
+  def test_exact_boundary_triggers(self):
+    mgr = CompressionManager(compress_single_result_size=100, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 100)]
+    assert mgr.should_compress(msgs) is True
+
+  def test_non_tool_messages_ignored(self):
+    mgr = CompressionManager(compress_single_result_size=10, compress_tool_results_limit=None)
+    msgs = [_user_msg(content="x" * 1000), _assistant_msg(content="x" * 1000)]
+    assert mgr.should_compress(msgs) is False
+
+  @pytest.mark.asyncio
+  async def test_async_should_compress_when_single_result_exceeds_size(self):
+    mgr = CompressionManager(compress_single_result_size=1000, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 2000)]
+    assert await mgr.ashould_compress(msgs) is True
+
+  @pytest.mark.asyncio
+  async def test_async_should_not_compress_when_below_size(self):
+    mgr = CompressionManager(compress_single_result_size=1000, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 500)]
+    assert await mgr.ashould_compress(msgs) is False
+
+  @pytest.mark.asyncio
+  async def test_async_skips_already_compressed(self):
+    mgr = CompressionManager(compress_single_result_size=1000, compress_tool_results_limit=None)
+    msgs = [_tool_msg(content="x" * 2000, compressed="done")]
+    assert await mgr.ashould_compress(msgs) is False
+
+
+# ===========================================================================
+# Compression config: single_result_size field
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestCompressionSingleResultSizeField:
+  """Verify single_result_size on the user-facing Compression config."""
+
+  def test_defaults_none(self):
+    cfg = Compression()
+    assert cfg.single_result_size is None
+
+  def test_custom_value(self):
+    cfg = Compression(single_result_size=5000)
+    assert cfg.single_result_size == 5000
+
+
+# ===========================================================================
+# AgentLoop: compress_tool_results flag wiring
+# ===========================================================================
+
+
+@pytest.mark.unit
+class TestLoopCompressFlag:
+  """Verify AgentLoop passes compress_tool_results to model calls."""
+
+  @pytest.mark.asyncio
+  async def test_loop_passes_compress_flag_when_manager_exists(self):
+    """When compression_manager is provided and compress_tool_results=True, the flag is passed."""
+    from definable.agent.loop import AgentLoop
+    from definable.agent.events import RunContext
+
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.content = "done"
+    mock_response.tool_calls = None
+    mock_response.response_usage = None
+    mock_response.parsed = None
+    mock_model.ainvoke = AsyncMock(return_value=mock_response)
+    mock_model.id = "test-model"
+    mock_model.provider = "test"
+
+    mgr = CompressionManager(compress_tool_results=True)
+
+    context = RunContext(run_id="r1", session_id="s1")
+    loop = AgentLoop(
+      model=mock_model,
+      tools={},
+      messages=[Message(role="user", content="hi")],
+      context=context,
+      config=MagicMock(max_tool_rounds=5, max_retries=0, retry_transient_errors=False),
+      streaming=False,
+      compression_manager=mgr,
+      emit_fn=lambda e: None,
+      agent_id="a1",
+      agent_name="test",
+    )
+
+    events = []
+    async for event in loop.run():
+      events.append(event)
+
+    mock_model.ainvoke.assert_awaited_once()
+    call_kwargs = mock_model.ainvoke.call_args.kwargs
+    assert call_kwargs["compress_tool_results"] is True
+
+  @pytest.mark.asyncio
+  async def test_loop_no_compress_flag_when_no_manager(self):
+    """Without compression_manager, compress_tool_results should be False."""
+    from definable.agent.loop import AgentLoop
+    from definable.agent.events import RunContext
+
+    mock_model = MagicMock()
+    mock_response = MagicMock()
+    mock_response.content = "done"
+    mock_response.tool_calls = None
+    mock_response.response_usage = None
+    mock_response.parsed = None
+    mock_model.ainvoke = AsyncMock(return_value=mock_response)
+    mock_model.id = "test-model"
+    mock_model.provider = "test"
+
+    context = RunContext(run_id="r1", session_id="s1")
+    loop = AgentLoop(
+      model=mock_model,
+      tools={},
+      messages=[Message(role="user", content="hi")],
+      context=context,
+      config=MagicMock(max_tool_rounds=5, max_retries=0, retry_transient_errors=False),
+      streaming=False,
+      compression_manager=None,
+      emit_fn=lambda e: None,
+      agent_id="a1",
+      agent_name="test",
+    )
+
+    events = []
+    async for event in loop.run():
+      events.append(event)
+
+    mock_model.ainvoke.assert_awaited_once()
+    call_kwargs = mock_model.ainvoke.call_args.kwargs
+    assert call_kwargs["compress_tool_results"] is False
+
+  @pytest.mark.asyncio
+  async def test_loop_passes_compress_flag_streaming(self):
+    """Streaming mode also passes the compress flag."""
+    from definable.agent.loop import AgentLoop
+    from definable.agent.events import RunContext
+
+    mock_model = MagicMock()
+    # Make ainvoke_stream an async generator
+    chunk = MagicMock()
+    chunk.content = "streamed"
+    chunk.tool_calls = None
+    chunk.response_usage = None
+    chunk.parsed = None
+
+    async def fake_stream(**kwargs):
+      yield chunk
+
+    mock_model.ainvoke_stream = MagicMock(side_effect=fake_stream)
+    mock_model.id = "test-model"
+    mock_model.provider = "test"
+
+    mgr = CompressionManager(compress_tool_results=True)
+
+    context = RunContext(run_id="r1", session_id="s1")
+    loop = AgentLoop(
+      model=mock_model,
+      tools={},
+      messages=[Message(role="user", content="hi")],
+      context=context,
+      config=MagicMock(max_tool_rounds=5, max_retries=0, retry_transient_errors=False),
+      streaming=True,
+      compression_manager=mgr,
+      emit_fn=lambda e: None,
+      agent_id="a1",
+      agent_name="test",
+    )
+
+    events = []
+    async for event in loop.run():
+      events.append(event)
+
+    mock_model.ainvoke_stream.assert_called_once()
+    call_kwargs = mock_model.ainvoke_stream.call_args.kwargs
+    assert call_kwargs["compress_tool_results"] is True

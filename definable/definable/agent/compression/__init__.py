@@ -39,6 +39,7 @@ class Compression:
   tool_results_limit: Optional[int] = 3
   token_limit: Optional[int] = None
   instructions: Optional[str] = None
+  single_result_size: Optional[int] = None
 
 
 __all__ = ["Compression", "CompressionManager"]

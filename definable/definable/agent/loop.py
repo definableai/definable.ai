@@ -108,6 +108,7 @@ class AgentLoop:
     self._streaming = streaming
     self._cancellation_token = cancellation_token
     self._compression_manager = compression_manager
+    self._compress_tool_results = compression_manager is not None and compression_manager.compress_tool_results
     self._guardrails = guardrails
     self._emit_fn = emit_fn
     self._agent_id = agent_id
@@ -198,6 +199,7 @@ class AgentLoop:
             assistant_message=assistant_message,
             tools=self._tools_dicts,
             response_format=self._context.output_schema,
+            compress_tool_results=self._compress_tool_results,
           ):
             if hasattr(chunk, "content") and chunk.content:
               accumulated_content += chunk.content
@@ -389,6 +391,7 @@ class AgentLoop:
           assistant_message=assistant_message,
           tools=self._tools_dicts,
           response_format=self._context.output_schema,
+          compress_tool_results=self._compress_tool_results,
         )
       except Exception as e:
         is_transient = isinstance(e, (ConnectionError, TimeoutError, OSError))
@@ -425,6 +428,7 @@ class AgentLoop:
       assistant_message=assistant_msg,
       tools=None,
       response_format=self._context.output_schema,
+      compress_tool_results=self._compress_tool_results,
     )
     self._messages.append(Message(role="assistant", content=final_response.content))
 
