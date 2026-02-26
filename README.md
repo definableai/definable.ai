@@ -26,6 +26,8 @@ A Python framework for building agent applications with tools, RAG, persistent m
 
 ---
 
+![Definable Observability](https://assets.definable.ai/blog-images/Screen%20Recording%202026-02-27%20at%201.35.34%E2%80%AFAM.gif)
+
 ## Install
 
 ```bash
