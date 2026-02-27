@@ -191,6 +191,9 @@ class RunEvent(str, Enum):
   sub_agent_failed = "SubAgentFailed"
   sub_agent_killed = "SubAgentKilled"
 
+  # Tool content streaming
+  tool_content = "ToolContent"
+
   # Compression events
   compression_started = "CompressionStarted"
   compression_completed = "CompressionCompleted"
@@ -527,6 +530,18 @@ class ToolCallErrorEvent(BaseAgentRunEvent):
 
 
 @dataclass
+class ToolContentEvent(BaseAgentRunEvent):
+  """Streaming chunk emitted as a tool yields incremental results."""
+
+  event: str = RunEvent.tool_content.value
+  tool_name: str = ""
+  tool_call_id: Optional[str] = None
+  chunk: str = ""
+  chunk_index: int = 0
+  is_final: bool = False
+
+
+@dataclass
 class ParserModelResponseStartedEvent(BaseAgentRunEvent):
   event: str = RunEvent.parser_model_response_started.value
 
@@ -690,6 +705,7 @@ RunOutputEvent = Union[
   ToolCallStartedEvent,
   ToolCallCompletedEvent,
   ToolCallErrorEvent,
+  ToolContentEvent,
   ParserModelResponseStartedEvent,
   ParserModelResponseCompletedEvent,
   OutputModelResponseStartedEvent,
@@ -750,6 +766,7 @@ RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.tool_call_started.value: ToolCallStartedEvent,
   RunEvent.tool_call_completed.value: ToolCallCompletedEvent,
   RunEvent.tool_call_error.value: ToolCallErrorEvent,
+  RunEvent.tool_content.value: ToolContentEvent,
   RunEvent.parser_model_response_started.value: ParserModelResponseStartedEvent,
   RunEvent.parser_model_response_completed.value: ParserModelResponseCompletedEvent,
   RunEvent.output_model_response_started.value: OutputModelResponseStartedEvent,

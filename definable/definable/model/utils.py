@@ -18,6 +18,7 @@ _PROVIDER_MAP: Dict[str, Tuple[str, str]] = {
   "perplexity": ("definable.model.perplexity.perplexity", "Perplexity"),
   "ollama": ("definable.model.ollama.chat", "Ollama"),
   "openrouter": ("definable.model.openrouter.openrouter", "OpenRouter"),
+  "claude-code": ("definable.model.claude_code.chat", "ClaudeCode"),
 }
 
 # Maps provider names to pip install extras for helpful error messages.
@@ -27,6 +28,7 @@ _INSTALL_HINTS: Dict[str, str] = {
   "google": 'pip install "definable[google]"',
   "mistral": 'pip install "definable[mistral]"',
   "ollama": 'pip install "definable[ollama]"',
+  "claude-code": 'pip install "definable[claude-code]"',
 }
 
 

@@ -80,15 +80,19 @@ class TestAgentTools:
 
 @pytest.mark.unit
 class TestAgentMemory:
-  def test_memory_true_creates_in_memory_store(self):
-    """Agent(memory=True) creates Memory with InMemoryStore."""
+  def test_memory_true_creates_semantic_memory(self):
+    """Agent(memory=True) creates Memory with SemanticStrategy + ConsolidationPolicy."""
+    from definable.memory.consolidation import ConsolidationPolicy
     from definable.memory.manager import Memory
     from definable.memory.store.in_memory import InMemoryStore
+    from definable.memory.strategies.semantic import SemanticStrategy
 
     agent = Agent(model=MockModel(), memory=True)  # type: ignore[arg-type]
     assert agent.memory is not None
     assert isinstance(agent.memory, Memory)
     assert isinstance(agent.memory.store, InMemoryStore)
+    assert isinstance(agent.memory.strategy, SemanticStrategy)
+    assert isinstance(agent.memory.consolidation, ConsolidationPolicy)
 
   def test_memory_false_is_none(self):
     """Agent(memory=False) results in memory=None."""

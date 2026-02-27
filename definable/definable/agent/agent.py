@@ -201,9 +201,9 @@ class Agent:
             the highest-level abstraction — use them to give your agent
             domain expertise alongside capabilities.
         skill_registry: Optional SkillRegistry for markdown-based skills.
-            Auto-selects eager mode (all skills injected) when the
-            registry has 15 or fewer skills, or lazy mode (catalog +
-            read_skill tool) for larger registries. Override by calling
+            Uses on-demand mode: only a compact XML catalog is injected
+            into the system prompt; the model activates individual skills
+            via the ``activate_skill`` tool. Override by calling
             ``registry.as_eager()`` or ``registry.as_lazy()`` directly
             and passing the result to ``skills=``.
         instructions: System instructions for the agent.
@@ -253,6 +253,7 @@ class Agent:
 
     # Resolve memory: Memory | bool → Memory | None
     self.memory = self._resolve_memory(memory)
+    self._resolve_memory_embedder()
 
     # Resolve knowledge: Knowledge | bool → Knowledge | None
     self._knowledge: Optional["Knowledge"] = self._resolve_knowledge(knowledge)
@@ -402,15 +403,12 @@ class Agent:
       for p in plugins:
         self._plugin_registry.add(p)
 
-    # Convert skill_registry to skills (eager/lazy based on size)
+    # Convert skill_registry to on-demand skill (model picks skills based on query)
     if skill_registry is not None:
       from definable.skill.registry import SkillRegistry
 
       if isinstance(skill_registry, SkillRegistry):
-        if len(skill_registry) <= 15:
-          self.skills.extend(skill_registry.as_eager())
-        else:
-          self.skills.append(skill_registry.as_lazy())
+        self.skills.append(skill_registry.as_on_demand())
 
     # Initialize skills (call setup, validate)
     self._init_skills()
@@ -1647,7 +1645,15 @@ class Agent:
     self._pending_memory_tasks = [t for t in self._pending_memory_tasks if not t.done()]
 
   async def _memory_recall(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
-    """Recall session history, emit events, inject into context."""
+    """Recall session history, emit events, inject into context.
+
+    When the memory has an embedder (semantic search), recall produces a
+    dual-layer context:
+      - Short-term: recent raw messages (conversation continuity)
+      - Long-term: top-K atoms ranked by similarity to the query
+
+    Without an embedder, falls back to chronological dump of all entries.
+    """
     assert self.memory is not None
     await self._drain_memory_tasks()
     import time
@@ -1657,7 +1663,7 @@ class Agent:
 
     events: List[RunOutputEvent] = []
 
-    # Extract the last user message as the query (for event metadata)
+    # Extract the last user message as the query (for event metadata + search)
     query = None
     for msg in reversed(new_messages):
       if msg.role == "user" and msg.content:
@@ -1679,20 +1685,32 @@ class Agent:
     # Ensure store is initialized
     await self.memory._ensure_initialized()
 
-    # Get session history entries
-    entries = await self.memory.get_entries(session_id, user_id)
+    chunks_included = 0
+
+    if self.memory.has_semantic_search and query:
+      # Dual-layer recall: short-term (recent messages) + long-term (semantic atoms).
+      context.memory_context = await self._memory_recall_semantic(session_id, user_id, query)
+      # Count chunks from the context (approximate).
+      chunks_included = context.memory_context.count("\n") if context.memory_context else 0
+    else:
+      # Chronological recall (existing behavior).
+      entries = await self.memory.get_entries(session_id, user_id)
+      chunks_included = len(entries)
+      if entries:
+        lines = []
+        for e in entries:
+          if e.role == "summary":
+            lines.append(f"[Summary]: {e.content}")
+          elif e.entry_type == "atom":
+            lines.append(f"[Fact]: {e.lossless_content or e.content}")
+          else:
+            lines.append(f"{e.role}: {e.content}")
+        context.memory_context = "<conversation_history>\n" + "\n".join(lines) + "\n</conversation_history>"
+
+    if context.memory_context:
+      context.active_layers.add("memory")
 
     elapsed = (time.perf_counter() - start_time) * 1000
-
-    if entries:
-      lines = []
-      for e in entries:
-        if e.role == "summary":
-          lines.append(f"[Summary]: {e.content}")
-        else:
-          lines.append(f"{e.role}: {e.content}")
-      context.memory_context = "<conversation_history>\n" + "\n".join(lines) + "\n</conversation_history>"
-      context.active_layers.add("memory")
 
     completed = MemoryRecallCompletedEvent(
       run_id=context.run_id,
@@ -1701,13 +1719,41 @@ class Agent:
       agent_name=self.agent_name,
       query=query or "",
       tokens_used=len(context.memory_context or "") // 4,
-      chunks_included=len(entries),
-      chunks_available=len(entries),
+      chunks_included=chunks_included,
+      chunks_available=chunks_included,
       duration_ms=elapsed,
     )
     self._emit(completed)
     events.append(completed)
     return events
+
+  async def _memory_recall_semantic(self, session_id: str, user_id: str, query: str) -> str:
+    """Build dual-layer memory context: short-term messages + long-term atoms."""
+    assert self.memory is not None
+    entries = await self.memory.get_entries(session_id, user_id)
+
+    # Split into recent messages (STM) and search for relevant atoms (LTM).
+    recent_messages = [e for e in entries if e.entry_type == "message"][-self.memory.recent_count :]
+    relevant_atoms = await self.memory.search(query, session_id, user_id)
+
+    parts: list[str] = []
+
+    # Long-term memory: relevant facts from semantic search.
+    if relevant_atoms:
+      ltm_lines = [f"- {a.lossless_content or a.content}" for a in relevant_atoms]
+      parts.append("<long_term_memory>\n" + "\n".join(ltm_lines) + "\n</long_term_memory>")
+
+    # Short-term memory: recent conversation turns.
+    if recent_messages:
+      stm_lines = []
+      for e in recent_messages:
+        if e.role == "summary":
+          stm_lines.append(f"[Summary]: {e.content}")
+        else:
+          stm_lines.append(f"{e.role}: {e.content}")
+      parts.append("<short_term_memory>\n" + "\n".join(stm_lines) + "\n</short_term_memory>")
+
+    return "\n".join(parts)
 
   def _memory_store(self, new_messages: List[Message], context: RunContext) -> List[RunOutputEvent]:
     """Store new messages in session memory (fire-and-forget), emit events."""
@@ -2906,19 +2952,73 @@ class Agent:
 
     Accepts:
       - False/None → None
-      - True → Memory(store=InMemoryStore())
+      - True → Memory with SemanticStrategy + ConsolidationPolicy (smart defaults)
       - Memory instance → pass through
+
+    When a Memory instance has no embedder, attempts to auto-resolve one
+    from the agent's model provider.
     """
     if memory is False or memory is None:
       return None
     if memory is True:
+      from definable.memory.consolidation import ConsolidationPolicy
       from definable.memory.manager import Memory
       from definable.memory.store.in_memory import InMemoryStore
+      from definable.memory.strategies.semantic import SemanticStrategy
 
-      return Memory(store=InMemoryStore())
+      return Memory(
+        store=InMemoryStore(),
+        strategy=SemanticStrategy(),
+        consolidation=ConsolidationPolicy(),
+      )
 
     # Memory instance — pass through
     return memory
+
+  def _resolve_memory_embedder(self) -> None:
+    """Auto-resolve memory embedder from model provider if not set."""
+    if self.memory is None or self.memory.embedder is not None:
+      return
+
+    # Only auto-resolve for SemanticStrategy (embedder is useless without atoms).
+    from definable.memory.strategies.semantic import SemanticStrategy
+
+    strategy = self.memory._resolve_strategy()
+    if not isinstance(strategy, SemanticStrategy):
+      return
+
+    # Try to create an embedder matching the agent's model provider.
+    embedder = self._create_embedder_for_model()
+    if embedder is not None:
+      self.memory.embedder = embedder
+
+  def _create_embedder_for_model(self) -> "Any":
+    """Create an embedder matching the agent's model provider. Returns None if unavailable."""
+    # Check model class name to determine provider.
+    model_cls = type(self.model).__name__
+    try:
+      if model_cls == "OpenAIChat":
+        from definable.knowledge.embedder.openai import OpenAIEmbedder
+
+        return OpenAIEmbedder()
+      if model_cls == "Gemini":
+        from definable.knowledge.embedder.google import GoogleEmbedder
+
+        return GoogleEmbedder()
+      if model_cls == "MistralChat":
+        from definable.knowledge.embedder.mistral import MistralEmbedder
+
+        return MistralEmbedder()
+    except Exception:
+      pass
+
+    # Default: try OpenAI embedder (most commonly available).
+    try:
+      from definable.knowledge.embedder.openai import OpenAIEmbedder
+
+      return OpenAIEmbedder()
+    except Exception:
+      return None
 
   def _resolve_knowledge(self, knowledge: "Knowledge | str | bool | None") -> Optional["Knowledge"]:
     """Resolve knowledge param to Knowledge | None.

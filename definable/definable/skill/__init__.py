@@ -64,7 +64,8 @@ from definable.skill.builtin.web_search import WebSearch
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-  from definable.skill.markdown import MarkdownSkill, MarkdownSkillMeta, SkillLoader
+  from definable.skill.executor import SkillScriptExecutor
+  from definable.skill.markdown import MarkdownSkill, MarkdownSkillMeta, SkillLoader, validate_agent_skills_name
   from definable.skill.registry import SkillRegistry
 
 __all__ = [
@@ -85,21 +86,30 @@ __all__ = [
   "MarkdownSkillMeta",
   "SkillLoader",
   "SkillRegistry",
+  # Agent Skills spec
+  "SkillScriptExecutor",
+  "validate_agent_skills_name",
 ]
 
 
 # Lazy imports for markdown skills layer
 def __getattr__(name: str):
-  if name in ("MarkdownSkill", "MarkdownSkillMeta", "SkillLoader"):
-    from definable.skill.markdown import MarkdownSkill, MarkdownSkillMeta, SkillLoader
+  if name in ("MarkdownSkill", "MarkdownSkillMeta", "SkillLoader", "validate_agent_skills_name"):
+    from definable.skill.markdown import MarkdownSkill, MarkdownSkillMeta, SkillLoader, validate_agent_skills_name
 
     globals()["MarkdownSkill"] = MarkdownSkill
     globals()["MarkdownSkillMeta"] = MarkdownSkillMeta
     globals()["SkillLoader"] = SkillLoader
+    globals()["validate_agent_skills_name"] = validate_agent_skills_name
     return globals()[name]
   if name == "SkillRegistry":
     from definable.skill.registry import SkillRegistry
 
     globals()["SkillRegistry"] = SkillRegistry
     return SkillRegistry
+  if name == "SkillScriptExecutor":
+    from definable.skill.executor import SkillScriptExecutor
+
+    globals()["SkillScriptExecutor"] = SkillScriptExecutor
+    return SkillScriptExecutor
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

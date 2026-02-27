@@ -25,6 +25,7 @@ if TYPE_CHECKING:
   from definable.model.perplexity import Perplexity
   from definable.model.ollama import Ollama
   from definable.model.openrouter import OpenRouter
+  from definable.model.claude_code import ClaudeCode
 
 
 def __getattr__(name: str):
@@ -76,6 +77,10 @@ def __getattr__(name: str):
     from definable.model.openrouter import OpenRouter
 
     return OpenRouter
+  if name == "ClaudeCode":
+    from definable.model.claude_code import ClaudeCode
+
+    return ClaudeCode
   if name == "resolve_model_string":
     from definable.model.utils import resolve_model_string
 
@@ -122,6 +127,7 @@ __all__ = [
   "Perplexity",
   "Ollama",
   "OpenRouter",
+  "ClaudeCode",
   # Lazy — Utilities
   "resolve_model_string",
   # Lazy — Resilience

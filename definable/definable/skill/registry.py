@@ -1,12 +1,15 @@
 """SkillRegistry — discover, search, and inject markdown skills.
 
 The registry loads markdown skills from the built-in library and/or
-custom directories, and provides two injection modes:
+custom directories, and provides three injection modes:
 
+- **On-demand** (default): An XML catalog + ``activate_skill``,
+  ``read_skill_file``, and ``run_skill_script`` tools are injected.
+  The LLM picks which skill to activate based on the user's query.
 - **Eager**: All skill instructions are injected into the system prompt
-  (best for small collections).
-- **Lazy**: A catalog table + ``read_skill`` tool are injected, letting
-  the LLM load skills on demand (best for large collections).
+  (best for small collections, or explicit user choice).
+- **Lazy**: A catalog table + ``read_skill`` tool (legacy, kept for
+  backward compatibility).
 
 Example::
 
@@ -15,15 +18,19 @@ Example::
     registry = SkillRegistry()           # loads built-in library
     print(registry.list_skills())        # list available skills
 
+    # On-demand (recommended): inject catalog + 3 tools
+    agent = Agent(model=model, skill_registry=registry)
+
     # Eager: inject all skills
     agent = Agent(model=model, skills=registry.as_eager())
 
-    # Lazy: inject catalog + read_skill tool
+    # Legacy lazy: inject catalog + read_skill tool
     agent = Agent(model=model, skills=[registry.as_lazy()])
 """
 
 from pathlib import Path
 from typing import List, Optional
+from xml.sax.saxutils import escape as xml_escape
 
 from definable.skill.base import Skill
 from definable.skill.markdown import MarkdownSkill, MarkdownSkillMeta, SkillLoader
@@ -127,6 +134,36 @@ class SkillRegistry:
     scored.sort(key=lambda x: x[0], reverse=True)
     return [skill for _, skill in scored]
 
+  def to_prompt(self) -> str:
+    """Generate an XML catalog of all skills for system prompt injection.
+
+    Only name and description are included — this is the compact
+    catalog that lets the LLM decide which skill to activate.
+
+    Returns:
+      XML string with ``<available_skills>`` root element.
+    """
+    lines = ["<available_skills>"]
+    for meta in self.list_skills():
+      lines.append("  <skill>")
+      lines.append(f"    <name>{xml_escape(meta.name)}</name>")
+      lines.append(f"    <description>{xml_escape(meta.description)}</description>")
+      lines.append("  </skill>")
+    lines.append("</available_skills>")
+    return "\n".join(lines)
+
+  def as_on_demand(self) -> Skill:
+    """Return a Skill with XML catalog + 3 on-demand tools.
+
+    This is the recommended mode for ``skill_registry=`` on Agent.
+    Only name+description are injected at startup; the model calls
+    ``activate_skill`` to load full content on demand.
+
+    Returns:
+      A Skill with catalog instructions and activate/read/run tools.
+    """
+    return _build_on_demand_skill(self)
+
   def as_eager(self) -> List[Skill]:
     """Return all skills for eager injection.
 
@@ -141,9 +178,7 @@ class SkillRegistry:
   def as_lazy(self) -> Skill:
     """Return a single wrapper skill with a catalog and ``read_skill`` tool.
 
-    The wrapper skill provides:
-    - Instructions: a markdown table listing all available skills.
-    - Tools: a ``read_skill`` tool that loads a skill's full content.
+    Legacy mode — kept for backward compatibility. Prefer ``as_on_demand()``.
 
     Returns:
       A Skill instance with catalog instructions and read_skill tool.
@@ -160,8 +195,129 @@ class SkillRegistry:
     return f"SkillRegistry(skills={len(self._skills)})"
 
 
+def _build_on_demand_skill(registry: SkillRegistry) -> Skill:
+  """Build a wrapper Skill with XML catalog + 3 on-demand tools.
+
+  Tools:
+    - ``activate_skill``: Load full SKILL.md content for a skill.
+    - ``read_skill_file``: Read a bundled resource file.
+    - ``run_skill_script``: Execute a bundled script.
+
+  Args:
+    registry: The SkillRegistry to build from.
+
+  Returns:
+    A Skill with catalog instructions and 3 tools.
+  """
+  from definable.tool.decorator import tool
+
+  catalog_xml = registry.to_prompt()
+  instructions = (
+    "You have access to specialized skills. Review the catalog below and activate "
+    "any skill relevant to the user's request using the `activate_skill` tool.\n\n"
+    f"{catalog_xml}\n\n"
+    "When a skill is activated, follow its instructions carefully. Use "
+    "`read_skill_file` to access referenced documents and `run_skill_script` "
+    "to execute bundled scripts."
+  )
+
+  @tool(description="Activate a skill by name. Returns the skill's full instructions and lists any bundled resources.")
+  def activate_skill(skill_name: str) -> str:
+    """Activate a skill by name to load its full instructions.
+
+    Args:
+      skill_name: The name of the skill to activate (from the catalog).
+
+    Returns:
+      The skill's full content and resource listing.
+    """
+    skill = registry.get_skill(skill_name)
+    if skill is None:
+      available = ", ".join(s.name for s in registry.list_skills())
+      return f"Skill '{skill_name}' not found. Available skills: {available}"
+
+    result = skill.get_instructions()
+
+    # List bundled resources if this is a directory skill
+    if skill.is_directory_skill:
+      files = skill.list_files()
+      if files:
+        result += "\n\n<bundled_resources>\n"
+        for f in files:
+          result += f"  {f}\n"
+        result += "</bundled_resources>"
+
+    return result
+
+  @tool(description="Read a bundled resource file from a skill directory (e.g. references, forms, examples).")
+  def read_skill_file(skill_name: str, file_path: str) -> str:
+    """Read a bundled resource file from an activated skill.
+
+    Args:
+      skill_name: The name of the skill.
+      file_path: Relative path within the skill directory (e.g. "references/api.md").
+
+    Returns:
+      The file content, or an error message.
+    """
+    skill = registry.get_skill(skill_name)
+    if skill is None:
+      return f"Skill '{skill_name}' not found."
+    try:
+      return skill.read_file(file_path)
+    except (ValueError, FileNotFoundError) as e:
+      return f"Error: {e}"
+
+  @tool(description="Run a bundled script from a skill directory. Returns stdout/stderr output.")
+  def run_skill_script(skill_name: str, script_path: str, args: str = "") -> str:
+    """Run a bundled script from a skill directory.
+
+    Args:
+      skill_name: The name of the skill.
+      script_path: Relative path to the script (e.g. "scripts/extract.py").
+      args: Space-separated command-line arguments (optional).
+
+    Returns:
+      Script output (stdout + stderr).
+    """
+    import asyncio
+
+    from definable.skill.executor import SkillScriptExecutor
+
+    skill = registry.get_skill(skill_name)
+    if skill is None:
+      return f"Skill '{skill_name}' not found."
+
+    executor = SkillScriptExecutor()
+    arg_list = args.split() if args.strip() else []
+
+    # Run the async executor — handle both running and no-loop contexts
+    try:
+      loop = asyncio.get_running_loop()
+    except RuntimeError:
+      loop = None
+
+    if loop and loop.is_running():
+      # We're inside an async context — create a task via the loop
+      import concurrent.futures
+
+      with concurrent.futures.ThreadPoolExecutor() as pool:
+        result = pool.submit(asyncio.run, executor.run(skill, script_path, arg_list)).result()
+      return result  # type: ignore[return-value]
+    else:
+      return asyncio.run(executor.run(skill, script_path, arg_list))
+
+  return Skill(
+    name="skill_library",
+    instructions=instructions,
+    tools=[activate_skill, read_skill_file, run_skill_script],
+  )
+
+
 def _build_lazy_skill(registry: SkillRegistry) -> Skill:
   """Build a wrapper Skill with catalog table + read_skill tool.
+
+  Legacy mode — kept for backward compatibility.
 
   Args:
     registry: The SkillRegistry to build the lazy skill from.

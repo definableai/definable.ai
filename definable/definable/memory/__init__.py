@@ -1,27 +1,39 @@
 """Session-history memory system for Definable AI agents.
 
 The memory system stores conversation history per session with
-auto-summarization when history exceeds a configurable threshold.
+configurable optimization strategies.
+
+Composition: Memory = Strategy + Store + Optional[Embedder].
+
+Strategies:
+    - SummarizeStrategy: pin + summarize-middle + recent (default).
+    - SemanticStrategy: extract atomic, self-contained facts from conversation.
 
 Quick Start:
     from definable.memory import Memory, SQLiteStore
 
     memory = Memory(store=SQLiteStore("./memory.db"))
+    agent = Agent(model=model, memory=memory)
 
-    # Use with Agent — snaps in directly, no config wrapper needed:
+    # With semantic extraction:
+    from definable.memory import Memory, SemanticStrategy
+    memory = Memory(strategy=SemanticStrategy())
     agent = Agent(model=model, memory=memory)
 """
 
 from definable.memory.manager import Memory
 from definable.memory.store.base import MemoryStore
+from definable.memory.strategies.base import MemoryStrategy
 from definable.memory.types import MemoryEntry
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+  from definable.memory.consolidation import ConsolidationPolicy
   from definable.memory.store.file import FileStore
   from definable.memory.store.in_memory import InMemoryStore
   from definable.memory.store.sqlite import SQLiteStore
+  from definable.memory.strategies.semantic import SemanticStrategy
   from definable.memory.strategies.summarize import SummarizeStrategy
 
 __all__ = [
@@ -30,12 +42,16 @@ __all__ = [
   "MemoryEntry",
   # Protocol
   "MemoryStore",
+  "MemoryStrategy",
+  # Consolidation
+  "ConsolidationPolicy",
   # Store implementations (lazy-loaded)
   "InMemoryStore",
   "SQLiteStore",
   "FileStore",
-  # Strategies
+  # Strategies (lazy-loaded)
   "SummarizeStrategy",
+  "SemanticStrategy",
 ]
 
 _LAZY_IMPORTS = {
@@ -43,6 +59,8 @@ _LAZY_IMPORTS = {
   "InMemoryStore": ("definable.memory.store.in_memory", "InMemoryStore"),
   "FileStore": ("definable.memory.store.file", "FileStore"),
   "SummarizeStrategy": ("definable.memory.strategies.summarize", "SummarizeStrategy"),
+  "SemanticStrategy": ("definable.memory.strategies.semantic", "SemanticStrategy"),
+  "ConsolidationPolicy": ("definable.memory.consolidation", "ConsolidationPolicy"),
 }
 
 

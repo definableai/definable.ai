@@ -62,6 +62,7 @@ from definable.agent.run.agent import (
   ToolCallCompletedEvent,
   ToolCallErrorEvent,
   ToolCallStartedEvent,
+  ToolContentEvent,
 )
 
 from definable.agent.team.events import (
@@ -118,6 +119,7 @@ __all__ = [
   "ToolCallStartedEvent",
   "ToolCallCompletedEvent",
   "ToolCallErrorEvent",
+  "ToolContentEvent",
   # Knowledge
   "KnowledgeRetrievalStartedEvent",
   "KnowledgeRetrievalCompletedEvent",

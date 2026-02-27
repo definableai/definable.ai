@@ -5,7 +5,7 @@ Yields RunOutputEvent instances throughout execution.
 """
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as _dc_replace
 from time import time
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Callable, Dict, Optional
 
@@ -26,6 +26,7 @@ from definable.agent.events import (
   RunPausedEvent,
   ToolCallCompletedEvent,
   ToolCallStartedEvent,
+  ToolContentEvent,
 )
 from definable.agent.run.requirement import RunRequirement
 from definable.tool.function import Function
@@ -265,10 +266,14 @@ class AgentLoop:
           final_parsed = parsed
           break
 
-        # 6. Parallel tool dispatch
-        batch = await self._execute_tools(tool_calls)
-        for event in batch.events:
-          yield event  # type: ignore[misc]
+        # 6. Parallel tool dispatch (async generator — yields events then ToolBatchResult)
+        batch: Optional[ToolBatchResult] = None
+        async for item in self._execute_tools(tool_calls):
+          if isinstance(item, ToolBatchResult):
+            batch = item
+          else:
+            yield item  # type: ignore[misc]
+        assert batch is not None
 
         # 7. Check stop_after_tool_call
         if any(r.should_stop for r in batch.results):
@@ -441,8 +446,12 @@ class AgentLoop:
   # Tool dispatch
   # ------------------------------------------------------------------
 
-  async def _execute_tools(self, tool_calls: list[dict]) -> ToolBatchResult:
-    """Execute tool calls — parallel by default, sequential when flagged."""
+  async def _execute_tools(self, tool_calls: list[dict]) -> AsyncGenerator[Any, None]:
+    """Execute tool calls — yields events in real-time, then a final ToolBatchResult.
+
+    Parallel tools push events via an asyncio.Queue so they stream as they happen.
+    Sequential tools yield events immediately after each tool completes.
+    """
     parallel_calls: list[dict] = []
     sequential_calls: list[dict] = []
 
@@ -454,13 +463,31 @@ class AgentLoop:
       else:
         parallel_calls.append(tc)
 
-    all_events: list[BaseRunOutputEvent] = []
     all_results: list[ToolResult] = []
 
-    # Execute parallel tools via asyncio.gather
+    # Execute parallel tools — stream events via queue
     if parallel_calls:
-      tasks = [self._execute_single_tool(tc) for tc in parallel_calls]
-      results = await asyncio.gather(*tasks, return_exceptions=True)
+      event_queue: asyncio.Queue[Any] = asyncio.Queue()
+      _sentinel = object()
+
+      async def _gather_then_signal() -> list:
+        results = await asyncio.gather(
+          *[self._execute_single_tool(tc, event_sink=event_queue.put_nowait) for tc in parallel_calls],
+          return_exceptions=True,
+        )
+        event_queue.put_nowait(_sentinel)
+        return list(results)
+
+      gather_task = asyncio.create_task(_gather_then_signal())
+
+      # Drain queue, yielding events as they arrive
+      while True:
+        item = await event_queue.get()
+        if item is _sentinel:
+          break
+        yield item
+
+      results = gather_task.result()
       for i, r in enumerate(results):
         if isinstance(r, BaseException):
           tc = parallel_calls[i]
@@ -470,7 +497,6 @@ class AgentLoop:
             tool_name=fn_name,
             error=str(r),
           )
-          # Add tool error message to conversation
           self._messages.append(
             Message(
               role="tool",
@@ -482,24 +508,34 @@ class AgentLoop:
           all_results.append(tr)
         else:
           all_results.append(r)
-          all_events.extend(r.events)
 
-    # Execute sequential tools in order
+    # Execute sequential tools — yield events immediately after each
     for tc in sequential_calls:
       if self._cancellation_token:
         self._cancellation_token.raise_if_cancelled()
       result = await self._execute_single_tool(tc)
+      for evt in result.events:
+        yield evt
       all_results.append(result)
-      all_events.extend(result.events)
 
-    return ToolBatchResult(results=all_results, events=all_events)
+    yield ToolBatchResult(results=all_results, events=[])
 
-  async def _execute_single_tool(self, tool_call: dict) -> ToolResult:
+  async def _execute_single_tool(
+    self,
+    tool_call: dict,
+    event_sink: Optional[Callable[[BaseRunOutputEvent], None]] = None,
+  ) -> ToolResult:
     """Execute one tool call with HITL checks, guardrails, events."""
     function_call = get_function_call_for_tool_call(tool_call, self._tools)
     fn_name = tool_call.get("function", {}).get("name", "unknown")
     fn = self._tools.get(fn_name)
     events: list[BaseRunOutputEvent] = []
+
+    def emit(evt: BaseRunOutputEvent) -> None:
+      if event_sink is not None:
+        event_sink(evt)
+      else:
+        events.append(evt)
 
     # Build ToolExecution for tracking
     tool_execution = ToolExecution(
@@ -508,15 +544,15 @@ class AgentLoop:
       tool_args=function_call.arguments if function_call else None,
     )
 
-    # Emit ToolCallStarted
+    # Emit ToolCallStarted (snapshot to decouple from later result mutation)
     started_event = ToolCallStartedEvent(
       run_id=self._context.run_id,
       session_id=self._context.session_id,
       agent_id=self._agent_id,
       agent_name=self._agent_name,
-      tool=tool_execution,
+      tool=_dc_replace(tool_execution),
     )
-    events.append(started_event)
+    emit(started_event)
 
     # ---- HITL: requires_confirmation ----
     if fn and fn.requires_confirmation:
@@ -568,7 +604,16 @@ class AgentLoop:
     if function_call:
       try:
         result_obj = await function_call.aexecute()
-        tool_execution.result = str(result_obj.result) if result_obj.status == "success" else str(result_obj.error)
+        if result_obj.status == "success":
+          tool_execution.result = await self._resolve_tool_result(
+            result_obj.result,
+            fn_name=fn_name,
+            tool_call_id=tool_call.get("id"),
+            events=events,
+            event_sink=event_sink,
+          )
+        else:
+          tool_execution.result = str(result_obj.error)
         tool_execution.tool_call_error = result_obj.status == "failure"
       except Exception as exc:
         # Lazy import to avoid circular dependency
@@ -603,7 +648,7 @@ class AgentLoop:
       tool=tool_execution,
       content=tool_execution.result,
     )
-    events.append(completed_event)
+    emit(completed_event)
 
     # Add tool result message to conversation
     self._messages.append(
@@ -624,6 +669,83 @@ class AgentLoop:
       events=events,
       tool_execution=tool_execution,
     )
+
+  # ------------------------------------------------------------------
+  # Generator consumption
+  # ------------------------------------------------------------------
+
+  async def _resolve_tool_result(
+    self,
+    result: Any,
+    *,
+    fn_name: str,
+    tool_call_id: Optional[str],
+    events: list[BaseRunOutputEvent],
+    event_sink: Optional[Callable[[BaseRunOutputEvent], None]] = None,
+  ) -> str:
+    """Consume a tool result, handling async/sync generators transparently.
+
+    For generators: iterates all chunks, emits a ToolContentEvent per chunk,
+    and returns the accumulated string.  For plain values: returns ``str(result)``.
+    """
+    from inspect import isasyncgen, isgenerator
+
+    def _emit(evt: BaseRunOutputEvent) -> None:
+      if event_sink is not None:
+        event_sink(evt)
+      else:
+        events.append(evt)
+
+    if isasyncgen(result):
+      chunks: list[str] = []
+      idx = 0
+      last_content_event: Optional[ToolContentEvent] = None
+      async for chunk in result:
+        chunk_str = str(chunk)
+        chunks.append(chunk_str)
+        evt = ToolContentEvent(
+          run_id=self._context.run_id,
+          session_id=self._context.session_id,
+          agent_id=self._agent_id,
+          agent_name=self._agent_name,
+          tool_name=fn_name,
+          tool_call_id=tool_call_id,
+          chunk=chunk_str,
+          chunk_index=idx,
+        )
+        last_content_event = evt
+        _emit(evt)
+        idx += 1
+      # Mark the last event as final (if any chunks were emitted)
+      if last_content_event is not None:
+        last_content_event.is_final = True
+      return "\n".join(chunks) if chunks else ""
+
+    if isgenerator(result):
+      chunks = []
+      idx = 0
+      last_content_event = None
+      for chunk in result:
+        chunk_str = str(chunk)
+        chunks.append(chunk_str)
+        evt = ToolContentEvent(
+          run_id=self._context.run_id,
+          session_id=self._context.session_id,
+          agent_id=self._agent_id,
+          agent_name=self._agent_name,
+          tool_name=fn_name,
+          tool_call_id=tool_call_id,
+          chunk=chunk_str,
+          chunk_index=idx,
+        )
+        last_content_event = evt
+        _emit(evt)
+        idx += 1
+      if last_content_event is not None:
+        last_content_event.is_final = True
+      return "\n".join(chunks) if chunks else ""
+
+    return str(result)
 
   # ------------------------------------------------------------------
   # Accessors
