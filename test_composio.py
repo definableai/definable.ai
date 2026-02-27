@@ -12,7 +12,6 @@ import asyncio
 
 from definable.agent import Agent
 from definable.agent.compression import Compression
-from definable.agent.interface.cli import CLIInterface
 from definable.agent.tracing import JSONLExporter, Tracing
 from definable.composio import ComposioToolkit
 
@@ -30,7 +29,10 @@ async def main() -> None:
       compression=Compression(token_limit=10000),
     )
 
-    await agent.aserve(CLIInterface(mode="repl"), enable_server=True, port=8001)
+    for result in agent.run_stream("Can you fetch my latest email??"):
+      print(result)
+
+    # await agent.aserve(CLIInterface(mode="repl"), enable_server=True, port=8001)
 
 
 if __name__ == "__main__":
