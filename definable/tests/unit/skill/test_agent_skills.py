@@ -461,6 +461,7 @@ class TestOnDemandMode:
     reg = SkillRegistry(skills=[s], include_library=False)
     on_demand = reg.as_on_demand()
     activate = next(t for t in on_demand.tools if t.name == "activate_skill")
+    assert activate.entrypoint is not None
     result = activate.entrypoint(skill_name="target")
     assert 'name="target"' in result
     assert "Full methodology." in result
@@ -469,6 +470,7 @@ class TestOnDemandMode:
     reg = SkillRegistry(skills=[_make_skill("x")], include_library=False)
     on_demand = reg.as_on_demand()
     activate = next(t for t in on_demand.tools if t.name == "activate_skill")
+    assert activate.entrypoint is not None
     result = activate.entrypoint(skill_name="nonexistent")
     assert "not found" in result.lower()
 
@@ -480,6 +482,7 @@ class TestOnDemandMode:
     reg = SkillRegistry(skills=[skill], include_library=False)
     on_demand = reg.as_on_demand()
     read_file = next(t for t in on_demand.tools if t.name == "read_skill_file")
+    assert read_file.entrypoint is not None
     result = read_file.entrypoint(skill_name="s", file_path="refs/guide.md")
     assert "# Guide" in result
 
@@ -488,6 +491,7 @@ class TestOnDemandMode:
     reg = SkillRegistry(skills=[s], include_library=False)
     on_demand = reg.as_on_demand()
     read_file = next(t for t in on_demand.tools if t.name == "read_skill_file")
+    assert read_file.entrypoint is not None
     result = read_file.entrypoint(skill_name="no-dir", file_path="nope.txt")
     assert "error" in result.lower()
 
@@ -499,6 +503,7 @@ class TestOnDemandMode:
     reg = SkillRegistry(skills=[skill], include_library=False)
     on_demand = reg.as_on_demand()
     activate = next(t for t in on_demand.tools if t.name == "activate_skill")
+    assert activate.entrypoint is not None
     result = activate.entrypoint(skill_name="rich")
     assert "<bundled_resources>" in result
     assert "scripts/run.py" in result
@@ -706,6 +711,7 @@ class TestFullLibrary:
     assert len(on_demand.tools) == 3
     # Activate a known skill
     activate = next(t for t in on_demand.tools if t.name == "activate_skill")
+    assert activate.entrypoint is not None
     result = activate.entrypoint(skill_name="code-review")
     assert "code-review" in result
 

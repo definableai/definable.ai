@@ -21,18 +21,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
-from claude_agent_sdk import (
+sdk = pytest.importorskip("claude_agent_sdk", reason="claude-agent-sdk not installed")
+
+from claude_agent_sdk import (  # noqa: E402
   AssistantMessage as SdkAssistantMessage,
   ResultMessage as SdkResultMessage,
   TextBlock as SdkTextBlock,
   ThinkingBlock as SdkThinkingBlock,
   ToolUseBlock as SdkToolUseBlock,
 )
-from claude_agent_sdk.types import StreamEvent as SdkStreamEvent
+from claude_agent_sdk.types import StreamEvent as SdkStreamEvent  # noqa: E402
 
-from definable.exceptions import ModelProviderError
-from definable.model.message import Message
-from definable.model.response import ModelResponse
+from definable.exceptions import ModelProviderError  # noqa: E402
+from definable.model.message import Message  # noqa: E402
+from definable.model.response import ModelResponse  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +173,7 @@ class TestClaudeCodeBuildOptions:
       stream=False,
       mcp_server=mock_server,
     )
+    assert isinstance(opts.mcp_servers, dict)
     assert "definable" in opts.mcp_servers
     assert opts.allowed_tools == ["mcp__definable__*"]
     assert opts.disallowed_tools == ["*"]
@@ -474,6 +477,7 @@ class TestClaudeCodeResponseParsing:
     response = model._parse_provider_response(([assistant], _result()))
     assert response.reasoning_content == "Let me think..."
     assert response.content == "The answer is 4."
+    assert response.provider_data is not None
     assert response.provider_data["signature"] == "sig123"
 
   def test_metrics_extraction(self):
@@ -770,7 +774,7 @@ class TestClaudeCodeErrorHandling:
 
     async def _mock_query(**kwargs):
       raise RuntimeError("CLI not found")
-      yield  # make it an async generator
+      yield  # type: ignore[unreachable]  # make it an async generator
 
     with patch("definable.model.claude_code.chat.sdk_query", _mock_query):
       with pytest.raises(ModelProviderError, match="CLI not found"):
@@ -1026,6 +1030,7 @@ class TestClaudeCodeAInvoke:
         assistant_message=Message(role="assistant", content=""),
       )
       assert response.content == "Hello!"
+      assert response.response_usage is not None
       assert response.response_usage.input_tokens == 50
 
   @pytest.mark.asyncio

@@ -14,13 +14,14 @@ Covers:
 """
 
 import asyncio
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from definable.agent.events import ToolCallCompletedEvent, ToolCallStartedEvent, ToolContentEvent
 from definable.agent.loop import AgentLoop, ToolBatchResult
-from definable.agent.run.agent import BaseAgentRunEvent, RunEvent
+from definable.agent.run.agent import BaseRunOutputEvent, RunEvent
 from definable.agent.run.base import RunContext
 
 
@@ -29,23 +30,21 @@ from definable.agent.run.base import RunContext
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def _make_loop(**overrides) -> AgentLoop:
+def _make_loop(**overrides: Any) -> AgentLoop:
   """Create a minimal AgentLoop for unit testing _resolve_tool_result."""
   from definable.agent.config import AgentConfig
 
-  defaults = dict(
-    model=MagicMock(),
-    tools={},
-    messages=[],
-    context=RunContext(run_id="test-run", session_id="test-session"),
-    config=AgentConfig(),
-    streaming=False,
-    emit_fn=lambda _: None,
-    agent_id="agent-1",
-    agent_name="TestAgent",
+  return AgentLoop(
+    model=overrides.get("model", MagicMock()),
+    tools=overrides.get("tools", {}),
+    messages=overrides.get("messages", []),
+    context=overrides.get("context", RunContext(run_id="test-run", session_id="test-session")),
+    config=overrides.get("config", AgentConfig()),
+    streaming=overrides.get("streaming", False),
+    emit_fn=overrides.get("emit_fn", lambda _: None),
+    agent_id=overrides.get("agent_id", "agent-1"),
+    agent_name=overrides.get("agent_name", "TestAgent"),
   )
-  defaults.update(overrides)
-  return AgentLoop(**defaults)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -66,7 +65,7 @@ class TestResolveAsyncGenerator:
       yield "beta"
       yield "gamma"
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       gen(),
       fn_name="stream_tool",
@@ -83,7 +82,7 @@ class TestResolveAsyncGenerator:
       yield "chunk-0"
       yield "chunk-1"
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     await loop._resolve_tool_result(
       gen(),
       fn_name="my_tool",
@@ -106,7 +105,7 @@ class TestResolveAsyncGenerator:
     async def gen():
       yield "only"
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     await loop._resolve_tool_result(
       gen(),
       fn_name="the_tool",
@@ -131,7 +130,7 @@ class TestResolveAsyncGenerator:
       return
       yield  # noqa: RET504 — makes this an async generator
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       gen(),
       fn_name="empty",
@@ -150,7 +149,7 @@ class TestResolveAsyncGenerator:
       yield 42
       yield {"key": "value"}
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       gen(),
       fn_name="typed_tool",
@@ -179,7 +178,7 @@ class TestResolveSyncGenerator:
       yield "two"
       yield "three"
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       gen(),
       fn_name="sync_stream",
@@ -196,7 +195,7 @@ class TestResolveSyncGenerator:
       yield "a"
       yield "b"
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     await loop._resolve_tool_result(
       gen(),
       fn_name="sg",
@@ -217,7 +216,7 @@ class TestResolveSyncGenerator:
       return
       yield  # noqa: RET504
 
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       gen(),
       fn_name="empty_sync",
@@ -239,7 +238,7 @@ class TestResolvePlainResult:
   @pytest.mark.asyncio
   async def test_string_passthrough(self):
     loop = _make_loop()
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       "hello world",
       fn_name="plain",
@@ -252,7 +251,7 @@ class TestResolvePlainResult:
   @pytest.mark.asyncio
   async def test_int_passthrough(self):
     loop = _make_loop()
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       42,
       fn_name="num",
@@ -265,7 +264,7 @@ class TestResolvePlainResult:
   @pytest.mark.asyncio
   async def test_dict_passthrough(self):
     loop = _make_loop()
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       {"status": "ok"},
       fn_name="dict_tool",
@@ -279,7 +278,7 @@ class TestResolvePlainResult:
   @pytest.mark.asyncio
   async def test_none_passthrough(self):
     loop = _make_loop()
-    events: list[BaseAgentRunEvent] = []
+    events: list[BaseRunOutputEvent] = []
     result = await loop._resolve_tool_result(
       None,
       fn_name="void",
@@ -379,23 +378,21 @@ def _make_tool_call(name: str, call_id: str, args: str = "{}") -> dict:
   }
 
 
-def _make_loop_with_tools(tools: dict, **overrides) -> AgentLoop:
+def _make_loop_with_tools(tools: dict[str, Any], **overrides: Any) -> AgentLoop:
   """Create an AgentLoop with real Function objects in the tools dict."""
   from definable.agent.config import AgentConfig
 
-  defaults = dict(
-    model=MagicMock(),
+  return AgentLoop(
+    model=overrides.get("model", MagicMock()),
     tools=tools,
-    messages=[],
-    context=RunContext(run_id="test-run", session_id="test-session"),
-    config=AgentConfig(),
-    streaming=False,
-    emit_fn=lambda _: None,
-    agent_id="agent-1",
-    agent_name="TestAgent",
+    messages=overrides.get("messages", []),
+    context=overrides.get("context", RunContext(run_id="test-run", session_id="test-session")),
+    config=overrides.get("config", AgentConfig()),
+    streaming=overrides.get("streaming", False),
+    emit_fn=overrides.get("emit_fn", lambda _: None),
+    agent_id=overrides.get("agent_id", "agent-1"),
+    agent_name=overrides.get("agent_name", "TestAgent"),
   )
-  defaults.update(overrides)
-  return AgentLoop(**defaults)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -470,6 +467,7 @@ class TestToolCallStartedEventSnapshot:
     result = await loop._execute_single_tool(tc)
 
     started = [e for e in result.events if isinstance(e, ToolCallStartedEvent)][0]
+    assert started.tool is not None
     assert started.tool.tool_name == "add"
     assert started.tool.tool_args == {"a": 1, "b": 2}
 
@@ -523,7 +521,8 @@ class TestToolEventRealTimeStreaming:
     # Started events must appear before their corresponding completed events
     for s in started:
       s_idx = received.index(s)
-      matching_completed = [c for c in completed if c.tool.tool_call_id == s.tool.tool_call_id]
+      assert s.tool is not None
+      matching_completed = [c for c in completed if c.tool is not None and c.tool.tool_call_id == s.tool.tool_call_id]
       assert len(matching_completed) == 1
       c_idx = received.index(matching_completed[0])
       assert s_idx < c_idx
@@ -563,9 +562,15 @@ class TestToolEventRealTimeStreaming:
     assert len(batch) == 1
 
     # tool_a events should all precede tool_b events
-    a_started_idx = next(i for i, e in enumerate(events) if isinstance(e, ToolCallStartedEvent) and e.tool.tool_name == "tool_a")
-    a_completed_idx = next(i for i, e in enumerate(events) if isinstance(e, ToolCallCompletedEvent) and e.tool.tool_name == "tool_a")
-    b_started_idx = next(i for i, e in enumerate(events) if isinstance(e, ToolCallStartedEvent) and e.tool.tool_name == "tool_b")
+    a_started_idx = next(
+      i for i, e in enumerate(events) if isinstance(e, ToolCallStartedEvent) and e.tool is not None and e.tool.tool_name == "tool_a"
+    )
+    a_completed_idx = next(
+      i for i, e in enumerate(events) if isinstance(e, ToolCallCompletedEvent) and e.tool is not None and e.tool.tool_name == "tool_a"
+    )
+    b_started_idx = next(
+      i for i, e in enumerate(events) if isinstance(e, ToolCallStartedEvent) and e.tool is not None and e.tool.tool_name == "tool_b"
+    )
     assert a_started_idx < a_completed_idx < b_started_idx
 
   @pytest.mark.asyncio
