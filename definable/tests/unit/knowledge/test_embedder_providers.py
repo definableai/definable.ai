@@ -15,7 +15,7 @@ Covers:
   - Custom parameters (api_key, dimensions, model)
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -69,14 +69,14 @@ class TestMistralEmbedderMethods:
     assert result == [0.1, 0.2, 0.3]
     mock_client.embeddings.create.assert_called_once_with(model="mistral-embed", inputs=["hello"])
 
-  def test_get_embedding_error_returns_empty(self):
+  def test_get_embedding_error_propagates(self):
     emb = MistralEmbedder()
     mock_client = MagicMock()
     mock_client.embeddings.create.side_effect = RuntimeError("API error")
     emb._client = mock_client
 
-    result = emb.get_embedding("hello")
-    assert result == []
+    with pytest.raises(RuntimeError, match="API error"):
+      emb.get_embedding("hello")
 
   def test_get_embedding_and_usage_returns_tuple(self):
     emb = MistralEmbedder()
@@ -105,15 +105,14 @@ class TestMistralEmbedderMethods:
     assert embedding == [0.1, 0.2]
     assert usage is None
 
-  def test_get_embedding_and_usage_error_returns_empty(self):
+  def test_get_embedding_and_usage_error_propagates(self):
     emb = MistralEmbedder()
     mock_client = MagicMock()
     mock_client.embeddings.create.side_effect = RuntimeError("API error")
     emb._client = mock_client
 
-    embedding, usage = emb.get_embedding_and_usage("hello")
-    assert embedding == []
-    assert usage is None
+    with pytest.raises(RuntimeError, match="API error"):
+      emb.get_embedding_and_usage("hello")
 
   def test_import_error_gives_helpful_message(self):
     emb = MistralEmbedder()
@@ -132,23 +131,21 @@ class TestMistralEmbedderAsync:
     mock_response = MagicMock()
     mock_response.data = [MagicMock(embedding=[0.4, 0.5])]
     mock_client = MagicMock()
-    mock_client.embeddings.create_async = MagicMock(return_value=mock_response)
+    mock_client.embeddings.create_async = AsyncMock(return_value=mock_response)
     emb._client = mock_client
 
-    # The async version wraps the sync client call
     result = await emb.async_get_embedding("hello")
     assert isinstance(result, list)
 
   @pytest.mark.asyncio
-  async def test_async_get_embedding_error(self):
+  async def test_async_get_embedding_error_propagates(self):
     emb = MistralEmbedder()
     mock_client = MagicMock()
-    mock_client.embeddings.create_async.side_effect = RuntimeError("async error")
+    mock_client.embeddings.create_async = AsyncMock(side_effect=RuntimeError("async error"))
     emb._client = mock_client
 
-    result = await emb.async_get_embedding("hello")
-    # Should not crash — returns empty or handles error
-    assert isinstance(result, list)
+    with pytest.raises(RuntimeError, match="async error"):
+      await emb.async_get_embedding("hello")
 
 
 # ---------------------------------------------------------------------------

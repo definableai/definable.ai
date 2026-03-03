@@ -77,6 +77,7 @@ class InvokeLoopPhase(BasePhase):
     async for event in loop.run():
       if isinstance(event, RunCompletedEvent):
         state.content = event.content
+        state.parsed = event.parsed
         state.metrics = event.metrics
 
       elif isinstance(event, RunPausedEvent):

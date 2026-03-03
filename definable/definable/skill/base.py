@@ -148,6 +148,9 @@ class Skill:
     if self._explicit_tools is not None:
       return list(self._explicit_tools)
 
+    from functools import partial
+    from inspect import signature
+
     from definable.tool.function import Function
 
     discovered: List[Function] = []
@@ -157,7 +160,15 @@ class Skill:
       try:
         attr = getattr(self, attr_name)
         if isinstance(attr, Function):
-          discovered.append(attr)
+          # If the entrypoint has a 'self' parameter, it's an unbound method
+          # from a @tool-decorated class method. Bind it to this Skill instance.
+          sig = signature(attr.entrypoint)
+          if "self" in sig.parameters:
+            bound = attr.model_copy()
+            bound.entrypoint = partial(attr.entrypoint, self)
+            discovered.append(bound)
+          else:
+            discovered.append(attr)
       except Exception:
         continue
     return discovered

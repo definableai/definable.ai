@@ -121,6 +121,9 @@ class InMemoryVectorDB(VectorDB):
       if filters:
         meta_data.update(filters)
 
+      # Reflect the stored ID back to the document object
+      doc.id = doc_id
+
       self._store[doc_id] = {
         "id": doc_id,
         "name": doc.name,

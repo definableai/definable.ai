@@ -254,7 +254,9 @@ class AgentLoop:
           # Non-streaming
           content, tool_calls, metrics, parsed = await self._call_model()
 
-        completed_evt = self._make_model_call_completed(content, tool_calls, metrics)
+        # In streaming mode, content was already yielded via RunContentEvent deltas,
+        # so omit it from ModelCallCompletedEvent to avoid duplication.
+        completed_evt = self._make_model_call_completed("" if self._streaming else content, tool_calls, metrics)
         yield completed_evt
 
         if metrics is not None and not self._streaming:
@@ -562,6 +564,7 @@ class AgentLoop:
         tool_call_id=tool_call.get("id"),
         tool_name=fn_name,
         is_paused=True,
+        should_stop=bool(fn.stop_after_tool_call),
         requirement=requirement,
         tool_execution=tool_execution,
         events=events,
@@ -576,6 +579,7 @@ class AgentLoop:
         tool_call_id=tool_call.get("id"),
         tool_name=fn_name,
         is_paused=True,
+        should_stop=bool(fn.stop_after_tool_call),
         requirement=requirement,
         tool_execution=tool_execution,
         events=events,
@@ -589,6 +593,7 @@ class AgentLoop:
         tool_call_id=tool_call.get("id"),
         tool_name=fn_name,
         is_paused=True,
+        should_stop=bool(fn.stop_after_tool_call),
         requirement=requirement,
         tool_execution=tool_execution,
         events=events,

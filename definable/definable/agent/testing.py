@@ -98,13 +98,18 @@ class MockModel:
 
     # Use side effect if provided
     if self.side_effect:
-      return self.side_effect(messages, tools, **kwargs)
+      return self.side_effect(messages=messages, tools=tools, system_message=system_message, output_schema=output_schema, **kwargs)
 
     # Check if this is a structured output request with canned structured responses
     response_format = kwargs.get("response_format") or output_schema
     if response_format is not None and self.structured_responses:
       response = MagicMock()
-      response.content = self.structured_responses[min(self._structured_call_count, len(self.structured_responses) - 1)]
+      if self._structured_call_count >= len(self.structured_responses):
+        raise IndexError(
+          f"MockModel structured_responses exhausted: expected at most {len(self.structured_responses)} "
+          f"structured call(s), got call #{self._structured_call_count + 1}."
+        )
+      response.content = self.structured_responses[self._structured_call_count]
       response.tool_executions = []
       response.tool_calls = []
       response.response_usage = Metrics()
@@ -119,7 +124,12 @@ class MockModel:
 
     # Build mock response
     response = MagicMock()
-    response.content = self.responses[min(self._call_count, len(self.responses) - 1)]
+    if self._call_count >= len(self.responses):
+      raise IndexError(
+        f"MockModel exhausted: expected at most {len(self.responses)} call(s), "
+        f"got call #{self._call_count + 1}. Add more responses or use side_effect."
+      )
+    response.content = self.responses[self._call_count]
     response.tool_executions = []
     response.tool_calls = []
     response.response_usage = Metrics()

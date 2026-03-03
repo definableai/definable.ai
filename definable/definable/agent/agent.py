@@ -527,6 +527,11 @@ class Agent:
     return self.config.agent_name or self.__class__.__name__
 
   @property
+  def name(self) -> str:
+    """Alias for agent_name."""
+    return self.agent_name
+
+  @property
   def tool_names(self) -> List[str]:
     """Get list of available tool names."""
     return list(self._tools_dict.keys())
@@ -837,7 +842,10 @@ class Agent:
         return future.result()
     else:
       # Create a new event loop to avoid "Event loop is closed" errors
-      # when making multiple sequential sync calls with async HTTP clients
+      # when making multiple sequential sync calls with async HTTP clients.
+      # Clear pending memory tasks from previous loops to avoid
+      # "Event loop is closed" errors when waiting on orphaned tasks.
+      self._pending_memory_tasks.clear()
       loop = asyncio.new_event_loop()
       asyncio.set_event_loop(loop)
       try:
@@ -917,8 +925,7 @@ class Agent:
     if output_schema is not None:
       if not isinstance(output_schema, type) or not issubclass(output_schema, BaseModel):
         raise TypeError(
-          f"output_schema must be a Pydantic BaseModel subclass, got {output_schema!r}. "
-          f"Example: output_schema=MyModel where MyModel(BaseModel)."
+          f"output_schema must be a Pydantic BaseModel subclass, got {output_schema!r}. Example: output_schema=MyModel where MyModel(BaseModel)."
         )
 
     # Load plugins on first run (async lifecycle)
@@ -966,6 +973,10 @@ class Agent:
 
     # Execute pipeline through middleware chain
     result = await handler(context)
+
+    # Record usage metrics
+    if self._usage_tracker is not None and result.metrics is not None:
+      await self._usage_tracker.arecord_run(result.metrics, self.model.id if self.model else None)
 
     # Fire agent-level after_response hooks (outside pipeline — receives RunOutput)
     await self._fire_after_hooks(result)
@@ -2045,6 +2056,7 @@ class Agent:
 
     results = await self.guardrails.run_output_checks(text, context)
 
+    modified = False
     for gr in results:
       gname = (gr.metadata or {}).get("guardrail_name", "unknown")
       duration = (gr.metadata or {}).get("duration_ms")
@@ -2098,8 +2110,9 @@ class Agent:
         if result.metadata is None:
           result.metadata = {}
         result.metadata["guardrail_modified"] = True
+        modified = True
 
-    return None
+    return result if modified else None
 
   async def _run_tool_guardrails(self, context: RunContext, tool_execution: ToolExecution) -> Optional[str]:
     """Run tool guardrails. Returns block reason string if blocked, None if allowed."""
@@ -3183,6 +3196,7 @@ class Agent:
       agent_name=state.agent_name,
       input=state.run_input,
       content=state.content,
+      parsed=state.parsed,
       tools=state.tool_executions or None,
       metrics=state.metrics,
       messages=state.output_messages,

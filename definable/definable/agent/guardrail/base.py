@@ -125,16 +125,17 @@ class Guardrails:
     """Run all tool guardrails, respecting *mode*."""
     results: List[GuardrailResult] = []
     for guardrail in self.tool:
+      gname = getattr(guardrail, "name", type(guardrail).__name__)
       start = time.perf_counter()
       try:
         result = await guardrail.check(tool_name, tool_args, context)
       except Exception as exc:
-        log_warning(f"Tool guardrail '{guardrail.name}' raised: {exc}")
+        log_warning(f"Tool guardrail '{gname}' raised: {exc}")
         result = GuardrailResult.block(f"Guardrail error: {exc}")
       elapsed = (time.perf_counter() - start) * 1000
-      result.metadata = {**(result.metadata or {}), "duration_ms": elapsed, "guardrail_name": guardrail.name}
+      result.metadata = {**(result.metadata or {}), "duration_ms": elapsed, "guardrail_name": gname}
       results.append(result)
-      log_debug(f"Tool guardrail '{guardrail.name}' → {result.action} ({elapsed:.1f}ms)")
+      log_debug(f"Tool guardrail '{gname}' → {result.action} ({elapsed:.1f}ms)")
       if self.mode == "fail_fast" and result.action == "block":
         break
     return results
@@ -152,16 +153,17 @@ class Guardrails:
   ) -> List[GuardrailResult]:
     results: List[GuardrailResult] = []
     for guardrail in guardrails:
+      gname = getattr(guardrail, "name", type(guardrail).__name__)
       start = time.perf_counter()
       try:
         result = await guardrail.check(text, context)
       except Exception as exc:
-        log_warning(f"{guardrail_type.title()} guardrail '{guardrail.name}' raised: {exc}")
+        log_warning(f"{guardrail_type.title()} guardrail '{gname}' raised: {exc}")
         result = GuardrailResult.block(f"Guardrail error: {exc}")
       elapsed = (time.perf_counter() - start) * 1000
-      result.metadata = {**(result.metadata or {}), "duration_ms": elapsed, "guardrail_name": guardrail.name}
+      result.metadata = {**(result.metadata or {}), "duration_ms": elapsed, "guardrail_name": gname}
       results.append(result)
-      log_debug(f"{guardrail_type.title()} guardrail '{guardrail.name}' → {result.action} ({elapsed:.1f}ms)")
+      log_debug(f"{guardrail_type.title()} guardrail '{gname}' → {result.action} ({elapsed:.1f}ms)")
       if self.mode == "fail_fast" and result.action == "block":
         break
     return results

@@ -46,41 +46,25 @@ class MistralEmbedder(Embedder):
     return self._client
 
   def get_embedding(self, text: str) -> List[float]:
-    try:
-      response = self.client.embeddings.create(model=self.id, inputs=[text])
-      return [float(x) for x in response.data[0].embedding]
-    except Exception as e:
-      log_warning(f"MistralEmbedder error: {e}")
-      return []
+    response = self.client.embeddings.create(model=self.id, inputs=[text])
+    return [float(x) for x in response.data[0].embedding]
 
   def get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
-    try:
-      response = self.client.embeddings.create(model=self.id, inputs=[text])
-      embedding = [float(x) for x in response.data[0].embedding]
-      usage = None
-      if hasattr(response, "usage") and response.usage:
-        usage = {"prompt_tokens": response.usage.prompt_tokens, "total_tokens": response.usage.total_tokens}
-      return embedding, usage
-    except Exception as e:
-      log_warning(f"MistralEmbedder error: {e}")
-      return [], None
+    response = self.client.embeddings.create(model=self.id, inputs=[text])
+    embedding = [float(x) for x in response.data[0].embedding]
+    usage = None
+    if hasattr(response, "usage") and response.usage:
+      usage = {"prompt_tokens": response.usage.prompt_tokens, "total_tokens": response.usage.total_tokens}
+    return embedding, usage
 
   async def async_get_embedding(self, text: str) -> List[float]:
-    try:
-      response = await self.client.embeddings.create_async(model=self.id, inputs=[text])
-      return [float(x) for x in response.data[0].embedding]
-    except Exception as e:
-      log_warning(f"MistralEmbedder async error: {e}")
-      return []
+    response = await self.client.embeddings.create_async(model=self.id, inputs=[text])
+    return [float(x) for x in response.data[0].embedding]
 
   async def async_get_embedding_and_usage(self, text: str) -> Tuple[List[float], Optional[Dict[str, Any]]]:
-    try:
-      response = await self.client.embeddings.create_async(model=self.id, inputs=[text])
-      embedding = [float(x) for x in response.data[0].embedding]
-      usage = None
-      if hasattr(response, "usage") and response.usage:
-        usage = {"prompt_tokens": response.usage.prompt_tokens, "total_tokens": response.usage.total_tokens}
-      return embedding, usage
-    except Exception as e:
-      log_warning(f"MistralEmbedder async error: {e}")
-      return [], None
+    response = await self.client.embeddings.create_async(model=self.id, inputs=[text])
+    embedding = [float(x) for x in response.data[0].embedding]
+    usage = None
+    if hasattr(response, "usage") and response.usage:
+      usage = {"prompt_tokens": response.usage.prompt_tokens, "total_tokens": response.usage.total_tokens}
+    return embedding, usage

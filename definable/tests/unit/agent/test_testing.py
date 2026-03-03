@@ -76,13 +76,13 @@ class TestMockModelInvoke:
     r1 = await model.ainvoke(messages=[])
     assert r1.content == "Only"
 
-    r2 = await model.ainvoke(messages=[])
-    assert r2.content == "Only"
+    with pytest.raises(IndexError, match="MockModel exhausted"):
+      await model.ainvoke(messages=[])
 
   @pytest.mark.asyncio
   async def test_ainvoke_increments_call_count(self):
     """Each ainvoke() call increments call_count."""
-    model = MockModel()
+    model = MockModel(responses=["a", "b"])
     await model.ainvoke(messages=[])
     assert model.call_count == 1
     await model.ainvoke(messages=[])
@@ -168,7 +168,7 @@ class TestMockModelReset:
   @pytest.mark.asyncio
   async def test_reset_clears_count_and_history(self):
     """reset() zeroes call_count and clears call_history."""
-    model = MockModel()
+    model = MockModel(responses=["a", "b"])
     await model.ainvoke(messages=[])
     await model.ainvoke(messages=[])
     assert model.call_count == 2
@@ -196,7 +196,7 @@ class TestMockModelAssertions:
   @pytest.mark.asyncio
   async def test_assert_called_times_passes(self):
     """assert_called_times(n) passes when call_count matches."""
-    model = MockModel()
+    model = MockModel(responses=["a", "b"])
     await model.ainvoke(messages=[])
     await model.ainvoke(messages=[])
     model.assert_called_times(2)  # should not raise

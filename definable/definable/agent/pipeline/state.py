@@ -73,6 +73,7 @@ class LoopState:
 
   # ── Output ────────────────────────────────────────────────
   content: Optional[str] = None
+  parsed: Optional[Any] = None
   metrics: Optional["Metrics"] = None
   status: LoopStatus = LoopStatus.pending
   phase: str = ""
