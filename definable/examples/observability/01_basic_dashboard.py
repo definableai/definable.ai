@@ -17,7 +17,7 @@ def calculate(expression: str) -> str:
 
 # Create an agent with observability enabled
 agent = Agent(
-  model="openai/gpt-5.2",
+  model="openai/gpt-4o",
   tools=[get_weather, calculate],
   instructions="You are a helpful assistant with access to weather and calculator tools.",
   observability=True,  # <-- single flag enables the dashboard

@@ -55,7 +55,7 @@ from pydantic import BaseModel
 # ---------------------------------------------------------------------------
 
 TEMP_DIR = tempfile.mkdtemp(prefix="definable_showcase_")
-MODEL = "openai/gpt-5.2"
+MODEL = "openai/gpt-4o"
 
 
 def section(num: int, title: str) -> None:

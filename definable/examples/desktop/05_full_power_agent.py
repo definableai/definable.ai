@@ -16,6 +16,7 @@ Usage:
 import asyncio
 
 from definable.agent import Agent
+from definable.agent.interface.cli import CLIInterface
 from definable.model.openai import OpenAIChat
 from definable.skill.builtin.macos import MacOS
 
@@ -30,8 +31,9 @@ async def main() -> None:
   )
 
   agent = Agent(
-    model=OpenAIChat(id="gpt-5.2"),
+    model=OpenAIChat(id="gpt-4o"),
     skills=[skill],
+    observability=True,
     instructions=(
       "You are a full-power macOS automation agent with shell access, "
       "camera, screen recording, file I/O, and complete input control. "
@@ -44,12 +46,12 @@ async def main() -> None:
       "4. Screenshot to verify each step\n\n"
       "Be careful with destructive operations. Prefer non-destructive "
       "approaches when possible."
+      "You should not give up so easily. If something does not work out, try some different approach to fulfil the user's query."
     ),
   )
-  result = await agent.arun(
-    "Take a photo with the camera and save it to /tmp/selfie.png, then take a screenshot of my desktop and tell me what apps are open."
-  )
-  print(result.content)
+  # result = await agent.arun("Can you read all the files in my download folder and tell me what they are?")
+  # print(result.content)
+  await agent.aserve(CLIInterface(mode="repl"), enable_server=True, port=8003)
 
 
 if __name__ == "__main__":

@@ -41,6 +41,10 @@ Events:
     from definable.agent.events import RunContentEvent, ToolCallStartedEvent, RunCompletedEvent
 """
 
+from importlib.metadata import version as _pkg_version
+
+__version__ = _pkg_version("definable")
+
 from typing import TYPE_CHECKING
 
 # --- Eager exports (always loaded — core classes used by every consumer) ---
@@ -144,6 +148,7 @@ def __getattr__(name: str):
 
 
 __all__ = [
+  "__version__",
   # Core
   "Agent",
   "AgentConfig",
