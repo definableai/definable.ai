@@ -601,9 +601,21 @@ class AgentLoop:
 
     # ---- Tool guardrails ----
     if self._guardrails and hasattr(self._guardrails, "tool") and self._guardrails.tool:
-      # Guardrail check is done by the agent — we get the result via the guardrails object
-      # For now, guardrails are handled at the agent level and passed as blocked tool results
-      pass
+      tool_args = tool_call.get("arguments", {}) if isinstance(tool_call.get("arguments"), dict) else {}
+      gr_results = await self._guardrails.run_tool_checks(fn_name, tool_args, self._context)
+      for gr in gr_results:
+        if gr.action == "block":
+          tool_execution.result = gr.message or f"Tool '{fn_name}' blocked by guardrail"
+          tool_execution.tool_call_error = True
+          self._all_tool_executions.append(tool_execution)
+          return ToolResult(
+            tool_call_id=tool_call.get("id"),
+            tool_name=fn_name,
+            result=tool_execution.result,
+            error=tool_execution.result,
+            tool_execution=tool_execution,
+            events=events,
+          )
 
     # ---- Execute (with ToolRetry support) ----
     if function_call:
@@ -621,6 +633,22 @@ class AgentLoop:
           tool_execution.result = str(result_obj.error)
         tool_execution.tool_call_error = result_obj.status == "failure"
       except Exception as exc:
+        # Handle StopAgentRun — graceful loop termination
+        from definable.exceptions import StopAgentRun as _StopAgentRun
+
+        if isinstance(exc, _StopAgentRun):
+          tool_execution.result = str(exc.user_message or exc)
+          tool_execution.tool_call_error = False
+          self._all_tool_executions.append(tool_execution)
+          return ToolResult(
+            tool_call_id=tool_call.get("id"),
+            tool_name=fn_name,
+            result=tool_execution.result,
+            should_stop=True,
+            tool_execution=tool_execution,
+            events=events,
+          )
+
         # Lazy import to avoid circular dependency
         from definable.agent.pipeline.tool_retry import ToolRetry as _ToolRetry
 

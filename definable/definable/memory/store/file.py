@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from definable.memory.types import MemoryEntry
-from definable.utils.log import log_debug
+from definable.utils.log import log_debug, log_warning
 
 
 class FileStore:
@@ -68,7 +68,8 @@ class FileStore:
         try:
           data = json.loads(line)
           entries.append(MemoryEntry.from_dict(data))
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError) as exc:
+          log_warning(f"Skipping corrupted memory entry in {path}: {exc}")
           continue
     return entries
 
