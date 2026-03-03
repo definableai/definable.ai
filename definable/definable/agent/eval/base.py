@@ -161,6 +161,8 @@ class BaseEval(ABC):
     Returns:
         EvalSuite with all results.
     """
+    if not cases:
+      raise ValueError("arun_batch requires at least one EvalCase.")
     suite = EvalSuite(eval_name=self.name)
     for i, case in enumerate(cases):
       log_info(f"[{self.name}] Running case {i + 1}/{len(cases)}: {case.name or case.input[:50]}")

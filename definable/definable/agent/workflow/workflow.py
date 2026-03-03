@@ -86,6 +86,12 @@ class Workflow:
   _id: str = field(default_factory=lambda: str(uuid4()))
   _event_bus: EventBus = field(default_factory=EventBus)
 
+  def __post_init__(self) -> None:
+    if not self.steps:
+      raise ValueError("Workflow requires at least one step.")
+    if not self.name:
+      self.name = f"workflow-{self._id[:8]}"
+
   @property
   def id(self) -> str:
     return self._id

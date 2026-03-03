@@ -122,6 +122,8 @@ class Team:
       except ValueError:
         valid = [m.value for m in TeamMode]
         raise ValueError(f"Invalid team mode '{self.mode}'. Valid modes: {valid}")
+    if not self.members:
+      raise ValueError("Team requires at least one member agent.")
     if not self.name:
       self.name = f"team-{self._id[:8]}"
     self._build_member_map()

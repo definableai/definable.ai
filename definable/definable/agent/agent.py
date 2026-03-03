@@ -913,6 +913,14 @@ class Agent:
     Returns:
         RunOutput with response, metrics, tool executions, and messages.
     """
+    # Validate output_schema early (#95/#98)
+    if output_schema is not None:
+      if not isinstance(output_schema, type) or not issubclass(output_schema, BaseModel):
+        raise TypeError(
+          f"output_schema must be a Pydantic BaseModel subclass, got {output_schema!r}. "
+          f"Example: output_schema=MyModel where MyModel(BaseModel)."
+        )
+
     # Load plugins on first run (async lifecycle)
     if not self._plugins_loaded and len(self._plugin_registry) > 0:
       await self._plugin_registry.load_all(self)

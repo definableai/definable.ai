@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
 from definable.knowledge.embedder import Embedder
 
@@ -10,6 +11,10 @@ class Document:
 
   content: str
   id: Optional[str] = None
+
+  def __post_init__(self) -> None:
+    if self.id is None:
+      self.id = str(uuid4())
   name: Optional[str] = None
   meta_data: Dict[str, Any] = field(default_factory=dict)
   embedder: Optional["Embedder"] = None

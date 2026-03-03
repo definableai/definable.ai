@@ -11,6 +11,16 @@ from definable.agent.team import (
   Team,
   TeamMode,
 )
+def _mock_member(name: str = "member") -> MagicMock:
+  """Create a minimal mock member for Team construction."""
+  m = MagicMock()
+  m.name = name
+  m.agent_name = name
+  m.instructions = ""
+  m.tools = []
+  return m
+
+
 from definable.agent.team.events import (
   MemberCompletedEvent,
   MemberDelegatedEvent,
@@ -308,14 +318,18 @@ class TestTeamMode:
 
 class TestTeamConstruction:
   def test_minimal_construction(self):
-    team = Team(name="test-team")
+    team = Team(name="test-team", members=[_mock_member()])
     assert team.name == "test-team"
     assert team.mode == TeamMode.coordinate
     assert team.team_id != ""
 
   def test_auto_name(self):
-    team = Team()
+    team = Team(members=[_mock_member()])
     assert team.name.startswith("team-")
+
+  def test_empty_members_raises(self):
+    with pytest.raises(ValueError, match="at least one member"):
+      Team(name="empty")
 
   def test_member_names(self):
     m1 = MagicMock()
@@ -333,24 +347,24 @@ class TestTeamConstruction:
     assert "agent-alpha" in team.member_names or len(team.member_names) == 1
 
   def test_nested_team_as_member(self):
-    inner = Team(name="inner-team", description="Inner team desc")
+    inner = Team(name="inner-team", description="Inner team desc", members=[_mock_member()])
     outer = Team(name="outer-team", members=[inner])
     assert "inner-team" in outer.member_names
 
   def test_mode_setting(self):
-    team = Team(mode=TeamMode.route)
+    team = Team(mode=TeamMode.route, members=[_mock_member()])
     assert team.mode == TeamMode.route
 
   def test_max_iterations_default(self):
-    team = Team()
+    team = Team(members=[_mock_member()])
     assert team.max_iterations == 10
 
   def test_custom_max_iterations(self):
-    team = Team(max_iterations=5)
+    team = Team(max_iterations=5, members=[_mock_member()])
     assert team.max_iterations == 5
 
   def test_events_property(self):
-    team = Team()
+    team = Team(members=[_mock_member()])
     assert team.events is team._event_bus
 
 
@@ -676,7 +690,7 @@ class TestTeamAsAgent:
   def test_wraps_team(self):
     from definable.agent.team.team import _TeamAsAgent
 
-    inner = Team(name="inner", description="Inner team")
+    inner = Team(name="inner", description="Inner team", members=[_mock_member()])
     wrapper = _TeamAsAgent(inner)
     assert wrapper.name == "inner"
     assert "Inner team" in wrapper.instructions
@@ -687,7 +701,7 @@ class TestTeamAsAgent:
   async def test_arun_delegates_to_team(self):
     from definable.agent.team.team import _TeamAsAgent
 
-    inner = Team(name="inner")
+    inner = Team(name="inner", members=[_mock_member()])
     inner.arun = AsyncMock(return_value=MagicMock(content="team result"))  # type: ignore[method-assign]
 
     wrapper = _TeamAsAgent(inner)
@@ -769,7 +783,7 @@ class TestTeamCoordinate:
     team = Team(
       name="event-team",
       model=leader_model,  # type: ignore[arg-type]
-      members=[],
+      members=[_mock_member()],
       mode=TeamMode.coordinate,
     )
 
@@ -897,7 +911,9 @@ class TestTeamCollaborate:
 
 class TestTeamErrors:
   def test_no_model_raises(self):
-    team = Team(name="no-model")
+    m = _mock_member()
+    m.model = None
+    team = Team(name="no-model", members=[m])
     with pytest.raises(ValueError, match="requires a model"):
       team._get_or_create_leader()
 
@@ -912,7 +928,7 @@ class TestTeamErrors:
 
   @pytest.mark.asyncio
   async def test_delegate_to_unknown_member(self):
-    team = Team(name="test")
+    team = Team(name="test", members=[_mock_member()])
     with pytest.raises(ValueError, match="not found"):
       await team._run_single_member("nonexistent", "task", "run-1")
 
@@ -950,7 +966,7 @@ class TestTeamErrors:
 class TestTeamEventSubscription:
   @pytest.mark.asyncio
   async def test_subscribe_and_receive(self):
-    team = Team(name="event-test")
+    team = Team(name="event-test", members=[_mock_member()])
     received = []
 
     async def handler(event):

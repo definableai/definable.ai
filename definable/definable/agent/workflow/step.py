@@ -89,6 +89,14 @@ class Step(BaseStep):
   timeout: Optional[float] = None
   retries: int = 0
 
+  def __post_init__(self) -> None:
+    executors = [self.agent, self.team, self.executor]
+    count = sum(1 for e in executors if e is not None)
+    if count == 0:
+      raise ValueError("Step requires exactly one of agent, team, or executor.")
+    if count > 1:
+      raise ValueError("Step accepts only one of agent, team, or executor — not multiple.")
+
   @property
   def step_type(self) -> str:
     return "step"

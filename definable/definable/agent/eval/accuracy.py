@@ -70,11 +70,11 @@ class AccuracyEval(BaseEval):
 
   async def evaluate(self, agent: "Agent", case: EvalCase) -> AccuracyResult:
     """Run the agent, then judge the output against expected."""
-    if case.expected is None:
+    if case.expected is None or (isinstance(case.expected, str) and not case.expected.strip()):
       return AccuracyResult(
         eval_name=self.name,
         success=False,
-        reason="No expected output provided.",
+        reason="No expected output provided (None or empty).",
         threshold=self.threshold,
         actual=None,
       )

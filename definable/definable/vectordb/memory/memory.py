@@ -201,6 +201,8 @@ class InMemoryVectorDB(VectorDB):
     filters: Optional[Union[Dict[str, Any], list]] = None,
   ) -> List[Document]:
     """Search for documents by embedding the query and computing similarity."""
+    if not query or not isinstance(query, str):
+      raise TypeError(f"Query must be a non-empty string, got {type(query).__name__}: {query!r}")
     query_embedding = self.embedder.get_embedding(query)
     if query_embedding is None:
       log_warning(f"Failed to get embedding for query: {query}")  # type: ignore[unreachable]

@@ -47,6 +47,9 @@ class APIKeyAuth:
     header: str = "X-API-Key",
   ) -> None:
     self.keys: Set[str] = {keys} if isinstance(keys, str) else set(keys)
+    self.keys.discard("")  # Remove empty strings
+    if not self.keys:
+      raise ValueError("APIKeyAuth requires at least one non-empty API key.")
     self.header = header
 
   def authenticate(self, request: Union[AuthRequest, object]) -> Optional[AuthContext]:

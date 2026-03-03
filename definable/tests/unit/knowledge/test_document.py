@@ -28,7 +28,9 @@ class TestDocumentCreation:
   def test_minimal_creation(self):
     doc = Document(content="Hello world")
     assert doc.content == "Hello world"
-    assert doc.id is None
+    assert doc.id is not None  # Auto-generated UUID
+    assert isinstance(doc.id, str)
+    assert len(doc.id) == 36  # UUID format
     assert doc.name is None
     assert doc.meta_data == {}
     assert doc.embedding is None

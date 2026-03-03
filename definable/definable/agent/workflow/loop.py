@@ -43,6 +43,10 @@ class Loop(BaseStep):
   def __post_init__(self) -> None:
     if not self.name:
       self.name = "loop"
+    if self.max_iterations < 1:
+      raise ValueError(f"max_iterations must be >= 1, got {self.max_iterations}")
+    if not self.steps:
+      raise ValueError("Loop requires at least one step.")
 
   @property
   def step_type(self) -> str:

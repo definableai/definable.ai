@@ -64,6 +64,10 @@ class CompressionManager:
   stats: Dict[str, Any] = field(default_factory=dict)
 
   def __post_init__(self):
+    if self.compress_tool_results and self.model is None:
+      from definable.utils.log import log_warning
+
+      log_warning("CompressionManager: compress_tool_results=True but no model provided. Compression will be skipped.")
     if self.compress_tool_results_limit is None and self.compress_token_limit is None:
       self.compress_tool_results_limit = 3
 

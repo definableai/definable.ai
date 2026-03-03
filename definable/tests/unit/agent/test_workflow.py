@@ -222,7 +222,7 @@ class TestDefaultInputBuilder:
 
 class TestNormalizeStep:
   def test_basestep_passthrough(self):
-    step = Step(name="test")
+    step = Step(name="test", executor=lambda x: "ok")
     assert _normalize_step(step) is step
 
   def test_callable_wrapped(self):
@@ -246,7 +246,7 @@ class TestNormalizeStep:
 
 class TestStep:
   def test_step_type(self):
-    step = Step(name="test")
+    step = Step(name="test", executor=lambda x: "ok")
     assert step.step_type == "step"
 
   @pytest.mark.asyncio
@@ -302,15 +302,9 @@ class TestStep:
     assert result.success is True
     assert result.content == "sync: test"
 
-  @pytest.mark.asyncio
-  async def test_no_executor_raises(self):
-    step = Step(name="empty")
-    si = StepInput(input="test")
-
-    result = await step.execute(si)
-
-    assert result.success is False
-    assert "no agent, team, or executor" in (result.error or "")
+  def test_no_executor_raises(self):
+    with pytest.raises(ValueError, match="exactly one of agent, team, or executor"):
+      Step(name="empty")
 
   @pytest.mark.asyncio
   async def test_failure_returns_failed_output(self):
@@ -675,12 +669,20 @@ class TestParallel:
 
 class TestLoop:
   def test_step_type(self):
-    loop = Loop()
+    loop = Loop(steps=[Step(name="s", executor=lambda x: "ok")])
     assert loop.step_type == "loop"
 
   def test_default_name(self):
-    loop = Loop()
+    loop = Loop(steps=[Step(name="s", executor=lambda x: "ok")])
     assert loop.name == "loop"
+
+  def test_empty_steps_raises(self):
+    with pytest.raises(ValueError, match="at least one step"):
+      Loop(name="empty")
+
+  def test_zero_max_iterations_raises(self):
+    with pytest.raises(ValueError, match="max_iterations must be >= 1"):
+      Loop(steps=[Step(name="s", executor=lambda x: "ok")], max_iterations=0)
 
   @pytest.mark.asyncio
   async def test_basic_loop(self):
