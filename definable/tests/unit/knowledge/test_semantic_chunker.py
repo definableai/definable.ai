@@ -182,7 +182,7 @@ class TestSemanticChunkerWithEmbedder:
     assert len(chunks) > 1
 
   def test_embedder_failure_falls_back_to_size(self):
-    chunker = SemanticChunker(chunk_size=50, embedder=FailingEmbedder(), min_sentences=1)
+    chunker = SemanticChunker(chunk_size=50, embedder=FailingEmbedder(), min_sentences=1, chunk_overlap=0)
     doc = make_doc(make_multisentence(10))
     chunks = chunker.chunk(doc)
     # Should not crash — falls back to size-based splitting
@@ -208,18 +208,18 @@ class TestSemanticChunkerFallback:
   """SemanticChunker without embedder uses size-based splitting."""
 
   def test_no_embedder_splits_by_size(self):
-    chunker = SemanticChunker(chunk_size=100, embedder=None, min_sentences=1)
+    chunker = SemanticChunker(chunk_size=100, embedder=None, min_sentences=1, chunk_overlap=0)
     doc = make_doc(make_multisentence(20))
     chunks = chunker.chunk(doc)
     assert len(chunks) > 1
 
   def test_no_embedder_empty_returns_empty(self):
-    chunker = SemanticChunker(chunk_size=100, embedder=None)
+    chunker = SemanticChunker(chunk_size=100, embedder=None, chunk_overlap=0)
     assert chunker.chunk(make_doc("")) == []
 
   def test_no_embedder_preserves_content(self):
     text = make_multisentence(8)
-    chunker = SemanticChunker(chunk_size=100, embedder=None, min_sentences=1)
+    chunker = SemanticChunker(chunk_size=100, embedder=None, min_sentences=1, chunk_overlap=0)
     doc = make_doc(text)
     chunks = chunker.chunk(doc)
     combined = " ".join(c.content for c in chunks)

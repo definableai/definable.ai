@@ -242,7 +242,7 @@ class Agent:
     self.tools = tools or []
     self.toolkits = toolkits or []
     self.skills = skills or []
-    self.instructions = instructions
+    self.instructions: Optional[str] = "\n".join(str(i) for i in instructions) if isinstance(instructions, list) else instructions
     self.readers = self._init_readers(readers)
     self.guardrails = guardrails
 

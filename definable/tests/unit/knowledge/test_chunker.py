@@ -39,7 +39,7 @@ class TestTextChunker:
   """TextChunker splits by a single separator and merges parts up to chunk_size."""
 
   def test_empty_document_returns_empty_list(self):
-    chunker = TextChunker(chunk_size=100)
+    chunker = TextChunker(chunk_size=100, chunk_overlap=0)
     assert chunker.chunk(make_doc("")) == []
 
   def test_small_document_returns_single_chunk(self):
@@ -50,7 +50,7 @@ class TestTextChunker:
     assert chunks[0].content == "Hello world"
 
   def test_splits_at_separator(self):
-    chunker = TextChunker(chunk_size=10, separator="\n\n")
+    chunker = TextChunker(chunk_size=10, separator="\n\n", chunk_overlap=0)
     # Each paragraph is 5 chars — fitting, so they merge until chunk_size is hit
     doc = make_doc("Hello\n\nWorld\n\nFoo")
     chunks = chunker.chunk(doc)
@@ -61,7 +61,7 @@ class TestTextChunker:
     assert "Foo" in all_text
 
   def test_chunks_respect_max_size(self):
-    chunker = TextChunker(chunk_size=50, separator="\n")
+    chunker = TextChunker(chunk_size=50, separator="\n", chunk_overlap=0)
     lines = ["A" * 20, "B" * 20, "C" * 20, "D" * 20]
     doc = make_doc("\n".join(lines))
     chunks = chunker.chunk(doc)
@@ -70,7 +70,7 @@ class TestTextChunker:
       assert len(chunk.content) <= 100  # with separator tolerance
 
   def test_chunk_metadata_preserved(self):
-    chunker = TextChunker(chunk_size=10, separator="\n")
+    chunker = TextChunker(chunk_size=10, separator="\n", chunk_overlap=0)
     doc = make_doc("Line1\nLine2\nLine3", source="my_file.txt", name="my_doc")
     chunks = chunker.chunk(doc)
     assert len(chunks) >= 1
@@ -81,21 +81,21 @@ class TestTextChunker:
       assert chunk.parent_id is not None
 
   def test_source_type_preserved(self):
-    chunker = TextChunker(chunk_size=10, separator="\n")
+    chunker = TextChunker(chunk_size=10, separator="\n", chunk_overlap=0)
     doc = Document(content="Line1\nLine2", source_type="url", source="http://example.com")
     chunks = chunker.chunk(doc)
     for chunk in chunks:
       assert chunk.source_type == "url"
 
   def test_meta_data_inherited(self):
-    chunker = TextChunker(chunk_size=10, separator="\n")
+    chunker = TextChunker(chunk_size=10, separator="\n", chunk_overlap=0)
     doc = Document(content="A\nB\nC", meta_data={"category": "test"})
     chunks = chunker.chunk(doc)
     for chunk in chunks:
       assert chunk.meta_data.get("category") == "test"
 
   def test_meta_data_has_chunk_index_and_total(self):
-    chunker = TextChunker(chunk_size=5, separator="\n")
+    chunker = TextChunker(chunk_size=5, separator="\n", chunk_overlap=0)
     doc = make_doc("AAAAA\nBBBBB\nCCCCC")
     chunks = chunker.chunk(doc)
     for i, chunk in enumerate(chunks):
@@ -103,7 +103,7 @@ class TestTextChunker:
       assert chunk.meta_data["chunk_total"] == len(chunks)
 
   def test_chunk_many_processes_multiple_docs(self):
-    chunker = TextChunker(chunk_size=10, separator="\n")
+    chunker = TextChunker(chunk_size=10, separator="\n", chunk_overlap=0)
     docs = [
       make_doc("Doc1Line1\nDoc1Line2"),
       make_doc("Doc2Line1\nDoc2Line2"),
@@ -113,13 +113,13 @@ class TestTextChunker:
 
   def test_single_long_line_becomes_one_chunk(self):
     """A line with no separator cannot be split further by TextChunker."""
-    chunker = TextChunker(chunk_size=5, separator="\n")
+    chunker = TextChunker(chunk_size=5, separator="\n", chunk_overlap=0)
     doc = make_doc("ABCDEFGHIJKLMNOP")  # No newlines
     chunks = chunker.chunk(doc)
     assert len(chunks) == 1  # No way to split without separator
 
   def test_name_includes_chunk_index(self):
-    chunker = TextChunker(chunk_size=5, separator="\n")
+    chunker = TextChunker(chunk_size=5, separator="\n", chunk_overlap=0)
     doc = Document(content="AAA\nBBB\nCCC", name="mydoc")
     chunks = chunker.chunk(doc)
     for i, chunk in enumerate(chunks):
@@ -136,7 +136,7 @@ class TestRecursiveChunker:
   """RecursiveChunker uses a hierarchy of separators and falls through them."""
 
   def test_empty_document_returns_empty_list(self):
-    chunker = RecursiveChunker(chunk_size=100)
+    chunker = RecursiveChunker(chunk_size=100, chunk_overlap=0)
     assert chunker.chunk(make_doc("")) == []
 
   def test_small_document_returns_single_chunk(self):
@@ -202,7 +202,7 @@ class TestRecursiveChunker:
       assert len(chunk.content) <= 5
 
   def test_chunk_many_works(self):
-    chunker = RecursiveChunker(chunk_size=50)
+    chunker = RecursiveChunker(chunk_size=50, chunk_overlap=0)
     docs = [make_doc("word " * 20), make_doc("item " * 20)]
     chunks = chunker.chunk_many(docs)
     assert len(chunks) >= 2
@@ -229,7 +229,7 @@ class TestChunkerInvariants:
   @pytest.mark.parametrize(
     "chunker_cls,kwargs",
     [
-      (TextChunker, {"chunk_size": 50, "separator": "\n"}),
+      (TextChunker, {"chunk_size": 50, "separator": "\n", "chunk_overlap": 0}),
       (RecursiveChunker, {"chunk_size": 50, "chunk_overlap": 0}),
     ],
   )
@@ -243,7 +243,7 @@ class TestChunkerInvariants:
   @pytest.mark.parametrize(
     "chunker_cls,kwargs",
     [
-      (TextChunker, {"chunk_size": 50, "separator": "\n"}),
+      (TextChunker, {"chunk_size": 50, "separator": "\n", "chunk_overlap": 0}),
       (RecursiveChunker, {"chunk_size": 50, "chunk_overlap": 0}),
     ],
   )
@@ -257,7 +257,7 @@ class TestChunkerInvariants:
   @pytest.mark.parametrize(
     "chunker_cls,kwargs",
     [
-      (TextChunker, {"chunk_size": 50, "separator": "\n"}),
+      (TextChunker, {"chunk_size": 50, "separator": "\n", "chunk_overlap": 0}),
       (RecursiveChunker, {"chunk_size": 50, "chunk_overlap": 0}),
     ],
   )
@@ -271,7 +271,7 @@ class TestChunkerInvariants:
   @pytest.mark.parametrize(
     "chunker_cls,kwargs",
     [
-      (TextChunker, {"chunk_size": 50, "separator": "\n"}),
+      (TextChunker, {"chunk_size": 50, "separator": "\n", "chunk_overlap": 0}),
       (RecursiveChunker, {"chunk_size": 50, "chunk_overlap": 0}),
     ],
   )

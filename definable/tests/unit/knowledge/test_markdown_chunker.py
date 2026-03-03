@@ -38,7 +38,7 @@ class TestMarkdownChunkerBasic:
   """MarkdownChunker splits markdown on headings."""
 
   def test_empty_document_returns_empty_list(self):
-    chunker = MarkdownChunker(chunk_size=100)
+    chunker = MarkdownChunker(chunk_size=100, chunk_overlap=0)
     assert chunker.chunk(make_doc("")) == []
 
   def test_small_document_returns_single_chunk(self):
@@ -162,7 +162,7 @@ class TestMarkdownChunkerLargeSections:
   def test_large_section_gets_split(self):
     heading = "# Big Section\n\n"
     body = "Word " * 200  # ~1000 chars
-    chunker = MarkdownChunker(chunk_size=100)
+    chunker = MarkdownChunker(chunk_size=100, chunk_overlap=0)
     doc = make_doc(heading + body)
     chunks = chunker.chunk(doc)
     assert len(chunks) > 1
@@ -170,7 +170,7 @@ class TestMarkdownChunkerLargeSections:
   def test_large_section_splits_on_paragraphs(self):
     heading = "# Section\n\n"
     paragraphs = "\n\n".join([f"Paragraph {i}. " + "Text " * 20 for i in range(10)])
-    chunker = MarkdownChunker(chunk_size=200)
+    chunker = MarkdownChunker(chunk_size=200, chunk_overlap=0)
     doc = make_doc(heading + paragraphs)
     chunks = chunker.chunk(doc)
     assert len(chunks) > 1
@@ -185,7 +185,7 @@ class TestMarkdownChunkerLargeSections:
       "# Large\n\n" + "Word " * 200,
       "# Also Small\n\nBrief.",
     ]
-    chunker = MarkdownChunker(chunk_size=100)
+    chunker = MarkdownChunker(chunk_size=100, chunk_overlap=0)
     doc = make_doc("\n\n".join(sections))
     chunks = chunker.chunk(doc)
     assert len(chunks) >= 3
@@ -313,7 +313,7 @@ class TestMarkdownChunkerEdgeCases:
     assert len(chunks) >= 1
 
   def test_whitespace_only_returns_empty(self):
-    chunker = MarkdownChunker(chunk_size=100)
+    chunker = MarkdownChunker(chunk_size=100, chunk_overlap=0)
     doc = make_doc("   \n\n   ")
     chunks = chunker.chunk(doc)
     assert len(chunks) == 0

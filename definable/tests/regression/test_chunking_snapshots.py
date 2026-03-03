@@ -141,7 +141,7 @@ class TestChunkerEdgeCaseStability:
   """Edge cases that should produce stable, known behavior."""
 
   def test_single_word_document(self):
-    chunker = TextChunker(chunk_size=100)
+    chunker = TextChunker(chunk_size=100, chunk_overlap=0)
     doc = Document(content="Hello")
     chunks = chunker.chunk(doc)
     assert len(chunks) == 1
@@ -156,7 +156,7 @@ class TestChunkerEdgeCaseStability:
 
   def test_unicode_content_preserved(self):
     """Unicode content (non-ASCII) should be preserved exactly."""
-    chunker = TextChunker(chunk_size=100)
+    chunker = TextChunker(chunk_size=100, chunk_overlap=0)
     content = "Hllo wrld — это тест"
     doc = Document(content=content)
     chunks = chunker.chunk(doc)
@@ -166,7 +166,7 @@ class TestChunkerEdgeCaseStability:
 
   def test_whitespace_only_lines_handled(self):
     """Documents with whitespace-only lines should not crash."""
-    chunker = TextChunker(chunk_size=100, separator="\n")
+    chunker = TextChunker(chunk_size=100, separator="\n", chunk_overlap=0)
     doc = Document(content="Line 1\n   \nLine 2\n\nLine 3")
     chunks = chunker.chunk(doc)
     assert len(chunks) >= 1

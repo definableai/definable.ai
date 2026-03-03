@@ -205,7 +205,7 @@ def tool(*args, **kwargs) -> Union[Function, Callable[[F], Function]]:
     # Preserve the original signature and metadata
     update_wrapper(wrapper, func)
 
-    if kwargs.get("requires_user_input", True):
+    if kwargs.get("requires_user_input", False):
       kwargs["user_input_fields"] = kwargs.get("user_input_fields", [])
 
     if kwargs.get("user_input_fields"):

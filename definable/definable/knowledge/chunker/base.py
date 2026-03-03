@@ -14,6 +14,14 @@ class Chunker(ABC):
   chunk_size: int = 1000
   chunk_overlap: int = 200
 
+  def __post_init__(self) -> None:
+    if self.chunk_size <= 0:
+      raise ValueError(f"chunk_size must be > 0, got {self.chunk_size}")
+    if self.chunk_overlap < 0:
+      raise ValueError(f"chunk_overlap must be >= 0, got {self.chunk_overlap}")
+    if self.chunk_overlap >= self.chunk_size:
+      raise ValueError(f"chunk_overlap ({self.chunk_overlap}) must be < chunk_size ({self.chunk_size})")
+
   @abstractmethod
   def chunk(self, document: Document) -> List[Document]:
     """Split document into chunks."""

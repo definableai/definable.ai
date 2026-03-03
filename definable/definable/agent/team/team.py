@@ -116,6 +116,12 @@ class Team:
   _interactions: List[str] = field(default_factory=list, repr=False)
 
   def __post_init__(self) -> None:
+    if isinstance(self.mode, str):
+      try:
+        self.mode = TeamMode(self.mode)
+      except ValueError:
+        valid = [m.value for m in TeamMode]
+        raise ValueError(f"Invalid team mode '{self.mode}'. Valid modes: {valid}")
     if not self.name:
       self.name = f"team-{self._id[:8]}"
     self._build_member_map()
