@@ -108,6 +108,8 @@ class Model(ABC):
   name: Optional[str] = None
   # Provider for this Model. This is not sent to the Model API.
   provider: Optional[str] = None
+  # Provider-specific client instance. Subclasses override with their client type.
+  client: Any = None
 
   # -*- Do not set the following attributes directly -*-
   # -*- Set them on the Agent instead -*-

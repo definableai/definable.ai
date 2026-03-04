@@ -27,6 +27,9 @@ class Thinking:
     instructions: Custom thinking prompt. If None, uses the default.
     trigger: When to activate thinking. "always" runs every call; "auto" does
       a lightweight model pre-check; "never" disables even if configured.
+    effort: Depth of reasoning. "low" for quick decisions, "medium" (default)
+      for standard analysis, "high" for thorough multi-step reasoning with
+      considerations of edge cases and trade-offs.
     description: Description shown in the layer guide (system prompt).
   """
 
@@ -34,4 +37,5 @@ class Thinking:
   model: Optional["Model"] = None
   instructions: Optional[str] = None
   trigger: Literal["always", "auto", "never"] = "always"
+  effort: Literal["low", "medium", "high"] = "medium"
   description: Optional[str] = None

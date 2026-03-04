@@ -142,6 +142,26 @@ class TestThinkPhase:
     # Thinking output not populated
     assert state.thinking_output is None
 
+  @pytest.mark.asyncio
+  async def test_propagates_thinking_output_with_effort(self):
+    """ThinkPhase stores thinking output on state regardless of effort level."""
+    from definable.agent.reasoning.step import ThinkingOutput
+
+    thinking_output = ThinkingOutput(analysis="deep", approach="thorough", considerations="risk noted")
+    thinking_config = MagicMock()
+    thinking_config.effort = "high"
+
+    agent = _mock_agent(_thinking=thinking_config)
+    agent._thinking_should_run = AsyncMock(return_value=True)
+    agent._execute_thinking = AsyncMock(return_value=(thinking_output, [], []))
+
+    phase = ThinkPhase(agent)
+    state = _make_state()
+    async for s, e in phase.execute(state):
+      pass
+    assert state.thinking_output is thinking_output
+    assert state.thinking_output.considerations == "risk noted"
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # GuardInputPhase / GuardOutputPhase

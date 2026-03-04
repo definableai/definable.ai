@@ -290,13 +290,13 @@ def convert_schema(schema_dict: Dict[str, Any], root_schema: Optional[Dict[str, 
         # This is a workaround since Gemini doesn't support additionalProperties directly
         placeholder_properties = {
           "example_key": Schema(
-            type=value_type,
+            type=GeminiType(value_type),
             description=f"Example key-value pair. This object can contain any number of keys with "
             f"{value_type.lower()} values{type_description_suffix}.",
           )
         }
         if value_type == "ARRAY":
-          placeholder_properties["example_key"].items = {}
+          placeholder_properties["example_key"].items = Schema(type=GeminiType.STRING)
 
         return Schema(
           type=GeminiType.OBJECT,
@@ -331,46 +331,41 @@ def convert_schema(schema_dict: Dict[str, Any], root_schema: Optional[Dict[str, 
     )
 
   elif schema_type == "string":
-    schema_kwargs = {
-      "type": GeminiType.STRING,
-      "description": description,
-      "default": default,
-      "title": title,
-    }
+    schema = Schema(
+      type=GeminiType.STRING,
+      description=description,
+      default=default,
+      title=title,
+    )
     if "format" in schema_dict:
-      schema_kwargs["format"] = schema_dict["format"]
-    return Schema(**schema_kwargs)
+      schema.format = schema_dict["format"]
+    return schema
 
   elif schema_type in ("integer", "number"):
-    schema_kwargs = {
-      "type": schema_type.upper(),
-      "description": description,
-      "default": default,
-      "title": title,
-    }
+    gemini_type = GeminiType.INTEGER if schema_type == "integer" else GeminiType.NUMBER
+    schema = Schema(
+      type=gemini_type,
+      description=description,
+      default=default,
+      title=title,
+    )
     if "maximum" in schema_dict:
-      schema_kwargs["maximum"] = schema_dict["maximum"]
+      schema.maximum = schema_dict["maximum"]
     if "minimum" in schema_dict:
-      schema_kwargs["minimum"] = schema_dict["minimum"]
-    return Schema(**schema_kwargs)
+      schema.minimum = schema_dict["minimum"]
+    return schema
 
   elif schema_type == "" and "anyOf" in schema_dict:
-    any_of = []
+    any_of: list[Schema] = []
+    is_nullable = False
     for sub_schema in schema_dict["anyOf"]:
       sub_schema_converted = convert_schema(sub_schema, root_schema, visited_refs)
-      any_of.append(sub_schema_converted)
-
-    is_nullable = False
-    filtered_any_of = []
-
-    for schema in any_of:
-      if schema is None:
-        is_nullable = True
+      if sub_schema_converted is not None:
+        any_of.append(sub_schema_converted)
       else:
-        filtered_any_of.append(schema)
+        is_nullable = True
 
-    any_of = filtered_any_of
-    if len(any_of) == 1 and any_of[0] is not None:
+    if len(any_of) == 1:
       any_of[0].nullable = is_nullable
       return any_of[0]
     else:
@@ -390,7 +385,7 @@ def convert_schema(schema_dict: Dict[str, Any], root_schema: Optional[Dict[str, 
     # Only convert to uppercase if schema_type is not empty
     if schema_type:
       schema_type = schema_type.upper()
-      return Schema(type=schema_type, description=description, default=default, title=title)
+      return Schema(type=GeminiType(schema_type), description=description, default=default, title=title)
     else:
       # If we get here with an empty type and no other handlers matched,
       # something is wrong with the schema

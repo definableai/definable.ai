@@ -270,7 +270,7 @@ class Gemini(Model):
     if self.grounding:
       log_debug("Gemini Grounding enabled. This is a legacy tool. For Gemini 2.0+ Please use enable `search` flag instead.")
       builtin_tools.append(
-        Tool(google_search=GoogleSearchRetrieval(dynamic_retrieval_config=DynamicRetrievalConfig(dynamic_threshold=self.grounding_dynamic_threshold)))
+        Tool(google_search=GoogleSearchRetrieval(dynamic_retrieval_config=DynamicRetrievalConfig(dynamic_threshold=self.grounding_dynamic_threshold)))  # type: ignore[arg-type]  # legacy grounding API
       )
 
     if self.search:
@@ -345,7 +345,7 @@ class Gemini(Model):
       response = self.get_client().models.count_tokens(
         model=self.id,
         contents=contents,
-        config=config or None,
+        config=config or None,  # type: ignore[arg-type]  # SDK accepts dict at runtime
       )
       return (response.total_tokens or 0) + schema_tokens
     else:
@@ -391,7 +391,7 @@ class Gemini(Model):
       response = await self.get_client().aio.models.count_tokens(
         model=self.id,
         contents=contents,
-        config=config or None,
+        config=config or None,  # type: ignore[arg-type]  # SDK accepts dict at runtime
       )
       return (response.total_tokens or 0) + schema_tokens
     else:
@@ -453,7 +453,7 @@ class Gemini(Model):
       error_message = str(e)
       if hasattr(e, "response"):
         if hasattr(e.response, "text"):
-          error_message = e.response.text
+          error_message = str(e.response.text)  # type: ignore[union-attr]
         else:
           error_message = str(e.response)
       raise ModelProviderError(
@@ -505,7 +505,7 @@ class Gemini(Model):
       error_message = str(e)
       if hasattr(e, "response"):
         if hasattr(e.response, "text"):
-          error_message = e.response.text
+          error_message = str(e.response.text)  # type: ignore[union-attr]
         else:
           error_message = str(e.response)
       raise ModelProviderError(
@@ -560,7 +560,7 @@ class Gemini(Model):
       error_message = str(e)
       if hasattr(e, "response"):
         if hasattr(e.response, "text"):
-          error_message = e.response.text
+          error_message = str(e.response.text)  # type: ignore[union-attr]
         else:
           error_message = str(e.response)
       raise ModelProviderError(
@@ -615,7 +615,7 @@ class Gemini(Model):
       error_message = str(e)
       if hasattr(e, "response"):
         if hasattr(e.response, "text"):
-          error_message = e.response.text
+          error_message = str(e.response.text)  # type: ignore[union-attr]
         else:
           error_message = str(e.response)
       raise ModelProviderError(
@@ -693,8 +693,8 @@ class Gemini(Model):
         # Add images
         if message.images is not None:
           for image in message.images:
-            if image.content is not None and isinstance(image.content, GeminiFile):
-              message_parts.insert(0, image.content)
+            if image.content is not None and isinstance(image.content, GeminiFile):  # type: ignore[unreachable]  # duck typing for Gemini File objects
+              message_parts.insert(0, image.content)  # type: ignore[unreachable]
             else:
               image_content = format_image_for_message(image)
               if image_content:
@@ -704,8 +704,8 @@ class Gemini(Model):
         if message.videos is not None:
           try:
             for video in message.videos:
-              if video.content is not None and isinstance(video.content, GeminiFile):
-                if video.content.uri and video.content.mime_type:
+              if video.content is not None and isinstance(video.content, GeminiFile):  # type: ignore[unreachable]  # duck typing for Gemini File objects
+                if video.content.uri and video.content.mime_type:  # type: ignore[unreachable]
                   message_parts.insert(0, Part.from_uri(file_uri=video.content.uri, mime_type=video.content.mime_type))
               else:
                 video_file = self._format_video_for_message(video)
@@ -719,8 +719,8 @@ class Gemini(Model):
         if message.audio is not None:
           try:
             for audio_snippet in message.audio:
-              if audio_snippet.content is not None and isinstance(audio_snippet.content, GeminiFile):
-                if audio_snippet.content.uri and audio_snippet.content.mime_type:
+              if audio_snippet.content is not None and isinstance(audio_snippet.content, GeminiFile):  # type: ignore[unreachable]  # duck typing for Gemini File objects
+                if audio_snippet.content.uri and audio_snippet.content.mime_type:  # type: ignore[unreachable]
                   message_parts.insert(
                     0,
                     Part.from_uri(
@@ -731,7 +731,7 @@ class Gemini(Model):
               else:
                 audio_content = self._format_audio_for_message(audio_snippet)
                 if audio_content:
-                  message_parts.append(audio_content)
+                  message_parts.append(audio_content)  # type: ignore[arg-type]  # GeminiFile branch handled above
           except Exception as e:
             log_warning(f"Failed to load audio from {message.audio}: {e}")
             continue
@@ -1250,7 +1250,7 @@ class Gemini(Model):
       config["display_name"] = display_name
 
     try:
-      store = self.get_client().file_search_stores.create(config=config or None)
+      store = self.get_client().file_search_stores.create(config=config or None)  # type: ignore[arg-type]  # SDK accepts dict at runtime
       log_info(f"Created File Search store: {store.name}")
       return store
     except Exception as e:
@@ -1264,7 +1264,7 @@ class Gemini(Model):
       config["display_name"] = display_name
 
     try:
-      store = await self.get_client().aio.file_search_stores.create(config=config or None)
+      store = await self.get_client().aio.file_search_stores.create(config=config or None)  # type: ignore[arg-type]  # SDK accepts dict at runtime
       log_info(f"Created File Search store: {store.name}")
       return store
     except Exception as e:
@@ -1388,7 +1388,7 @@ class Gemini(Model):
       operation = self.get_client().file_search_stores.upload_to_file_search_store(
         file=file_path,
         file_search_store_name=store_name,
-        config=config or None,
+        config=config or None,  # type: ignore[arg-type]  # SDK accepts dict at runtime
       )
       log_info(f"Upload initiated for {file_path.name}")
       return operation
@@ -1423,7 +1423,7 @@ class Gemini(Model):
       operation = await self.get_client().aio.file_search_stores.upload_to_file_search_store(
         file=file_path,
         file_search_store_name=store_name,
-        config=config or None,
+        config=config or None,  # type: ignore[arg-type]  # SDK accepts dict at runtime
       )
       log_info(f"Upload initiated for {file_path.name}")
       return operation
@@ -1450,7 +1450,7 @@ class Gemini(Model):
       operation = self.get_client().file_search_stores.import_file(
         file_search_store_name=store_name,
         file_name=file_name,
-        config=config or None,
+        config=config or None,  # type: ignore[arg-type]  # SDK accepts dict at runtime
       )
       log_info(f"Import initiated for {file_name}")
       return operation
@@ -1477,7 +1477,7 @@ class Gemini(Model):
       operation = await self.get_client().aio.file_search_stores.import_file(
         file_search_store_name=store_name,
         file_name=file_name,
-        config=config or None,
+        config=config or None,  # type: ignore[arg-type]  # SDK accepts dict at runtime
       )
       log_info(f"Import initiated for {file_name}")
       return operation

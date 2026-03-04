@@ -36,6 +36,10 @@ class ThinkingOutput(BaseModel):
     None,
     description="Ordered list of tool names to use (from the provided catalog). Null if no tools needed.",
   )
+  considerations: Optional[str] = Field(
+    None,
+    description="Risks, trade-offs, edge cases, or alternative approaches. Populated for high-effort thinking.",
+  )
 
 
 def thinking_output_to_reasoning_steps(output: ThinkingOutput) -> List[ReasoningStep]:
@@ -56,6 +60,17 @@ def thinking_output_to_reasoning_steps(output: ThinkingOutput) -> List[Reasoning
         title="Tool Plan",
         reasoning=f"Tools to use: {', '.join(output.tool_plan)}",
         action=f"Execute tools in order: {', '.join(output.tool_plan)}",
+        result=None,
+        next_action=NextAction.FINAL_ANSWER if not output.considerations else NextAction.CONTINUE,
+        confidence=None,
+      )
+    )
+  if output.considerations:
+    steps.append(
+      ReasoningStep(
+        title="Considerations",
+        reasoning=output.considerations,
+        action=None,
         result=None,
         next_action=NextAction.FINAL_ANSWER,
         confidence=None,

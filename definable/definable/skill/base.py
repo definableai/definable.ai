@@ -160,6 +160,8 @@ class Skill:
       try:
         attr = getattr(self, attr_name)
         if isinstance(attr, Function):
+          if attr.entrypoint is None:
+            continue
           # If the entrypoint has a 'self' parameter, it's an unbound method
           # from a @tool-decorated class method. Bind it to this Skill instance.
           sig = signature(attr.entrypoint)
