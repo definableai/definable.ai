@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
   from definable.memory.consolidation import ConsolidationPolicy
+  from definable.memory.cortex.cortex import CortexMemory
   from definable.memory.store.file import FileStore
   from definable.memory.store.in_memory import InMemoryStore
   from definable.memory.store.sqlite import SQLiteStore
@@ -52,6 +53,8 @@ __all__ = [
   # Strategies (lazy-loaded)
   "SummarizeStrategy",
   "SemanticStrategy",
+  # Cortex (lazy-loaded)
+  "CortexMemory",
 ]
 
 _LAZY_IMPORTS = {
@@ -61,6 +64,7 @@ _LAZY_IMPORTS = {
   "SummarizeStrategy": ("definable.memory.strategies.summarize", "SummarizeStrategy"),
   "SemanticStrategy": ("definable.memory.strategies.semantic", "SemanticStrategy"),
   "ConsolidationPolicy": ("definable.memory.consolidation", "ConsolidationPolicy"),
+  "CortexMemory": ("definable.memory.cortex.cortex", "CortexMemory"),
 }
 
 
