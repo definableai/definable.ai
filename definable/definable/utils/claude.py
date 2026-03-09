@@ -332,7 +332,7 @@ def format_messages(messages: List[Message], compress_tool_results: bool = False
           content.append(
             ToolUseBlock(
               id=tool_call["id"],
-              input=json.loads(tool_call["function"]["arguments"]) if "arguments" in tool_call["function"] else {},
+              input=json.loads(tool_call["function"]["arguments"]) if tool_call["function"].get("arguments", "").strip() else {},
               name=tool_call["function"]["name"],
               type="tool_use",
             )

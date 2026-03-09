@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from definable.agent.pipeline.phases import (
   ComposePhase,
   GuardInputPhase,

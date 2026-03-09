@@ -117,7 +117,6 @@ class Claude(Model):
 
   # Client parameters
   api_key: Optional[str] = None
-  auth_token: Optional[str] = None
   default_headers: Optional[Dict[str, Any]] = None
   timeout: Optional[float] = None
   http_client: Optional[Union[httpx.Client, httpx.AsyncClient]] = None
@@ -142,13 +141,11 @@ class Claude(Model):
     client_params: Dict[str, Any] = {}
 
     self.api_key = self.api_key or getenv("ANTHROPIC_API_KEY")
-    self.auth_token = self.auth_token or getenv("ANTHROPIC_AUTH_TOKEN")
-    if not (self.api_key or self.auth_token):
-      log_error("ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN not set. Please set the ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable.")
+    if not self.api_key:
+      log_error("ANTHROPIC_API_KEY not set. Please set the ANTHROPIC_API_KEY environment variable.")
 
     # Add API key to client parameters
     client_params["api_key"] = self.api_key
-    client_params["auth_token"] = self.auth_token
     if self.timeout is not None:
       client_params["timeout"] = self.timeout
 

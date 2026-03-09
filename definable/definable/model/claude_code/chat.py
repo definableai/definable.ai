@@ -10,9 +10,13 @@ Phase 1: stateless `query()` per invoke, MCP tool bridge, structured output.
 
 import asyncio
 import json
+import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterator, List, Optional, Type, Union
+
+if sys.version_info < (3, 11):
+  from exceptiongroup import ExceptionGroup
 
 from pydantic import BaseModel
 
@@ -440,17 +444,37 @@ class ClaudeCode(Model):
 
       assistant_message.metrics.start_timer()
 
-      # Collect all messages from the async iterator
+      # Collect all messages from the async iterator.
+      # The SDK has a known race condition: when max_turns=1, the CLI subprocess
+      # exits after producing output, but a background TaskGroup task may still
+      # try to write to the dead transport.  We catch that ExceptionGroup and
+      # use whatever results were already collected.
       assistant_msgs: list = []
       result_msg = None
 
-      async for msg in sdk_query(prompt=prompt, options=options):
-        if isinstance(msg, SdkAssistantMessage):
-          assistant_msgs.append(msg)
-        elif isinstance(msg, SdkResultMessage):
-          result_msg = msg
+      try:
+        async for msg in sdk_query(prompt=prompt, options=options):
+          if isinstance(msg, SdkAssistantMessage):
+            assistant_msgs.append(msg)
+          elif isinstance(msg, SdkResultMessage):
+            result_msg = msg
+      except ExceptionGroup as eg:
+        # Filter out benign transport-cleanup errors from the SDK.
+        real_errors = [e for e in eg.exceptions if not (hasattr(e, "__class__") and "CLIConnectionError" in type(e).__name__)]
+        if real_errors:
+          raise ExceptionGroup(eg.message, real_errors) from eg
+        # All sub-exceptions were transport cleanup noise — continue with
+        # whatever messages we already collected.
+        log_warning(f"ClaudeCode: suppressed SDK transport cleanup error ({len(eg.exceptions)} sub-exceptions)")
 
       assistant_message.metrics.stop_timer()
+
+      if not assistant_msgs and result_msg is None:
+        raise ModelProviderError(
+          message="ClaudeCode SDK returned no messages",
+          model_name=self.name,
+          model_id=self.id,
+        )
 
       model_response = self._parse_provider_response(
         (assistant_msgs, result_msg),
@@ -459,6 +483,8 @@ class ClaudeCode(Model):
       return model_response
 
     except ImportError:
+      raise
+    except ModelProviderError:
       raise
     except Exception as e:
       log_error(f"ClaudeCode SDK error: {e}")
@@ -580,30 +606,38 @@ class ClaudeCode(Model):
 
       assistant_message.metrics.start_timer()
 
-      async for msg in sdk_query(prompt=prompt, options=options):
-        if isinstance(msg, SdkStreamEvent):
-          yield self._parse_provider_response_delta(msg)
-        elif isinstance(msg, SdkAssistantMessage):
-          yield self._parse_provider_response_delta(msg)
-        elif isinstance(msg, SdkResultMessage):
-          # Final message — emit metrics
-          final = ModelResponse()
-          metrics = Metrics()
-          metrics.duration = msg.duration_ms / 1000.0
-          if msg.usage:
-            metrics.input_tokens = msg.usage.get("input_tokens", 0)
-            metrics.output_tokens = msg.usage.get("output_tokens", 0)
-            metrics.total_tokens = metrics.input_tokens + metrics.output_tokens
-          if msg.total_cost_usd is not None:
-            metrics.cost = msg.total_cost_usd
-          final.response_usage = metrics
-          if msg.structured_output is not None:
-            final.parsed = msg.structured_output
-          yield final
+      try:
+        async for msg in sdk_query(prompt=prompt, options=options):
+          if isinstance(msg, SdkStreamEvent):
+            yield self._parse_provider_response_delta(msg)
+          elif isinstance(msg, SdkAssistantMessage):
+            yield self._parse_provider_response_delta(msg)
+          elif isinstance(msg, SdkResultMessage):
+            # Final message — emit metrics
+            final = ModelResponse()
+            metrics = Metrics()
+            metrics.duration = msg.duration_ms / 1000.0
+            if msg.usage:
+              metrics.input_tokens = msg.usage.get("input_tokens", 0)
+              metrics.output_tokens = msg.usage.get("output_tokens", 0)
+              metrics.total_tokens = metrics.input_tokens + metrics.output_tokens
+            if msg.total_cost_usd is not None:
+              metrics.cost = msg.total_cost_usd
+            final.response_usage = metrics
+            if msg.structured_output is not None:
+              final.parsed = msg.structured_output
+            yield final
+      except ExceptionGroup as eg:
+        real_errors = [e for e in eg.exceptions if not (hasattr(e, "__class__") and "CLIConnectionError" in type(e).__name__)]
+        if real_errors:
+          raise ExceptionGroup(eg.message, real_errors) from eg
+        log_warning(f"ClaudeCode: suppressed SDK transport cleanup error ({len(eg.exceptions)} sub-exceptions)")
 
       assistant_message.metrics.stop_timer()
 
     except ImportError:
+      raise
+    except ModelProviderError:
       raise
     except Exception as e:
       log_error(f"ClaudeCode SDK streaming error: {e}")

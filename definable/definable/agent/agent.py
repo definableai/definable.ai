@@ -2998,10 +2998,13 @@ class Agent:
 
   def _resolve_memory_embedder(self) -> None:
     """Auto-resolve memory embedder from model provider if not set."""
-    if self.memory is None or self.memory.embedder is not None:
+    if self.memory is None or getattr(self.memory, "embedder", None) is not None:
       return
 
-    # Only auto-resolve for SemanticStrategy (embedder is useless without atoms).
+    # Only auto-resolve for Memory instances with strategies (not CortexMemory etc.)
+    if not hasattr(self.memory, "_resolve_strategy"):
+      return
+
     from definable.memory.strategies.semantic import SemanticStrategy
 
     strategy = self.memory._resolve_strategy()

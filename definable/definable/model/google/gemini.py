@@ -656,7 +656,7 @@ class Gemini(Model):
         for tool_call in message.tool_calls:
           part = Part.from_function_call(
             name=tool_call["function"]["name"],
-            args=json.loads(tool_call["function"]["arguments"]),
+            args=json.loads(tool_call["function"]["arguments"]) if tool_call["function"].get("arguments", "").strip() else {},
           )
           if "thought_signature" in tool_call:
             part.thought_signature = base64.b64decode(tool_call["thought_signature"])
