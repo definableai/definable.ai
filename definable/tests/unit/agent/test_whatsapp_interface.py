@@ -76,7 +76,7 @@ class TestWhatsAppInterface:
     assert msg is not None
     assert msg.text == "Hello agent"
     assert msg.platform == "whatsapp"
-    assert msg.platform_user_id == "+15551234567"  # stripped whatsapp: prefix
+    assert msg.platform_user_id == "15551234567"  # normalized E.164 (bare digits)
 
   @pytest.mark.asyncio
   async def test_convert_inbound_empty_body(self):

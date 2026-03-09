@@ -56,6 +56,16 @@ from definable.agent import Workflow, Step, Steps, Parallel, Loop, Condition, Ro
 # Desktop Events
 from definable.agent.interface.desktop import BridgeCallEvent, DesktopActionEvent
 
+# WhatsApp Interface
+from definable.agent.interface.whatsapp import WhatsAppInterface, WhatsAppPolicy
+from definable.agent.interface.whatsapp.provider import (
+    WhatsAppProvider, InboundMessage, OutboundMessage,
+    PollMessage, ReactionMessage, SendResult,
+    ConnectionStatus, QRLoginResult,
+)
+from definable.agent.interface.whatsapp.normalize import normalize_e164, redact_phone
+from definable.agent.interface.whatsapp.formatting import markdown_to_whatsapp
+
 # Agents
 from definable.agent import Agent, AgentConfig, MockModel, create_test_agent, AgentTestCase
 from definable.agent import Tracing, JSONLExporter, NoOpExporter, DebugExporter
@@ -161,6 +171,9 @@ agent.use(RetryMiddleware(max_retries=3))
 - `Workflow.arun()` returns `WorkflowOutput` (NOT RunOutput) — has `.step_outputs`, `.get_step_output(name)`
 - `Step` needs exactly one of `agent=`, `team=`, or `executor=`
 - `CLIInterface(mode="tui")` without textual raises ImportError — `pip install definable[cli]`
+- `WhatsAppPolicy()` default `dm_policy="allowlist"` + empty `allow_from` blocks ALL senders
+- `WhatsAppInterface(provider="baileys")` requires Node.js >= 18 + `pip install websockets`
+- `WhatsAppInterface(provider="twilio")` requires `pip install httpx`
 
 ## Pipeline Architecture (8 phases)
 Prepare -> Recall -> Think -> GuardInput -> Compose -> InvokeLoop -> GuardOutput -> Store

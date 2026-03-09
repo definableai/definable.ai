@@ -221,6 +221,60 @@ await slack.publish_home(user_id, view)
 await slack.schedule_message(channel, text, post_at)
 ```
 
+## WhatsApp Interface
+
+```python
+from definable.agent.interface.whatsapp import WhatsAppInterface, WhatsAppPolicy
+
+# Baileys (self-hosted, QR login, free)
+whatsapp = WhatsAppInterface(
+    provider="baileys",
+    auth_dir="./whatsapp-auth",
+    policy=WhatsAppPolicy(dm_policy="allowlist", allow_from=["+15551234567"]),
+    markdown_conversion=True,
+)
+whatsapp.bind(agent)
+await whatsapp.start()
+await whatsapp.stop()
+
+# Twilio (managed, webhook-based, paid)
+whatsapp = WhatsAppInterface(
+    provider="twilio",
+    account_sid="AC...",
+    auth_token="...",
+    from_number="whatsapp:+14155238886",
+    validate_signatures=True,
+)
+agent.serve(whatsapp, port=8000)
+
+# Provider protocol
+from definable.agent.interface.whatsapp.provider import (
+    WhatsAppProvider, InboundMessage, OutboundMessage,
+    PollMessage, ReactionMessage, SendResult,
+    ConnectionStatus, QRLoginResult,
+)
+
+# Health check
+status = await whatsapp.health()  # ConnectionStatus
+
+# QR login (Baileys only)
+qr = await whatsapp.login_qr_start()
+result = await whatsapp.login_qr_wait(timeout_ms=60_000)
+
+# Direct provider access
+await whatsapp.provider.send_poll(PollMessage(to="jid", question="?", options=["A","B"]))
+await whatsapp.provider.send_reaction(ReactionMessage(chat_jid="jid", message_id="id", emoji="👍"))
+
+# Utilities
+from definable.agent.interface.whatsapp.normalize import normalize_e164, redact_phone
+from definable.agent.interface.whatsapp.formatting import markdown_to_whatsapp
+```
+
+WhatsApp policy modes:
+- `dm_policy`: `"allowlist"` (default, requires `allow_from`), `"open"`, `"disabled"`
+- `group_policy`: `"open"` (default), `"allowlist"`, `"disabled"`
+- Default `dm_policy="allowlist"` with empty `allow_from` blocks ALL senders
+
 ## Audio Transcription
 
 ```python
@@ -433,3 +487,6 @@ from definable.agent.interface.desktop import BridgeCallEvent, DesktopActionEven
 - `FTSIndex` requires explicit `await fts.initialize()` before use
 - `FallbackEmbedder(providers=[])` → ValueError (requires at least one provider)
 - `ToolPolicy(mode="allowlist")` with no `allowed_tools` blocks all tools
+- `WhatsAppPolicy(dm_policy="allowlist")` with empty `allow_from` blocks ALL senders (default!)
+- `WhatsAppInterface(provider="baileys")` requires Node.js >= 18 and `pip install websockets`
+- `WhatsAppInterface(provider="twilio")` requires `pip install httpx`

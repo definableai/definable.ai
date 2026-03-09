@@ -49,6 +49,12 @@ Agent ──┬── Model (lazy client, global HTTP pool) — or string shorth
               ├── Auth → APIKeyAuth, JWTAuth, AllowlistAuth
               ├── CLI → CLIInterface (auto-detects TUI vs REPL)
               │     └── TUI → Textual-based terminal UI (streaming, widgets, metrics)
+              ├── WhatsApp → WhatsAppInterface (provider="twilio"|"baileys")
+              │     ├── WhatsAppProvider (ABC) → TwilioProvider, BaileysProvider
+              │     ├── WhatsAppPolicy (DM/group access control)
+              │     ├── formatting (markdown_to_whatsapp)
+              │     ├── normalize (E.164, JID normalization)
+              │     └── _bridge/ (Node.js sidecar for Baileys)
               └── Call → CallInterface (Twilio/Plivo, managed/cascading/realtime)
                     ├── Telephony → TwilioProvider, PlivoProvider
                     ├── STT → DeepgramSTT

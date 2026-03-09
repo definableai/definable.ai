@@ -56,7 +56,8 @@ Check `.claude/memory/` before every significant action — especially `project-
 | `agent/` | The brain — orchestration, composition, identity | Agent, AgentConfig, RunOutput |
 | `agent/tracing/` | The nervous system — observability | Tracing, JSONLExporter |
 | `agent/guardrail/` | The immune system — input/output/tool validation | Guardrails |
-| `agent/interface/` | The mouth — how the organism speaks to platforms | TelegramInterface, DiscordInterface |
+| `agent/interface/` | The mouth — how the organism speaks to platforms | TelegramInterface, DiscordInterface, WhatsAppInterface |
+| `agent/interface/whatsapp/` | WhatsApp channel — Twilio + Baileys providers | WhatsAppInterface, WhatsAppPolicy, WhatsAppProvider |
 | `agent/research/` | Deep curiosity — autonomous investigation | DeepResearch |
 | `agent/reasoning/` | The prefrontal cortex — deliberate thought | Thinking |
 | `agent/replay/` | Episodic memory — re-experiencing past runs | Replay |
@@ -119,8 +120,9 @@ Agent ──┬── Model (the voice — lazy client, global HTTP pool)
         ├── Middleware[] (reflexes → chain, skipped in streaming)
         ├── Team (the collective → coordinate/route/collaborate/tasks)
         ├── Workflow (the blueprint → Step, Steps, Parallel, Loop, Condition, Router)
-        └── Interfaces[] (communication channels → Telegram, Discord, Slack, Call, Desktop, CLI)
+        └── Interfaces[] (communication channels → Telegram, Discord, Slack, WhatsApp, Call, Desktop, CLI)
               ├── Auth (identity verification → APIKeyAuth, JWTAuth, AllowlistAuth)
+              ├── WhatsApp (provider="twilio"|"baileys" — policy, formatting, normalize, Node.js bridge)
               └── CLI (auto TUI/REPL — Textual-based terminal UI with streaming, metrics, slash commands)
 ```
 
@@ -267,6 +269,29 @@ from definable.embedder import OpenAIEmbedder, VoyageAIEmbedder
 from definable.agent.auth import APIKeyAuth, AllowlistAuth
 auth = APIKeyAuth(keys={"key1", "key2"})      # NOT api_keys
 auth = AllowlistAuth(user_ids={"user1"})       # NOT allowed_ids
+```
+
+### WhatsApp — Multi-Provider Messaging
+
+```python
+from definable.agent.interface.whatsapp import WhatsAppInterface, WhatsAppPolicy
+
+# Baileys (self-hosted, free, QR login)
+whatsapp = WhatsAppInterface(
+    provider="baileys",
+    auth_dir="./whatsapp-auth",
+    policy=WhatsAppPolicy(dm_policy="allowlist", allow_from=["+15551234567"]),
+)
+whatsapp.bind(agent)
+await whatsapp.start()
+
+# Twilio (managed, paid)
+whatsapp = WhatsAppInterface(
+    provider="twilio",
+    account_sid="AC...",
+    auth_token="...",
+    from_number="whatsapp:+14155238886",
+)
 ```
 
 ### MCPToolkit — Synaptic Protocol
@@ -436,6 +461,9 @@ These are injuries the organism has already suffered. Learn from them. Never rep
 | `Workflow.arun()` returns `WorkflowOutput` | Different from `RunOutput`. Has `.step_outputs`, `.get_step_output(name)`. |
 | `Step` needs exactly one executor | Set `agent=`, `team=`, or `executor=`. Not multiple, not none. |
 | `CLIInterface(mode="tui")` without textual | Raises `ImportError`. Install with `pip install definable[cli]`. |
+| `WhatsAppPolicy()` default blocks all | `dm_policy="allowlist"` + empty `allow_from` = nobody can message. Set `dm_policy="open"` or populate `allow_from`. |
+| `WhatsAppInterface(provider="baileys")` | Requires Node.js >= 18 + `pip install websockets`. |
+| `WhatsAppInterface(provider="twilio")` | Requires `pip install httpx`. |
 
 ---
 

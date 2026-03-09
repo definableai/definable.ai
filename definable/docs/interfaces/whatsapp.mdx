@@ -1,12 +1,56 @@
 ---
 title: WhatsApp
 sidebarTitle: WhatsApp
-description: "Connect agents to WhatsApp via the Twilio API."
+description: "Connect agents to WhatsApp via Twilio or Baileys (self-hosted)."
+icon: comment-dots
 ---
 
-The WhatsApp interface connects agents to WhatsApp using the Twilio WhatsApp API.
+The WhatsApp interface connects agents to WhatsApp with two transport providers:
 
-## Quick Start
+- **Twilio** — Managed webhook + REST API. Paid. Production-ready. No QR login.
+- **Baileys** — Self-hosted via Node.js sidecar. Free. Full protocol access (polls, reactions, groups, QR login).
+
+## Quick Start (Baileys)
+
+The fastest way to get a WhatsApp agent running — no API keys, no webhooks, just scan a QR code.
+
+```python
+import asyncio
+from definable.agent import Agent
+from definable.agent.interface.whatsapp import WhatsAppInterface
+
+agent = Agent(
+    model="openai/gpt-4o-mini",
+    instructions="You are a helpful assistant.",
+)
+
+whatsapp = WhatsAppInterface(
+    provider="baileys",
+    auth_dir="./whatsapp-auth",
+)
+
+whatsapp.bind(agent)
+
+async def main():
+    await whatsapp.start()
+    print("Scan the QR code above with WhatsApp on your phone.")
+    try:
+        await asyncio.Event().wait()
+    except KeyboardInterrupt:
+        await whatsapp.stop()
+
+asyncio.run(main())
+```
+
+On first run, a QR code appears in your terminal. Scan it with WhatsApp on your phone. After linking, credentials are saved to `auth_dir` and subsequent runs connect automatically.
+
+<Info>
+Baileys requires **Node.js >= 18** on the host. The bridge dependencies (`@whiskeysockets/baileys`, `ws`) are auto-installed on first run via `npm install`.
+</Info>
+
+## Quick Start (Twilio)
+
+For production deployments using the Twilio WhatsApp Business API.
 
 ```python
 from definable.agent import Agent
@@ -15,6 +59,7 @@ from definable.agent.interface.whatsapp import WhatsAppInterface
 agent = Agent(model="gpt-4o", instructions="You are a helpful assistant.")
 
 whatsapp = WhatsAppInterface(
+    provider="twilio",
     account_sid="AC...",
     auth_token="...",
     from_number="whatsapp:+14155238886",
@@ -25,29 +70,309 @@ agent.serve(whatsapp, port=8000)
 
 Configure your Twilio WhatsApp webhook to point to `http://your-server:8000/whatsapp/webhook`.
 
-## Features
+## Provider Comparison
 
-- Automatic signature validation on incoming webhooks
-- Message splitting at 1600 characters (WhatsApp limit)
-- Status callback handling
-- Session management per phone number
+| Feature | Twilio | Baileys |
+|---------|--------|---------|
+| Setup | API keys + webhook | QR code scan |
+| Cost | Paid (per message) | Free |
+| Media | URL-based only | Full (bytes + URL) |
+| Polls | No | Yes |
+| Reactions | No | Yes |
+| Groups | No | Yes |
+| QR Login | No | Yes |
+| Typing indicator | No | Yes |
+| Hosting | Managed (webhook) | Self-hosted (sidecar) |
 
-## Constructor Reference
+## WhatsAppInterface Parameters
 
-<ParamField path="account_sid" type="str" required>
-  Twilio account SID.
+### Provider Selection
+
+<ParamField path="provider" type="str" default="twilio">
+  Transport provider: `"twilio"` or `"baileys"`.
 </ParamField>
 
-<ParamField path="auth_token" type="str" required>
-  Twilio auth token. Used for webhook signature validation.
+### Twilio Parameters
+
+<ParamField path="account_sid" type="str">
+  Twilio account SID. Required when `provider="twilio"`.
 </ParamField>
 
-<ParamField path="from_number" type="str" required>
-  Your WhatsApp sender number (format: `whatsapp:+14155238886`).
+<ParamField path="auth_token" type="str">
+  Twilio auth token. Used for REST API calls and webhook signature validation.
 </ParamField>
+
+<ParamField path="from_number" type="str">
+  WhatsApp sender number (format: `whatsapp:+14155238886`). Required for Twilio.
+</ParamField>
+
+<ParamField path="validate_signatures" type="bool" default="true">
+  Validate `X-Twilio-Signature` on incoming webhooks. Disable only for local testing.
+</ParamField>
+
+### Baileys Parameters
+
+<ParamField path="auth_dir" type="str" default="./whatsapp-auth">
+  Directory for WhatsApp credential storage. Created automatically.
+</ParamField>
+
+<ParamField path="node_path" type="str" default="node">
+  Path to the Node.js binary. Override if `node` is not on your PATH.
+</ParamField>
+
+<ParamField path="bridge_port" type="int" default="0">
+  WebSocket port for the sidecar. `0` = auto-assign (recommended).
+</ParamField>
+
+<ParamField path="reconnect_max_attempts" type="int" default="12">
+  Maximum reconnect attempts before giving up after a disconnect.
+</ParamField>
+
+<ParamField path="heartbeat_seconds" type="int" default="60">
+  Heartbeat interval for the sidecar connection.
+</ParamField>
+
+### Shared Parameters
+
+<ParamField path="policy" type="WhatsAppPolicy">
+  Sender access control policy. See [Access Control](#access-control) below.
+</ParamField>
+
+<ParamField path="markdown_conversion" type="bool" default="true">
+  Convert Markdown formatting in agent responses to WhatsApp-compatible formatting (`**bold**` to `*bold*`, etc.).
+</ParamField>
+
+<ParamField path="text_chunk_limit" type="int" default="4000">
+  Maximum characters per message. Long responses are split at word boundaries.
+</ParamField>
+
+<ParamField path="webhook_path" type="str" default="/whatsapp/webhook">
+  URL path for the Twilio webhook endpoint.
+</ParamField>
+
+<ParamField path="verbose" type="bool" default="false">
+  Enable verbose logging in both Python and the Node.js sidecar.
+</ParamField>
+
+## Access Control
+
+Use `WhatsAppPolicy` to control which messages reach the agent.
+
+```python
+from definable.agent.interface.whatsapp import WhatsAppInterface, WhatsAppPolicy
+
+whatsapp = WhatsAppInterface(
+    provider="baileys",
+    auth_dir="./whatsapp-auth",
+    policy=WhatsAppPolicy(
+        dm_policy="allowlist",
+        allow_from=["+15551234567", "+15559876543"],
+        group_policy="disabled",
+    ),
+)
+```
+
+### Policy Options
+
+<ParamField path="dm_policy" type="str" default="allowlist">
+  Direct message policy: `"allowlist"` (only `allow_from`), `"open"` (all DMs), or `"disabled"` (block all DMs).
+</ParamField>
+
+<ParamField path="allow_from" type="List[str]">
+  Allowed sender phone numbers in E.164 format. Use `"*"` for wildcard.
+</ParamField>
+
+<ParamField path="group_policy" type="str" default="open">
+  Group message policy: `"open"`, `"allowlist"`, or `"disabled"`.
+</ParamField>
+
+<ParamField path="group_allow_from" type="List[str]">
+  Separate allowlist for group senders. Falls back to `allow_from` if not set.
+</ParamField>
+
+<ParamField path="self_phone" type="str">
+  Your own phone number (E.164). Used for self-chat detection.
+</ParamField>
+
+<Warning>
+The default `dm_policy` is `"allowlist"` with an empty `allow_from` list. This means **no one can message your agent** unless you explicitly add numbers. Set `dm_policy="open"` to allow all senders, or populate `allow_from`.
+</Warning>
+
+## Media Support
+
+Both providers handle media, but with different capabilities:
+
+| Media Type | Twilio | Baileys |
+|-----------|--------|---------|
+| Images | URL only | URL + bytes |
+| Audio | URL only | URL + bytes |
+| Video | URL only | URL + bytes |
+| Files | URL only | URL + bytes |
+
+Incoming media is converted to Definable's `Image`, `Audio`, `Video`, and `File` types and passed to the agent.
+
+### Voice Notes
+
+WhatsApp voice notes work with `audio_transcriber=True`:
+
+```python
+agent = Agent(
+    model="openai/gpt-4o-mini",
+    instructions="You are a helpful assistant.",
+    audio_transcriber=True,
+)
+
+whatsapp = WhatsAppInterface(provider="baileys", auth_dir="./whatsapp-auth")
+whatsapp.bind(agent)
+```
+
+### Sending Media
+
+Agents can send media back via tool responses:
+
+```python
+from definable.tool.decorator import tool
+from definable.media import Image
+
+@tool
+def generate_chart(data: str) -> Image:
+    """Generate a chart from data."""
+    return Image(filepath="chart.png")
+```
+
+## Markdown Conversion
+
+When `markdown_conversion=True` (default), agent responses are automatically converted to WhatsApp-compatible formatting:
+
+| Markdown | WhatsApp |
+|----------|----------|
+| `**bold**` | `*bold*` |
+| `*italic*` | `_italic_` |
+| `~~strike~~` | `~strike~` |
+| `` `code` `` | ` ```code``` ` |
+| `# Heading` | `*Heading*` |
+| `[text](url)` | `text (url)` |
+
+Fenced code blocks are preserved as-is (WhatsApp renders triple backticks natively).
+
+## Baileys Features
+
+### QR Login
+
+The Baileys provider supports programmatic QR login:
+
+```python
+# Start QR login
+qr = await whatsapp.login_qr_start()
+print(f"QR data: {qr.qr_data}")
+
+# Wait for scan
+result = await whatsapp.login_qr_wait(timeout_ms=60_000)
+if result.connected:
+    print("Connected!")
+```
+
+### Polls
+
+```python
+from definable.agent.interface.whatsapp.provider import PollMessage
+
+await whatsapp.provider.send_poll(PollMessage(
+    to="15551234567@s.whatsapp.net",
+    question="What's for lunch?",
+    options=["Pizza", "Sushi", "Tacos"],
+    allows_multiple=True,
+))
+```
+
+### Reactions
+
+```python
+from definable.agent.interface.whatsapp.provider import ReactionMessage
+
+await whatsapp.provider.send_reaction(ReactionMessage(
+    chat_jid="15551234567@s.whatsapp.net",
+    message_id="msg-id-here",
+    emoji="👍",
+))
+```
+
+### Health Check
+
+```python
+status = await whatsapp.health()
+print(f"Connected: {status.connected}")
+print(f"Phone: {status.self_phone}")
+```
+
+## Phone Number Normalization
+
+Phone numbers are automatically normalized to bare E.164 (digits only, no `+`):
+
+```python
+from definable.agent.interface.whatsapp.normalize import normalize_e164
+
+normalize_e164("+1-555-123-4567")  # → "15551234567"
+normalize_e164("whatsapp:+1555")   # → None (too short)
+```
+
+## Complete Production Example
+
+```python
+import asyncio
+import os
+import signal
+from definable.agent import Agent
+from definable.agent.interface.whatsapp import WhatsAppInterface, WhatsAppPolicy
+
+agent = Agent(
+    model="openai/gpt-4o",
+    instructions="You are a customer support agent for Acme Corp.",
+    audio_transcriber=True,
+)
+
+whatsapp = WhatsAppInterface(
+    provider="baileys",
+    auth_dir="./whatsapp-auth",
+    policy=WhatsAppPolicy(
+        dm_policy="allowlist",
+        allow_from=[os.environ.get("MY_PHONE", "+15551234567")],
+        group_policy="disabled",
+    ),
+    markdown_conversion=True,
+    verbose=False,
+)
+
+whatsapp.bind(agent)
+
+async def main():
+    await whatsapp.start()
+    print("[ready] WhatsApp agent is running. Press Ctrl+C to stop.")
+
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, stop.set)
+    await stop.wait()
+
+    await whatsapp.stop()
+
+asyncio.run(main())
+```
 
 ## Imports
 
 ```python
-from definable.agent.interface.whatsapp import WhatsAppInterface
+from definable.agent.interface.whatsapp import WhatsAppInterface, WhatsAppPolicy
+
+# Provider types (for advanced usage)
+from definable.agent.interface.whatsapp.provider import (
+    WhatsAppProvider, InboundMessage, OutboundMessage,
+    PollMessage, ReactionMessage, SendResult,
+    ConnectionStatus, QRLoginResult,
+)
+
+# Utilities
+from definable.agent.interface.whatsapp.normalize import normalize_e164, redact_phone
+from definable.agent.interface.whatsapp.formatting import markdown_to_whatsapp
 ```
