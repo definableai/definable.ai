@@ -149,6 +149,7 @@ class TestThinkPhase:
     thinking_output = ThinkingOutput(analysis="deep", approach="thorough", considerations="risk noted")  # type: ignore[call-arg]
     thinking_config = MagicMock()
     thinking_config.effort = "high"
+    thinking_config.should_use_native = MagicMock(return_value=False)
 
     agent = _mock_agent(_thinking=thinking_config)
     agent._thinking_should_run = AsyncMock(return_value=True)

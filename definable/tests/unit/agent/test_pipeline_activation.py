@@ -259,6 +259,7 @@ class TestThinkPhaseActivation:
 
     agent = MagicMock()
     agent._thinking = MagicMock()
+    agent._thinking.should_use_native = MagicMock(return_value=False)
     agent._thinking_should_run = AsyncMock(return_value=True)
     agent._execute_thinking = AsyncMock(return_value=(thinking_output, reasoning_steps, reasoning_msgs))
 

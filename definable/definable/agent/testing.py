@@ -65,6 +65,7 @@ class MockModel:
     self.id = "mock-model"
     self.provider = "mock"
     self.supports_native_structured_outputs = True
+    self.supports_native_thinking = False
 
   async def ainvoke(
     self,

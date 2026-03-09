@@ -53,6 +53,9 @@ class InvokeLoopPhase(BasePhase):
     )
     yield state, started_event
 
+    # Detect if native thinking is active
+    _native_thinking = bool(self._agent._thinking and self._agent._thinking.enabled and self._agent._thinking.should_use_native(self._agent.model))
+
     # Create the loop — streaming and cancellation come from state
     loop = AgentLoop(
       model=state.model,
@@ -61,6 +64,7 @@ class InvokeLoopPhase(BasePhase):
       context=state.context,
       config=state.config or self._agent.config,
       streaming=state.streaming,
+      native_thinking=_native_thinking,
       cancellation_token=state.cancellation_token,
       compression_manager=self._agent._compression_manager,
       guardrails=self._agent.guardrails,
@@ -89,3 +93,7 @@ class InvokeLoopPhase(BasePhase):
     # Capture output messages (excluding system)
     state.output_messages = [m for m in loop.messages if m.role != "system"]
     state.tool_executions = loop.tool_executions or []
+
+    # Capture native reasoning content from the loop
+    if loop.native_reasoning_content:
+      state.native_reasoning_content = loop.native_reasoning_content
