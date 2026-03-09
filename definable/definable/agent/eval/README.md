@@ -53,11 +53,14 @@ result = await eval.arun(agent, EvalCase(input="What is 2+2?", expected="4"))
 print(result.score, result.success, result.reason)
 
 # Batch
-suite = await eval.arun_batch(agent, [
-  EvalCase(input="What is 2+2?", expected="4", name="addition"),
-  EvalCase(input="What is 10/3?", expected="3.33", name="division"),
-  EvalCase(input="What is sqrt(144)?", expected="12", name="sqrt"),
-])
+suite = await eval.arun_batch(
+  agent,
+  [
+    EvalCase(input="What is 2+2?", expected="4", name="addition"),
+    EvalCase(input="What is 10/3?", expected="3.33", name="division"),
+    EvalCase(input="What is sqrt(144)?", expected="12", name="sqrt"),
+  ],
+)
 print(f"Pass rate: {suite.pass_rate:.0%}")  # e.g. "Pass rate: 100%"
 ```
 
@@ -74,9 +77,9 @@ from definable.agent.eval import EvalCase
 
 case = EvalCase(
   input="What is the capital of France?",  # prompt sent to the agent
-  expected="Paris",                         # ground truth (for accuracy/judge evals)
-  metadata={},                              # arbitrary metadata
-  name="capitals-france",                   # human-readable label
+  expected="Paris",  # ground truth (for accuracy/judge evals)
+  metadata={},  # arbitrary metadata
+  name="capitals-france",  # human-readable label
 )
 ```
 
@@ -93,12 +96,12 @@ from definable.agent.eval import EvalSuite
 
 suite = EvalSuite(eval_name="accuracy", results=[...])
 
-suite.total       # number of cases
-suite.passed      # cases where result.success == True
-suite.failed      # total - passed
-suite.pass_rate   # passed / total (0.0-1.0)
+suite.total  # number of cases
+suite.passed  # cases where result.success == True
+suite.failed  # total - passed
+suite.pass_rate  # passed / total (0.0-1.0)
 
-suite.to_dict()   # serializable dict with all results
+suite.to_dict()  # serializable dict with all results
 ```
 
 ---
@@ -110,6 +113,7 @@ Abstract base class. All eval types inherit from this and implement `evaluate()`
 ```python
 from definable.agent.eval import BaseEval, EvalCase
 from definable.agent.eval.result import EvalResult
+
 
 class MyCustomEval(BaseEval):
   name = "custom"
@@ -147,21 +151,24 @@ from definable.agent.eval import AccuracyEval, EvalCase
 
 eval = AccuracyEval(
   judge_model="openai/gpt-4o-mini",  # model string shorthand or Model instance
-  threshold=7.0,                      # minimum score to pass (1-10)
+  threshold=7.0,  # minimum score to pass (1-10)
 )
 
-result = await eval.arun(agent, EvalCase(
-  input="Explain photosynthesis in one sentence.",
-  expected="Plants convert sunlight, water, and CO2 into glucose and oxygen.",
-))
+result = await eval.arun(
+  agent,
+  EvalCase(
+    input="Explain photosynthesis in one sentence.",
+    expected="Plants convert sunlight, water, and CO2 into glucose and oxygen.",
+  ),
+)
 
 # AccuracyResult fields
-result.score       # float, 1.0-10.0
-result.success     # True if score >= threshold
-result.reason      # judge's explanation
-result.threshold   # the threshold used
-result.expected    # the expected output
-result.actual      # the agent's actual output
+result.score  # float, 1.0-10.0
+result.success  # True if score >= threshold
+result.reason  # judge's explanation
+result.threshold  # the threshold used
+result.expected  # the expected output
+result.actual  # the agent's actual output
 ```
 
 **Scoring rubric** (sent to the judge model):
@@ -186,22 +193,22 @@ Runtime and memory profiling using `tracemalloc`. Runs the agent multiple times 
 from definable.agent.eval import PerformanceEval, EvalCase
 
 eval = PerformanceEval(
-  duration_threshold_ms=5000,   # max p95 execution time (None = no check)
-  memory_threshold_mb=50,       # max peak memory delta (None = no check)
-  runs=3,                       # number of profiling runs
-  warmup_runs=1,                # warmup runs excluded from results
+  duration_threshold_ms=5000,  # max p95 execution time (None = no check)
+  memory_threshold_mb=50,  # max peak memory delta (None = no check)
+  runs=3,  # number of profiling runs
+  warmup_runs=1,  # warmup runs excluded from results
 )
 
 result = await eval.arun(agent, EvalCase(input="Complex query"))
 
 # PerformanceResult fields
-result.duration_ms          # p95 execution time in milliseconds
-result.peak_memory_mb       # peak memory delta across all runs (MB)
+result.duration_ms  # p95 execution time in milliseconds
+result.peak_memory_mb  # peak memory delta across all runs (MB)
 result.duration_threshold_ms  # the threshold used (or None)
-result.memory_threshold_mb    # the threshold used (or None)
-result.runs                 # number of profiling runs executed
-result.durations            # list of individual run durations (ms)
-result.success              # True if both duration and memory are within thresholds
+result.memory_threshold_mb  # the threshold used (or None)
+result.runs  # number of profiling runs executed
+result.durations  # list of individual run durations (ms)
+result.success  # True if both duration and memory are within thresholds
 ```
 
 **Pass criteria:** The eval passes when both thresholds are met (or when a threshold is `None`, that dimension is skipped). If both are `None`, the eval always passes but still collects profiling data.
@@ -217,18 +224,18 @@ from definable.agent.eval import ReliabilityEval, EvalCase
 
 eval = ReliabilityEval(
   expected_tools=["search_web", "summarize"],  # tools that must be called
-  strict=False,                                 # True = fail on unexpected tools
+  strict=False,  # True = fail on unexpected tools
 )
 
 result = await eval.arun(agent, EvalCase(input="Research quantum computing"))
 
 # ReliabilityResult fields
-result.expected_tools   # ["search_web", "summarize"]
-result.actual_tools     # tools that were actually called
-result.missing_tools    # expected but not called
-result.extra_tools      # called but not expected
-result.strict           # whether strict mode was used
-result.success          # True if all expected tools called (and no extras in strict mode)
+result.expected_tools  # ["search_web", "summarize"]
+result.actual_tools  # tools that were actually called
+result.missing_tools  # expected but not called
+result.extra_tools  # called but not expected
+result.strict  # whether strict mode was used
+result.success  # True if all expected tools called (and no extras in strict mode)
 ```
 
 **Modes:**
@@ -259,12 +266,12 @@ eval = AgentAsJudgeEval(
 result = await eval.arun(agent, EvalCase(input="Write a quarterly report summary"))
 
 # JudgeResult fields
-result.score       # float, 1.0-10.0 (numeric) or 10.0/0.0 (binary)
-result.success     # True if score >= threshold (numeric) or passed (binary)
-result.reason      # judge's explanation
-result.criteria    # the criteria used
-result.mode        # "numeric" or "binary"
-result.threshold   # threshold (numeric mode only)
+result.score  # float, 1.0-10.0 (numeric) or 10.0/0.0 (binary)
+result.success  # True if score >= threshold (numeric) or passed (binary)
+result.reason  # judge's explanation
+result.criteria  # the criteria used
+result.mode  # "numeric" or "binary"
+result.threshold  # threshold (numeric mode only)
 ```
 
 ```python
@@ -341,6 +348,7 @@ for r in suite.results:
 
 # Serialize for CI/CD
 import json
+
 print(json.dumps(suite.to_dict(), indent=2))
 ```
 
@@ -360,10 +368,13 @@ team = Team(
 )
 
 eval = AccuracyEval(threshold=8.0)
-result = await eval.arun_team(team, EvalCase(
-  input="Write about quantum computing",
-  expected="A well-researched article about quantum computing...",
-))
+result = await eval.arun_team(
+  team,
+  EvalCase(
+    input="Write about quantum computing",
+    expected="A well-researched article about quantum computing...",
+  ),
+)
 
 # Batch team evaluation
 suite = await eval.arun_batch_team(team, cases)
@@ -404,12 +415,15 @@ Extend `BaseEval` for domain-specific evaluation logic:
 from definable.agent.eval import BaseEval, EvalCase
 from definable.agent.eval import EvalResult
 
+
 class JSONFormatEval(BaseEval):
   """Verify the agent returns valid JSON."""
+
   name = "json_format"
 
   async def evaluate(self, agent, case: EvalCase) -> EvalResult:
     import json
+
     output = await agent.arun(case.input)
     content = output.content or ""
     try:
@@ -417,6 +431,7 @@ class JSONFormatEval(BaseEval):
       return EvalResult(eval_name=self.name, success=True, score=10.0, reason="Valid JSON")
     except json.JSONDecodeError as e:
       return EvalResult(eval_name=self.name, success=False, score=0.0, reason=f"Invalid JSON: {e}")
+
 
 # Use it like any other eval
 eval = JSONFormatEval()

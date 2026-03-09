@@ -15,6 +15,7 @@ class Document:
   def __post_init__(self) -> None:
     if self.id is None:
       self.id = str(uuid4())
+
   name: Optional[str] = None
   meta_data: Dict[str, Any] = field(default_factory=dict)
   embedder: Optional["Embedder"] = None

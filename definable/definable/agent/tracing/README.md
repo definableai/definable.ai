@@ -88,12 +88,12 @@ Internal coordinator that holds the list of exporters and applies the filter. Yo
 
 ```python
 writer = TraceWriter(tracing_config)
-writer.write(event)      # fan-out to all exporters; respects event_filter
-writer.flush()           # flush all exporters
-writer.shutdown()        # flush then close all exporters
-writer.add_exporter(e)   # add at runtime
+writer.write(event)  # fan-out to all exporters; respects event_filter
+writer.flush()  # flush all exporters
+writer.shutdown()  # flush then close all exporters
+writer.add_exporter(e)  # add at runtime
 writer.remove_exporter(e)  # remove at runtime; returns True if found
-writer.exporter_count    # int — number of currently attached exporters
+writer.exporter_count  # int — number of currently attached exporters
 ```
 
 ### `JSONLExporter`
@@ -104,9 +104,9 @@ Writes events to JSONL files, one file per session. Each line is a complete JSON
 class JSONLExporter:
   def __init__(
     self,
-    trace_dir: str | None = None,   # default: .definable/traces/
-    flush_each: bool = True,         # flush after every write
-    mirror_stdout: bool = True,      # also print each line to stdout
+    trace_dir: str | None = None,  # default: .definable/traces/
+    flush_each: bool = True,  # flush after every write
+    mirror_stdout: bool = True,  # also print each line to stdout
   ): ...
 ```
 
@@ -132,6 +132,7 @@ for ev in events_raw:
 
 # Typed event objects — full field access
 from definable.agent.run.agent import RunCompletedEvent
+
 events = read_trace_events(Path("./traces/session_abc123.jsonl"))
 for ev in events:
   if isinstance(ev, RunCompletedEvent):
@@ -164,8 +165,8 @@ class DebugExporter:
     self,
     *,
     max_content_length: int = 500,  # truncate long content fields
-    show_tools: bool = True,         # show tool definitions on ModelCallStarted
-    show_metrics: bool = True,       # show token counts on ModelCallCompleted
+    show_tools: bool = True,  # show tool definitions on ModelCallStarted
+    show_metrics: bool = True,  # show token counts on ModelCallCompleted
   ): ...
 ```
 
@@ -179,9 +180,9 @@ Discards every event. Useful in tests to suppress any real I/O while still exerc
 from definable.agent.tracing import NoOpExporter
 
 exporter = NoOpExporter()
-exporter.export(event)   # no-op
-exporter.flush()         # no-op
-exporter.shutdown()      # no-op
+exporter.export(event)  # no-op
+exporter.flush()  # no-op
+exporter.shutdown()  # no-op
 ```
 
 ### `read_trace_file(path: Path) -> list[dict]`
@@ -198,6 +199,7 @@ Reads a JSONL trace file and deserialises each line into the correct typed event
 from definable.agent.tracing import TraceExporter
 from definable.agent.events import BaseRunOutputEvent
 
+
 class MyExporter:
   """Send events to a remote collector."""
 
@@ -206,6 +208,7 @@ class MyExporter:
 
   def export(self, event: BaseRunOutputEvent) -> None:
     import httpx
+
     # Fire-and-forget; exceptions are suppressed by TraceWriter
     httpx.post(self._endpoint, json=event.to_dict())
 
@@ -251,8 +254,8 @@ agent = Agent(
   model="openai/gpt-4o-mini",
   tracing=Tracing(
     exporters=[
-      JSONLExporter("./traces"),   # write to disk
-      DebugExporter(),             # also print to stderr
+      JSONLExporter("./traces"),  # write to disk
+      DebugExporter(),  # also print to stderr
     ],
   ),
 )

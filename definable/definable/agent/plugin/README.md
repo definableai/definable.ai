@@ -11,6 +11,7 @@ import asyncio
 from definable.agent.plugin import Plugin, PluginRegistry
 from definable.agent.plugin.builtin import LoggingPlugin, MetricsPlugin, CachingPlugin
 
+
 # Create a custom plugin
 class HelloPlugin(Plugin):
   @property
@@ -24,14 +25,15 @@ class HelloPlugin(Plugin):
     print(f"Hello from plugin! Run ID: {state.run_id}")
     return state
 
+
 # Register and load
 registry = PluginRegistry()
 registry.add(HelloPlugin())
 registry.add(LoggingPlugin(verbose=True))
 registry.add(MetricsPlugin())
 
-print(len(registry))          # 3
-print("hello" in registry)    # True
+print(len(registry))  # 3
+print("hello" in registry)  # True
 
 # Load all onto an agent (dependency-ordered)
 await registry.load_all(agent)
@@ -108,35 +110,36 @@ Base class for all plugins. Subclasses must implement `name` and `on_load`.
 ```python
 from definable.agent.plugin import Plugin
 
+
 class MyPlugin(Plugin):
   @property
   def name(self) -> str:
-    return "my-plugin"                      # Required: unique identifier
+    return "my-plugin"  # Required: unique identifier
 
   @property
   def version(self) -> str:
-    return "1.0.0"                          # Default: "0.1.0"
+    return "1.0.0"  # Default: "0.1.0"
 
   @property
   def description(self) -> str:
-    return "Does something useful."         # Default: ""
+    return "Does something useful."  # Default: ""
 
   @property
   def requires(self) -> frozenset[str]:
-    return frozenset({"logging"})           # Default: frozenset()
+    return frozenset({"logging"})  # Default: frozenset()
 
   @property
   def conflicts(self) -> frozenset[str]:
-    return frozenset({"old-plugin"})        # Default: frozenset()
+    return frozenset({"old-plugin"})  # Default: frozenset()
 
   @property
   def modifies(self) -> frozenset[str]:
-    return frozenset({"invoke_loop"})       # Default: frozenset()
+    return frozenset({"invoke_loop"})  # Default: frozenset()
 
-  async def on_load(self, agent) -> None:   # Required
+  async def on_load(self, agent) -> None:  # Required
     agent.pipeline.hook("before:invoke_loop", self._hook)
 
-  async def on_unload(self, agent) -> None: # Optional (default: no-op)
+  async def on_unload(self, agent) -> None:  # Optional (default: no-op)
     pass
 ```
 
@@ -162,6 +165,7 @@ class MyPlugin(Plugin):
 ```python
 from definable.agent.plugin import Plugin
 
+
 class AnalyticsPlugin(Plugin):
   @property
   def name(self):
@@ -181,6 +185,7 @@ class AnalyticsPlugin(Plugin):
   async def _report(self, state):
     print(f"Run {state.run_id} completed")
     return state
+
 
 plugin = AnalyticsPlugin()
 print(plugin.to_dict())
@@ -231,9 +236,9 @@ registry = PluginRegistry()
 registry.add(LoggingPlugin())
 registry.add(MetricsPlugin())
 
-print("logging" in registry)   # True
-print(len(registry))           # 2
-print(registry.plugin_names)   # ["logging", "metrics"]
+print("logging" in registry)  # True
+print(len(registry))  # 2
+print(registry.plugin_names)  # ["logging", "metrics"]
 
 # Disable a plugin (skipped during load_all)
 registry.disable("logging")
@@ -253,12 +258,12 @@ Structured logging for pipeline phase transitions and run lifecycle events. Regi
 from definable.agent.plugin.builtin import LoggingPlugin
 
 lp = LoggingPlugin(
-  verbose=False,    # If True, log full state details (default: summary only)
-  log_fn=None,      # Custom log function (default: log_info)
+  verbose=False,  # If True, log full state details (default: summary only)
+  log_fn=None,  # Custom log function (default: log_info)
 )
 
-print(lp.name)         # "logging"
-print(lp.modifies)     # frozenset({"*"})
+print(lp.name)  # "logging"
+print(lp.modifies)  # frozenset({"*"})
 ```
 
 When loaded, logs:
@@ -307,12 +312,12 @@ LRU cache for identical prompts. Caches model responses keyed on SHA-256 hash of
 from definable.agent.plugin.builtin import CachingPlugin
 
 cp = CachingPlugin(
-  max_size=256,       # Max cached responses (default 256)
-  ttl_seconds=0,      # Time-to-live per entry (0 = no expiry, default 0)
+  max_size=256,  # Max cached responses (default 256)
+  ttl_seconds=0,  # Time-to-live per entry (0 = no expiry, default 0)
 )
 
-print(cp.name)       # "caching"
-print(cp.modifies)   # frozenset({"invoke_loop"})
+print(cp.name)  # "caching"
+print(cp.modifies)  # frozenset({"invoke_loop"})
 
 # After usage:
 # cp.size              -- current cache size
@@ -327,6 +332,7 @@ print(cp.modifies)   # frozenset({"invoke_loop"})
 
 ```python
 from definable.agent.plugin import Plugin
+
 
 class DashboardPlugin(Plugin):
   @property
@@ -350,6 +356,7 @@ class DashboardPlugin(Plugin):
 
 ```python
 from definable.agent.plugin import Plugin
+
 
 class NewCachePlugin(Plugin):
   @property
@@ -389,8 +396,8 @@ registry.add(MetricsPlugin())
 
 # Load only metrics
 await registry.load_one("metrics", agent)
-print(registry.is_loaded("metrics"))   # True
-print(registry.is_loaded("logging"))   # False
+print(registry.is_loaded("metrics"))  # True
+print(registry.is_loaded("logging"))  # False
 
 # Unload metrics
 await registry.unload_one("metrics", agent)

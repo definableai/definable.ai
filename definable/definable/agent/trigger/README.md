@@ -19,30 +19,36 @@ from definable.model.openai import OpenAIChat
 
 agent = Agent(model=OpenAIChat(id="gpt-4o-mini"), tools=[...])
 
+
 # HTTP webhook
 @agent.on(Webhook("/github", method="POST"))
 async def handle_github(event):
   return f"Process this GitHub event: {event.body}"
+
 
 # Cron — every hour (requires croniter)
 @agent.on(Cron("0 * * * *"))
 async def hourly_check(event):
   return "Run the hourly health check."
 
+
 # Fixed interval — every 30 seconds
 @agent.on(Interval(seconds=30))
 async def poll(event):
   return "Poll the external service."
+
 
 # One-shot — fire once after 60 seconds
 @agent.on(OneShot(delay=60))
 async def delayed_task(event):
   return "Run the deferred task now."
 
+
 # Programmatic event
 @agent.on(EventTrigger("user_signup"))
 async def on_signup(event):
   return f"Welcome new user: {event.body}"
+
 
 # Fire a programmatic event
 agent.emit("user_signup", {"name": "Alice"})
@@ -121,9 +127,9 @@ HTTP webhook trigger. Registered as a route on the `AgentServer`.
 
 ```python
 Webhook(
-  path="/my-endpoint",   # URL path (leading / auto-prepended if absent)
-  method="POST",         # HTTP method
-  auth=None,             # None = inherit from agent, False = disable, AuthProvider = override
+  path="/my-endpoint",  # URL path (leading / auto-prepended if absent)
+  method="POST",  # HTTP method
+  auth=None,  # None = inherit from agent, False = disable, AuthProvider = override
 )
 ```
 
@@ -145,7 +151,7 @@ Scheduled trigger using standard 5-field cron expressions. Requires `croniter`.
 ```python
 Cron(
   schedule="*/5 * * * *",  # Every 5 minutes
-  timezone="UTC",           # IANA timezone string
+  timezone="UTC",  # IANA timezone string
 )
 ```
 
@@ -167,12 +173,12 @@ Interval(
 
 ```python
 iv = Interval(seconds=60)
-iv.name              # "interval(60s)"
-iv.seconds           # 60
+iv.name  # "interval(60s)"
+iv.seconds  # 60
 iv.next_run(1000.0)  # 1060.0
 
 Interval(seconds=-1)  # raises ValueError
-Interval(seconds=0)   # raises ValueError
+Interval(seconds=0)  # raises ValueError
 ```
 
 `next_run(base_time)` returns `base_time + seconds`. The Scheduler calls this after each execution to compute the next fire time.
@@ -195,18 +201,18 @@ trigger = OneShot(delay=60)
 trigger = OneShot(fire_at=1700000000.0)
 
 # Neither provided — raises ValueError
-OneShot()            # ValueError: requires 'delay' > 0 or 'fire_at' > 0
-OneShot(delay=0)     # ValueError
+OneShot()  # ValueError: requires 'delay' > 0 or 'fire_at' > 0
+OneShot(delay=0)  # ValueError
 ```
 
 ```python
 os_t = OneShot(delay=60)
-os_t.name       # "oneshot(at=<timestamp>)"
-os_t.fire_at    # absolute Unix timestamp
-os_t.fired      # False
+os_t.name  # "oneshot(at=<timestamp>)"
+os_t.fire_at  # absolute Unix timestamp
+os_t.fired  # False
 
 os_t.mark_fired()
-os_t.fired      # True
+os_t.fired  # True
 os_t.next_run(0)  # math.inf — Scheduler sees this as "never run again"
 ```
 
@@ -256,7 +262,7 @@ scheduler = Scheduler(store=InMemoryJobStore())
 job = ScheduledJob(
   trigger=Interval(seconds=300),
   name="health-check",
-  max_runs=100,          # stop after 100 executions
+  max_runs=100,  # stop after 100 executions
 )
 await scheduler.add_job(job)
 await scheduler.start()
@@ -287,9 +293,11 @@ agent = Agent(
   instructions="...",
 )
 
+
 @agent.on(Interval(seconds=60))
 async def periodic(event):
   return "Run periodic task."
+
 
 # agent.scheduler is auto-initialized when schedulable triggers are present
 await agent.scheduler.start()

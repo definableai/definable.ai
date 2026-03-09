@@ -30,7 +30,7 @@ agent = Agent(
   model="openai/gpt-4o-mini",
   tools=[search, browse],
   compression=Compression(
-    tool_results_limit=3,   # compress after 3 uncompressed tool results
+    tool_results_limit=3,  # compress after 3 uncompressed tool results
   ),
 )
 
@@ -47,10 +47,10 @@ The agent loop calls `CompressionManager.ashould_compress()` after every tool ro
 from definable.agent.compression import Compression
 
 Compression(
-  model=None,                      # str | Model | None — compression model (default: agent's model)
-  tool_results_limit=3,            # int | None — compress after N uncompressed tool results
-  token_limit=None,                # int | None — compress when token count exceeds this
-  instructions=None,               # str | None — custom compression prompt
+  model=None,  # str | Model | None — compression model (default: agent's model)
+  tool_results_limit=3,  # int | None — compress after N uncompressed tool results
+  token_limit=None,  # int | None — compress when token count exceeds this
+  instructions=None,  # str | None — custom compression prompt
 )
 ```
 
@@ -76,8 +76,8 @@ from definable.model.openai import OpenAIChat
 manager = CompressionManager(
   model=OpenAIChat(id="gpt-4o-mini"),
   compress_tool_results=True,
-  compress_tool_results_limit=3,    # mirrors Compression.tool_results_limit
-  compress_token_limit=None,        # mirrors Compression.token_limit
+  compress_tool_results_limit=3,  # mirrors Compression.tool_results_limit
+  compress_token_limit=None,  # mirrors Compression.token_limit
   compress_tool_call_instructions=None,  # mirrors Compression.instructions
 )
 ```
@@ -98,8 +98,8 @@ After `compress()` or `acompress()`, the `manager.stats` dict is updated:
 ```python
 {
   "tool_results_compressed": int,  # total tool results compressed this session
-  "original_size": int,            # total original content length (chars)
-  "compressed_size": int,          # total compressed content length (chars)
+  "original_size": int,  # total original content length (chars)
+  "compressed_size": int,  # total compressed content length (chars)
 }
 ```
 
@@ -119,10 +119,10 @@ CompressionStartedEvent(
 
 # Emitted after compression finishes
 CompressionCompletedEvent(
-  tool_results_compressed=3,   # count of results compressed
-  original_size=4820,          # total chars before compression
-  compressed_size=312,         # total chars after compression
-  duration_ms=1240.5,          # wall time
+  tool_results_compressed=3,  # count of results compressed
+  original_size=4820,  # total chars before compression
+  compressed_size=312,  # total chars after compression
+  duration_ms=1240.5,  # wall time
 )
 ```
 

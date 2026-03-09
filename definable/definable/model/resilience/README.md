@@ -20,10 +20,12 @@ model = ResilientModel(
 )
 
 # Provider failover: fall through to backup on errors
-chain = FailoverChain(entries=[
-  FailoverEntry(model=OpenAIChat(id="gpt-4o-mini"), priority=0),
-  FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
-])
+chain = FailoverChain(
+  entries=[
+    FailoverEntry(model=OpenAIChat(id="gpt-4o-mini"), priority=0),
+    FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
+  ]
+)
 
 model = ResilientModel(
   inner=OpenAIChat(id="gpt-4o-mini"),
@@ -33,6 +35,7 @@ model = ResilientModel(
 
 # Use as a drop-in Model replacement
 from definable.agent import Agent
+
 agent = Agent(model=model)
 ```
 
@@ -93,7 +96,7 @@ Enum for key selection strategy in the pool.
 ```python
 from definable.model.resilience import SelectionStrategy
 
-SelectionStrategy.ROUND_ROBIN         # "round_robin" -- cycle through keys in order
+SelectionStrategy.ROUND_ROBIN  # "round_robin" -- cycle through keys in order
 SelectionStrategy.LEAST_RECENTLY_USED  # "lru" -- pick the key used least recently
 ```
 
@@ -105,13 +108,13 @@ Per-key health tracking dataclass.
 from definable.model.resilience import KeyHealth
 
 health = KeyHealth(
-  key="sk-key1",          # The API key string
-  success_count=0,        # Successful requests
-  failure_count=0,        # Failed requests (non-429)
-  rate_limit_count=0,     # Rate-limited requests (429)
-  last_used=0.0,          # Unix timestamp of last use
-  cooldown_until=0.0,     # Unix timestamp when cooldown expires
-  consecutive_failures=0, # Consecutive failures (resets on success)
+  key="sk-key1",  # The API key string
+  success_count=0,  # Successful requests
+  failure_count=0,  # Failed requests (non-429)
+  rate_limit_count=0,  # Rate-limited requests (429)
+  last_used=0.0,  # Unix timestamp of last use
+  cooldown_until=0.0,  # Unix timestamp when cooldown expires
+  consecutive_failures=0,  # Consecutive failures (resets on success)
 )
 ```
 
@@ -132,9 +135,9 @@ key = pool.acquire()
 pool.mark_success(key)
 
 health = pool.get_health(key)
-print(health.success_count)    # 1
-print(health.success_rate)     # 1.0
-print(health.is_available)     # True
+print(health.success_count)  # 1
+print(health.success_rate)  # 1.0
+print(health.is_available)  # True
 ```
 
 ### KeyPool
@@ -146,9 +149,9 @@ from definable.model.resilience import KeyPool, SelectionStrategy
 
 pool = KeyPool(
   keys=["sk-key1", "sk-key2", "sk-key3"],  # Must be unique, at least 1
-  strategy=SelectionStrategy.ROUND_ROBIN,    # Default: round_robin
-  base_cooldown=60.0,                        # Base cooldown for rate limits (seconds)
-  max_cooldown=300.0,                        # Max cooldown cap (seconds)
+  strategy=SelectionStrategy.ROUND_ROBIN,  # Default: round_robin
+  base_cooldown=60.0,  # Base cooldown for rate limits (seconds)
+  max_cooldown=300.0,  # Max cooldown cap (seconds)
 )
 ```
 
@@ -176,10 +179,10 @@ pool = KeyPool(
 from definable.model.resilience import KeyPool, SelectionStrategy
 
 pool = KeyPool(keys=["sk-key1", "sk-key2", "sk-key3"], strategy=SelectionStrategy.ROUND_ROBIN)
-print(pool.size)            # 3
+print(pool.size)  # 3
 print(pool.available_count())  # 3
 
-key = pool.acquire()        # "sk-key1"
+key = pool.acquire()  # "sk-key1"
 pool.mark_success(key)
 print(pool.get_health(key).success_count)  # 1
 
@@ -206,8 +209,8 @@ from definable.model.openai import OpenAIChat
 
 entry = FailoverEntry(
   model=OpenAIChat(id="gpt-4o-mini"),  # Required: the model provider
-  key_pool=None,                        # Optional: per-provider key rotation
-  priority=0,                           # Lower = tried first (default 0)
+  key_pool=None,  # Optional: per-provider key rotation
+  priority=0,  # Lower = tried first (default 0)
 )
 ```
 
@@ -219,13 +222,15 @@ Ordered list of failover providers, sorted by priority.
 from definable.model.resilience import FailoverChain, FailoverEntry
 from definable.model.openai import OpenAIChat
 
-chain = FailoverChain(entries=[
-  FailoverEntry(model=OpenAIChat(id="gpt-4o-mini"), priority=0),
-  FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
-])
+chain = FailoverChain(
+  entries=[
+    FailoverEntry(model=OpenAIChat(id="gpt-4o-mini"), priority=0),
+    FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
+  ]
+)
 
 print(chain.primary.model.id)  # "gpt-4o-mini" (lowest priority number)
-print(len(chain))              # 2
+print(len(chain))  # 2
 
 # Iterable -- iterate in priority order
 for entry in chain:
@@ -251,12 +256,14 @@ from definable.model.openai import OpenAIChat
 model = ResilientModel(
   inner=OpenAIChat(id="gpt-4o-mini"),  # Required: primary model
   key_pool=KeyPool(keys=["sk-1", "sk-2"]),  # Optional: key rotation
-  failover=FailoverChain(entries=[           # Optional: provider failover
-    FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
-  ]),
-  max_key_retries=3,              # Max key rotation attempts per call (default 3)
-  on_key_rotated=None,            # Callback for KeyRotatedEvent
-  on_failover=None,               # Callback for ProviderFailoverEvent
+  failover=FailoverChain(
+    entries=[  # Optional: provider failover
+      FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
+    ]
+  ),
+  max_key_retries=3,  # Max key rotation attempts per call (default 3)
+  on_key_rotated=None,  # Callback for KeyRotatedEvent
+  on_failover=None,  # Callback for ProviderFailoverEvent
 )
 ```
 
@@ -289,14 +296,14 @@ from definable.model.resilience.events import KeyRotatedEvent, ProviderFailoverE
 KeyRotatedEvent(
   old_key_prefix="sk-key1..",  # First 8 chars of old key
   new_key_prefix="sk-key2..",  # First 8 chars of new key
-  reason="rate_limited",       # Always "rate_limited"
+  reason="rate_limited",  # Always "rate_limited"
 )
 
 # Emitted on provider failover
 ProviderFailoverEvent(
   from_model_id="gpt-4o-mini",  # Model that failed
-  to_model_id="gpt-4o",         # Model that succeeded
-  reason="...",                  # Error message from the failure
+  to_model_id="gpt-4o",  # Model that succeeded
+  reason="...",  # Error message from the failure
 )
 ```
 
@@ -322,9 +329,11 @@ from definable.model.openai import OpenAIChat
 
 model = ResilientModel(
   inner=OpenAIChat(id="gpt-4o-mini"),
-  failover=FailoverChain(entries=[
-    FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
-  ]),
+  failover=FailoverChain(
+    entries=[
+      FailoverEntry(model=OpenAIChat(id="gpt-4o"), priority=1),
+    ]
+  ),
 )
 ```
 
@@ -332,7 +341,11 @@ model = ResilientModel(
 
 ```python
 from definable.model.resilience import (
-  ResilientModel, KeyPool, FailoverChain, FailoverEntry, SelectionStrategy,
+  ResilientModel,
+  KeyPool,
+  FailoverChain,
+  FailoverEntry,
+  SelectionStrategy,
 )
 from definable.model.openai import OpenAIChat
 
@@ -350,13 +363,15 @@ backup_pool = KeyPool(
 model = ResilientModel(
   inner=OpenAIChat(id="gpt-4o-mini"),
   key_pool=primary_pool,
-  failover=FailoverChain(entries=[
-    FailoverEntry(
-      model=OpenAIChat(id="gpt-4o"),
-      key_pool=backup_pool,
-      priority=1,
-    ),
-  ]),
+  failover=FailoverChain(
+    entries=[
+      FailoverEntry(
+        model=OpenAIChat(id="gpt-4o"),
+        key_pool=backup_pool,
+        priority=1,
+      ),
+    ]
+  ),
   max_key_retries=3,
   on_key_rotated=lambda e: print(f"Key rotated: {e.old_key_prefix} -> {e.new_key_prefix}"),
   on_failover=lambda e: print(f"Failover: {e.from_model_id} -> {e.to_model_id}"),

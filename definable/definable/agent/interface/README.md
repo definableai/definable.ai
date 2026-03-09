@@ -86,6 +86,7 @@ Abstract base class for all platform interfaces.
 ```python
 from definable.agent.interface import BaseInterface, InterfaceMessage, InterfaceResponse
 
+
 class MyInterface(BaseInterface):
   async def _start_receiver(self) -> None: ...
   async def _stop_receiver(self) -> None: ...
@@ -264,12 +265,12 @@ Lifecycle state of an interface managed by the gateway.
 from definable.agent.interface import InterfaceStatus
 
 # Values:
-InterfaceStatus.pending      # registered, not yet started
-InterfaceStatus.starting     # start() called, not yet running
-InterfaceStatus.running      # receiving messages
-InterfaceStatus.restarting   # crashed, waiting for backoff before restart
-InterfaceStatus.stopped      # stopped cleanly
-InterfaceStatus.error        # crashed
+InterfaceStatus.pending  # registered, not yet started
+InterfaceStatus.starting  # start() called, not yet running
+InterfaceStatus.running  # receiving messages
+InterfaceStatus.restarting  # crashed, waiting for backoff before restart
+InterfaceStatus.stopped  # stopped cleanly
+InterfaceStatus.error  # crashed
 ```
 
 The gateway auto-restarts crashed interfaces with exponential backoff (1s → 60s max).
@@ -331,11 +332,11 @@ async with SQLiteIdentityResolver("./identity.db") as resolver:
 
 ```python
 from definable.agent.interface import (
-  InterfaceError,               # Base — HTTP 500
-  InterfaceConnectionError,     # HTTP 503 — platform connection failed
-  InterfaceAuthenticationError, # HTTP 401 — invalid credentials
-  InterfaceRateLimitError,      # HTTP 429 — has retry_after attribute
-  InterfaceMessageError,        # HTTP 400 — message send/receive failed
+  InterfaceError,  # Base — HTTP 500
+  InterfaceConnectionError,  # HTTP 503 — platform connection failed
+  InterfaceAuthenticationError,  # HTTP 401 — invalid credentials
+  InterfaceRateLimitError,  # HTTP 429 — has retry_after attribute
+  InterfaceMessageError,  # HTTP 400 — message send/receive failed
 )
 ```
 

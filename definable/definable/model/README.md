@@ -76,8 +76,8 @@ from definable.model import Message, ModelResponse, Metrics, ToolExecution
 from definable.model import Citations, MessageReferences, Model
 
 # Lazy-loaded (require optional dependencies):
-from definable.model import Gemini   # requires: pip install google-genai
-from definable.model import Ollama   # requires: pip install ollama
+from definable.model import Gemini  # requires: pip install google-genai
+from definable.model import Ollama  # requires: pip install ollama
 from definable.model import OpenRouter
 ```
 
@@ -88,11 +88,11 @@ from definable.model import OpenRouter
 ```python
 from definable.model import resolve_model_string
 
-model = resolve_model_string("openai/gpt-4o-mini")   # → OpenAIChat(id="gpt-4o-mini")
+model = resolve_model_string("openai/gpt-4o-mini")  # → OpenAIChat(id="gpt-4o-mini")
 model = resolve_model_string("anthropic/claude-sonnet-4-5-20250929")  # → Claude(...)
-model = resolve_model_string("deepseek/deepseek-chat")                # → DeepSeekChat(...)
-model = resolve_model_string("google/gemini-2.0-flash-001")           # → Gemini(...)
-model = resolve_model_string("gpt-4o")               # bare name → OpenAI default
+model = resolve_model_string("deepseek/deepseek-chat")  # → DeepSeekChat(...)
+model = resolve_model_string("google/gemini-2.0-flash-001")  # → Gemini(...)
+model = resolve_model_string("gpt-4o")  # bare name → OpenAI default
 ```
 
 Supported providers: `anthropic`, `deepseek`, `google`, `mistral`, `moonshot`, `ollama`, `openai`, `openrouter`, `perplexity`, `xai`
@@ -367,6 +367,7 @@ pool = KeyPool(keys=["sk-key1", "sk-key2", "sk-key3"])
 
 # Selection strategies: round_robin (default) or lru
 from definable.model.resilience.key_pool import SelectionStrategy
+
 pool = KeyPool(keys=["sk-1", "sk-2"], strategy=SelectionStrategy.LEAST_RECENTLY_USED)
 
 # Manual key lifecycle
@@ -403,10 +404,12 @@ from definable.model import FailoverChain, FailoverEntry, OpenAIChat, Claude
 primary = OpenAIChat(id="gpt-4o")
 backup = Claude(id="claude-sonnet-4-5-20250929")
 
-chain = FailoverChain(entries=[
-  FailoverEntry(model=primary, key_pool=KeyPool(keys=["sk-1"]), priority=0),
-  FailoverEntry(model=backup, priority=1),
-])
+chain = FailoverChain(
+  entries=[
+    FailoverEntry(model=primary, key_pool=KeyPool(keys=["sk-1"]), priority=0),
+    FailoverEntry(model=backup, priority=1),
+  ]
+)
 # len(chain) == 2
 # chain.primary → the priority=0 entry
 ```
@@ -438,9 +441,11 @@ model = ResilientModel(
 model = ResilientModel(
   inner=OpenAIChat(id="gpt-4o"),
   key_pool=pool,
-  failover=FailoverChain(entries=[
-    FailoverEntry(model=Claude(id="claude-sonnet-4-5-20250929"), priority=0),
-  ]),
+  failover=FailoverChain(
+    entries=[
+      FailoverEntry(model=Claude(id="claude-sonnet-4-5-20250929"), priority=0),
+    ]
+  ),
   max_key_retries=3,
   on_key_rotated=lambda event: print(f"Rotated: {event.old_key_prefix} → {event.new_key_prefix}"),
   on_failover=lambda event: print(f"Failover: {event.from_model_id} → {event.to_model_id}"),
@@ -448,6 +453,7 @@ model = ResilientModel(
 
 # Use with Agent — transparent to the rest of the system:
 from definable.agent import Agent
+
 agent = Agent(model=model)
 ```
 

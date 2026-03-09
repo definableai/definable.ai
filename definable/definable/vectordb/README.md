@@ -18,12 +18,12 @@ db.create()
 
 # Prepare documents with embeddings
 docs = [
-    Document(content="Python is a programming language", meta_data={"source": "wiki"}),
-    Document(content="JavaScript runs in the browser", meta_data={"source": "wiki"}),
-    Document(content="Rust is a systems programming language", meta_data={"source": "blog"}),
+  Document(content="Python is a programming language", meta_data={"source": "wiki"}),
+  Document(content="JavaScript runs in the browser", meta_data={"source": "wiki"}),
+  Document(content="Rust is a systems programming language", meta_data={"source": "blog"}),
 ]
 for doc in docs:
-    doc.embedding = embedder.get_embedding(doc.content)
+  doc.embedding = embedder.get_embedding(doc.content)
 
 # Insert and search
 db.insert(docs)
@@ -96,9 +96,9 @@ All backends implement these methods:
 ```python
 from definable.vectordb import Distance
 
-Distance.cosine              # Cosine similarity (default)
-Distance.l2                  # Euclidean distance
-Distance.max_inner_product   # Dot product
+Distance.cosine  # Cosine similarity (default)
+Distance.l2  # Euclidean distance
+Distance.max_inner_product  # Dot product
 ```
 
 ### SearchType
@@ -106,9 +106,9 @@ Distance.max_inner_product   # Dot product
 ```python
 from definable.vectordb import SearchType
 
-SearchType.vector    # Pure vector similarity
-SearchType.keyword   # BM25 keyword search
-SearchType.hybrid    # Combined vector + keyword
+SearchType.vector  # Pure vector similarity
+SearchType.keyword  # BM25 keyword search
+SearchType.hybrid  # Combined vector + keyword
 ```
 
 ## Backend Implementations
@@ -122,9 +122,9 @@ from definable.vectordb import InMemoryVectorDB
 from definable.knowledge.embedder.openai import OpenAIEmbedder
 
 db = InMemoryVectorDB(
-    name="my_collection",       # Collection name
-    embedder=OpenAIEmbedder(),  # For embedding search queries
-    distance=Distance.cosine,   # Similarity metric
+  name="my_collection",  # Collection name
+  embedder=OpenAIEmbedder(),  # For embedding search queries
+  distance=Distance.cosine,  # Similarity metric
 )
 db.create()  # No-op for in-memory, but call for API consistency
 ```
@@ -139,9 +139,9 @@ PostgreSQL with the pgvector extension.
 from definable.vectordb import PgVector
 
 db = PgVector(
-    name="documents",
-    db_url="postgresql://user:pass@localhost:5432/mydb",
-    embedder=embedder,
+  name="documents",
+  db_url="postgresql://user:pass@localhost:5432/mydb",
+  embedder=embedder,
 )
 ```
 
@@ -155,9 +155,9 @@ Qdrant vector search engine (local or cloud).
 from definable.vectordb import Qdrant
 
 db = Qdrant(
-    name="documents",
-    url="http://localhost:6333",
-    embedder=embedder,
+  name="documents",
+  url="http://localhost:6333",
+  embedder=embedder,
 )
 ```
 
@@ -171,8 +171,8 @@ ChromaDB embedded or client mode.
 from definable.vectordb import ChromaDb
 
 db = ChromaDb(
-    name="documents",
-    embedder=embedder,
+  name="documents",
+  embedder=embedder,
 )
 ```
 
@@ -186,9 +186,9 @@ MongoDB Atlas vector search.
 from definable.vectordb import MongoDb
 
 db = MongoDb(
-    name="documents",
-    connection_string="mongodb+srv://...",
-    embedder=embedder,
+  name="documents",
+  connection_string="mongodb+srv://...",
+  embedder=embedder,
 )
 ```
 
@@ -202,9 +202,9 @@ Redis with the RediSearch module.
 from definable.vectordb import RedisDB
 
 db = RedisDB(
-    name="documents",
-    url="redis://localhost:6379",
-    embedder=embedder,
+  name="documents",
+  url="redis://localhost:6379",
+  embedder=embedder,
 )
 ```
 
@@ -218,9 +218,9 @@ Pinecone managed cloud vector service.
 from definable.vectordb import PineconeDb
 
 db = PineconeDb(
-    name="documents",
-    api_key="your-api-key",
-    embedder=embedder,
+  name="documents",
+  api_key="your-api-key",
+  embedder=embedder,
 )
 ```
 
@@ -231,8 +231,8 @@ db = PineconeDb(
 ### Insert with Content Hash (Deduplication)
 
 ```python
-db.insert("hash123", docs)               # Explicit content hash
-db.insert(docs)                           # Auto-generates hash from content
+db.insert("hash123", docs)  # Explicit content hash
+db.insert(docs)  # Auto-generates hash from content
 ```
 
 ### Metadata Filtering
@@ -247,12 +247,14 @@ results = db.search("query", limit=5, filters={"source": "blog"})
 import asyncio
 from definable.vectordb import InMemoryVectorDB
 
+
 async def main():
-    db = InMemoryVectorDB(embedder=embedder)
-    await db.async_create()
-    await db.ainsert(docs)
-    results = await db.asearch("search query", limit=3)
-    print(len(results))
+  db = InMemoryVectorDB(embedder=embedder)
+  await db.async_create()
+  await db.ainsert(docs)
+  results = await db.asearch("search query", limit=3)
+  print(len(results))
+
 
 asyncio.run(main())
 ```
@@ -267,8 +269,8 @@ from definable.knowledge import Knowledge
 from definable.vectordb import InMemoryVectorDB
 
 knowledge = Knowledge(
-    vector_db=InMemoryVectorDB(),
-    top_k=5,
+  vector_db=InMemoryVectorDB(),
+  top_k=5,
 )
 agent = Agent(model="openai/gpt-4o-mini", knowledge=knowledge)
 ```

@@ -264,8 +264,8 @@ from definable.reader import normalize_audio_format, OPENAI_INPUT_AUDIO_FORMATS
 
 normalized_bytes, output_format = normalize_audio_format(
   audio_bytes,
-  source_format,             # e.g. "ogg", "oga", "flac", "m4a"
-  target_formats=None,       # defaults to OPENAI_INPUT_AUDIO_FORMATS
+  source_format,  # e.g. "ogg", "oga", "flac", "m4a"
+  target_formats=None,  # defaults to OPENAI_INPUT_AUDIO_FORMATS
 )
 ```
 
@@ -319,11 +319,10 @@ Any object satisfying the `AudioTranscriber` protocol can be passed — implemen
 
 ```python
 class MyTranscriber:
-  def transcribe(self, audio_bytes: bytes, mime_type: str, **kwargs) -> str:
-    ...
+  def transcribe(self, audio_bytes: bytes, mime_type: str, **kwargs) -> str: ...
 
-  async def atranscribe(self, audio_bytes: bytes, mime_type: str, **kwargs) -> str:
-    ...
+  async def atranscribe(self, audio_bytes: bytes, mime_type: str, **kwargs) -> str: ...
+
 
 agent = Agent(model=model, audio_transcriber=MyTranscriber())
 ```

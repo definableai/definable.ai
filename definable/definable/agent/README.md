@@ -8,10 +8,12 @@ The central module for building LLM-powered agents. Provides the `Agent` class p
 from definable.agent import Agent
 from definable.tool.decorator import tool
 
+
 @tool
 def get_weather(city: str) -> str:
   """Get the current weather for a city."""
   return f"The weather in {city} is sunny."
+
 
 agent = Agent(
   model="openai/gpt-4o",
@@ -66,37 +68,29 @@ from definable.agent import Agent, AgentConfig
 agent = Agent(
   # Identity
   name="my-agent",
-  model="openai/gpt-4o",      # string shorthand or Model instance
+  model="openai/gpt-4o",  # string shorthand or Model instance
   instructions="...",
-
   # Capabilities
   tools=[...],
   toolkits=[...],
   skills=[...],
-
   # Memory & knowledge
-  memory=True,                 # InMemoryStore; or Memory(store=SQLiteStore(...))
-  knowledge="./docs/",         # path shorthand; or Knowledge(vector_db=..., top_k=5)
-  readers=True,                # file reading; or BaseReader instance
-
+  memory=True,  # InMemoryStore; or Memory(store=SQLiteStore(...))
+  knowledge="./docs/",  # path shorthand; or Knowledge(vector_db=..., top_k=5)
+  readers=True,  # file reading; or BaseReader instance
   # Reasoning
-  thinking=True,               # inner monologue; or Thinking(...)
-  deep_research=True,          # multi-wave research; or DeepResearchConfig(...)
-
+  thinking=True,  # inner monologue; or Thinking(...)
+  deep_research=True,  # multi-wave research; or DeepResearchConfig(...)
   # Security
-  security=True,               # default SecurityConfig; or SecurityConfig(...)
-
+  security=True,  # default SecurityConfig; or SecurityConfig(...)
   # Observability
   tracing=Tracing(...),
-  usage=True,                  # token + cost tracking; or UsageTracker(...)
-  debug=False,                 # color-coded per-turn debug output
-
+  usage=True,  # token + cost tracking; or UsageTracker(...)
+  debug=False,  # color-coded per-turn debug output
   # Audio
-  audio_transcriber=True,      # Whisper transcription; or OpenAITranscriber(...)
-
+  audio_transcriber=True,  # Whisper transcription; or OpenAITranscriber(...)
   # Plugins
-  plugins=[...],               # list[Plugin]
-
+  plugins=[...],  # list[Plugin]
   # Guardrails & config
   guardrails=Guardrails(...),
   config=AgentConfig(...),
@@ -249,8 +243,8 @@ agent = Agent(
 
 # Run an audit
 report = await agent.security_audit()
-print(report.score)       # int 0-100
-print(report.findings)    # list[SecurityFinding]
+print(report.score)  # int 0-100
+print(report.findings)  # list[SecurityFinding]
 ```
 
 See [`security/README.md`](security/README.md) for full details (rate limiting, SSRF guard, prompt injection defense, env sanitization).
@@ -404,7 +398,7 @@ from definable.agent import Agent, Interval, OneShot
 agent = Agent(
   model="gpt-4o",
   instructions="Run the daily briefing.",
-  triggers=[Interval(seconds=3600)],    # fires every hour
+  triggers=[Interval(seconds=3600)],  # fires every hour
 )
 await agent.aserve()
 ```
@@ -454,12 +448,14 @@ The plugin system provides a structured extension point for adding capabilities 
 ```python
 from definable.agent import Plugin, PluginRegistry, Agent
 
+
 class MyPlugin(Plugin):
   name = "my-plugin"
 
   def install(self, agent: Agent) -> None:
     # Attach tools, middleware, hooks, etc.
     ...
+
 
 agent = Agent(model="gpt-4o", plugins=[MyPlugin()])
 ```

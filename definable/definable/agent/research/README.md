@@ -19,9 +19,9 @@ researcher = DeepResearch(
 )
 
 result = await researcher.arun("What are the latest developments in quantum computing?")
-print(result.context)   # Formatted context for system prompt injection
-print(result.metrics)   # Performance metrics
-print(result.sources)   # Sources consulted
+print(result.context)  # Formatted context for system prompt injection
+print(result.metrics)  # Performance metrics
+print(result.sources)  # Sources consulted
 ```
 
 ### Agent Integration

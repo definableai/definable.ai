@@ -101,10 +101,10 @@ All endpoints accept `POST` with a JSON body and return JSON.
 from definable.agent.interface.desktop import BridgeClient
 
 async with BridgeClient() as client:
-    # Token auto-read from ~/.definable/bridge-token
-    png = await client.capture_screen()
-    await client.click(x=500, y=400)
-    text = await client.ocr_screen()
+  # Token auto-read from ~/.definable/bridge-token
+  png = await client.capture_screen()
+  await client.click(x=500, y=400)
+  text = await client.ocr_screen()
 ```
 
 Or plug the `MacOS` skill into any agent:
@@ -115,9 +115,9 @@ from definable.model.openai import OpenAIChat
 from definable.skill import MacOS
 
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o"),
-    skills=[MacOS()],
-    instructions="You can control this Mac.",
+  model=OpenAIChat(id="gpt-4o"),
+  skills=[MacOS()],
+  instructions="You can control this Mac.",
 )
 result = await agent.arun("Open Safari and go to apple.com")
 ```

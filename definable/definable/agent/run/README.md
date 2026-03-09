@@ -23,10 +23,10 @@ from definable.agent import Agent
 agent = Agent(model="openai/gpt-4o-mini")
 result = await agent.arun("What is the boiling point of tungsten?")
 
-print(result.content)          # the answer
-print(result.status)           # RunStatus.completed
-print(result.metrics.cost)     # total cost in USD
-print(result.run_id)           # unique run identifier
+print(result.content)  # the answer
+print(result.status)  # RunStatus.completed
+print(result.metrics.cost)  # total cost in USD
+print(result.run_id)  # unique run identifier
 ```
 
 Checking run status programmatically:
@@ -52,13 +52,13 @@ elif result.status == RunStatus.paused:
 
 ```python
 class RunStatus(str, Enum):
-  pending   = "PENDING"    # not yet started
-  running   = "RUNNING"    # in progress
+  pending = "PENDING"  # not yet started
+  running = "RUNNING"  # in progress
   completed = "COMPLETED"  # finished successfully
-  paused    = "PAUSED"     # waiting for human input (HITL)
+  paused = "PAUSED"  # waiting for human input (HITL)
   cancelled = "CANCELLED"  # cancelled by the caller
-  blocked   = "BLOCKED"    # waiting on an external dependency
-  error     = "ERROR"      # failed with an error
+  blocked = "BLOCKED"  # waiting on an external dependency
+  error = "ERROR"  # failed with an error
 ```
 
 Compare against enum members, not strings:
@@ -66,8 +66,8 @@ Compare against enum members, not strings:
 ```python
 from definable.agent.run import RunStatus
 
-assert result.status == RunStatus.completed   # correct
-assert result.status == "COMPLETED"           # also works (str enum), but prefer the member
+assert result.status == RunStatus.completed  # correct
+assert result.status == "COMPLETED"  # also works (str enum), but prefer the member
 ```
 
 ### `RunContext`
@@ -90,15 +90,15 @@ class RunContext:
   output_schema: type[BaseModel] | dict[str, Any] | None = None
 
   # Pipeline-populated (read after the run)
-  knowledge_context: str | None = None        # formatted RAG context injected into the prompt
-  knowledge_documents: list[Document] | None = None   # the raw retrieved documents
-  memory_context: str | None = None           # formatted memory payload
-  research_context: str | None = None         # formatted deep research output
-  research_result: object | None = None       # full ResearchResult object
-  readers_context: str | None = None          # extracted file content
+  knowledge_context: str | None = None  # formatted RAG context injected into the prompt
+  knowledge_documents: list[Document] | None = None  # the raw retrieved documents
+  memory_context: str | None = None  # formatted memory payload
+  research_context: str | None = None  # formatted deep research output
+  research_result: object | None = None  # full ResearchResult object
+  readers_context: str | None = None  # extracted file content
 
   # Which layers ran this turn
-  active_layers: set[str]                     # e.g. {"knowledge", "memory"}
+  active_layers: set[str]  # e.g. {"knowledge", "memory"}
 ```
 
 **Supplying `RunContext` to a run:**
@@ -121,8 +121,8 @@ result = await agent.arun("What changed in v3.2?", run_context=ctx)
 Reading pipeline-populated fields after the run (via the context object passed in — the same object is mutated):
 
 ```python
-print(ctx.knowledge_context)      # the text that was injected
-print(ctx.active_layers)          # e.g. {"knowledge"}
+print(ctx.knowledge_context)  # the text that was injected
+print(ctx.active_layers)  # e.g. {"knowledge"}
 ```
 
 ### `RunOutput`
@@ -142,13 +142,13 @@ class RunOutput:
   user_id: str | None
 
   # Input
-  input: RunInput | None                  # original prompt + attached media
+  input: RunInput | None  # original prompt + attached media
 
   # Output
-  content: Any                            # str or structured BaseModel
-  parsed: Any                             # populated when output_schema is used (see gotchas)
-  content_type: str                       # "str" by default
-  reasoning_content: str | None           # raw reasoning text (thinking-enabled runs)
+  content: Any  # str or structured BaseModel
+  parsed: Any  # populated when output_schema is used (see gotchas)
+  content_type: str  # "str" by default
+  reasoning_content: str | None  # raw reasoning text (thinking-enabled runs)
   reasoning_steps: list[ReasoningStep] | None
   reasoning_messages: list[Message] | None
 
@@ -158,10 +158,10 @@ class RunOutput:
   model_provider_data: dict[str, Any] | None
 
   # Conversation
-  messages: list[Message] | None          # full conversation history for multi-turn
+  messages: list[Message] | None  # full conversation history for multi-turn
 
   # Metrics
-  metrics: Metrics | None                 # tokens, cost, duration, cache hits
+  metrics: Metrics | None  # tokens, cost, duration, cache hits
 
   # Tool executions
   tools: list[ToolExecution] | None
@@ -171,7 +171,7 @@ class RunOutput:
   videos: list[Video] | None
   audio: list[Audio] | None
   files: list[File] | None
-  response_audio: Audio | None            # model-generated audio (voice runs)
+  response_audio: Audio | None  # model-generated audio (voice runs)
 
   # Citations / references
   citations: Citations | None
@@ -180,7 +180,7 @@ class RunOutput:
   # Metadata
   metadata: dict[str, Any] | None
   session_state: dict[str, Any] | None
-  created_at: int                         # Unix timestamp
+  created_at: int  # Unix timestamp
 
   # Events (streaming history)
   events: list[RunOutputEvent] | None
@@ -193,7 +193,7 @@ class RunOutput:
 
   # HITL
   requirements: list[RunRequirement] | None
-  workflow_step_id: str | None            # FK to StepOutput.step_id in workflows
+  workflow_step_id: str | None  # FK to StepOutput.step_id in workflows
 ```
 
 **Key properties:**
@@ -210,7 +210,7 @@ class RunOutput:
 **Serialisation:**
 
 ```python
-json_str = result.to_json()           # pretty-printed JSON
+json_str = result.to_json()  # pretty-printed JSON
 json_str = result.to_json(indent=None)  # compact
 d = result.to_dict()
 restored = RunOutput.from_dict(d)

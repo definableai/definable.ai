@@ -40,6 +40,7 @@ auth/
 ```python
 from definable.agent.auth import AuthProvider
 
+
 class MyAuth:
   def authenticate(self, request) -> Optional[AuthContext]:
     # Return AuthContext on success, None on failure.
@@ -68,7 +69,7 @@ from definable.agent.auth import APIKeyAuth
 
 auth = APIKeyAuth(
   keys={"key-1", "key-2"},  # str or Set[str]
-  header="X-API-Key",       # Default header to check
+  header="X-API-Key",  # Default header to check
 )
 ```
 
@@ -81,9 +82,9 @@ from definable.agent.auth import JWTAuth
 
 auth = JWTAuth(
   secret="my-jwt-secret",
-  algorithm="HS256",        # Default
-  audience=None,            # Optional audience claim
-  issuer=None,              # Optional issuer claim
+  algorithm="HS256",  # Default
+  audience=None,  # Optional audience claim
+  issuer=None,  # Optional issuer claim
 )
 ```
 
@@ -96,8 +97,8 @@ from definable.agent.auth import AllowlistAuth
 
 auth = AllowlistAuth(
   user_ids={"user-123", "user-456"},  # Required: allowed user IDs
-  chat_ids=None,                      # Optional: restrict to specific chats
-  platforms=None,                     # Optional: restrict to specific platforms
+  chat_ids=None,  # Optional: restrict to specific chats
+  platforms=None,  # Optional: restrict to specific platforms
 )
 ```
 
@@ -133,15 +134,15 @@ agent.auth = CompositeAuth(
   AllowlistAuth(user_ids={"user-1"}, platforms={"telegram"}),
 )
 
+
 # Per-trigger auth override
 @agent.on(Webhook("/github", auth=APIKeyAuth(keys="gh-secret")))
-async def handle_github(event):
-  ...
+async def handle_github(event): ...
+
 
 # Disable auth for a specific trigger
 @agent.on(Webhook("/public", auth=False))
-async def handle_public(event):
-  ...
+async def handle_public(event): ...
 ```
 
 ## See Also

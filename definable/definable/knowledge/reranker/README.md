@@ -65,9 +65,9 @@ from definable.knowledge.reranker import CohereReranker
 
 reranker = CohereReranker(
   model="rerank-multilingual-v3.0",  # or "rerank-english-v3.0"
-  api_key=None,                      # falls back to COHERE_API_KEY env var
-  top_n=None,                        # None = return all documents; int = return top N
-  cohere_client=None,                # inject a pre-built CohereClient
+  api_key=None,  # falls back to COHERE_API_KEY env var
+  top_n=None,  # None = return all documents; int = return top N
+  cohere_client=None,  # inject a pre-built CohereClient
 )
 ```
 
@@ -93,8 +93,8 @@ from definable.knowledge.reranker import SentenceTransformerReranker
 
 reranker = SentenceTransformerReranker(
   model="cross-encoder/ms-marco-MiniLM-L-6-v2",  # HuggingFace model ID
-  top_n=None,                                      # None = return all
-  device=None,                                     # None = auto; "cpu" | "cuda" | "mps"
+  top_n=None,  # None = return all
+  device=None,  # None = auto; "cpu" | "cuda" | "mps"
   batch_size=32,
 )
 ```

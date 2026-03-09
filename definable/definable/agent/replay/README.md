@@ -25,6 +25,7 @@ agent = Agent(model="openai/gpt-4o-mini", tools=[...])
 output = await agent.arun("Summarise the Q3 report.")
 
 from definable.agent.replay import Replay
+
 replay = Replay.from_run_output(output)
 
 print(replay.content)
@@ -58,9 +59,9 @@ class Replay:
   model_provider: str
 
   # Input / output
-  input: Any                            # RunInput — the original prompt/media
-  content: Any                          # final answer (str or structured)
-  messages: list                        # full conversation history
+  input: Any  # RunInput — the original prompt/media
+  content: Any  # final answer (str or structured)
+  messages: list  # full conversation history
 
   # Tool executions
   tool_calls: list[ToolCallRecord]
@@ -68,7 +69,7 @@ class Replay:
   # Aggregated metrics
   tokens: ReplayTokens
   cost: float | None
-  duration: float | None                # seconds
+  duration: float | None  # seconds
 
   # Step timeline
   steps: list[ReplayStep]
@@ -78,14 +79,14 @@ class Replay:
   memory_recalls: list[MemoryRecallRecord]
 
   # Status
-  status: str                           # "completed" | "error" | "cancelled"
+  status: str  # "completed" | "error" | "cancelled"
   error: str | None
 
   # Raw events
   events: list[BaseRunOutputEvent]
 
   # Source tag
-  source: str                           # "run_output" | "trace_file"
+  source: str  # "run_output" | "trace_file"
 ```
 
 **Construction class methods:**
@@ -120,9 +121,9 @@ One entry in the per-step timeline. Covers model calls, tool calls, knowledge re
 ```python
 @dataclass
 class ReplayStep:
-  step_type: str               # "model_call" | "tool_call" | "knowledge_retrieval" | "memory_recall"
-  name: str | None             # tool name, "model", "knowledge", or "memory"
-  started_at: int              # Unix timestamp (seconds)
+  step_type: str  # "model_call" | "tool_call" | "knowledge_retrieval" | "memory_recall"
+  name: str | None  # tool name, "model", "knowledge", or "memory"
+  started_at: int  # Unix timestamp (seconds)
   completed_at: int | None
   duration_ms: float | None
 ```
@@ -137,7 +138,7 @@ class ToolCallRecord:
   tool_name: str
   tool_args: dict[str, Any] | None
   result: str | None
-  error: bool | None           # True if the tool call raised an error
+  error: bool | None  # True if the tool call raised an error
   started_at: int
   completed_at: int | None
   duration_ms: float | None
@@ -177,9 +178,9 @@ Tool call diff produced by `compare_runs`.
 ```python
 @dataclass
 class ToolCallsDiff:
-  added: list[ToolCallRecord]    # calls present in b but not a
+  added: list[ToolCallRecord]  # calls present in b but not a
   removed: list[ToolCallRecord]  # calls present in a but not b
-  common: int                    # positional matches by name
+  common: int  # positional matches by name
 ```
 
 ### `ReplayComparison`
@@ -191,10 +192,10 @@ Side-by-side diff of two runs, returned by `compare_runs`.
 class ReplayComparison:
   original: Replay | None
   replayed: Replay | None
-  content_diff: str | None       # unified diff string; None when content is identical
-  cost_diff: float | None        # b.cost - a.cost; None if either run has no cost
-  token_diff: int                # b.total_tokens - a.total_tokens
-  duration_diff: float | None    # b.duration - a.duration (seconds)
+  content_diff: str | None  # unified diff string; None when content is identical
+  cost_diff: float | None  # b.cost - a.cost; None if either run has no cost
+  token_diff: int  # b.total_tokens - a.total_tokens
+  duration_diff: float | None  # b.duration - a.duration (seconds)
   tool_calls_diff: ToolCallsDiff
 ```
 
@@ -208,7 +209,7 @@ from definable.agent.replay import compare_runs
 diff = compare_runs(output_a, output_b)
 
 if diff.content_diff:
-  print(diff.content_diff)     # unified diff
+  print(diff.content_diff)  # unified diff
 print(f"Token delta: {diff.token_diff:+d}")
 print(f"Cost delta:  ${diff.cost_diff:+.6f}")
 print(f"New tools:   {[t.tool_name for t in diff.tool_calls_diff.added]}")
@@ -248,7 +249,7 @@ from definable.agent.replay import Replay
 
 replay = Replay.from_trace_file(
   Path("./traces/session_abc123.jsonl"),
-  run_id="run_xyz789",   # optional — omit to get the first run
+  run_id="run_xyz789",  # optional — omit to get the first run
 )
 
 for step in replay.steps:

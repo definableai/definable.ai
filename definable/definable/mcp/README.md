@@ -8,14 +8,16 @@ Model Context Protocol (MCP) client — connect to MCP servers to access tools, 
 from definable.agent import Agent
 from definable.mcp import MCPToolkit, MCPConfig, MCPServerConfig
 
-config = MCPConfig(servers=[
-  MCPServerConfig(
-    name="filesystem",
-    transport="stdio",
-    command="npx",
-    args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-  ),
-])
+config = MCPConfig(
+  servers=[
+    MCPServerConfig(
+      name="filesystem",
+      transport="stdio",
+      command="npx",
+      args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    ),
+  ]
+)
 
 async with MCPToolkit(config=config) as toolkit:
   await toolkit.initialize()
@@ -109,9 +111,9 @@ Exposes MCP server tools as `Function` objects for agent integration.
 ```python
 toolkit = MCPToolkit(
   config=config,
-  tool_name_prefix="",           # Optional prefix for tool names
-  include_server_prefix=True,    # Prefix tool names with server name
-  require_confirmation=False,    # HITL confirmation for tool calls
+  tool_name_prefix="",  # Optional prefix for tool names
+  include_server_prefix=True,  # Prefix tool names with server name
+  require_confirmation=False,  # HITL confirmation for tool calls
 )
 ```
 
@@ -143,13 +145,13 @@ from definable.mcp import MCPResourceProvider, MCPPromptProvider
 
 ```python
 from definable.mcp import (
-  MCPError,                # Base (500)
-  MCPConnectionError,      # 503 — connection failures
-  MCPTimeoutError,         # 504 — operation timeouts
-  MCPProtocolError,        # 502 — protocol violations
-  MCPToolNotFoundError,    # 404 — tool not found
+  MCPError,  # Base (500)
+  MCPConnectionError,  # 503 — connection failures
+  MCPTimeoutError,  # 504 — operation timeouts
+  MCPProtocolError,  # 502 — protocol violations
+  MCPToolNotFoundError,  # 404 — tool not found
   MCPServerNotFoundError,  # 404 — server not found
-  MCPResourceNotFoundError,# 404 — resource not found
+  MCPResourceNotFoundError,  # 404 — resource not found
   MCPPromptNotFoundError,  # 404 — prompt not found
 )
 ```
@@ -158,12 +160,12 @@ from definable.mcp import (
 
 ```python
 from definable.mcp import (
-  MCPToolDefinition,    # Tool metadata (name, description, inputSchema)
-  MCPToolCallResult,    # Tool execution result
-  MCPResource,          # Resource metadata (uri, name, mimeType)
-  MCPResourceContent,   # Resource content (text or blob)
+  MCPToolDefinition,  # Tool metadata (name, description, inputSchema)
+  MCPToolCallResult,  # Tool execution result
+  MCPResource,  # Resource metadata (uri, name, mimeType)
+  MCPResourceContent,  # Resource content (text or blob)
   MCPPromptDefinition,  # Prompt metadata (name, description, arguments)
-  MCPPromptMessage,     # Message in prompt result
+  MCPPromptMessage,  # Message in prompt result
 )
 ```
 

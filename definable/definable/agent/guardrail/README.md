@@ -9,12 +9,12 @@ from definable.agent import Agent
 from definable.agent.guardrail import Guardrails, max_tokens, pii_filter, tool_blocklist
 
 agent = Agent(
-    model=model,
-    guardrails=Guardrails(
-        input=[max_tokens(500)],
-        output=[pii_filter()],
-        tool=[tool_blocklist({"dangerous_tool"})],
-    ),
+  model=model,
+  guardrails=Guardrails(
+    input=[max_tokens(500)],
+    output=[pii_filter()],
+    tool=[tool_blocklist({"dangerous_tool"})],
+  ),
 )
 
 # Guardrails run automatically on every arun() / arun_stream() call.
@@ -49,11 +49,11 @@ Container that holds all guardrails and runs them at the appropriate checkpoints
 
 ```python
 guardrails = Guardrails(
-    input=[max_tokens(500)],           # Before LLM call
-    output=[pii_filter()],            # After LLM call
-    tool=[tool_blocklist({"rm"})],    # Before each tool execution
-    mode="fail_fast",                  # "fail_fast" | "run_all"
-    on_block="raise",                  # "raise" | "return_message"
+  input=[max_tokens(500)],  # Before LLM call
+  output=[pii_filter()],  # After LLM call
+  tool=[tool_blocklist({"rm"})],  # Before each tool execution
+  mode="fail_fast",  # "fail_fast" | "run_all"
+  on_block="raise",  # "raise" | "return_message"
 )
 ```
 
@@ -135,16 +135,17 @@ Convert plain async functions into guardrail objects:
 ```python
 from definable.agent.guardrail import input_guardrail, GuardrailResult
 
+
 @input_guardrail
 async def no_profanity(text: str, context) -> GuardrailResult:
-    if "badword" in text.lower():
-        return GuardrailResult.block("Profanity detected")
-    return GuardrailResult.allow()
+  if "badword" in text.lower():
+    return GuardrailResult.block("Profanity detected")
+  return GuardrailResult.allow()
+
 
 # With custom name
 @input_guardrail(name="custom_name")
-async def my_guard(text: str, context) -> GuardrailResult:
-    ...
+async def my_guard(text: str, context) -> GuardrailResult: ...
 ```
 
 Also available: `@output_guardrail`, `@tool_guardrail`.

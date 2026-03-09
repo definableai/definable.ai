@@ -11,23 +11,25 @@ import asyncio
 from definable.memory import Memory, InMemoryStore, SQLiteStore
 from definable.model.message import Message
 
+
 async def main():
-    # Default: InMemoryStore (created automatically)
-    memory = Memory()
+  # Default: InMemoryStore (created automatically)
+  memory = Memory()
 
-    # Add messages
-    await memory.add(Message(role="user", content="What is Python?"), session_id="s1")
-    await memory.add(Message(role="assistant", content="A programming language."), session_id="s1")
+  # Add messages
+  await memory.add(Message(role="user", content="What is Python?"), session_id="s1")
+  await memory.add(Message(role="assistant", content="A programming language."), session_id="s1")
 
-    # Retrieve entries
-    entries = await memory.get_entries("s1")
-    print(f"Stored {len(entries)} entries")  # 2
+  # Retrieve entries
+  entries = await memory.get_entries("s1")
+  print(f"Stored {len(entries)} entries")  # 2
 
-    # Get as Message objects (ready for agent context)
-    messages = await memory.get_context_messages("s1")
-    print(messages[0].role, messages[0].content)  # user What is Python?
+  # Get as Message objects (ready for agent context)
+  messages = await memory.get_context_messages("s1")
+  print(messages[0].role, messages[0].content)  # user What is Python?
 
-    await memory.close()
+  await memory.close()
+
 
 asyncio.run(main())
 ```
@@ -75,13 +77,13 @@ The main entry point. Snaps directly into Agent — no config wrapper needed.
 from definable.memory import Memory
 
 memory = Memory(
-    store=None,          # Backend store. None → InMemoryStore (auto-created)
-    model=None,          # LLM for summarization. None → uses agent's model at runtime
-    enabled=True,        # Whether memory is active
-    max_messages=100,    # Threshold for auto-optimization
-    pin_count=2,         # Initial messages to preserve during optimization
-    recent_count=5,      # Recent messages to preserve during optimization
-    description=None,    # Description shown in agent layer guide
+  store=None,  # Backend store. None → InMemoryStore (auto-created)
+  model=None,  # LLM for summarization. None → uses agent's model at runtime
+  enabled=True,  # Whether memory is active
+  max_messages=100,  # Threshold for auto-optimization
+  pin_count=2,  # Initial messages to preserve during optimization
+  recent_count=5,  # Recent messages to preserve during optimization
+  description=None,  # Description shown in agent layer guide
 )
 ```
 
@@ -105,14 +107,14 @@ The data object stored by all backends.
 from definable.memory import MemoryEntry
 
 entry = MemoryEntry(
-    session_id="sess-1",          # Required — session scope
-    memory_id=None,               # Auto-generated UUID if not provided
-    user_id="default",            # User scope
-    role="user",                  # "user" | "assistant" | "tool" | "system" | "summary"
-    content="Hello, world!",      # Text content
-    message_data=None,            # Full serialized message (preserves tool_calls)
-    created_at=None,              # Auto-set to time.time()
-    updated_at=None,              # Auto-set to time.time()
+  session_id="sess-1",  # Required — session scope
+  memory_id=None,  # Auto-generated UUID if not provided
+  user_id="default",  # User scope
+  role="user",  # "user" | "assistant" | "tool" | "system" | "summary"
+  content="Hello, world!",  # Text content
+  message_data=None,  # Full serialized message (preserves tool_calls)
+  created_at=None,  # Auto-set to time.time()
+  updated_at=None,  # Auto-set to time.time()
 )
 
 # Serialization
@@ -127,16 +129,17 @@ All stores implement this async protocol:
 ```python
 from definable.memory import MemoryStore
 
+
 class MemoryStore(Protocol):
-    async def initialize(self) -> None: ...
-    async def close(self) -> None: ...
-    async def add(self, entry: MemoryEntry) -> None: ...
-    async def get_entries(self, session_id, user_id="default", limit=None) -> list[MemoryEntry]: ...
-    async def get_entry(self, memory_id) -> MemoryEntry | None: ...
-    async def update(self, entry: MemoryEntry) -> None: ...
-    async def delete(self, memory_id) -> None: ...
-    async def delete_session(self, session_id, user_id=None) -> None: ...
-    async def count(self, session_id, user_id="default") -> int: ...
+  async def initialize(self) -> None: ...
+  async def close(self) -> None: ...
+  async def add(self, entry: MemoryEntry) -> None: ...
+  async def get_entries(self, session_id, user_id="default", limit=None) -> list[MemoryEntry]: ...
+  async def get_entry(self, memory_id) -> MemoryEntry | None: ...
+  async def update(self, entry: MemoryEntry) -> None: ...
+  async def delete(self, memory_id) -> None: ...
+  async def delete_session(self, session_id, user_id=None) -> None: ...
+  async def count(self, session_id, user_id="default") -> int: ...
 ```
 
 ## Store Implementations
@@ -149,20 +152,22 @@ Ephemeral, in-process storage. Best for testing and short-lived processes.
 import asyncio
 from definable.memory import InMemoryStore, MemoryEntry
 
+
 async def main():
-    store = InMemoryStore()
-    await store.initialize()
+  store = InMemoryStore()
+  await store.initialize()
 
-    await store.add(MemoryEntry(session_id="s1", role="user", content="Hello"))
-    await store.add(MemoryEntry(session_id="s1", role="assistant", content="Hi!"))
+  await store.add(MemoryEntry(session_id="s1", role="user", content="Hello"))
+  await store.add(MemoryEntry(session_id="s1", role="assistant", content="Hi!"))
 
-    entries = await store.get_entries("s1")
-    print(len(entries))  # 2
+  entries = await store.get_entries("s1")
+  print(len(entries))  # 2
 
-    count = await store.count("s1")
-    print(count)  # 2
+  count = await store.count("s1")
+  print(count)  # 2
 
-    await store.close()
+  await store.close()
+
 
 asyncio.run(main())
 ```
@@ -175,16 +180,18 @@ Persistent storage via aiosqlite. Auto-creates tables on first use.
 import asyncio
 from definable.memory import SQLiteStore, MemoryEntry
 
+
 async def main():
-    store = SQLiteStore("./my_memory.db")  # or None → .definable/memory.db
-    await store.initialize()
+  store = SQLiteStore("./my_memory.db")  # or None → .definable/memory.db
+  await store.initialize()
 
-    await store.add(MemoryEntry(session_id="s1", role="user", content="Remember this"))
+  await store.add(MemoryEntry(session_id="s1", role="user", content="Remember this"))
 
-    entries = await store.get_entries("s1")
-    print(entries[0].content)  # "Remember this"
+  entries = await store.get_entries("s1")
+  print(entries[0].content)  # "Remember this"
 
-    await store.close()
+  await store.close()
+
 
 asyncio.run(main())
 ```
@@ -199,16 +206,18 @@ JSONL file-based storage. Human-readable, good for debugging.
 import asyncio
 from definable.memory import FileStore, MemoryEntry
 
+
 async def main():
-    store = FileStore("./memory_data")  # or None → .definable/memory/
-    await store.initialize()
+  store = FileStore("./memory_data")  # or None → .definable/memory/
+  await store.initialize()
 
-    await store.add(MemoryEntry(session_id="chat1", user_id="alice", role="user", content="Hi"))
+  await store.add(MemoryEntry(session_id="chat1", user_id="alice", role="user", content="Hi"))
 
-    entries = await store.get_entries("chat1", "alice")
-    print(entries[0].content)  # "Hi"
+  entries = await store.get_entries("chat1", "alice")
+  print(entries[0].content)  # "Hi"
 
-    await store.close()
+  await store.close()
+
 
 asyncio.run(main())
 ```
@@ -232,12 +241,14 @@ import asyncio
 from definable.memory import Memory
 from definable.model.message import Message
 
+
 async def main():
-    async with Memory() as memory:
-        await memory.add(Message(role="user", content="Hello"), session_id="s1")
-        entries = await memory.get_entries("s1")
-        print(len(entries))  # 1
-    # store automatically closed
+  async with Memory() as memory:
+    await memory.add(Message(role="user", content="Hello"), session_id="s1")
+    entries = await memory.get_entries("s1")
+    print(len(entries))  # 1
+  # store automatically closed
+
 
 asyncio.run(main())
 ```
@@ -255,8 +266,8 @@ agent = Agent(model="openai/gpt-4o-mini", memory=True)
 
 # Explicit store
 agent = Agent(
-    model="openai/gpt-4o-mini",
-    memory=Memory(store=SQLiteStore("./agent_memory.db")),
+  model="openai/gpt-4o-mini",
+  memory=Memory(store=SQLiteStore("./agent_memory.db")),
 )
 ```
 
@@ -269,8 +280,8 @@ from definable.agent import Agent
 from definable.memory import Memory, SQLiteStore
 
 agent = Agent(
-    model="openai/gpt-4o-mini",
-    memory=Memory(store=SQLiteStore("./chat.db")),
+  model="openai/gpt-4o-mini",
+  memory=Memory(store=SQLiteStore("./chat.db")),
 )
 
 # First turn
@@ -285,10 +296,10 @@ When conversation history exceeds `max_messages`, Memory automatically summarize
 
 ```python
 memory = Memory(
-    store=SQLiteStore("./chat.db"),
-    max_messages=50,    # Trigger summarization at 50 entries
-    pin_count=2,        # Keep first 2 messages
-    recent_count=5,     # Keep last 5 messages
+  store=SQLiteStore("./chat.db"),
+  max_messages=50,  # Trigger summarization at 50 entries
+  pin_count=2,  # Keep first 2 messages
+  recent_count=5,  # Keep last 5 messages
 )
 # model is set automatically from agent.model at runtime
 ```

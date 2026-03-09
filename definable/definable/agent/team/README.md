@@ -153,9 +153,9 @@ Team(
 # Async (preferred)
 result = await team.arun(
   instruction="Write about quantum computing",
-  session_id=None,       # Optional session ID
-  user_id=None,          # Optional user ID
-  output_schema=None,    # Override structured output schema
+  session_id=None,  # Optional session ID
+  user_id=None,  # Optional user ID
+  output_schema=None,  # Override structured output schema
 )
 # Returns: RunOutput (same as Agent.arun())
 
@@ -170,10 +170,10 @@ result = team.run("Write about quantum computing")
 ```python
 from definable.agent.team import TeamMode
 
-TeamMode.coordinate   # "coordinate" -- leader picks members, synthesizes
-TeamMode.route        # "route"      -- routes to single specialist
+TeamMode.coordinate  # "coordinate" -- leader picks members, synthesizes
+TeamMode.route  # "route"      -- routes to single specialist
 TeamMode.collaborate  # "collaborate"-- all members parallel, leader synthesizes
-TeamMode.tasks        # "tasks"      -- autonomous task list loop
+TeamMode.tasks  # "tasks"      -- autonomous task list loop
 ```
 
 ---
@@ -187,11 +187,11 @@ The `Task` and `TaskList` classes power the `tasks` mode. They are available for
 ```python
 from definable.agent.team import TaskStatus
 
-TaskStatus.pending      # "pending"     -- ready to be picked up
+TaskStatus.pending  # "pending"     -- ready to be picked up
 TaskStatus.in_progress  # "in_progress" -- currently being executed
-TaskStatus.completed    # "completed"   -- finished successfully
-TaskStatus.failed       # "failed"      -- encountered an error
-TaskStatus.blocked      # "blocked"     -- waiting on dependencies
+TaskStatus.completed  # "completed"   -- finished successfully
+TaskStatus.failed  # "failed"      -- encountered an error
+TaskStatus.blocked  # "blocked"     -- waiting on dependencies
 ```
 
 ### Task
@@ -200,20 +200,20 @@ TaskStatus.blocked      # "blocked"     -- waiting on dependencies
 from definable.agent.team import Task
 
 task = Task(
-  id="",                   # Auto-generated (8-char UUID)
+  id="",  # Auto-generated (8-char UUID)
   title="Research topic",
   description="Find sources about quantum computing",
   status=TaskStatus.pending,
-  assignee=None,           # Member name or None
-  parent_id=None,          # ID of parent task
-  dependencies=[],         # List of task IDs this depends on
-  result=None,             # Result string after completion
-  notes=[],                # List of note strings
-  created_at=0.0,          # Auto-set to time()
+  assignee=None,  # Member name or None
+  parent_id=None,  # ID of parent task
+  dependencies=[],  # List of task IDs this depends on
+  result=None,  # Result string after completion
+  notes=[],  # List of note strings
+  created_at=0.0,  # Auto-set to time()
 )
 
-task.to_dict()             # Serialize to dict
-Task.from_dict(data)       # Deserialize from dict
+task.to_dict()  # Serialize to dict
+Task.from_dict(data)  # Deserialize from dict
 ```
 
 ### TaskList
@@ -228,17 +228,17 @@ t1 = tl.create_task("Research", "Find sources", assignee="researcher")
 t2 = tl.create_task("Write", "Draft article", assignee="writer", dependencies=[t1.id])
 
 # Query
-tl.get_task(t1.id)                   # -> Task | None
-tl.get_available_tasks()              # -> [t1] (t2 is blocked by dependency)
+tl.get_task(t1.id)  # -> Task | None
+tl.get_available_tasks()  # -> [t1] (t2 is blocked by dependency)
 tl.get_available_tasks(for_assignee="researcher")  # -> [t1]
 
 # Update
 tl.update_task(t1.id, status="completed", result="Found 5 sources")
-tl.get_available_tasks()              # -> [t2] (dependency satisfied)
+tl.get_available_tasks()  # -> [t2] (dependency satisfied)
 
 # Status
-tl.all_terminal()                     # True when all tasks are completed or failed
-tl.get_summary_string()               # Formatted task list for display
+tl.all_terminal()  # True when all tasks are completed or failed
+tl.get_summary_string()  # Formatted task list for display
 
 # Serialization
 tl.to_dict()
@@ -294,7 +294,7 @@ general = Agent(model="openai/gpt-4o", instructions="General customer support.")
 
 team = Team(
   name="support",
-  model="openai/gpt-4o-mini",   # Cheaper model for routing decisions
+  model="openai/gpt-4o-mini",  # Cheaper model for routing decisions
   members=[tech_support, billing, general],
   mode=TeamMode.route,
 )
@@ -402,10 +402,12 @@ Force the team's final response into a Pydantic model:
 ```python
 from pydantic import BaseModel
 
+
 class Report(BaseModel):
   title: str
   summary: str
   key_findings: list[str]
+
 
 team = Team(
   name="report-team",
@@ -443,18 +445,21 @@ from definable.agent.team import (
 
 team = Team(name="my-team", model="openai/gpt-4o", members=[...])
 
+
 @team.events.on(MemberDelegatedEvent)
 async def on_delegated(event):
   print(f"Delegated to {event.member_name}: {event.task_input[:80]}")
+
 
 @team.events.on(MemberCompletedEvent)
 async def on_completed(event):
   print(f"{event.member_name} completed: {(event.content or '')[:80]}")
 
+
 @team.events.on(TaskIterationEvent)
 async def on_iteration(event):
-  print(f"Tasks mode iteration {event.iteration}: "
-        f"{event.completed_count} done, {event.pending_count} pending")
+  print(f"Tasks mode iteration {event.iteration}: {event.completed_count} done, {event.pending_count} pending")
+
 
 result = await team.arun("Do something complex")
 ```

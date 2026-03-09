@@ -85,7 +85,7 @@ from definable.knowledge.chunker import TextChunker
 
 chunker = TextChunker(
   chunk_size=1000,
-  separator="\n\n",    # split on double newline (paragraph breaks)
+  separator="\n\n",  # split on double newline (paragraph breaks)
   keep_separator=False,
 )
 chunks = chunker.chunk(document)
@@ -139,7 +139,7 @@ from definable.knowledge.chunker import MarkdownChunker
 chunker = MarkdownChunker(
   chunk_size=1000,
   chunk_overlap=200,
-  max_heading_depth=3,      # split on H1, H2, H3 (not H4-H6)
+  max_heading_depth=3,  # split on H1, H2, H3 (not H4-H6)
   preserve_code_blocks=True,
 )
 chunks = chunker.chunk(document)
@@ -165,12 +165,12 @@ from definable.knowledge.chunker import SemanticChunker
 from definable.knowledge.embedder import OpenAIEmbedder
 
 chunker = SemanticChunker(
-  chunk_size=1000,            # soft size limit (not strictly enforced)
+  chunk_size=1000,  # soft size limit (not strictly enforced)
   chunk_overlap=200,
   embedder=OpenAIEmbedder(),  # None = fall back to size-based splitting
-  similarity_threshold=0.5,   # 0.0-1.0; lower = fewer, larger chunks
-  sentence_window=1,          # sentences to average on each side of a boundary candidate
-  min_sentences=2,            # minimum sentences per chunk (merges tiny chunks)
+  similarity_threshold=0.5,  # 0.0-1.0; lower = fewer, larger chunks
+  sentence_window=1,  # sentences to average on each side of a boundary candidate
+  min_sentences=2,  # minimum sentences per chunk (merges tiny chunks)
 )
 chunks = chunker.chunk(document)
 ```

@@ -21,7 +21,7 @@ from definable.vectordb import InMemoryVectorDB
 knowledge = Knowledge(
   vector_db=InMemoryVectorDB(),
   temporal_decay=TemporalDecay(half_life_days=14.0),  # aggressively prefer recent
-  mmr=MMRConfig(lambda_param=0.7),                     # mostly relevance, some diversity
+  mmr=MMRConfig(lambda_param=0.7),  # mostly relevance, some diversity
 )
 ```
 
@@ -36,7 +36,7 @@ from definable.knowledge.scoring import TemporalDecay
 
 decay = TemporalDecay(
   half_life_days=30.0,  # float — days until score is halved
-  enabled=True,         # bool — set False to disable without removing from config
+  enabled=True,  # bool — set False to disable without removing from config
 )
 ```
 
@@ -81,9 +81,9 @@ from definable.knowledge.scoring import TemporalDecay
 
 now = time.time()
 docs = [
-  Document(content="Recent news",   reranking_score=0.9, meta_data={"inserted_at": now - 86400}),     # 1 day old
-  Document(content="Old tutorial",  reranking_score=0.9, meta_data={"inserted_at": now - 86400 * 60}), # 60 days old
-  Document(content="Core concept",  reranking_score=0.9, meta_data={"evergreen": True}),               # exempt
+  Document(content="Recent news", reranking_score=0.9, meta_data={"inserted_at": now - 86400}),  # 1 day old
+  Document(content="Old tutorial", reranking_score=0.9, meta_data={"inserted_at": now - 86400 * 60}),  # 60 days old
+  Document(content="Core concept", reranking_score=0.9, meta_data={"evergreen": True}),  # exempt
 ]
 
 decay = TemporalDecay(half_life_days=30.0)
@@ -98,7 +98,7 @@ from definable.knowledge.scoring import MMRConfig
 
 config = MMRConfig(
   lambda_param=0.5,  # float in [0.0, 1.0] — relevance vs diversity balance
-  enabled=True,      # bool
+  enabled=True,  # bool
 )
 ```
 
@@ -115,10 +115,10 @@ config = MMRConfig(
 from definable.knowledge.scoring import MMRConfig, mmr_rerank
 
 diverse = mmr_rerank(
-  query_embedding=query_emb,   # list[float] | None — query vector
-  documents=docs,              # list[Document]
+  query_embedding=query_emb,  # list[float] | None — query vector
+  documents=docs,  # list[Document]
   config=MMRConfig(lambda_param=0.7),
-  top_k=5,                     # int | None — defaults to len(documents)
+  top_k=5,  # int | None — defaults to len(documents)
 )
 ```
 

@@ -138,8 +138,8 @@ from definable.model.message import Message
 
 model = OpenAIChat(id="gpt-4o-mini")
 response = model.invoke(
-    messages=[Message(role="user", content="Hello!")],
-    assistant_message=Message(role="assistant", content=""),
+  messages=[Message(role="user", content="Hello!")],
+  assistant_message=Message(role="assistant", content=""),
 )
 print(response.content)
 ```
@@ -151,10 +151,12 @@ from definable.agent import Agent
 from definable.model.openai import OpenAIChat
 from definable.tool.decorator import tool
 
+
 @tool
 def add(a: int, b: int) -> int:
-    """Add two numbers together."""
-    return a + b
+  """Add two numbers together."""
+  return a + b
+
 
 model = OpenAIChat(id="gpt-4o-mini")
 agent = Agent(model=model, tools=[add])
@@ -173,17 +175,17 @@ from definable.model.openai import OpenAIChat
 
 # Setup knowledge base
 kb = Knowledge(
-    vector_db=InMemoryVectorDB(),
-    embedder=VoyageAIEmbedder(),
-    top_k=3,
+  vector_db=InMemoryVectorDB(),
+  embedder=VoyageAIEmbedder(),
+  top_k=3,
 )
 kb.add(Document(content="Company policy: Employees get 20 days PTO per year."))
 
 # Create agent with automatic RAG
 agent = Agent(
-    model=OpenAIChat(id="gpt-4o-mini"),
-    instructions="You are a helpful HR assistant.",
-    knowledge=kb,
+  model=OpenAIChat(id="gpt-4o-mini"),
+  instructions="You are a helpful HR assistant.",
+  knowledge=kb,
 )
 
 output = agent.run("How many vacation days do I get?")

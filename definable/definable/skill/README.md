@@ -12,11 +12,13 @@ from definable.tool.decorator import tool
 # Built-in skills
 agent = Agent(model=model, skills=[Calculator(), DateTime()])
 
+
 # Inline skill with custom tools
 @tool
 def search_docs(query: str) -> str:
   """Search documentation."""
   return docs.search(query)
+
 
 support = Skill(
   name="support",
@@ -68,9 +70,9 @@ skills/
 from definable.skill import Skill
 
 skill = Skill(
-  name="my_skill",                  # Identifier (defaults to class name)
+  name="my_skill",  # Identifier (defaults to class name)
   instructions="Domain expertise",  # Injected into system prompt
-  tools=[my_tool],                  # Tool functions
+  tools=[my_tool],  # Tool functions
   dependencies={"api_key": "..."},  # Shared config for tools
 )
 ```
@@ -136,9 +138,9 @@ A `Skill` backed by markdown content with YAML frontmatter. Provides instruction
 from definable.skill import SkillRegistry
 
 registry = SkillRegistry(
-  skills=None,              # Explicit MarkdownSkill list
-  directories=None,         # Custom directories to load from
-  include_library=True,     # Load built-in library skills
+  skills=None,  # Explicit MarkdownSkill list
+  directories=None,  # Custom directories to load from
+  include_library=True,  # Load built-in library skills
 )
 ```
 

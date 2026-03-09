@@ -19,9 +19,9 @@ workflow = Workflow(
   ],
 )
 result = await workflow.arun("Write about quantum computing")
-print(result.content)       # Final writer output
-print(result.success)       # True
-print(result.duration_ms)   # Total time in milliseconds
+print(result.content)  # Final writer output
+print(result.success)  # True
+print(result.duration_ms)  # Total time in milliseconds
 ```
 
 ---
@@ -137,9 +137,11 @@ step = Step(name="researcher", agent=my_agent)
 # With a Team
 step = Step(name="content-team", team=my_team)
 
+
 # With an async callable (receives StepInput, returns str or any)
 async def process(step_input):
   return f"Processed: {step_input.input}"
+
 
 step = Step(name="processor", executor=process)
 
@@ -168,6 +170,7 @@ By default, `Step` combines the original input with the previous step's content.
 def custom_builder(step_input):
   research = step_input.get_step_content("researcher")
   return f"Rewrite this research as a blog post:\n\n{research}"
+
 
 step = Step(name="writer", agent=writer, input_builder=custom_builder)
 ```
@@ -248,9 +251,7 @@ loop = Loop(
     Step(name="generate", agent=generator),
     Step(name="evaluate", agent=evaluator),
   ],
-  end_condition=lambda outputs: any(
-    "APPROVED" in (o.content or "") for o in outputs
-  ),
+  end_condition=lambda outputs: any("APPROVED" in (o.content or "") for o in outputs),
   max_iterations=5,
 )
 ```
@@ -357,11 +358,11 @@ If the selector returns a route name not in the `routes` dict, that route is mar
 ```python
 from definable.agent.workflow import StepStatus
 
-StepStatus.pending     # "pending"   -- not yet started
-StepStatus.running     # "running"   -- currently executing
-StepStatus.completed   # "completed" -- finished successfully
-StepStatus.failed      # "failed"    -- encountered an error
-StepStatus.skipped     # "skipped"   -- branch not taken (Condition)
+StepStatus.pending  # "pending"   -- not yet started
+StepStatus.running  # "running"   -- currently executing
+StepStatus.completed  # "completed" -- finished successfully
+StepStatus.failed  # "failed"    -- encountered an error
+StepStatus.skipped  # "skipped"   -- branch not taken (Condition)
 ```
 
 ### StepInput
@@ -374,16 +375,16 @@ from definable.agent.workflow import StepInput
 si = StepInput(
   input="original user prompt",
   previous_step_content="output from previous step",
-  previous_step_outputs={},   # name -> StepOutput
-  additional_data={},          # extra data from Workflow.arun()
-  session_state={},            # shared state across all steps
+  previous_step_outputs={},  # name -> StepOutput
+  additional_data={},  # extra data from Workflow.arun()
+  session_state={},  # shared state across all steps
 )
 
 # Access methods
-si.get_step_output("researcher")       # -> StepOutput | None
-si.get_step_content("researcher")      # -> str | None
-si.get_last_step_content()             # -> str | None (most recent)
-si.get_all_previous_content()          # -> dict[str, str | None]
+si.get_step_output("researcher")  # -> StepOutput | None
+si.get_step_content("researcher")  # -> str | None
+si.get_last_step_content()  # -> str | None (most recent)
+si.get_all_previous_content()  # -> dict[str, str | None]
 ```
 
 ### StepOutput
@@ -395,17 +396,17 @@ from definable.agent.workflow import StepOutput
 
 output = StepOutput(
   step_name="researcher",
-  step_id="a1b2c3d4",          # Auto-generated
-  step_type="step",             # "step", "steps", "parallel", "loop", "condition", "router"
+  step_id="a1b2c3d4",  # Auto-generated
+  step_type="step",  # "step", "steps", "parallel", "loop", "condition", "router"
   content="The research findings...",
   status=StepStatus.completed,
   success=True,
   error=None,
-  stop=False,                   # If True, halts the parent sequence
-  metrics=None,                 # Optional dict
+  stop=False,  # If True, halts the parent sequence
+  metrics=None,  # Optional dict
   duration_ms=1234.5,
-  run_output=None,              # The full RunOutput if agent/team was used
-  steps=[],                     # Nested StepOutputs for composite steps
+  run_output=None,  # The full RunOutput if agent/team was used
+  steps=[],  # Nested StepOutputs for composite steps
 )
 
 output.to_dict()  # Serialize to dict (excludes run_output)
@@ -420,19 +421,19 @@ from definable.agent.workflow import WorkflowOutput
 
 result = await workflow.arun("some input")
 
-result.workflow_id     # UUID of the workflow instance
-result.workflow_name   # "research-pipeline"
-result.run_id          # UUID of this specific run
-result.content         # Final content from the last step
-result.success         # True if all steps succeeded
-result.error           # Error message if failed
-result.step_outputs    # list[StepOutput] -- all top-level step results
-result.duration_ms     # Total execution time
-result.session_state   # Final session state dict
+result.workflow_id  # UUID of the workflow instance
+result.workflow_name  # "research-pipeline"
+result.run_id  # UUID of this specific run
+result.content  # Final content from the last step
+result.success  # True if all steps succeeded
+result.error  # Error message if failed
+result.step_outputs  # list[StepOutput] -- all top-level step results
+result.duration_ms  # Total execution time
+result.session_state  # Final session state dict
 
 # Access specific step results
-result.get_step_output("researcher")    # -> StepOutput | None (searches nested)
-result.get_step_content("researcher")   # -> str | None
+result.get_step_output("researcher")  # -> StepOutput | None (searches nested)
+result.get_step_content("researcher")  # -> str | None
 ```
 
 ---
@@ -461,7 +462,7 @@ Workflow(
 ```python
 result = await workflow.arun(
   input="user prompt",
-  session_state={"key": "override"},    # Merges with workflow session_state
+  session_state={"key": "override"},  # Merges with workflow session_state
   additional_data={"context": "extra"},  # Passed to all steps via StepInput
 )
 # Returns: WorkflowOutput
@@ -480,10 +481,13 @@ workflow = Workflow(
   name="research-and-analyze",
   steps=[
     Step(name="researcher", agent=researcher),
-    Parallel(name="analysis", steps=[
-      Step(name="technical", agent=tech_analyst),
-      Step(name="business", agent=biz_analyst),
-    ]),
+    Parallel(
+      name="analysis",
+      steps=[
+        Step(name="technical", agent=tech_analyst),
+        Step(name="business", agent=biz_analyst),
+      ],
+    ),
     Step(name="synthesizer", agent=synthesizer),
   ],
 )
@@ -506,9 +510,7 @@ workflow = Workflow(
           false_steps=Step(name="feedback", agent=critic),
         ),
       ],
-      end_condition=lambda outputs: any(
-        "PASS" in (o.content or "") for o in outputs
-      ),
+      end_condition=lambda outputs: any("PASS" in (o.content or "") for o in outputs),
       max_iterations=5,
     ),
   ],
@@ -526,10 +528,13 @@ workflow = Workflow(
       selector=classify_input,
       routes={
         "simple": Step(name="fast-path", agent=simple_agent),
-        "complex": Parallel(name="deep-analysis", steps=[
-          Step(name="a", agent=agent_a),
-          Step(name="b", agent=agent_b),
-        ]),
+        "complex": Parallel(
+          name="deep-analysis",
+          steps=[
+            Step(name="a", agent=agent_a),
+            Step(name="b", agent=agent_b),
+          ],
+        ),
       },
     ),
   ],
@@ -546,13 +551,14 @@ Any async or sync callable can be used as a step executor. The callable receives
 async def double(step_input):
   return f"doubled: {step_input.input or step_input.previous_step_content}"
 
+
 workflow = Workflow(
   name="test-wf",
   steps=[Step(name="step1", executor=double)],
 )
 result = await workflow.arun("hello")
-result.content       # "doubled: hello"
-result.success       # True
+result.content  # "doubled: hello"
+result.success  # True
 result.get_step_content("step1")  # "doubled: hello"
 ```
 
@@ -561,6 +567,7 @@ Sync callables are also supported (run in a thread executor):
 ```python
 def transform(step_input):
   return f"transformed: {step_input.input}"
+
 
 step = Step(name="sync-step", executor=transform)
 ```
@@ -603,13 +610,16 @@ from definable.agent.workflow import (
 
 workflow = Workflow(name="my-wf", steps=[...])
 
+
 @workflow.events.on(StepCompletedEvent)
 async def on_step_done(event):
   print(f"Step '{event.step_name}' completed in {event.duration_ms:.0f}ms")
 
+
 @workflow.events.on(LoopIterationEvent)
 async def on_loop_iter(event):
   print(f"Loop '{event.step_name}' iteration {event.iteration}/{event.max_iterations}")
+
 
 result = await workflow.arun("input")
 ```

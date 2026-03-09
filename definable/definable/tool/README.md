@@ -7,10 +7,12 @@ Tool system — define functions that agents can call during execution.
 ```python
 from definable.tool.decorator import tool
 
+
 @tool
 def get_weather(city: str) -> str:
   """Get the current weather for a city."""
   return f"Sunny in {city}"
+
 
 @tool(name="search", description="Search the web")
 async def web_search(query: str, max_results: int = 5) -> str:
@@ -87,10 +89,12 @@ Defines a field for HITL user input:
 from definable.agent import Agent
 from definable.tool.decorator import tool
 
+
 @tool
 def calculate(expression: str) -> str:
   """Evaluate a math expression."""
   return str(eval(expression))
+
 
 agent = Agent(
   model=model,

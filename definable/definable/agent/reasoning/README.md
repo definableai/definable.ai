@@ -25,7 +25,7 @@ from definable.agent.reasoning import Thinking
 
 agent = Agent(
   model="openai/gpt-4o-mini",
-  thinking=Thinking(trigger="auto"),   # only think when the query seems complex
+  thinking=Thinking(trigger="auto"),  # only think when the query seems complex
 )
 
 result = await agent.arun("Explain the tradeoffs between B-trees and LSM trees.")
@@ -74,9 +74,9 @@ Pydantic model. The structured result produced by the thinking phase. The agent'
 
 ```python
 class ThinkingOutput(BaseModel):
-  analysis: str                   # 1-2 sentence read of what the user needs
-  approach: str                   # 1-2 sentence plan for how to respond
-  tool_plan: list[str] | None     # ordered tool names to call; None if no tools needed
+  analysis: str  # 1-2 sentence read of what the user needs
+  approach: str  # 1-2 sentence plan for how to respond
+  tool_plan: list[str] | None  # ordered tool names to call; None if no tools needed
 ```
 
 ### `ReasoningStep`
@@ -85,12 +85,12 @@ Pydantic model. One discrete step in an explicit chain-of-thought trace. Used by
 
 ```python
 class ReasoningStep(BaseModel):
-  title: str | None            # concise label for the step
-  action: str | None           # what was done ("I will ..." / "I did ...")
-  result: str | None           # what came out of the action
-  reasoning: str | None        # the thought process behind the step
-  next_action: NextAction | None   # what happens next
-  confidence: float | None     # 0.0–1.0 confidence in this step
+  title: str | None  # concise label for the step
+  action: str | None  # what was done ("I will ..." / "I did ...")
+  result: str | None  # what came out of the action
+  reasoning: str | None  # the thought process behind the step
+  next_action: NextAction | None  # what happens next
+  confidence: float | None  # 0.0–1.0 confidence in this step
 ```
 
 ### `ReasoningSteps`
@@ -108,10 +108,10 @@ Enum controlling step-to-step flow in explicit reasoning chains.
 
 ```python
 class NextAction(str, Enum):
-  CONTINUE     = "continue"       # keep reasoning
-  VALIDATE     = "validate"       # check the current result
-  FINAL_ANSWER = "final_answer"   # commit and return
-  RESET        = "reset"          # start over
+  CONTINUE = "continue"  # keep reasoning
+  VALIDATE = "validate"  # check the current result
+  FINAL_ANSWER = "final_answer"  # commit and return
+  RESET = "reset"  # start over
 ```
 
 ### `thinking_output_to_reasoning_steps`
@@ -119,8 +119,7 @@ class NextAction(str, Enum):
 Utility that converts a `ThinkingOutput` to a `list[ReasoningStep]` for backward compatibility with consumers that expect the older step format.
 
 ```python
-def thinking_output_to_reasoning_steps(output: ThinkingOutput) -> list[ReasoningStep]:
-  ...
+def thinking_output_to_reasoning_steps(output: ThinkingOutput) -> list[ReasoningStep]: ...
 ```
 
 Returns one or two steps: an "Analysis" step always, plus a "Tool Plan" step when `output.tool_plan` is non-empty.
@@ -136,7 +135,7 @@ from definable.model.openai import OpenAIChat
 agent = Agent(
   model=OpenAIChat(id="gpt-4o"),
   thinking=Thinking(
-    model=OpenAIChat(id="gpt-4o-mini"),   # thinking is cheap, output is powerful
+    model=OpenAIChat(id="gpt-4o-mini"),  # thinking is cheap, output is powerful
     trigger="always",
     instructions="Be concise. Identify the single most important constraint.",
   ),

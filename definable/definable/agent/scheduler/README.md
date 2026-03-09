@@ -11,24 +11,26 @@ import asyncio
 from definable.agent.scheduler import Scheduler, ScheduledJob, JobStatus, InMemoryJobStore
 from definable.agent.trigger import Interval
 
+
 async def main():
   # Create a scheduler with defaults (InMemoryJobStore, 1s tick, 10 concurrent)
   scheduler = Scheduler()
 
   # Add a recurring job
   job = scheduler.add(Interval(seconds=30), name="health-check")
-  print(job.status)      # JobStatus.ACTIVE (auto-activated on add)
-  print(job.name)        # "health-check"
+  print(job.status)  # JobStatus.ACTIVE (auto-activated on add)
+  print(job.name)  # "health-check"
   print(scheduler.job_count)  # 1
 
   # Lifecycle control
   scheduler.pause(job.job_id)
-  print(job.status)      # JobStatus.PAUSED
+  print(job.status)  # JobStatus.PAUSED
   scheduler.resume(job.job_id)
-  print(job.status)      # JobStatus.ACTIVE
+  print(job.status)  # JobStatus.ACTIVE
 
   # Persist all jobs to the store
   await scheduler.save_all()
+
 
 asyncio.run(main())
 ```
@@ -82,12 +84,12 @@ Enum representing the lifecycle state of a scheduled job.
 ```python
 from definable.agent.scheduler import JobStatus
 
-JobStatus.PENDING     # "pending"   -- created but not yet started
-JobStatus.ACTIVE      # "active"    -- running on schedule
-JobStatus.PAUSED      # "paused"    -- temporarily suspended
-JobStatus.COMPLETED   # "completed" -- finished (max_runs reached or OneShot fired)
-JobStatus.FAILED      # "failed"    -- last run failed
-JobStatus.CANCELLED   # "cancelled" -- manually cancelled
+JobStatus.PENDING  # "pending"   -- created but not yet started
+JobStatus.ACTIVE  # "active"    -- running on schedule
+JobStatus.PAUSED  # "paused"    -- temporarily suspended
+JobStatus.COMPLETED  # "completed" -- finished (max_runs reached or OneShot fired)
+JobStatus.FAILED  # "failed"    -- last run failed
+JobStatus.CANCELLED  # "cancelled" -- manually cancelled
 ```
 
 ### ScheduledJob
@@ -101,10 +103,10 @@ from definable.agent.trigger import Interval
 job = ScheduledJob(
   trigger=Interval(seconds=60),  # Required -- the trigger that fires this job
   job_id="auto-generated-uuid",  # Auto-generated if omitted
-  name="",                       # Human-readable name (defaults to trigger.name)
-  status=JobStatus.PENDING,      # Initial status
-  max_runs=None,                 # None = unlimited executions
-  metadata={},                   # Arbitrary user metadata
+  name="",  # Human-readable name (defaults to trigger.name)
+  status=JobStatus.PENDING,  # Initial status
+  max_runs=None,  # None = unlimited executions
+  metadata={},  # Arbitrary user metadata
 )
 ```
 
@@ -148,21 +150,21 @@ from definable.agent.scheduler import ScheduledJob, JobStatus
 from definable.agent.trigger import Interval
 
 job = ScheduledJob(trigger=Interval(seconds=60), name="heartbeat")
-print(job.status)   # JobStatus.PENDING
+print(job.status)  # JobStatus.PENDING
 print(job.is_runnable)  # True
 
 job.activate()
-print(job.status)   # JobStatus.ACTIVE
+print(job.status)  # JobStatus.ACTIVE
 
 job.record_run()
 print(job.run_count)  # 1
 
 job.pause()
-print(job.status)   # JobStatus.PAUSED
+print(job.status)  # JobStatus.PAUSED
 print(job.is_runnable)  # False
 
 job.resume()
-print(job.status)   # JobStatus.ACTIVE
+print(job.status)  # JobStatus.ACTIVE
 
 # Max runs auto-completes the job
 limited = ScheduledJob(trigger=Interval(seconds=10), max_runs=1)
@@ -177,6 +179,7 @@ Async protocol for job persistence backends.
 
 ```python
 from definable.agent.scheduler import JobStore
+
 
 class JobStore(Protocol):
   async def save(self, job: ScheduledJob) -> None: ...
@@ -193,6 +196,7 @@ Dict-based ephemeral store. Best for testing and short-lived processes.
 import asyncio
 from definable.agent.scheduler import InMemoryJobStore, ScheduledJob, JobStatus
 from definable.agent.trigger import Interval
+
 
 async def main():
   store = InMemoryJobStore()
@@ -215,6 +219,7 @@ async def main():
   deleted = await store.delete(job.job_id)
   print(deleted)  # True
 
+
 asyncio.run(main())
 ```
 
@@ -226,6 +231,7 @@ Persistent store backed by aiosqlite. Auto-creates the `scheduled_jobs` table on
 import asyncio
 from definable.agent.scheduler import SQLiteJobStore, ScheduledJob
 from definable.agent.trigger import Interval
+
 
 async def main():
   store = SQLiteJobStore(".definable/scheduler.db")  # default path
@@ -239,6 +245,7 @@ async def main():
   print(rows[0]["trigger_name"])  # "interval(60s)"
 
   await store.close()
+
 
 asyncio.run(main())
 ```
@@ -255,9 +262,9 @@ The central scheduling loop. Manages job registration, lifecycle control, and co
 from definable.agent.scheduler import Scheduler
 
 scheduler = Scheduler(
-  store=None,            # JobStore backend. None -> InMemoryJobStore
-  tick_interval=1.0,     # Seconds between due-job checks (default 1.0)
-  max_concurrent=10,     # Max simultaneous job executions (default 10)
+  store=None,  # JobStore backend. None -> InMemoryJobStore
+  tick_interval=1.0,  # Seconds between due-job checks (default 1.0)
+  max_concurrent=10,  # Max simultaneous job executions (default 10)
 )
 ```
 

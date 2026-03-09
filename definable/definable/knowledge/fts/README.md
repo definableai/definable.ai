@@ -60,8 +60,8 @@ await knowledge.aadd(docs)
 from definable.knowledge.fts import FTSIndex
 
 fts = FTSIndex(
-  db_path=None,              # str | None — path to .db file, None = in-memory
-  table_name="fts_documents" # str — FTS5 virtual table name
+  db_path=None,  # str | None — path to .db file, None = in-memory
+  table_name="fts_documents",  # str — FTS5 virtual table name
 )
 ```
 
@@ -90,11 +90,11 @@ SQLite FTS5 returns negative BM25 ranks (lower = better). `FTSIndex` converts th
 from definable.knowledge.fts import HybridSearchConfig
 
 config = HybridSearchConfig(
-  vector_weight=0.6,        # float — weight for vector scores
-  text_weight=0.4,          # float — weight for BM25 scores
-  merge_strategy="rrf",     # "rrf" | "weighted"
-  rrf_k=60,                 # int — RRF smoothing constant
-  fts_fetch_multiplier=3,   # int — fetch limit * multiplier from FTS for coverage
+  vector_weight=0.6,  # float — weight for vector scores
+  text_weight=0.4,  # float — weight for BM25 scores
+  merge_strategy="rrf",  # "rrf" | "weighted"
+  rrf_k=60,  # int — RRF smoothing constant
+  fts_fetch_multiplier=3,  # int — fetch limit * multiplier from FTS for coverage
 )
 ```
 
@@ -120,8 +120,8 @@ searcher = HybridSearcher(
 
 merged = await searcher.merge(
   vector_results=vector_docs,  # list[Document] from vector DB
-  query="machine learning",    # str — passed to FTS search
-  limit=10,                    # int — max results returned
+  query="machine learning",  # str — passed to FTS search
+  limit=10,  # int — max results returned
 )
 ```
 
@@ -178,7 +178,7 @@ knowledge = Knowledge(
 
 await knowledge.aadd([
   Document(content="Python asyncio tutorial", meta_data={"source": "docs.py"}),
-  Document(content="FastAPI routing guide",   meta_data={"source": "fastapi.md"}),
+  Document(content="FastAPI routing guide", meta_data={"source": "fastapi.md"}),
 ])
 
 # Both vector and keyword paths are searched automatically

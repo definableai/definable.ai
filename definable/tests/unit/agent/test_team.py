@@ -11,6 +11,8 @@ from definable.agent.team import (
   Team,
   TeamMode,
 )
+
+
 def _mock_member(name: str = "member") -> MagicMock:
   """Create a minimal mock member for Team construction."""
   m = MagicMock()

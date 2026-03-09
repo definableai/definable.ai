@@ -11,14 +11,16 @@ import asyncio
 from definable.agent import Agent
 from definable.browser import BrowserToolkit, BrowserConfig
 
+
 async def main():
-    async with BrowserToolkit() as toolkit:
-        agent = Agent(
-            model="openai/gpt-4o",
-            toolkits=[toolkit],
-        )
-        result = await agent.arun("Go to news.ycombinator.com and list the top 3 stories")
-        print(result.content)
+  async with BrowserToolkit() as toolkit:
+    agent = Agent(
+      model="openai/gpt-4o",
+      toolkits=[toolkit],
+    )
+    result = await agent.arun("Go to news.ycombinator.com and list the top 3 stories")
+    print(result.content)
+
 
 asyncio.run(main())
 ```
@@ -135,9 +137,11 @@ toolkit = BrowserToolkit()
 # Custom config
 toolkit = BrowserToolkit(config=BrowserConfig(headless=True))
 
+
 # With action callback
 def on_action(event):
-    print(f"Browser: {event.action} on {event.selector}")
+  print(f"Browser: {event.action} on {event.selector}")
+
 
 toolkit = BrowserToolkit(on_action=on_action)
 ```
@@ -147,8 +151,8 @@ toolkit = BrowserToolkit(on_action=on_action)
 ```python
 # Context manager (recommended)
 async with BrowserToolkit() as toolkit:
-    agent = Agent(model="openai/gpt-4o", toolkits=[toolkit])
-    # ... use agent ...
+  agent = Agent(model="openai/gpt-4o", toolkits=[toolkit])
+  # ... use agent ...
 
 # Manual lifecycle
 toolkit = BrowserToolkit()
@@ -187,12 +191,14 @@ Abstract base class for implementing custom browser backends:
 ```python
 from definable.browser import BaseBrowser
 
+
 class MyBrowser(BaseBrowser):
-    async def start(self) -> None: ...
-    async def stop(self) -> None: ...
-    async def snapshot(self, options=None, selector=None, frame_selector=None) -> str: ...
-    async def navigate(self, url: str) -> str: ...
-    # ... implement all abstract methods ...
+  async def start(self) -> None: ...
+  async def stop(self) -> None: ...
+  async def snapshot(self, options=None, selector=None, frame_selector=None) -> str: ...
+  async def navigate(self, url: str) -> str: ...
+
+  # ... implement all abstract methods ...
 ```
 
 ## Patterns & Recipes
@@ -212,9 +218,7 @@ The recommended pattern for agent browser use:
 
 ```python
 # Agent can dismiss cookie banners before interacting
-result = await agent.arun(
-    "Go to example.com, remove any cookie banners, then read the main content"
-)
+result = await agent.arun("Go to example.com, remove any cookie banners, then read the main content")
 # Agent will use: browser_remove_elements(".cookie-notice")
 ```
 
@@ -223,9 +227,9 @@ result = await agent.arun(
 ```python
 config = BrowserConfig(user_data_dir="/tmp/my-chrome-profile")
 async with BrowserToolkit(config=config) as toolkit:
-    agent = Agent(model="openai/gpt-4o", toolkits=[toolkit])
-    # First run: agent logs in and cookies are saved
-    # Subsequent runs: already logged in
+  agent = Agent(model="openai/gpt-4o", toolkits=[toolkit])
+  # First run: agent logs in and cookies are saved
+  # Subsequent runs: already logged in
 ```
 
 ## Gotchas

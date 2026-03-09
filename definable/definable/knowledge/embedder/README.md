@@ -7,8 +7,8 @@ Text embedding sub-module. Converts raw text into float vectors that live in a v
 ```python
 from definable.knowledge.embedder import OpenAIEmbedder
 
-embedder = OpenAIEmbedder()                        # text-embedding-3-small, 1536 dims
-vector = embedder.get_embedding("Hello world")     # List[float]
+embedder = OpenAIEmbedder()  # text-embedding-3-small, 1536 dims
+vector = embedder.get_embedding("Hello world")  # List[float]
 vector = await embedder.async_get_embedding("Hi")  # async variant
 ```
 
@@ -65,17 +65,17 @@ The `usage` dict is provider-specific. OpenAI returns `{"prompt_tokens": int, "t
 from definable.knowledge.embedder import OpenAIEmbedder
 
 embedder = OpenAIEmbedder(
-  id="text-embedding-3-small",   # or "text-embedding-3-large" / "text-embedding-ada-002"
-  dimensions=1536,               # None = provider default; auto-set from model
-  encoding_format="float",       # "float" | "base64"
-  user=None,                     # optional end-user ID for OpenAI abuse detection
-  api_key=None,                  # falls back to OPENAI_API_KEY env var
+  id="text-embedding-3-small",  # or "text-embedding-3-large" / "text-embedding-ada-002"
+  dimensions=1536,  # None = provider default; auto-set from model
+  encoding_format="float",  # "float" | "base64"
+  user=None,  # optional end-user ID for OpenAI abuse detection
+  api_key=None,  # falls back to OPENAI_API_KEY env var
   organization=None,
-  base_url=None,                 # override for Azure OpenAI or compatible APIs
-  request_params=None,           # merged into every embeddings.create() call
-  client_params=None,            # merged into OpenAI() constructor
-  openai_client=None,            # inject a pre-built OpenAI client (sync)
-  async_client=None,             # inject a pre-built AsyncOpenAI client
+  base_url=None,  # override for Azure OpenAI or compatible APIs
+  request_params=None,  # merged into every embeddings.create() call
+  client_params=None,  # merged into OpenAI() constructor
+  openai_client=None,  # inject a pre-built OpenAI client (sync)
+  async_client=None,  # inject a pre-built AsyncOpenAI client
 )
 ```
 
@@ -96,7 +96,7 @@ from definable.knowledge.embedder import VoyageAIEmbedder
 embedder = VoyageAIEmbedder(
   id="voyage-2",
   dimensions=1024,
-  api_key=None,       # falls back to VOYAGEAI_API_KEY env var
+  api_key=None,  # falls back to VOYAGEAI_API_KEY env var
   max_retries=None,
   timeout=None,
   request_params=None,
@@ -114,9 +114,9 @@ from definable.knowledge.embedder import GoogleEmbedder
 embedder = GoogleEmbedder(
   id="text-embedding-004",
   dimensions=768,
-  api_key=None,       # falls back to GOOGLE_API_KEY env var
-  task_type=None,     # "retrieval_document" | "retrieval_query" |
-                      # "semantic_similarity" | "classification" | "clustering"
+  api_key=None,  # falls back to GOOGLE_API_KEY env var
+  task_type=None,  # "retrieval_document" | "retrieval_query" |
+  # "semantic_similarity" | "classification" | "clustering"
 )
 ```
 
@@ -145,7 +145,7 @@ from definable.knowledge.embedder import FallbackEmbedder, OpenAIEmbedder, Voyag
 
 embedder = FallbackEmbedder(
   providers=[
-    OpenAIEmbedder(),    # primary
+    OpenAIEmbedder(),  # primary
     VoyageAIEmbedder(),  # fallback
   ]
 )

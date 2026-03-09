@@ -22,7 +22,7 @@ print(f"Pages: {len(reader.pages)}")
 # Extract text
 text = ""
 for page in reader.pages:
-    text += page.extract_text()
+  text += page.extract_text()
 ```
 
 ## Python Libraries
@@ -35,22 +35,22 @@ from pypdf import PdfWriter, PdfReader
 
 writer = PdfWriter()
 for pdf_file in ["doc1.pdf", "doc2.pdf", "doc3.pdf"]:
-    reader = PdfReader(pdf_file)
-    for page in reader.pages:
-        writer.add_page(page)
+  reader = PdfReader(pdf_file)
+  for page in reader.pages:
+    writer.add_page(page)
 
 with open("merged.pdf", "wb") as output:
-    writer.write(output)
+  writer.write(output)
 ```
 
 #### Split PDF
 ```python
 reader = PdfReader("input.pdf")
 for i, page in enumerate(reader.pages):
-    writer = PdfWriter()
-    writer.add_page(page)
-    with open(f"page_{i+1}.pdf", "wb") as output:
-        writer.write(output)
+  writer = PdfWriter()
+  writer.add_page(page)
+  with open(f"page_{i + 1}.pdf", "wb") as output:
+    writer.write(output)
 ```
 
 #### Extract Metadata
@@ -73,7 +73,7 @@ page.rotate(90)  # Rotate 90 degrees clockwise
 writer.add_page(page)
 
 with open("rotated.pdf", "wb") as output:
-    writer.write(output)
+  writer.write(output)
 ```
 
 ### pdfplumber - Text and Table Extraction
@@ -83,20 +83,20 @@ with open("rotated.pdf", "wb") as output:
 import pdfplumber
 
 with pdfplumber.open("document.pdf") as pdf:
-    for page in pdf.pages:
-        text = page.extract_text()
-        print(text)
+  for page in pdf.pages:
+    text = page.extract_text()
+    print(text)
 ```
 
 #### Extract Tables
 ```python
 with pdfplumber.open("document.pdf") as pdf:
-    for i, page in enumerate(pdf.pages):
-        tables = page.extract_tables()
-        for j, table in enumerate(tables):
-            print(f"Table {j+1} on page {i+1}:")
-            for row in table:
-                print(row)
+  for i, page in enumerate(pdf.pages):
+    tables = page.extract_tables()
+    for j, table in enumerate(tables):
+      print(f"Table {j + 1} on page {i + 1}:")
+      for row in table:
+        print(row)
 ```
 
 #### Advanced Table Extraction
@@ -104,18 +104,18 @@ with pdfplumber.open("document.pdf") as pdf:
 import pandas as pd
 
 with pdfplumber.open("document.pdf") as pdf:
-    all_tables = []
-    for page in pdf.pages:
-        tables = page.extract_tables()
-        for table in tables:
-            if table:  # Check if table is not empty
-                df = pd.DataFrame(table[1:], columns=table[0])
-                all_tables.append(df)
+  all_tables = []
+  for page in pdf.pages:
+    tables = page.extract_tables()
+    for table in tables:
+      if table:  # Check if table is not empty
+        df = pd.DataFrame(table[1:], columns=table[0])
+        all_tables.append(df)
 
 # Combine all tables
 if all_tables:
-    combined_df = pd.concat(all_tables, ignore_index=True)
-    combined_df.to_excel("extracted_tables.xlsx", index=False)
+  combined_df = pd.concat(all_tables, ignore_index=True)
+  combined_df.to_excel("extracted_tables.xlsx", index=False)
 ```
 
 ### reportlab - Create PDFs
@@ -150,17 +150,17 @@ styles = getSampleStyleSheet()
 story = []
 
 # Add content
-title = Paragraph("Report Title", styles['Title'])
+title = Paragraph("Report Title", styles["Title"])
 story.append(title)
 story.append(Spacer(1, 12))
 
-body = Paragraph("This is the body of the report. " * 20, styles['Normal'])
+body = Paragraph("This is the body of the report. " * 20, styles["Normal"])
 story.append(body)
 story.append(PageBreak())
 
 # Page 2
-story.append(Paragraph("Page 2", styles['Heading1']))
-story.append(Paragraph("Content for page 2", styles['Normal']))
+story.append(Paragraph("Page 2", styles["Heading1"]))
+story.append(Paragraph("Content for page 2", styles["Normal"]))
 
 # Build PDF
 doc.build(story)
@@ -178,10 +178,10 @@ from reportlab.lib.styles import getSampleStyleSheet
 styles = getSampleStyleSheet()
 
 # Subscripts: use <sub> tag
-chemical = Paragraph("H<sub>2</sub>O", styles['Normal'])
+chemical = Paragraph("H<sub>2</sub>O", styles["Normal"])
 
 # Superscripts: use <super> tag
-squared = Paragraph("x<super>2</super> + y<super>2</super>", styles['Normal'])
+squared = Paragraph("x<super>2</super> + y<super>2</super>", styles["Normal"])
 ```
 
 For canvas-drawn text (not Paragraph objects), manually adjust font the size and position rather than using Unicode subscripts/superscripts.
@@ -237,14 +237,14 @@ import pytesseract
 from pdf2image import convert_from_path
 
 # Convert PDF to images
-images = convert_from_path('scanned.pdf')
+images = convert_from_path("scanned.pdf")
 
 # OCR each page
 text = ""
 for i, image in enumerate(images):
-    text += f"Page {i+1}:\n"
-    text += pytesseract.image_to_string(image)
-    text += "\n\n"
+  text += f"Page {i + 1}:\n"
+  text += pytesseract.image_to_string(image)
+  text += "\n\n"
 
 print(text)
 ```
@@ -261,11 +261,11 @@ reader = PdfReader("document.pdf")
 writer = PdfWriter()
 
 for page in reader.pages:
-    page.merge_page(watermark)
-    writer.add_page(page)
+  page.merge_page(watermark)
+  writer.add_page(page)
 
 with open("watermarked.pdf", "wb") as output:
-    writer.write(output)
+  writer.write(output)
 ```
 
 ### Extract Images
@@ -284,13 +284,13 @@ reader = PdfReader("input.pdf")
 writer = PdfWriter()
 
 for page in reader.pages:
-    writer.add_page(page)
+  writer.add_page(page)
 
 # Add password
 writer.encrypt("userpassword", "ownerpassword")
 
 with open("encrypted.pdf", "wb") as output:
-    writer.write(output)
+  writer.write(output)
 ```
 
 ## Quick Reference

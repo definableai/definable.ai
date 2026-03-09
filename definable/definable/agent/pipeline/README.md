@@ -11,6 +11,7 @@ from definable.agent import Agent
 from definable.agent.pipeline import Pipeline, ToolRetry, DebugConfig
 from definable.tool.decorator import tool
 
+
 # Tool retry: ask the model to fix its arguments
 @tool
 def search(query: str) -> str:
@@ -19,16 +20,19 @@ def search(query: str) -> str:
     raise ToolRetry("Query too short. Provide at least 3 characters.")
   return f"Results for: {query}"
 
+
 agent = Agent(
   model="openai/gpt-4o-mini",
   tools=[search],
 )
+
 
 # Register a hook on the pipeline
 @agent.pipeline.hook("before:invoke_loop")
 async def log_messages(state):
   print(f"Messages going to model: {len(state.invoke_messages)}")
   return state
+
 
 # Run with debug inspection
 agent = Agent(
@@ -117,13 +121,13 @@ Enum representing the execution status of the pipeline.
 ```python
 from definable.agent.pipeline import LoopStatus
 
-LoopStatus.pending     # "pending"   -- not yet started
-LoopStatus.running     # "running"   -- currently executing phases
-LoopStatus.completed   # "completed" -- all phases finished successfully
-LoopStatus.paused      # "paused"    -- HITL pause (awaiting user input)
-LoopStatus.cancelled   # "cancelled" -- cancelled via CancellationToken
-LoopStatus.blocked     # "blocked"   -- blocked on a requirement
-LoopStatus.error       # "error"     -- a phase raised an exception
+LoopStatus.pending  # "pending"   -- not yet started
+LoopStatus.running  # "running"   -- currently executing phases
+LoopStatus.completed  # "completed" -- all phases finished successfully
+LoopStatus.paused  # "paused"    -- HITL pause (awaiting user input)
+LoopStatus.cancelled  # "cancelled" -- cancelled via CancellationToken
+LoopStatus.blocked  # "blocked"   -- blocked on a requirement
+LoopStatus.error  # "error"     -- a phase raised an exception
 ```
 
 ### PhaseMetric
@@ -135,8 +139,8 @@ from definable.agent.pipeline import PhaseMetric
 
 metric = PhaseMetric(
   phase_name="invoke_loop",  # Phase that was executed
-  duration_ms=234.5,         # Execution time in milliseconds
-  skipped=False,             # True if phase was skipped (should_run=False)
+  duration_ms=234.5,  # Execution time in milliseconds
+  skipped=False,  # True if phase was skipped (should_run=False)
 )
 ```
 
@@ -179,8 +183,8 @@ The core orchestrator. Manages phase ordering, hooks, and execution.
 from definable.agent.pipeline import Pipeline
 
 pipeline = Pipeline(
-  phases=None,   # List[Phase] -- defaults to 8 standard phases
-  debug=None,    # DebugConfig for breakpoints and inspection
+  phases=None,  # List[Phase] -- defaults to 8 standard phases
+  debug=None,  # DebugConfig for breakpoints and inspection
 )
 ```
 
@@ -238,10 +242,13 @@ async def log_before(state):
   print(f"About to invoke with {len(state.invoke_messages)} messages")
   return state
 
+
 # Direct call
 async def log_after(state):
   print(f"Invoke completed: {state.content[:50] if state.content else 'empty'}")
   return state
+
+
 pipeline.hook("after:invoke_loop", log_after, priority=10)
 
 # Wildcard -- runs on every phase
@@ -257,9 +264,9 @@ pipeline.remove_hook("before:invoke_loop")
 **Hook priority:** Lower numbers run first. Default is 0. Use positive numbers for late-running hooks and negative numbers for early-running hooks.
 
 ```python
-pipeline.hook("before:invoke_loop", critical_hook, priority=-10)   # runs first
-pipeline.hook("before:invoke_loop", normal_hook, priority=0)       # runs second
-pipeline.hook("before:invoke_loop", cleanup_hook, priority=100)    # runs last
+pipeline.hook("before:invoke_loop", critical_hook, priority=-10)  # runs first
+pipeline.hook("before:invoke_loop", normal_hook, priority=0)  # runs second
+pipeline.hook("before:invoke_loop", cleanup_hook, priority=100)  # runs last
 ```
 
 ### 8 Default Phases
@@ -280,6 +287,7 @@ pipeline.hook("before:invoke_loop", cleanup_hook, priority=100)    # runs last
 ```python
 from definable.agent.pipeline import Phase, BasePhase
 
+
 # Phase is a Protocol -- any class with name + execute works
 class MyPhase:
   @property
@@ -290,11 +298,12 @@ class MyPhase:
     state.extra["custom_data"] = "hello"
     yield state, None  # yield (state, optional_event) tuples
 
+
 # BasePhase adds should_run, requires, provides
 class ConditionalPhase(BasePhase):
   _name = "conditional"
   _requires = {"invoke_messages"}  # fields this phase reads
-  _provides = {"custom_output"}    # fields this phase writes
+  _provides = {"custom_output"}  # fields this phase writes
 
   def should_run(self, state):
     return state.extra.get("enabled", True)
@@ -321,6 +330,7 @@ raise ToolRetry(
 from definable.agent.pipeline import ToolRetry
 from definable.tool.decorator import tool
 
+
 @tool
 def search(query: str) -> str:
   """Search the web for information."""
@@ -346,11 +356,11 @@ Fine-grained pipeline inspection configuration.
 from definable.agent.pipeline import DebugConfig
 
 config = DebugConfig(
-  breakpoints=set(),      # Set of hook specs where execution pauses (e.g. {"invoke_loop"})
-  step_mode=False,        # If True, pause after every phase (overrides breakpoints)
-  inspector=None,         # Callback: (state, phase_name) -> None (sync or async)
+  breakpoints=set(),  # Set of hook specs where execution pauses (e.g. {"invoke_loop"})
+  step_mode=False,  # If True, pause after every phase (overrides breakpoints)
+  inspector=None,  # Callback: (state, phase_name) -> None (sync or async)
   log_state_changes=False,  # If True, diff state between phases and log changes
-  enable_trace=True,      # If True, attach DebugExporter (color-coded stderr)
+  enable_trace=True,  # If True, attach DebugExporter (color-coded stderr)
 )
 ```
 
@@ -382,13 +392,13 @@ Controls for sub-agent spawning. When enabled, the agent gets a `spawn_agent` to
 from definable.agent.pipeline import SubAgentPolicy
 
 policy = SubAgentPolicy(
-  max_concurrent=5,          # Max simultaneous sub-agents (default 5)
-  max_tool_rounds=15,        # Tool rounds limit for child agents (default 15)
-  inherit_tools=True,        # Child inherits parent's tools (default True)
-  inherit_knowledge=False,   # Child inherits parent's knowledge (default False)
-  allowed_models=None,       # Restrict child model choices (None = use parent's)
-  on_spawn=None,             # Callback: (ThreadControlBlock) -> None
-  on_complete=None,          # Callback: (ThreadControlBlock) -> None
+  max_concurrent=5,  # Max simultaneous sub-agents (default 5)
+  max_tool_rounds=15,  # Tool rounds limit for child agents (default 15)
+  inherit_tools=True,  # Child inherits parent's tools (default True)
+  inherit_knowledge=False,  # Child inherits parent's knowledge (default False)
+  allowed_models=None,  # Restrict child model choices (None = use parent's)
+  on_spawn=None,  # Callback: (ThreadControlBlock) -> None
+  on_complete=None,  # Callback: (ThreadControlBlock) -> None
 )
 ```
 
@@ -400,15 +410,15 @@ Tracks a spawned sub-agent execution (inspired by the Self-Manager paper).
 from definable.agent.pipeline import ThreadControlBlock
 
 tcb = ThreadControlBlock(
-  id="uuid",                  # Unique thread identifier
+  id="uuid",  # Unique thread identifier
   goal="Research quantum computing",  # The subtask
-  state="running",            # "running" | "completed" | "failed" | "killed"
-  agent_config=None,          # SubAgentConfig (optional)
-  start_time=1234567890.0,    # Unix timestamp
-  result=None,                # Final output string (on completion)
-  error=None,                 # Error message (on failure)
-  metrics=None,               # Model metrics
-  run_output=None,            # Full RunOutput for inspection
+  state="running",  # "running" | "completed" | "failed" | "killed"
+  agent_config=None,  # SubAgentConfig (optional)
+  start_time=1234567890.0,  # Unix timestamp
+  result=None,  # Final output string (on completion)
+  error=None,  # Error message (on failure)
+  metrics=None,  # Model metrics
+  run_output=None,  # Full RunOutput for inspection
 )
 ```
 
@@ -421,8 +431,10 @@ from definable.agent.pipeline import EventStream
 
 stream = EventStream()
 
+
 async def my_handler(event):
   print(f"Event: {type(event).__name__}")
+
 
 stream.subscribe(my_handler)
 print(stream.handler_count)  # 1
@@ -444,6 +456,7 @@ stream.clear()
 ```python
 from definable.agent.pipeline import BasePhase
 
+
 class AuditPhase(BasePhase):
   _name = "audit"
   _requires = {"content"}
@@ -452,6 +465,7 @@ class AuditPhase(BasePhase):
     if state.content:
       print(f"[audit] Output length: {len(state.content)}")
     yield state, None
+
 
 # Insert between guard_output and store
 agent.pipeline.add_phase(AuditPhase(), after="guard_output")
@@ -469,6 +483,7 @@ class FastComposePhase(BasePhase):
     state.invoke_messages = list(state.all_messages)
     yield state, None
 
+
 agent.pipeline.replace_phase("compose", FastComposePhase())
 ```
 
@@ -480,6 +495,7 @@ async def custom_invoke(state):
   state.content = "Hardcoded response for testing"
   yield state, None
 
+
 agent.pipeline.hook("instead:invoke_loop", custom_invoke)
 ```
 
@@ -488,10 +504,12 @@ agent.pipeline.hook("instead:invoke_loop", custom_invoke)
 ```python
 from definable.agent.pipeline import EventStream
 
+
 async def monitor(event):
   event_name = type(event).__name__
   if "Completed" in event_name:
     print(f"Phase completed: {getattr(event, 'phase_name', '?')}")
+
 
 agent.pipeline.subscribe(monitor)
 ```

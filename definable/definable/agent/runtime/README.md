@@ -59,9 +59,9 @@ runtime = AgentRuntime(
   interfaces=[telegram, discord],
   host="0.0.0.0",
   port=8000,
-  enable_server=True,    # None = auto-detect (True if webhooks registered)
+  enable_server=True,  # None = auto-detect (True if webhooks registered)
   name="my-agent",
-  dev=False,             # Enable hot-reload
+  dev=False,  # Enable hot-reload
 )
 await runtime.start()
 ```

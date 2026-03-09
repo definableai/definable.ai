@@ -104,19 +104,18 @@ The main orchestrator. Manages: Source → Reader → Chunker → Embedder → V
 from definable.knowledge import Knowledge
 
 kb = Knowledge(
-  vector_db=InMemoryVectorDB(),    # Required — where embeddings live
-  embedder=OpenAIEmbedder(),       # Optional — defaults to OpenAIEmbedder
-  chunker=RecursiveChunker(),      # Optional — defaults to RecursiveChunker
-  readers=[],                      # Optional — auto-detected by file type
-  reranker=None,                   # Optional — re-score results
-  top_k=10,                        # Number of results to return
-  trigger="auto",                  # "always" | "auto" | "never"
-
+  vector_db=InMemoryVectorDB(),  # Required — where embeddings live
+  embedder=OpenAIEmbedder(),  # Optional — defaults to OpenAIEmbedder
+  chunker=RecursiveChunker(),  # Optional — defaults to RecursiveChunker
+  readers=[],  # Optional — auto-detected by file type
+  reranker=None,  # Optional — re-score results
+  top_k=10,  # Number of results to return
+  trigger="auto",  # "always" | "auto" | "never"
   # Advanced scoring (optional)
-  fts_index=None,                  # FTSIndex for full-text search
-  hybrid_config=None,              # HybridSearchConfig for vector + text merge
-  temporal_decay=None,             # TemporalDecay for age-based scoring
-  mmr=None,                        # MMRConfig for diversity reranking
+  fts_index=None,  # FTSIndex for full-text search
+  hybrid_config=None,  # HybridSearchConfig for vector + text merge
+  temporal_decay=None,  # TemporalDecay for age-based scoring
+  mmr=None,  # MMRConfig for diversity reranking
 )
 ```
 
@@ -134,7 +133,7 @@ from definable.knowledge import Document
 
 doc = Document(
   content="Hello world",
-  meta_data={"source": "wiki"},    # NOTE: meta_data, NOT metadata
+  meta_data={"source": "wiki"},  # NOTE: meta_data, NOT metadata
 )
 ```
 
@@ -152,9 +151,9 @@ doc = Document(
 ```python
 from definable.knowledge.chunker import (
   RecursiveChunker,  # Hierarchical splitting (default)
-  TextChunker,       # Single-separator splitting
-  MarkdownChunker,   # Heading-based splitting
-  SemanticChunker,   # Embedding-based boundary detection
+  TextChunker,  # Single-separator splitting
+  MarkdownChunker,  # Heading-based splitting
+  SemanticChunker,  # Embedding-based boundary detection
 )
 ```
 
@@ -169,11 +168,11 @@ from definable.knowledge.chunker import (
 
 ```python
 from definable.knowledge.embedder import (
-  OpenAIEmbedder,     # text-embedding-3-small (default)
-  VoyageAIEmbedder,   # voyage-2
-  GoogleEmbedder,     # text-embedding-004 (requires google-genai)
-  MistralEmbedder,    # mistral-embed (requires mistralai)
-  FallbackEmbedder,   # Multi-provider failover chain
+  OpenAIEmbedder,  # text-embedding-3-small (default)
+  VoyageAIEmbedder,  # voyage-2
+  GoogleEmbedder,  # text-embedding-004 (requires google-genai)
+  MistralEmbedder,  # mistral-embed (requires mistralai)
+  FallbackEmbedder,  # Multi-provider failover chain
 )
 ```
 
@@ -193,10 +192,12 @@ Chain of embedders — automatically switches to the next on failure:
 ```python
 from definable.knowledge.embedder import FallbackEmbedder, OpenAIEmbedder, VoyageAIEmbedder
 
-embedder = FallbackEmbedder(providers=[
-  OpenAIEmbedder(),       # Primary
-  VoyageAIEmbedder(),     # Fallback
-])
+embedder = FallbackEmbedder(
+  providers=[
+    OpenAIEmbedder(),  # Primary
+    VoyageAIEmbedder(),  # Fallback
+  ]
+)
 ```
 
 > **Gotcha:** `FallbackEmbedder(providers=[])` raises ValueError. At least one provider required.
@@ -205,8 +206,8 @@ embedder = FallbackEmbedder(providers=[
 
 ```python
 from definable.knowledge.reranker import (
-  CohereReranker,               # Cloud API reranking
-  SentenceTransformerReranker,   # Local cross-encoder
+  CohereReranker,  # Cloud API reranking
+  SentenceTransformerReranker,  # Local cross-encoder
 )
 ```
 
@@ -235,9 +236,9 @@ from definable.knowledge.reader.json_reader import JSONReader
 from definable.knowledge.reader.json_reader import JSONReader
 
 reader = JSONReader(
-  content_key="text",          # Extract content from this field
-  metadata_keys=["title"],     # Extract these as metadata
-  flatten=True,                # Flatten nested structures
+  content_key="text",  # Extract content from this field
+  metadata_keys=["title"],  # Extract these as metadata
+  flatten=True,  # Flatten nested structures
 )
 ```
 
@@ -257,9 +258,9 @@ knowledge = Knowledge(
   vector_db=InMemoryVectorDB(),
   fts_index=fts,
   hybrid_config=HybridSearchConfig(
-    method="rrf",       # "rrf" (Reciprocal Rank Fusion) or "weighted"
+    method="rrf",  # "rrf" (Reciprocal Rank Fusion) or "weighted"
     vector_weight=0.7,  # For weighted method
-    text_weight=0.3,    # For weighted method
+    text_weight=0.3,  # For weighted method
   ),
 )
 ```
@@ -278,7 +279,7 @@ from definable.knowledge import TemporalDecay
 knowledge = Knowledge(
   vector_db=db,
   temporal_decay=TemporalDecay(
-    half_life_days=30.0,    # Score halves every 30 days
+    half_life_days=30.0,  # Score halves every 30 days
     # Evergreen documents (meta_data.evergreen=True) are exempt
   ),
 )
@@ -294,7 +295,7 @@ from definable.knowledge import MMRConfig
 knowledge = Knowledge(
   vector_db=db,
   mmr=MMRConfig(
-    lambda_param=0.7,    # 0.0 = max diversity, 1.0 = pure relevance
+    lambda_param=0.7,  # 0.0 = max diversity, 1.0 = pure relevance
   ),
 )
 ```
@@ -319,7 +320,11 @@ agent = Agent(model="openai/gpt-4o-mini", knowledge="./docs/")
 
 ```python
 from definable.knowledge import (
-  Knowledge, FTSIndex, HybridSearchConfig, TemporalDecay, MMRConfig,
+  Knowledge,
+  FTSIndex,
+  HybridSearchConfig,
+  TemporalDecay,
+  MMRConfig,
 )
 from definable.knowledge.embedder import OpenAIEmbedder, FallbackEmbedder, VoyageAIEmbedder
 from definable.knowledge.chunker import MarkdownChunker
