@@ -8,6 +8,7 @@ on:
 
 jobs:
   lint:
+    if: github.event_name == 'pull_request'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +27,7 @@ jobs:
         run: ruff format --check definable/
 
   typecheck:
+    if: github.event_name == 'pull_request'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +40,7 @@ jobs:
         run: mypy definable/definable/ definable/tests/ --strict-equality --pretty --show-error-codes --config-file=mypy.ini
 
   test:
+    if: github.event_name == 'pull_request'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
@@ -55,7 +58,6 @@ jobs:
 
   integration-test:
     if: github.event_name == 'push'
-    needs: [test]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: integration_test
     services:
