@@ -73,28 +73,28 @@ class TestShouldUseNative:
   def test_auto_detect_native_model(self):
     model = _FakeModel(supports_native_thinking=True)
     t = Thinking()
-    assert t.should_use_native(model) is True
+    assert t.should_use_native(model) is True  # type: ignore[arg-type]
 
   def test_auto_detect_non_native_model(self):
     model = _FakeModel(supports_native_thinking=False)
     t = Thinking()
-    assert t.should_use_native(model) is False
+    assert t.should_use_native(model) is False  # type: ignore[arg-type]
 
   def test_mode_native_with_support(self):
     model = _FakeModel(supports_native_thinking=True)
     t = Thinking(mode="native")
-    assert t.should_use_native(model) is True
+    assert t.should_use_native(model) is True  # type: ignore[arg-type]
 
   def test_mode_native_without_support_raises(self):
     model = _FakeModel(supports_native_thinking=False, model_id="no-think-model")
     t = Thinking(mode="native")
     with pytest.raises(ValueError, match="does not support native thinking"):
-      t.should_use_native(model)
+      t.should_use_native(model)  # type: ignore[arg-type]
 
   def test_mode_definable_even_with_native_support(self):
     model = _FakeModel(supports_native_thinking=True)
     t = Thinking(mode="definable")
-    assert t.should_use_native(model) is False
+    assert t.should_use_native(model) is False  # type: ignore[arg-type]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -155,7 +155,7 @@ class TestDefinableFallbackEvents:
     )
 
     emitted_events = []
-    agent = Agent(model=model, thinking=True, instructions="Be helpful.")
+    agent = Agent(model=model, thinking=True, instructions="Be helpful.")  # type: ignore[arg-type]
     # Subscribe to _emit to capture trace events
     original_emit = agent._emit
 
@@ -163,7 +163,7 @@ class TestDefinableFallbackEvents:
       emitted_events.append(event)
       original_emit(event)
 
-    agent._emit = capture_emit
+    agent._emit = capture_emit  # type: ignore[method-assign]
 
     await agent.arun("What's the weather?")
 
@@ -194,14 +194,14 @@ class TestDefinableFallbackEvents:
     )
 
     emitted_events = []
-    agent = Agent(model=model, thinking=True, instructions="Be helpful.")
+    agent = Agent(model=model, thinking=True, instructions="Be helpful.")  # type: ignore[arg-type]
     original_emit = agent._emit
 
     def capture_emit(event):
       emitted_events.append(event)
       original_emit(event)
 
-    agent._emit = capture_emit
+    agent._emit = capture_emit  # type: ignore[method-assign]
 
     await agent.arun("Weather?")
 
@@ -248,9 +248,9 @@ class TestEnableNativeThinking:
 
     for effort, expected_budget in [("low", 4096), ("medium", 10000), ("high", 32000)]:
       model = Claude(id="claude-sonnet-4-5-20250929", api_key="test")
-      agent = Agent(model=model, thinking=Thinking(effort=effort))
+      agent = Agent(model=model, thinking=Thinking(effort=effort))  # type: ignore[arg-type]
       agent._enable_native_thinking()
-      assert model.thinking["budget_tokens"] == expected_budget, f"Failed for effort={effort}"
+      assert model.thinking["budget_tokens"] == expected_budget, f"Failed for effort={effort}"  # type: ignore[index]
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -319,7 +319,7 @@ class TestAgentLoopNativeThinking:
     # Check reasoning content
     delta_events = [e for e in events if e.event == "ReasoningContentDelta"]
     assert len(delta_events) == 1
-    assert delta_events[0].reasoning_content == "Let me think about this deeply..."
+    assert delta_events[0].reasoning_content == "Let me think about this deeply..."  # type: ignore[union-attr]
 
     # Check that native_reasoning_content is captured
     assert loop.native_reasoning_content == "Let me think about this deeply..."
@@ -451,7 +451,7 @@ class TestAgentLoopNativeThinking:
     # Check accumulated reasoning content
     deltas = [e for e in events if e.event == "ReasoningContentDelta"]
     assert len(deltas) == 3
-    full_reasoning = "".join(d.reasoning_content for d in deltas)
+    full_reasoning = "".join(d.reasoning_content for d in deltas)  # type: ignore[union-attr, misc]
     assert full_reasoning == "Let me think..."
 
     assert loop.native_reasoning_content == "Let me think..."
@@ -513,7 +513,7 @@ class TestAgentThinkingIntegration:
     )
     assert model.supports_native_thinking is False
 
-    agent = Agent(model=model, thinking=True)
+    agent = Agent(model=model, thinking=True)  # type: ignore[arg-type]
     result = await agent.arun("Hi!")
 
     # Should have made 2 calls: thinking (structured) + main response
@@ -541,7 +541,7 @@ class TestAgentThinkingIntegration:
     # Pretend this model supports native thinking
     model.supports_native_thinking = True
 
-    agent = Agent(model=model, thinking=Thinking(mode="definable"))
+    agent = Agent(model=model, thinking=Thinking(mode="definable"))  # type: ignore[arg-type]
     await agent.arun("Test.")
 
     # Should use Definable layer (2 calls)
@@ -566,7 +566,7 @@ class TestAgentThinkingIntegration:
       structured_responses=[thinking_response],
     )
 
-    agent = Agent(model=model, thinking=True)
+    agent = Agent(model=model, thinking=True)  # type: ignore[arg-type]
     result = await agent.arun("Hi!")
 
     assert result.reasoning_content is not None
