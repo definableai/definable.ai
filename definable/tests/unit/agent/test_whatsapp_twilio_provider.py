@@ -32,7 +32,7 @@ class TestTwilioLifecycle:
 
     await provider.disconnect()
     assert provider._connected is False
-    assert provider._http_client is None
+    assert provider._http_client is None  # type: ignore[unreachable]
 
   @pytest.mark.asyncio
   async def test_disconnect_idempotent(self, provider):
