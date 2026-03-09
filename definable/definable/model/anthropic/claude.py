@@ -133,6 +133,9 @@ class Claude(Model):
     # Set structured outputs capability flag for supported models
     if self._supports_structured_outputs():
       self.supports_native_structured_outputs = True
+    # Set native thinking capability flag
+    if self.id not in self.NON_THINKING_MODELS:
+      self.supports_native_thinking = True
     # Set up skills configuration if skills are enabled
     if self.skills:
       self._setup_skills_configuration()

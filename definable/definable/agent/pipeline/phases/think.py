@@ -15,12 +15,16 @@ class ThinkPhase(BasePhase):
 
   Wraps:
     - Agent._thinking_should_run()
-    - Agent._execute_thinking()
+    - Agent._execute_thinking() (Definable fallback layer)
+    - Agent._enable_native_thinking() (native model thinking)
 
-  The thinking output is stored on state and consumed by ComposePhase
-  to inject reasoning context into the system prompt. If removed or
-  replaced via hooks, ComposePhase falls back to computing thinking
-  inline (backward compat).
+  For native thinking models (Claude, DeepSeek, Gemini), this phase
+  configures the model's thinking parameters. The actual reasoning
+  content is emitted by the AgentLoop during model invocation.
+
+  For non-native models, this phase runs Definable's fallback thinking
+  layer (a separate LLM call) and stores the output on state for
+  ComposePhase to inject into the system prompt.
   """
 
   _name = "think"
@@ -42,15 +46,22 @@ class ThinkPhase(BasePhase):
       yield state, None
       return
 
-    # Execute thinking
-    thinking_output, reasoning_steps, reasoning_messages = await self._agent._execute_thinking(
-      state.context,
-      state.all_messages,
-      state.tools,
-    )
+    thinking = self._agent._thinking
+    assert thinking is not None
 
-    state.thinking_output = thinking_output
-    state.reasoning_steps = reasoning_steps
-    state.reasoning_messages = reasoning_messages
+    if thinking.should_use_native(self._agent.model):
+      # Native thinking: configure the model, let the loop handle events.
+      self._agent._enable_native_thinking()
+    else:
+      # Definable's fallback thinking layer (separate LLM call)
+      thinking_output, reasoning_steps, reasoning_messages = await self._agent._execute_thinking(
+        state.context,
+        state.all_messages,
+        state.tools,
+      )
+
+      state.thinking_output = thinking_output
+      state.reasoning_steps = reasoning_steps
+      state.reasoning_messages = reasoning_messages
 
     yield state, None

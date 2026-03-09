@@ -46,8 +46,8 @@ from definable.agent.events import (
   MemoryUpdateCompletedEvent,
   MemoryUpdateStartedEvent,
   ReasoningCompletedEvent,
+  ReasoningContentDeltaEvent,
   ReasoningStartedEvent,
-  ReasoningStepEvent,
   RunCompletedEvent,
   RunContext,
   RunErrorEvent,
@@ -2518,7 +2518,10 @@ class Agent:
     invoke_messages: List[Message],
     tools: Dict[str, Function],
   ) -> "tuple[Optional[ThinkingOutput], list[ReasoningStep], list[Message]]":
-    """Execute thinking phase: analyze query and produce reasoning steps.
+    """Execute Definable's fallback thinking layer (separate LLM call).
+
+    Used when the model does not support native thinking, or when
+    mode="definable" is explicitly set.
 
     Returns:
       Tuple of (thinking_output, reasoning_steps, reasoning_messages)
@@ -2591,15 +2594,20 @@ class Agent:
         thinking_output = ThinkingOutput(analysis="Could not parse", approach="Respond directly")  # type: ignore[call-arg]
         reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
 
-    # Emit ReasoningStep for each step
-    for step in reasoning_steps:
+    # Emit unified ReasoningContentDelta (flattened text, not structured steps)
+    if thinking_output:
+      delta_text = f"Analysis: {thinking_output.analysis}\nApproach: {thinking_output.approach}"
+      if thinking_output.tool_plan:
+        delta_text += f"\nTool plan: {', '.join(thinking_output.tool_plan)}"
+      if thinking_output.considerations:
+        delta_text += f"\nConsiderations: {thinking_output.considerations}"
       self._emit(
-        ReasoningStepEvent(
+        ReasoningContentDeltaEvent(
           run_id=context.run_id,
           session_id=context.session_id,
           agent_id=self.agent_id,
           agent_name=self.agent_name,
-          reasoning_content=step.reasoning or "",
+          reasoning_content=delta_text,
         )
       )
 
@@ -2623,6 +2631,40 @@ class Agent:
     )
 
     return thinking_output, reasoning_steps, reasoning_agent_messages
+
+  def _enable_native_thinking(self) -> None:
+    """Configure the model to use native extended thinking.
+
+    Called when thinking=True (or Thinking(...)) and the model supports it.
+    Sets the model's thinking parameter (e.g. Claude's thinking dict,
+    Gemini's thinking_budget, OpenAI's reasoning_effort).
+    """
+    assert self._thinking is not None
+    budget = self._thinking.resolve_budget_tokens()
+
+    # Claude: thinking = {"type": "enabled", "budget_tokens": N}
+    from definable.model.anthropic.claude import Claude
+
+    if isinstance(self.model, Claude):
+      if not self.model.thinking:
+        self.model.thinking = {"type": "enabled", "budget_tokens": budget}
+      return
+
+    # Gemini: thinking_budget
+    from definable.model.google.gemini import Gemini
+
+    if isinstance(self.model, Gemini):
+      if self.model.thinking_budget is None:
+        self.model.thinking_budget = budget
+      return
+
+    # OpenAI (o1/o3): reasoning_effort
+    from definable.model.openai.chat import OpenAIChat
+
+    if isinstance(self.model, OpenAIChat):
+      if self.model.reasoning_effort is None:
+        self.model.reasoning_effort = self._thinking.effort
+      return
 
   @staticmethod
   def _format_reasoning_context(steps: "list[ReasoningStep]") -> str:
@@ -2689,11 +2731,17 @@ class Agent:
     reasoning_agent_messages = reasoning_messages
     if thinking_output is None:
       if await self._thinking_should_run(invoke_messages):
-        thinking_output, reasoning_steps, reasoning_agent_messages = await self._execute_thinking(
-          context,
-          invoke_messages,
-          tools,
-        )
+        if self._thinking and self._thinking.should_use_native(self.model):
+          # Native thinking: configure the model, let the loop handle events.
+          # No separate call needed — the model will return reasoning_content.
+          self._enable_native_thinking()
+        else:
+          # Definable's fallback thinking layer (separate LLM call)
+          thinking_output, reasoning_steps, reasoning_agent_messages = await self._execute_thinking(
+            context,
+            invoke_messages,
+            tools,
+          )
 
     if thinking_output:
       effort = self._thinking.effort if self._thinking and hasattr(self._thinking, "effort") else "medium"
@@ -2800,6 +2848,9 @@ class Agent:
       # Build invoke messages (system prompt, thinking, knowledge, memory, readers)
       invoke_messages, reasoning_steps, reasoning_agent_messages = await self._build_invoke_messages(context, messages, tools)
 
+      # Detect if native thinking is active
+      _native_thinking = bool(self._thinking and self._thinking.enabled and self._thinking.should_use_native(self.model))
+
       # Create the loop
       loop = AgentLoop(
         model=self.model,
@@ -2808,6 +2859,7 @@ class Agent:
         context=context,
         config=self.config,
         streaming=False,
+        native_thinking=_native_thinking,
         cancellation_token=cancellation_token,
         compression_manager=self._compression_manager,
         guardrails=self.guardrails,
@@ -2850,6 +2902,9 @@ class Agent:
       # Build output messages (excluding system message)
       output_messages = [m for m in loop.messages if m.role != "system"]
 
+      # Determine reasoning content: native thinking takes priority over Definable's layer
+      final_reasoning_content = loop.native_reasoning_content or (self._format_reasoning_context(reasoning_steps) if reasoning_steps else None)
+
       return RunOutput(
         run_id=context.run_id,
         session_id=context.session_id,
@@ -2867,7 +2922,7 @@ class Agent:
         session_state=context.session_state,
         reasoning_steps=reasoning_steps or None,
         reasoning_messages=reasoning_agent_messages or None,
-        reasoning_content=self._format_reasoning_context(reasoning_steps) if reasoning_steps else None,
+        reasoning_content=final_reasoning_content,
       )
 
     except AgentCancelled:
@@ -3230,7 +3285,7 @@ class Agent:
       session_state=state.context.session_state if state.context else None,
       reasoning_steps=state.reasoning_steps or None,
       reasoning_messages=state.reasoning_messages or None,
-      reasoning_content=self._format_reasoning_context(state.reasoning_steps) if state.reasoning_steps else None,
+      reasoning_content=state.native_reasoning_content or (self._format_reasoning_context(state.reasoning_steps) if state.reasoning_steps else None),
       requirements=state.requirements,
       phase_metrics=state.phase_metrics or None,
     )

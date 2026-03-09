@@ -93,6 +93,7 @@ class LoopState:
   thinking_output: Optional["ThinkingOutput"] = None
   reasoning_steps: Optional[List["ReasoningStep"]] = None
   reasoning_messages: Optional[List[Message]] = None
+  native_reasoning_content: Optional[str] = None
 
   # ── Tool executions ───────────────────────────────────────
   tool_executions: List[ToolExecution] = field(default_factory=list)

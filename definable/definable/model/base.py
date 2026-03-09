@@ -116,6 +116,8 @@ class Model(ABC):
 
   # True if the Model supports structured outputs natively (e.g. OpenAI)
   supports_native_structured_outputs: bool = False
+  # True if the Model supports native extended thinking (e.g. Claude, DeepSeek, Gemini 2.5)
+  supports_native_thinking: bool = False
   # True if the Model requires a json_schema for structured outputs (e.g. LMStudio)
   supports_json_schema_outputs: bool = False
 

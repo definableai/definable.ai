@@ -18,6 +18,9 @@ from definable.agent.events import (
   CompressionStartedEvent,
   ModelCallCompletedEvent,
   ModelCallStartedEvent,
+  ReasoningCompletedEvent,
+  ReasoningContentDeltaEvent,
+  ReasoningStartedEvent,
   RunCompletedEvent,
   RunContentEvent,
   RunContext,
@@ -94,6 +97,7 @@ class AgentLoop:
     context: RunContext,
     config: "AgentConfig",
     streaming: bool = False,
+    native_thinking: bool = False,
     cancellation_token: Optional[CancellationToken] = None,
     compression_manager: Optional["CompressionManager"] = None,
     guardrails: Optional["Guardrails"] = None,
@@ -107,6 +111,7 @@ class AgentLoop:
     self._context = context
     self._config = config
     self._streaming = streaming
+    self._native_thinking = native_thinking
     self._cancellation_token = cancellation_token
     self._compression_manager = compression_manager
     self._compress_tool_results = compression_manager is not None and compression_manager.compress_tool_results
@@ -122,6 +127,7 @@ class AgentLoop:
     self._all_tool_executions: list[ToolExecution] = []
     self._turn: int = 0
     self._tool_retry_counts: Dict[str, int] = {}  # tool_call_id → retry count
+    self._native_reasoning_content: Optional[str] = None  # accumulated native thinking content
 
   # ------------------------------------------------------------------
   # Public API
@@ -191,8 +197,11 @@ class AgentLoop:
           # Streaming: yield RunContentEvent deltas inline
           content, tool_calls, metrics, parsed = "", [], None, None
           accumulated_content = ""
+          accumulated_reasoning = ""
           accumulated_tool_calls: list[dict] = []
           accumulated_metrics: Optional["Metrics"] = None
+          reasoning_started_emitted = False
+          reasoning_completed_emitted = False
 
           assistant_message = Message(role="assistant")
           async for chunk in self._model.ainvoke_stream(
@@ -202,7 +211,34 @@ class AgentLoop:
             response_format=self._context.output_schema,
             compress_tool_results=self._compress_tool_results,
           ):
+            # Native thinking: stream reasoning_content deltas as events
+            if self._native_thinking and hasattr(chunk, "reasoning_content") and chunk.reasoning_content:
+              if not reasoning_started_emitted:
+                reasoning_started_emitted = True
+                yield ReasoningStartedEvent(
+                  run_id=self._context.run_id,
+                  session_id=self._context.session_id,
+                  agent_id=self._agent_id,
+                  agent_name=self._agent_name,
+                )
+              accumulated_reasoning += chunk.reasoning_content
+              yield ReasoningContentDeltaEvent(
+                run_id=self._context.run_id,
+                session_id=self._context.session_id,
+                agent_id=self._agent_id,
+                agent_name=self._agent_name,
+                reasoning_content=chunk.reasoning_content,
+              )
             if hasattr(chunk, "content") and chunk.content:
+              # If we were streaming reasoning and now get content, close reasoning
+              if reasoning_started_emitted and not reasoning_completed_emitted:
+                reasoning_completed_emitted = True
+                yield ReasoningCompletedEvent(
+                  run_id=self._context.run_id,
+                  session_id=self._context.session_id,
+                  agent_id=self._agent_id,
+                  agent_name=self._agent_name,
+                )
               accumulated_content += chunk.content
               yield RunContentEvent(
                 run_id=self._context.run_id,
@@ -221,6 +257,19 @@ class AgentLoop:
             # Capture parsed from final chunk if provider set it
             if hasattr(chunk, "parsed") and chunk.parsed is not None:
               parsed = chunk.parsed
+
+          # Close reasoning if it was started but never completed (e.g. tool calls follow)
+          if reasoning_started_emitted and not reasoning_completed_emitted:
+            yield ReasoningCompletedEvent(
+              run_id=self._context.run_id,
+              session_id=self._context.session_id,
+              agent_id=self._agent_id,
+              agent_name=self._agent_name,
+            )
+
+          # Store accumulated reasoning content
+          if accumulated_reasoning:
+            self._native_reasoning_content = accumulated_reasoning
 
           # Parse structured output from accumulated content if not already parsed from chunks
           if parsed is None and self._context.output_schema is not None and accumulated_content:
@@ -242,6 +291,8 @@ class AgentLoop:
             content=accumulated_content or None,
             tool_calls=accumulated_tool_calls or None,
           )
+          if accumulated_reasoning:
+            assistant_msg.reasoning_content = accumulated_reasoning
           if accumulated_metrics is not None:
             assistant_msg.metrics = accumulated_metrics
             total_metrics = accumulated_metrics if total_metrics is None else total_metrics + accumulated_metrics
@@ -253,6 +304,28 @@ class AgentLoop:
         else:
           # Non-streaming
           content, tool_calls, metrics, parsed = await self._call_model()
+
+        # Emit native thinking events for non-streaming mode
+        if not self._streaming and self._native_thinking and self._native_reasoning_content:
+          yield ReasoningStartedEvent(
+            run_id=self._context.run_id,
+            session_id=self._context.session_id,
+            agent_id=self._agent_id,
+            agent_name=self._agent_name,
+          )
+          yield ReasoningContentDeltaEvent(
+            run_id=self._context.run_id,
+            session_id=self._context.session_id,
+            agent_id=self._agent_id,
+            agent_name=self._agent_name,
+            reasoning_content=self._native_reasoning_content,
+          )
+          yield ReasoningCompletedEvent(
+            run_id=self._context.run_id,
+            session_id=self._context.session_id,
+            agent_id=self._agent_id,
+            agent_name=self._agent_name,
+          )
 
         # In streaming mode, content was already yielded via RunContentEvent deltas,
         # so omit it from ModelCallCompletedEvent to avoid duplication.
@@ -368,12 +441,20 @@ class AgentLoop:
     """Non-streaming model call with retry. Returns (content, tool_calls, metrics, parsed)."""
     response = await self._call_model_with_retry()
 
+    # Capture native reasoning content if present
+    if self._native_thinking and response.reasoning_content:
+      self._native_reasoning_content = response.reasoning_content
+
     # Add assistant message to conversation history
     assistant_msg = Message(
       role="assistant",
       content=response.content,
       tool_calls=response.tool_calls or None,
     )
+    if response.reasoning_content:
+      assistant_msg.reasoning_content = response.reasoning_content
+    if response.redacted_reasoning_content:
+      assistant_msg.redacted_reasoning_content = response.redacted_reasoning_content
     if response.response_usage is not None:
       assistant_msg.metrics = response.response_usage
     self._messages.append(assistant_msg)
@@ -793,6 +874,11 @@ class AgentLoop:
   def tool_executions(self) -> list[ToolExecution]:
     """All tool executions accumulated during the loop."""
     return self._all_tool_executions
+
+  @property
+  def native_reasoning_content(self) -> Optional[str]:
+    """Native thinking content accumulated during the loop (if native thinking was active)."""
+    return self._native_reasoning_content
 
 
 # ---------------------------------------------------------------------------
