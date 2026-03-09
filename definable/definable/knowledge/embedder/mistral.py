@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from definable.knowledge.embedder.base import Embedder
-from definable.utils.log import log_warning
 
 
 @dataclass

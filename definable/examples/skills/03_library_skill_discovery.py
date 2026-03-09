@@ -13,10 +13,7 @@ This example demonstrates:
 No API keys required — uses MockModel for demonstration.
 """
 
-import os
-
 from definable.agent import Agent
-from definable.agent.testing import MockModel
 from definable.agent.tracing import Tracing
 from definable.model.openai import OpenAIChat
 from definable.skill import SkillRegistry, validate_agent_skills_name
