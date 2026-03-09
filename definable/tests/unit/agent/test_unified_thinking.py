@@ -109,14 +109,12 @@ class TestModelNativeThinkingFlag:
     assert Model.supports_native_thinking is False
 
   def test_claude_thinking_models_have_flag(self):
-    pytest.importorskip("anthropic")
     from definable.model.anthropic.claude import Claude
 
     model = Claude(id="claude-sonnet-4-5-20250929", api_key="test")
     assert model.supports_native_thinking is True
 
   def test_claude_non_thinking_model_no_flag(self):
-    pytest.importorskip("anthropic")
     from definable.model.anthropic.claude import Claude
 
     model = Claude(id="claude-3-5-haiku-20241022", api_key="test")
@@ -220,7 +218,6 @@ class TestDefinableFallbackEvents:
 
 class TestEnableNativeThinking:
   def test_claude_gets_thinking_dict(self):
-    pytest.importorskip("anthropic")
     from definable.agent import Agent
     from definable.model.anthropic.claude import Claude
 
@@ -232,7 +229,6 @@ class TestEnableNativeThinking:
     assert model.thinking == {"type": "enabled", "budget_tokens": 32000}
 
   def test_claude_existing_thinking_not_overwritten(self):
-    pytest.importorskip("anthropic")
     from definable.agent import Agent
     from definable.model.anthropic.claude import Claude
 
@@ -247,7 +243,6 @@ class TestEnableNativeThinking:
     assert model.thinking == {"type": "enabled", "budget_tokens": 5000}
 
   def test_effort_budget_mapping(self):
-    pytest.importorskip("anthropic")
     from definable.agent import Agent
     from definable.model.anthropic.claude import Claude
 
