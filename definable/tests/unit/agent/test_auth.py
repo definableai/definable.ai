@@ -185,6 +185,7 @@ class TestAPIKeyAuth:
     req = AuthRequest(platform="http", headers={"X-API-Key": "sk-abc123"})
     result = auth.authenticate(req)
     expected_hash = hashlib.sha256("sk-abc123".encode()).hexdigest()[:12]
+    assert result is not None
     assert result.user_id == f"apikey_{expected_hash}"
 
   def test_invalid_key_returns_none(self):
@@ -274,6 +275,7 @@ class TestAllowlistAuth:
     auth = AllowlistAuth(user_ids={"12345"})
     req = AuthRequest(platform="telegram", user_id="12345")
     result = auth.authenticate(req)
+    assert result is not None
     assert result.metadata["platform"] == "telegram"
     assert result.metadata["auth_method"] == "allowlist"
 
@@ -402,6 +404,7 @@ class TestJWTAuth:
     token = jwt_module.encode({"sub": "primary", "user_id": "secondary", "id": "tertiary"}, "s", algorithm="HS256")
     req = AuthRequest(platform="http", headers={"Authorization": f"Bearer {token}"})
     result = auth.authenticate(req)
+    assert result is not None
     assert result.user_id == "primary"
 
   def test_invalid_token_returns_none(self, auth):

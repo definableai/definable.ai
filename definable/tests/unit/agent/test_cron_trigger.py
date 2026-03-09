@@ -81,7 +81,7 @@ class TestCronTrigger:
     # so we just verify the class exists and the error message format
     # is documented in the code. Skip if croniter IS installed.
     try:
-      import croniter  # noqa: F401
+      import croniter  # type: ignore  # noqa: F401
 
       pytest.skip("croniter is installed; cannot test ImportError path")
     except ImportError:

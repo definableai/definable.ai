@@ -66,14 +66,17 @@ class TestDetectFromExtension:
 
   def test_docx(self):
     result = detect_from_extension(filename="doc.docx")
+    assert result is not None
     assert "wordprocessingml" in result
 
   def test_xlsx(self):
     result = detect_from_extension(filename="sheet.xlsx")
+    assert result is not None
     assert "spreadsheetml" in result
 
   def test_pptx(self):
     result = detect_from_extension(filename="slides.pptx")
+    assert result is not None
     assert "presentationml" in result
 
   def test_png(self):
@@ -194,6 +197,7 @@ class TestDetectCombined:
 
   def test_no_data_uses_extension(self):
     result = detect(filename="report.xlsx")
+    assert result is not None
     assert "spreadsheetml" in result
 
   def test_all_none_returns_none(self):
@@ -453,7 +457,7 @@ class TestBaseReader:
     f = File(name="test.txt", content=b"Hello, world!")
     output = reader.read(f)
     assert output.error is None
-    assert output.word_count > 0
+    assert output.word_count is not None and output.word_count > 0
     assert "Hello" in output.as_text()
 
   def test_read_html_file(self):

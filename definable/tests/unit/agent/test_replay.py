@@ -363,5 +363,5 @@ class TestCompareRuns:
     a = Replay(run_id="a", tokens=ReplayTokens())
     b = Replay(run_id="b", tokens=ReplayTokens())
     cmp = compare_runs(a, b)
-    assert cmp.original.run_id == "a"
-    assert cmp.replayed.run_id == "b"
+    assert cmp.original.run_id == "a"  # type: ignore[union-attr]
+    assert cmp.replayed.run_id == "b"  # type: ignore[union-attr]

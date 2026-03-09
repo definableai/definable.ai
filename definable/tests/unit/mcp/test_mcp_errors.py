@@ -263,14 +263,15 @@ class TestJSONRPCTypes:
 
   def test_response_error(self):
     r = JSONRPCResponse(id=1, error=JSONRPCErrorData(code=-32600, message="Invalid"))
+    assert r.error is not None
     assert r.error.code == -32600
 
   def test_error_code_enum_values(self):
-    assert JSONRPCErrorCode.PARSE_ERROR == -32700
-    assert JSONRPCErrorCode.INVALID_REQUEST == -32600
-    assert JSONRPCErrorCode.METHOD_NOT_FOUND == -32601
-    assert JSONRPCErrorCode.INVALID_PARAMS == -32602
-    assert JSONRPCErrorCode.INTERNAL_ERROR == -32603
+    assert JSONRPCErrorCode.PARSE_ERROR.value == -32700
+    assert JSONRPCErrorCode.INVALID_REQUEST.value == -32600
+    assert JSONRPCErrorCode.METHOD_NOT_FOUND.value == -32601
+    assert JSONRPCErrorCode.INVALID_PARAMS.value == -32602
+    assert JSONRPCErrorCode.INTERNAL_ERROR.value == -32603
 
 
 @pytest.mark.unit
@@ -325,6 +326,7 @@ class TestMCPProtocolTypes:
       isError=False,
     )
     assert len(r.content) == 1
+    assert isinstance(r.content[0], MCPTextContent)
     assert r.content[0].text == "result data"
 
   def test_tool_list_result(self):
@@ -359,6 +361,7 @@ class TestMCPProtocolTypes:
   def test_prompt_definition(self):
     p = MCPPromptDefinition(name="translate", arguments=[MCPPromptArgument(name="lang")])
     assert p.name == "translate"
+    assert p.arguments is not None
     assert len(p.arguments) == 1
 
   def test_prompt_list_result(self):
@@ -366,8 +369,8 @@ class TestMCPProtocolTypes:
     assert r.nextCursor is None
 
   def test_prompt_message_role_enum(self):
-    assert MCPPromptMessageRole.USER == "user"
-    assert MCPPromptMessageRole.ASSISTANT == "assistant"
+    assert MCPPromptMessageRole.USER.value == "user"
+    assert MCPPromptMessageRole.ASSISTANT.value == "assistant"
 
   def test_prompt_message(self):
     m = MCPPromptMessage(
@@ -504,12 +507,14 @@ class TestErrorResponseHelpers:
 
   def test_create_error_response(self):
     r = create_error_response(-32700, "Parse error", request_id=1)
+    assert r.error is not None
     assert r.error.code == -32700
     assert r.error.message == "Parse error"
     assert r.id == 1
 
   def test_create_error_response_with_data(self):
     r = create_error_response(-32600, "Bad", error_data={"detail": "x"})
+    assert r.error is not None
     assert r.error.data == {"detail": "x"}
 
   def test_is_error_response_true(self):
@@ -551,25 +556,30 @@ class TestStandardErrorConstructors:
 
   def test_parse_error(self):
     r = parse_error(request_id=1)
+    assert r.error is not None
     assert r.error.code == JSONRPCErrorCode.PARSE_ERROR
     assert r.error.message == "Parse error"
 
   def test_invalid_request(self):
     r = invalid_request(request_id=2)
+    assert r.error is not None
     assert r.error.code == JSONRPCErrorCode.INVALID_REQUEST
 
   def test_method_not_found(self):
     r = method_not_found("nonexistent", request_id=3)
+    assert r.error is not None
     assert r.error.code == JSONRPCErrorCode.METHOD_NOT_FOUND
     assert "nonexistent" in r.error.message
 
   def test_invalid_params(self):
     r = invalid_params("missing query", request_id=4)
+    assert r.error is not None
     assert r.error.code == JSONRPCErrorCode.INVALID_PARAMS
     assert "missing query" in r.error.message
 
   def test_internal_error(self):
     r = internal_error("server crashed", request_id=5)
+    assert r.error is not None
     assert r.error.code == JSONRPCErrorCode.INTERNAL_ERROR
 
   def test_constructors_without_request_id(self):

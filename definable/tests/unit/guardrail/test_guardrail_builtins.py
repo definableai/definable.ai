@@ -46,7 +46,7 @@ class TestBlockTopics:
     guard = block_topics(["violence", "drugs"])
     result = await guard.check("Tell me about violence", _ctx())
     assert result.action == "block"
-    assert "violence" in result.message
+    assert "violence" in result.message  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_case_insensitive(self):
@@ -87,7 +87,7 @@ class TestMaxTokens:
     long_text = "word " * 100
     result = await guard.check(long_text, _ctx())
     assert result.action == "block"
-    assert "exceeds token limit" in result.message
+    assert "exceeds token limit" in result.message  # type: ignore[operator]
 
   def test_name(self):
     guard = max_tokens(100)
@@ -103,7 +103,7 @@ class TestRegexFilter:
     guard = regex_filter([r"\d{3}-\d{2}-\d{4}"])  # SSN pattern
     result = await guard.check("My SSN is 123-45-6789", _ctx())
     assert result.action == "block"
-    assert "blocked pattern" in result.message
+    assert "blocked pattern" in result.message  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_block_mode_allows_clean(self):
@@ -116,16 +116,16 @@ class TestRegexFilter:
     guard = regex_filter([r"\d{3}-\d{2}-\d{4}"], action="modify")
     result = await guard.check("My SSN is 123-45-6789", _ctx())
     assert result.action == "modify"
-    assert "[REDACTED]" in result.modified_text
-    assert "123-45-6789" not in result.modified_text
+    assert "[REDACTED]" in result.modified_text  # type: ignore[operator]
+    assert "123-45-6789" not in result.modified_text  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_multiple_patterns(self):
     guard = regex_filter([r"secret", r"password"], action="modify")
     result = await guard.check("My secret password is abc", _ctx())
     assert result.action == "modify"
-    assert "secret" not in result.modified_text
-    assert "password" not in result.modified_text
+    assert "secret" not in result.modified_text  # type: ignore[operator]
+    assert "password" not in result.modified_text  # type: ignore[operator]
 
   def test_name(self):
     guard = regex_filter([r"test"])
@@ -146,36 +146,36 @@ class TestPIIFilter:
     guard = pii_filter(action="modify")
     result = await guard.check("Contact me at alice@example.com", _ctx())
     assert result.action == "modify"
-    assert "[EMAIL]" in result.modified_text
-    assert "alice@example.com" not in result.modified_text
+    assert "[EMAIL]" in result.modified_text  # type: ignore[operator]
+    assert "alice@example.com" not in result.modified_text  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_modify_mode_redacts_phone(self):
     guard = pii_filter(action="modify")
     result = await guard.check("Call me at 555-123-4567", _ctx())
     assert result.action == "modify"
-    assert "[PHONE]" in result.modified_text
+    assert "[PHONE]" in result.modified_text  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_modify_mode_redacts_ssn(self):
     guard = pii_filter(action="modify")
     result = await guard.check("SSN: 123-45-6789", _ctx())
     assert result.action == "modify"
-    assert "[SSN]" in result.modified_text
+    assert "[SSN]" in result.modified_text  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_modify_mode_redacts_credit_card(self):
     guard = pii_filter(action="modify")
     result = await guard.check("Card: 4111-1111-1111-1111", _ctx())
     assert result.action == "modify"
-    assert "[CREDIT_CARD]" in result.modified_text
+    assert "[CREDIT_CARD]" in result.modified_text  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_block_mode_blocks_on_pii(self):
     guard = pii_filter(action="block")
     result = await guard.check("Email: test@example.com", _ctx())
     assert result.action == "block"
-    assert "PII detected" in result.message
+    assert "PII detected" in result.message  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_clean_text_allowed(self):
@@ -209,7 +209,7 @@ class TestMaxOutputTokens:
     long_text = "word " * 100
     result = await guard.check(long_text, _ctx())
     assert result.action == "block"
-    assert "exceeds token limit" in result.message
+    assert "exceeds token limit" in result.message  # type: ignore[operator]
 
   def test_name(self):
     guard = max_output_tokens(100)
@@ -236,7 +236,7 @@ class TestToolAllowlist:
     guard = tool_allowlist({"search"})
     result = await guard.check("delete_all", {}, _ctx())
     assert result.action == "block"
-    assert "not in the allowlist" in result.message
+    assert "not in the allowlist" in result.message  # type: ignore[operator]
 
   def test_name(self):
     guard = tool_allowlist({"x"})
@@ -252,7 +252,7 @@ class TestToolBlocklist:
     guard = tool_blocklist({"delete_all", "drop_table"})
     result = await guard.check("delete_all", {}, _ctx())
     assert result.action == "block"
-    assert "is blocked" in result.message
+    assert "is blocked" in result.message  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_allowed_tool_passes(self):
@@ -418,7 +418,7 @@ class TestNOT:
     combo = NOT(AllowGuard())
     result = await combo.check("text", _ctx())
     assert result.action == "block"
-    assert "inverted" in result.message
+    assert "inverted" in result.message  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_inverts_block_to_allow(self):
@@ -497,7 +497,7 @@ class TestWhen:
         return GuardrailResult.allow()
 
     ctx = _ctx()
-    combo = when(lambda c: received_ctx.append(c) or True, Spy())
+    combo = when(lambda c: received_ctx.append(c) or True, Spy())  # type: ignore[func-returns-value]
     await combo.check("text", ctx)
     assert len(received_ctx) == 1
     assert received_ctx[0] is ctx
@@ -727,7 +727,7 @@ class TestGuardrailsContainerWithBuiltins:
     results = await g.run_output_checks("Email: test@example.com", _ctx())
     assert len(results) == 1
     assert results[0].action == "modify"
-    assert "[EMAIL]" in results[0].modified_text
+    assert "[EMAIL]" in results[0].modified_text  # type: ignore[operator]
 
   @pytest.mark.asyncio
   async def test_tool_blocklist_integration(self):
