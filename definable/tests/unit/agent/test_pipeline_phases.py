@@ -146,7 +146,7 @@ class TestThinkPhase:
     """ThinkPhase stores thinking output on state regardless of effort level."""
     from definable.agent.reasoning.step import ThinkingOutput
 
-    thinking_output = ThinkingOutput(analysis="deep", approach="thorough", considerations="risk noted")
+    thinking_output = ThinkingOutput(analysis="deep", approach="thorough", considerations="risk noted")  # type: ignore[call-arg]
     thinking_config = MagicMock()
     thinking_config.effort = "high"
 

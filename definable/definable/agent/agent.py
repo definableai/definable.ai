@@ -149,6 +149,12 @@ class Agent:
           output = agent.run("Hello!")
   """
 
+  _EFFORT_PROMPTS: dict[str, str] = {
+    "low": "Be brief and concise in your reasoning.",
+    "medium": "",
+    "high": "Think thoroughly. Include considerations of risks, trade-offs, edge cases, and alternative approaches.",
+  }
+
   def __init__(
     self,
     *,
@@ -2199,8 +2205,22 @@ class Agent:
     return "\n".join(parts)
 
   @staticmethod
-  def _format_thinking_injection(output: "ThinkingOutput") -> str:
-    """Format ThinkingOutput into a compact system prompt injection."""
+  def _format_thinking_injection(output: "ThinkingOutput", effort: str = "medium") -> str:
+    """Format ThinkingOutput into a system prompt injection.
+
+    Format varies by effort level:
+    - low/medium: compact single-line ``<analysis>...</analysis>``
+    - high: expanded multi-line with labeled fields
+    """
+    if effort == "high":
+      lines = [f"Analysis: {output.analysis}", f"Approach: {output.approach}"]
+      if output.tool_plan:
+        lines.append(f"Tools: {', '.join(output.tool_plan)}")
+      if output.considerations:
+        lines.append(f"Considerations: {output.considerations}")
+      return "\n".join(lines)
+
+    # low / medium — compact single-line
     parts = [f"<analysis>{output.approach}"]
     if output.tool_plan:
       parts.append(f" Tools: {', '.join(output.tool_plan)}.")
@@ -2676,7 +2696,8 @@ class Agent:
         )
 
     if thinking_output:
-      injection = self._format_thinking_injection(thinking_output)
+      effort = self._thinking.effort if self._thinking and hasattr(self._thinking, "effort") else "medium"
+      injection = self._format_thinking_injection(thinking_output, effort=effort)
       if injection:
         system_content = f"{system_content}\n\n{injection}" if system_content else injection
 

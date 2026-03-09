@@ -176,7 +176,7 @@ class TestCortexLifecycle:
     assert not mem._initialized
     await mem.remember("triggers init")
     assert mem._initialized
-    await mem.close()
+    await mem.close()  # type: ignore[unreachable]
 
   async def test_import_from_memory(self):
     from definable.memory import CortexMemory as CM

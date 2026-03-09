@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -535,6 +536,7 @@ class TestForwardContext:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Forwarded from @alice]" in msg.text
     assert msg.metadata["is_forward"] is True
 
@@ -555,6 +557,7 @@ class TestForwardContext:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Forwarded from News Channel]" in msg.text
 
 
@@ -787,6 +790,7 @@ class TestLocationMessages:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Location: 37.7749, -122.4194]" in msg.text
     assert msg.metadata["location"] == {"latitude": 37.7749, "longitude": -122.4194}
 
@@ -810,6 +814,7 @@ class TestLocationMessages:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Venue: Central Park, New York, NY" in msg.text
 
 
@@ -1092,6 +1097,7 @@ class TestConvertInbound:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Sticker: 😀 from 'Pack']" in msg.text
     # Static sticker should also provide an image
     assert msg.images is not None
@@ -1208,8 +1214,8 @@ class TestSendResponse:
     iface._typing_cb = _TypingCircuitBreaker()
     iface._outbound_rate_limiter = _OutboundRateLimiter(0)
 
-    typing_data = {}
-    sent_data = {}
+    typing_data: dict[str, Any] = {}
+    sent_data: dict[str, Any] = {}
 
     async def mock_api(method, data=None):
       if method == "sendChatAction":
@@ -1262,6 +1268,7 @@ class TestStickerInConversion:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Sticker: 🔥 from 'Animated']" in msg.text
     # Animated sticker should NOT have an image
     assert msg.images is None
@@ -1292,6 +1299,7 @@ class TestVideoTextFallback:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Video: 10s, 1920x1080]" in msg.text
 
   @pytest.mark.asyncio
@@ -1310,6 +1318,7 @@ class TestVideoTextFallback:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[Video note: 5s]" in msg.text
 
   @pytest.mark.asyncio
@@ -1328,6 +1337,7 @@ class TestVideoTextFallback:
     }
     msg = await iface._convert_inbound(raw)
     assert msg is not None
+    assert msg.text is not None
     assert "[GIF: 3s, 320x240]" in msg.text
 
   def test_describe_video_static(self):

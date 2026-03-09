@@ -16,6 +16,10 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -e ".[dev,readers]"
+      - name: Verify tools exist
+        run: |
+          ruff --version
+          mypy --version
       - name: Ruff check
         run: ruff check definable/
       - name: Ruff format check
@@ -42,8 +46,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install -e ".[readers,serve,discord]"
-          pip install pytest pytest-asyncio
+          pip install -e ".[dev,readers,serve,discord]"
       - name: Run tests
         run: |
           pytest definable/tests/ \
@@ -107,8 +110,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install -e ".[mem0-memory,readers,runtime,research,serve,cron,jwt,discord]"
-          pip install pytest pytest-asyncio pytest-timeout
+          pip install -e ".[dev,mem0-memory,readers,runtime,research,serve,cron,jwt,discord]"
       - name: Run integration tests
         run: |
           pytest definable/tests/ \

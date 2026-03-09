@@ -10,6 +10,8 @@ Usage:
   .venv/bin/python -m pytest tests/validation/cortex_evolution_test.py -v
 """
 
+from typing import Any
+
 import pytest
 
 from definable.memory.cortex.config import CortexConfig
@@ -97,7 +99,7 @@ def compute_trait_precision(user_model: UserModel, ground_truth: list[dict]) -> 
 # Novel scenarios for replication test (checkpoint 5)
 # ================================================================
 
-NOVEL_SCENARIOS = [
+NOVEL_SCENARIOS: list[dict[str, Any]] = [
   {
     "scenario": "Someone suggests using Pydantic for a new internal config class",
     "expected_keywords": ["dataclass", "simple", "overhead"],
@@ -325,7 +327,7 @@ class TestCortexEvolution:
 
   async def _checkpoint_60(self, cortex: CortexMemory, model: UserModel) -> dict:
     """After 60 memories: core values detected, frustration patterns visible."""
-    report = {"checkpoint": 60}
+    report: dict[str, Any] = {"checkpoint": 60}
 
     # Should have strong traits by now
     strong = model.get_strong_traits(threshold=0.6)
@@ -356,7 +358,7 @@ class TestCortexEvolution:
 
   async def _checkpoint_80(self, cortex: CortexMemory, model: UserModel) -> dict:
     """After 80 memories: style guide generation + retrieval quality."""
-    report = {"checkpoint": 80}
+    report: dict[str, Any] = {"checkpoint": 80}
 
     # Style guide should be non-trivial
     style_guide = model.generate_style_guide()
@@ -391,7 +393,7 @@ class TestCortexEvolution:
 
   async def _checkpoint_100(self, cortex: CortexMemory, model: UserModel, validator: ModelValidator) -> dict:
     """After 100 memories: full metrics + novel scenario predictions."""
-    report = {"checkpoint": 100}
+    report: dict[str, Any] = {"checkpoint": 100}
 
     # ---- Metrics ----
     trait_recall = compute_trait_recall(model, GROUND_TRUTH_TRAITS)
