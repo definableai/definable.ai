@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -e ".[readers]"
+        run: pip install -e ".[dev,readers]"
       - name: Ruff check
         run: ruff check definable/
       - name: Ruff format check
@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install -e ".[readers,serve,cron,jwt,discord]"
+        run: pip install -e ".[dev,readers,serve,cron,jwt,discord]"
       - name: Mypy
         run: mypy definable/definable/ definable/tests/ --strict-equality --pretty --show-error-codes --config-file=mypy.ini
 
