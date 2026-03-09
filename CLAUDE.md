@@ -146,11 +146,21 @@ These are not guidelines. These are the physics of this universe. Break them and
 
 ### Genetic Integrity (Git Rules)
 
+- **`main` is branch-protected** — direct pushes are BLOCKED (enforced for admins too)
+- Required CI checks before merge: `lint`, `typecheck`, `test`
+- Branch must be up-to-date with main before merging
+- Force pushes and branch deletion are blocked on main
+- **Workflow for shipping changes:**
+  1. Commit changes locally
+  2. Create a feature branch: `git checkout -b <descriptive-branch-name>`
+  3. Push the branch: `git push -u origin <branch-name>`
+  4. Create a PR: `gh pr create --title "..." --body "..."`
+  5. Return the PR URL to the human
+- **Branch naming**: descriptive kebab-case (`fix/model-edge-cases`, `feat/whatsapp-providers`, `chore/ci-hardening`)
+- NEVER attempt `git push origin main` — it will be rejected
 - Atomic commits — only commit cells YOU modified
 - NEVER add "Co-Authored-By" lines
 - NEVER amend without explicit request from the human
-- NEVER push without explicit request
-- NEVER force-push to main
 - Commit messages: short, imperative, surgical (`Add guardrail tests`, `Fix memory leak in SQLiteStore`)
 
 ### The Immune System (Quality Gates)
@@ -166,6 +176,9 @@ Identify the affected modules and run the testcases for those only.
 .venv/bin/ruff format definable/definable/            # structural integrity
 .venv/bin/python -m mypy definable/definable/         # type coherence
 ```
+
+- **Dev tools are pinned**: `ruff==0.15.5`, `mypy==1.19.1` (in `pyproject.toml [dev]`)
+- **CI enforces all four gates** via branch protection — no merge without green checks
 
 New organ → add immune response (tests).
 Healed wound → add scar tissue (regression test in `tests/regression/`).
