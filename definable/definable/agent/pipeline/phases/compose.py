@@ -36,6 +36,7 @@ class ComposePhase(BasePhase):
       state.all_messages,
       state.tools,
       thinking_output=state.thinking_output,
+      thinking_text=state.thinking_text,
       reasoning_steps=state.reasoning_steps,
       reasoning_messages=state.reasoning_messages,
     )

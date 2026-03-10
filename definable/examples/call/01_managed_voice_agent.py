@@ -27,13 +27,9 @@ Requirements:
   4. Run this script and call your Twilio number!
 """
 
-import asyncio
-
 from definable.agent import Agent
 from definable.agent.interface.call import CallInterface
-from definable.agent.runtime.runner import AgentRuntime
 from definable.tool.decorator import tool
-
 
 # --- Define tools the agent can use during calls ---
 
@@ -60,7 +56,7 @@ def schedule_callback(phone_number: str, preferred_time: str) -> str:
   return f"Callback scheduled for {preferred_time} at {phone_number}."
 
 
-# --- Create the agent ---
+# --- Create the agent with call interface ---
 
 agent = Agent(
   model="openai/gpt-4o-mini",
@@ -71,44 +67,19 @@ agent = Agent(
     "so short sentences work best. Be warm and conversational."
   ),
   tools=[check_order_status, schedule_callback],
+  interfaces=CallInterface(
+    provider="twilio",
+    phone_number="+15551234567",  # Your Twilio phone number
+    pipeline="managed",  # Twilio handles STT/TTS
+    welcome_message="Hello! Thank you for calling Acme Corp. How can I help you today?",
+    tts_provider="google",
+    stt_provider="deepgram",
+    voice="en-US-Standard-A",
+    language="en-US",
+    interruptible="any",
+    interrupt_sensitivity="medium",
+  ),
 )
-
-
-# --- Create the call interface ---
-
-call = CallInterface(
-  agent=agent,
-  provider="twilio",
-  # Twilio credentials (falls back to env vars)
-  # account_sid="AC...",
-  # auth_token="...",
-  phone_number="+15551234567",  # Your Twilio phone number
-  # Pipeline: managed = Twilio handles STT/TTS
-  pipeline="managed",
-  # Voice settings
-  welcome_message="Hello! Thank you for calling Acme Corp. How can I help you today?",
-  tts_provider="google",  # Options: google, elevenlabs, amazon
-  stt_provider="deepgram",  # Options: deepgram, google
-  voice="en-US-Standard-A",
-  language="en-US",
-  # Interruption handling
-  interruptible="any",  # Caller can interrupt anytime
-  interrupt_sensitivity="medium",
-)
-
-
-# --- Run with the runtime ---
-
-
-async def main():
-  runtime = AgentRuntime(
-    agent,
-    interfaces=[call],
-    host="0.0.0.0",
-    port=8000,
-  )
-  await runtime.start()
-
 
 if __name__ == "__main__":
-  asyncio.run(main())
+  agent.serve(port=8000)

@@ -61,25 +61,33 @@ async def on_signup(event):
 
 
 # --- Optional: Telegram interface with AllowlistAuth ---
-def maybe_add_telegram():
+def _make_telegram_interface():
   bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
   if not bot_token:
-    return
+    return None
   from definable.agent.auth import AllowlistAuth
   from definable.agent.interface.telegram import TelegramInterface
 
-  # Only allow specific Telegram users (set via env var or hardcode)
   allowed = os.environ.get("TELEGRAM_ALLOWED_USERS", "")
   allowed_ids = {uid.strip() for uid in allowed.split(",") if uid.strip()}
 
-  telegram = TelegramInterface(
+  return TelegramInterface(
     bot_token=bot_token,
     auth=AllowlistAuth(user_ids=allowed_ids) if allowed_ids else None,
   )
-  agent.add_interface(telegram)
-  print("Telegram interface registered")
 
 
 if __name__ == "__main__":
-  maybe_add_telegram()
-  agent.serve(port=8000, dev=True)
+  telegram = _make_telegram_interface()
+  if telegram:
+    # Re-create agent with the telegram interface attached
+    agent_with_tg = Agent(
+      model=OpenAIChat(id="gpt-4o-mini"),
+      name="UnifiedBot",
+      instructions="You are a helpful assistant.",
+      interfaces=telegram,
+    )
+    agent_with_tg.auth = APIKeyAuth(keys={"demo-key-123"})
+    agent_with_tg.serve(port=8000, dev=True)
+  else:
+    agent.serve(port=8000, dev=True)
