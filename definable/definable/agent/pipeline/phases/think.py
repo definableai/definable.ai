@@ -24,7 +24,8 @@ class ThinkPhase(BasePhase):
 
   For non-native models, this phase runs Definable's fallback thinking
   layer (a separate LLM call) and stores the output on state for
-  ComposePhase to inject into the system prompt.
+  ComposePhase to inject into the system prompt. Reasoning events are
+  yielded through the pipeline so arun_stream() consumers see them.
   """
 
   _name = "think"
@@ -52,10 +53,33 @@ class ThinkPhase(BasePhase):
     if thinking.should_use_native(self._agent.model):
       # Native thinking: configure the model, let the loop handle events.
       self._agent._enable_native_thinking()
+      yield state, None
     else:
-      # Definable's fallback thinking layer (separate LLM call)
-      thinking_output, reasoning_steps, reasoning_messages = await self._agent._execute_thinking(
-        state.context,
+      # Definable's fallback thinking layer (separate LLM call).
+      # _execute_thinking emits events via _emit (trace) — we also yield
+      # them through the pipeline so arun_stream consumers see them.
+      from definable.agent.events import (
+        ReasoningCompletedEvent,
+        ReasoningContentDeltaEvent,
+        ReasoningStartedEvent,
+      )
+
+      ctx = state.context
+      agent = self._agent
+
+      # Yield ReasoningStarted before the LLM call
+      yield (
+        state,
+        ReasoningStartedEvent(
+          run_id=ctx.run_id,
+          session_id=ctx.session_id,
+          agent_id=agent.agent_id,
+          agent_name=agent.agent_name,
+        ),
+      )
+
+      thinking_output, reasoning_steps, reasoning_messages = await agent._execute_thinking(
+        ctx,
         state.all_messages,
         state.tools,
       )
@@ -64,4 +88,31 @@ class ThinkPhase(BasePhase):
       state.reasoning_steps = reasoning_steps
       state.reasoning_messages = reasoning_messages
 
-    yield state, None
+      # Yield ReasoningContentDelta with the thinking output
+      if thinking_output:
+        delta_text = f"Analysis: {thinking_output.analysis}\nApproach: {thinking_output.approach}"
+        if thinking_output.tool_plan:
+          delta_text += f"\nTool plan: {', '.join(thinking_output.tool_plan)}"
+        if thinking_output.considerations:
+          delta_text += f"\nConsiderations: {thinking_output.considerations}"
+        yield (
+          state,
+          ReasoningContentDeltaEvent(
+            run_id=ctx.run_id,
+            session_id=ctx.session_id,
+            agent_id=agent.agent_id,
+            agent_name=agent.agent_name,
+            reasoning_content=delta_text,
+          ),
+        )
+
+      # Yield ReasoningCompleted
+      yield (
+        state,
+        ReasoningCompletedEvent(
+          run_id=ctx.run_id,
+          session_id=ctx.session_id,
+          agent_id=agent.agent_id,
+          agent_name=agent.agent_name,
+        ),
+      )
