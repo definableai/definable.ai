@@ -381,6 +381,7 @@ class BaseInterface(ABC):
       videos=list(run_output.videos) if run_output.videos else None,
       audio=list(run_output.audio) if run_output.audio else None,
       files=list(run_output.files) if run_output.files else None,
+      metadata=dict(run_output.metadata) if run_output.metadata else {},
     )
 
   def _update_session(self, session: InterfaceSession, run_output: RunOutput) -> None:

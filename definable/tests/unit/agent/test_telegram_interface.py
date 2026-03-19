@@ -1446,6 +1446,36 @@ class TestStreamedResponseMetadata:
     assert "sendMessage" in methods
 
 
+# ===== build_response metadata propagation =====
+
+
+class TestBuildResponseMetadata:
+  """Regression: _build_response must copy RunOutput.metadata so _tg_streamed survives."""
+
+  def test_build_response_copies_run_output_metadata(self):
+    """_tg_streamed (and any other RunOutput metadata) must reach InterfaceResponse."""
+    from definable.agent.events import RunOutput
+    from definable.agent.interface.base import BaseInterface
+
+    iface = TelegramInterface(bot_token="test:token")
+    run_output = RunOutput(content="hello", metadata={"_tg_streamed": True, "extra": "val"})
+    response = BaseInterface._build_response(iface, run_output)
+
+    assert response.metadata.get("_tg_streamed") is True
+    assert response.metadata.get("extra") == "val"
+
+  def test_build_response_empty_metadata_gives_empty_dict(self):
+    """When RunOutput has no metadata, InterfaceResponse.metadata is an empty dict."""
+    from definable.agent.events import RunOutput
+    from definable.agent.interface.base import BaseInterface
+
+    iface = TelegramInterface(bot_token="test:token")
+    run_output = RunOutput(content="hello", metadata=None)
+    response = BaseInterface._build_response(iface, run_output)
+
+    assert response.metadata == {}
+
+
 # ===== Streaming Double-Reply Prevention =====
 
 
