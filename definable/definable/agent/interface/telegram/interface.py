@@ -1429,61 +1429,44 @@ class TelegramInterface(BaseInterface):
       sent_message_id = await self._send_message(api_chat_id, "Thinking...", thread_id=thread_id)
       last_edit_time = _time.monotonic()
 
-    try:
-      async for event in self.agent.arun_stream(
-        instruction=message.text or "",
-        messages=session.messages,
-        session_id=run_session_id,
-        user_id=user_id,
-        images=message.images,
-      ):
-        all_events.append(event)
+    async for event in self.agent.arun_stream(
+      instruction=message.text or "",
+      messages=session.messages,
+      session_id=run_session_id,
+      user_id=user_id,
+      images=message.images,
+    ):
+      all_events.append(event)
 
-        if isinstance(event, RunContentEvent) and event.content:
-          buffer += str(event.content)
+      if isinstance(event, RunContentEvent) and event.content:
+        buffer += str(event.content)
 
-          # First send: wait for min_chars (or edit thinking placeholder)
-          if sent_message_id is None:
-            if len(buffer) >= min_chars:
-              display = self._format_stream_text(buffer, pm)
-              sent_message_id = await self._send_message(api_chat_id, display, parse_mode=pm, thread_id=thread_id)
-              last_edit_time = _time.monotonic()
-          else:
-            # Throttled edits
-            now = _time.monotonic()
-            if now - last_edit_time >= edit_interval:
-              display = self._format_stream_text(buffer, pm)
-              await self._edit_message(api_chat_id, sent_message_id, display, parse_mode=pm)
-              last_edit_time = now
-
-        elif isinstance(event, ToolCallStartedEvent) and self._tg_config.stream_tool_indicator:
-          tool_name = event.tool.tool_name if event.tool else "unknown"
-          tool_text = f"Using tool: {tool_name}..."
-          if sent_message_id is None:
-            sent_message_id = await self._send_message(api_chat_id, tool_text, thread_id=thread_id)
+        # First send: wait for min_chars (or edit thinking placeholder)
+        if sent_message_id is None:
+          if len(buffer) >= min_chars:
+            display = self._format_stream_text(buffer, pm)
+            sent_message_id = await self._send_message(api_chat_id, display, parse_mode=pm, thread_id=thread_id)
             last_edit_time = _time.monotonic()
-          else:
-            display = self._format_stream_text(buffer + f"\n\n_{tool_text}_", pm) if buffer else tool_text
+        else:
+          # Throttled edits
+          now = _time.monotonic()
+          if now - last_edit_time >= edit_interval:
+            display = self._format_stream_text(buffer, pm)
             await self._edit_message(api_chat_id, sent_message_id, display, parse_mode=pm)
+            last_edit_time = now
 
-        elif isinstance(event, RunCompletedEvent):
-          completed_event = event
-    except Exception as e:
-      # If something was already sent to Telegram, suppress propagation.
-      # Letting this propagate causes _run_agent()'s fallback to run the agent
-      # again and _send_response() to send a SECOND message on top of what
-      # streaming already delivered.
-      if sent_message_id is not None:
-        log_warning(f"[telegram] Streaming interrupted after partial send, suppressing fallback: {e}")
-        return RunOutput(
-          content=buffer,
-          messages=session.messages,
-          metadata={"_tg_streamed": True},
-          events=all_events,
-        )
-      # Nothing was sent yet — safe to propagate; _run_agent()'s fallback
-      # will run non-streaming and send exactly one clean message.
-      raise
+      elif isinstance(event, ToolCallStartedEvent) and self._tg_config.stream_tool_indicator:
+        tool_name = event.tool.tool_name if event.tool else "unknown"
+        tool_text = f"Using tool: {tool_name}..."
+        if sent_message_id is None:
+          sent_message_id = await self._send_message(api_chat_id, tool_text, thread_id=thread_id)
+          last_edit_time = _time.monotonic()
+        else:
+          display = self._format_stream_text(buffer + f"\n\n_{tool_text}_", pm) if buffer else tool_text
+          await self._edit_message(api_chat_id, sent_message_id, display, parse_mode=pm)
+
+      elif isinstance(event, RunCompletedEvent):
+        completed_event = event
 
     # Final edit with complete content
     if sent_message_id and buffer:
@@ -1523,25 +1506,6 @@ class TelegramInterface(BaseInterface):
       )
 
     # Last resort: no streaming output at all — re-run non-streaming
-    # If a placeholder was already sent (e.g. "Thinking..."), edit it with the
-    # non-streaming result instead of sending a second message below it.
-    if sent_message_id is not None:
-      run_output = await super()._run_agent(message, session)
-      if run_output.content:
-        display = self._format_stream_text(run_output.content, pm)
-        with contextlib.suppress(Exception):
-          await self._edit_message(api_chat_id, sent_message_id, display, parse_mode=pm)
-        meta = dict(run_output.metadata) if run_output.metadata else {}
-        meta["_tg_streamed"] = True
-        return RunOutput(
-          content=run_output.content,
-          content_type=run_output.content_type,
-          parsed=run_output.parsed,
-          messages=run_output.messages,
-          metadata=meta,
-          events=run_output.events or all_events,
-        )
-      return run_output
     return await super()._run_agent(message, session)
 
   def _format_stream_text(self, text: str, parse_mode: Optional[str]) -> str:
