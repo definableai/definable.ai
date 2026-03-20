@@ -636,3 +636,165 @@ class TestToolEventRealTimeStreaming:
 
     assert len(result.events) == 0
     assert len(sink_events) >= 2  # At least Started + Completed
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Regression: _merge_tool_call_deltas — parallel tool name concatenation
+# ═══════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.unit
+class TestMergeToolCallDeltas:
+  """Regression tests for _merge_tool_call_deltas.
+
+  Bug: When non-OpenAI providers (Anthropic, Gemini, Mistral, Ollama) emit
+  tool call dicts without an "index" key, all parallel tool calls were merged
+  into position 0 and their names concatenated via +=.
+
+  Example: "MANAGE_CONNECTIONS" + "MULTI_EXECUTE_TOOL" became
+  "MANAGE_CONNECTIONSMULTI_EXECUTE_TOOL".
+  """
+
+  def test_dicts_without_index_get_separate_entries(self):
+    """Complete tool call dicts (no index) must each become a separate entry."""
+    from definable.agent.loop import _merge_tool_call_deltas
+
+    existing: list[dict] = []
+    # Simulate two Anthropic-style tool calls arriving in separate chunks
+    _merge_tool_call_deltas(
+      existing,
+      [
+        {"id": "call_1", "type": "function", "function": {"name": "MANAGE_CONNECTIONS", "arguments": '{"x": 1}'}},
+      ],
+    )
+    _merge_tool_call_deltas(
+      existing,
+      [
+        {"id": "call_2", "type": "function", "function": {"name": "MULTI_EXECUTE_TOOL", "arguments": '{"y": 2}'}},
+      ],
+    )
+
+    assert len(existing) == 2
+    assert existing[0]["function"]["name"] == "MANAGE_CONNECTIONS"
+    assert existing[1]["function"]["name"] == "MULTI_EXECUTE_TOOL"
+    assert existing[0]["id"] == "call_1"
+    assert existing[1]["id"] == "call_2"
+
+  def test_dicts_without_index_same_tool_called_twice(self):
+    """Same tool called twice in parallel must produce two entries, not one with doubled name."""
+    from definable.agent.loop import _merge_tool_call_deltas
+
+    existing: list[dict] = []
+    _merge_tool_call_deltas(
+      existing,
+      [
+        {"id": "call_a", "type": "function", "function": {"name": "web_search", "arguments": '{"q": "foo"}'}},
+      ],
+    )
+    _merge_tool_call_deltas(
+      existing,
+      [
+        {"id": "call_b", "type": "function", "function": {"name": "web_search", "arguments": '{"q": "bar"}'}},
+      ],
+    )
+
+    assert len(existing) == 2
+    assert existing[0]["function"]["name"] == "web_search"
+    assert existing[1]["function"]["name"] == "web_search"
+    assert existing[0]["function"]["arguments"] == '{"q": "foo"}'
+    assert existing[1]["function"]["arguments"] == '{"q": "bar"}'
+
+  def test_dicts_without_index_both_in_single_batch(self):
+    """Multiple tool calls arriving in a single chunk (list) without index."""
+    from definable.agent.loop import _merge_tool_call_deltas
+
+    existing: list[dict] = []
+    _merge_tool_call_deltas(
+      existing,
+      [
+        {"id": "call_1", "type": "function", "function": {"name": "tool_a", "arguments": "{}"}},
+        {"id": "call_2", "type": "function", "function": {"name": "tool_b", "arguments": "{}"}},
+      ],
+    )
+
+    assert len(existing) == 2
+    assert existing[0]["function"]["name"] == "tool_a"
+    assert existing[1]["function"]["name"] == "tool_b"
+
+  def test_openai_indexed_deltas_still_work(self):
+    """OpenAI-style deltas with index attribute are merged correctly."""
+    from definable.agent.loop import _merge_tool_call_deltas
+
+    class FakeDelta:
+      def __init__(self, index, tc_id=None, tc_type=None, name=None, arguments=None):
+        self.index = index
+        self.id = tc_id
+        self.type = tc_type
+        self.function = MagicMock()
+        self.function.name = name
+        self.function.arguments = arguments
+
+    existing: list[dict] = []
+    # Chunk 1: first tool starts
+    _merge_tool_call_deltas(existing, [FakeDelta(index=0, tc_id="call_1", tc_type="function", name="search", arguments="")])
+    # Chunk 2: first tool arguments stream
+    _merge_tool_call_deltas(existing, [FakeDelta(index=0, name=None, arguments='{"query":')])
+    _merge_tool_call_deltas(existing, [FakeDelta(index=0, name=None, arguments=' "test"}')])
+    # Chunk 3: second tool starts
+    _merge_tool_call_deltas(existing, [FakeDelta(index=1, tc_id="call_2", tc_type="function", name="get_weather", arguments="")])
+    _merge_tool_call_deltas(existing, [FakeDelta(index=1, name=None, arguments='{"city": "NYC"}')])
+
+    assert len(existing) == 2
+    assert existing[0]["function"]["name"] == "search"
+    assert existing[0]["function"]["arguments"] == '{"query": "test"}'
+    assert existing[1]["function"]["name"] == "get_weather"
+    assert existing[1]["function"]["arguments"] == '{"city": "NYC"}'
+
+  def test_mixed_indexed_and_non_indexed(self):
+    """Edge case: mix of indexed deltas and non-indexed complete calls."""
+    from definable.agent.loop import _merge_tool_call_deltas
+
+    class FakeDelta:
+      def __init__(self, index, tc_id=None, tc_type=None, name=None, arguments=None):
+        self.index = index
+        self.id = tc_id
+        self.type = tc_type
+        self.function = MagicMock()
+        self.function.name = name
+        self.function.arguments = arguments
+
+    existing: list[dict] = []
+    # An indexed delta
+    _merge_tool_call_deltas(existing, [FakeDelta(index=0, tc_id="c1", tc_type="function", name="indexed_tool", arguments='{"a": 1}')])
+    # A non-indexed complete call
+    _merge_tool_call_deltas(
+      existing,
+      [
+        {"id": "c2", "type": "function", "function": {"name": "complete_tool", "arguments": '{"b": 2}'}},
+      ],
+    )
+
+    assert len(existing) == 2
+    assert existing[0]["function"]["name"] == "indexed_tool"
+    assert existing[1]["function"]["name"] == "complete_tool"
+
+  def test_object_without_index_appended(self):
+    """Objects with index=None should be appended as new entries."""
+    from definable.agent.loop import _merge_tool_call_deltas
+
+    class NoIndexDelta:
+      def __init__(self, tc_id, name, arguments):
+        self.index = None
+        self.id = tc_id
+        self.type = "function"
+        self.function = MagicMock()
+        self.function.name = name
+        self.function.arguments = arguments
+
+    existing: list[dict] = []
+    _merge_tool_call_deltas(existing, [NoIndexDelta("c1", "tool_x", '{"a": 1}')])
+    _merge_tool_call_deltas(existing, [NoIndexDelta("c2", "tool_y", '{"b": 2}')])
+
+    assert len(existing) == 2
+    assert existing[0]["function"]["name"] == "tool_x"
+    assert existing[1]["function"]["name"] == "tool_y"

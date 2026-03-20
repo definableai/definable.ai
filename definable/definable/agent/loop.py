@@ -887,17 +887,48 @@ class AgentLoop:
 
 
 def _merge_tool_call_deltas(existing: list[dict], new_deltas: list[Any]) -> list[dict]:
-  """Merge streaming tool call deltas into accumulated tool calls."""
-  for delta in new_deltas:
-    # Handle both dict and object formats
-    if hasattr(delta, "index"):
-      index = delta.index
-    elif isinstance(delta, dict):
-      index = delta.get("index", 0)
-    else:
-      index = 0
+  """Merge streaming tool call deltas into accumulated tool calls.
 
-    # Ensure list is long enough
+  Handles two formats:
+  - Streaming deltas (OpenAI-style): objects with .index attribute, name/arguments
+    arrive across multiple chunks and must be concatenated.
+  - Complete tool calls (Anthropic/Gemini/Mistral/Ollama): dicts without "index",
+    each representing a fully-formed tool call that should be appended as-is.
+  """
+  for delta in new_deltas:
+    # Determine index — distinguishes streaming deltas from complete tool calls.
+    index: int | None = None
+    if hasattr(delta, "index") and delta.index is not None:
+      index = delta.index
+    elif isinstance(delta, dict) and "index" in delta:
+      index = delta["index"]
+
+    # No index → complete tool call (e.g. Anthropic, Gemini, Mistral, Ollama).
+    # Append directly instead of merging into an existing slot.
+    if index is None:
+      if isinstance(delta, dict):
+        func = delta.get("function", {})
+        existing.append({
+          "id": delta.get("id", ""),
+          "type": delta.get("type", "function"),
+          "function": {
+            "name": func.get("name", "") if isinstance(func, dict) else "",
+            "arguments": func.get("arguments", "") if isinstance(func, dict) else "",
+          },
+        })
+      else:
+        func = getattr(delta, "function", None)
+        existing.append({
+          "id": getattr(delta, "id", "") or "",
+          "type": getattr(delta, "type", "") or "function",
+          "function": {
+            "name": getattr(func, "name", "") or "" if func else "",
+            "arguments": getattr(func, "arguments", "") or "" if func else "",
+          },
+        })
+      continue
+
+    # Streaming delta with index — merge into the existing slot.
     while index >= len(existing):
       existing.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
 

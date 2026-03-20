@@ -727,7 +727,7 @@ class OpenAIChat(Model):
     """
     tool_calls: list[ToolCallDict] = []
     for _tool_call in tool_calls_data:
-      _index = _tool_call.index or 0
+      _index = _tool_call.index if _tool_call.index is not None else 0
       _tool_call_id = _tool_call.id
       _tool_call_type = _tool_call.type
       _function_name = _tool_call.function.name if _tool_call.function else None
