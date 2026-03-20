@@ -261,7 +261,11 @@ class TestThinkPhaseActivation:
     agent._thinking = MagicMock()
     agent._thinking.should_use_native = MagicMock(return_value=False)
     agent._thinking_should_run = AsyncMock(return_value=True)
-    agent._execute_thinking = AsyncMock(return_value=(thinking_output, reasoning_steps, reasoning_msgs))
+
+    async def mock_execute_thinking(*args, **kwargs):
+      yield (thinking_output, "thinking text", reasoning_steps, reasoning_msgs)
+
+    agent._execute_thinking = mock_execute_thinking
 
     phase = ThinkPhase(agent)
     state = _make_state()
