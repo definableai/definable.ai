@@ -15,7 +15,7 @@ class ThinkPhase(BasePhase):
 
   Wraps:
     - Agent._thinking_should_run()
-    - Agent._execute_thinking() (Definable fallback layer)
+    - Agent._execute_thinking() (unified async generator — Definable fallback layer)
     - Agent._enable_native_thinking() (native model thinking)
 
   For native thinking models (Claude, DeepSeek, Gemini), this phase
@@ -24,12 +24,13 @@ class ThinkPhase(BasePhase):
 
   For non-native models, this phase runs Definable's fallback thinking
   layer (a separate LLM call) and stores the output on state for
-  ComposePhase to inject into the system prompt.
+  ComposePhase to inject into the system prompt. Reasoning tokens are
+  yielded as ReasoningContentDelta events token-by-token.
   """
 
   _name = "think"
   _requires: set[str] = {"tools"}
-  _provides: set[str] = {"thinking_output", "reasoning_steps", "reasoning_messages"}
+  _provides: set[str] = {"thinking_output", "thinking_text", "reasoning_steps", "reasoning_messages"}
 
   def __init__(self, agent: "Agent") -> None:
     self._agent = agent
@@ -52,16 +53,64 @@ class ThinkPhase(BasePhase):
     if thinking.should_use_native(self._agent.model):
       # Native thinking: configure the model, let the loop handle events.
       self._agent._enable_native_thinking()
+      yield state, None
     else:
-      # Definable's fallback thinking layer (separate LLM call)
-      thinking_output, reasoning_steps, reasoning_messages = await self._agent._execute_thinking(
-        state.context,
-        state.all_messages,
-        state.tools,
-      )
+      # Fallback: unified generator handles both streaming and non-streaming
+      async for s, e in self._execute_fallback(state):
+        yield s, e
 
-      state.thinking_output = thinking_output
-      state.reasoning_steps = reasoning_steps
-      state.reasoning_messages = reasoning_messages
+  async def _execute_fallback(self, state: LoopState) -> AsyncGenerator[Tuple[LoopState, Optional[BaseRunOutputEvent]], None]:
+    """Execute Definable's fallback thinking via the unified async generator."""
+    from definable.agent.events import (
+      ReasoningCompletedEvent,
+      ReasoningContentDeltaEvent,
+      ReasoningStartedEvent,
+    )
 
-    yield state, None
+    ctx = state.context
+    assert ctx is not None
+    agent = self._agent
+
+    # Yield ReasoningStarted
+    yield (
+      state,
+      ReasoningStartedEvent(
+        run_id=ctx.run_id,
+        session_id=ctx.session_id,
+        agent_id=agent.agent_id,
+        agent_name=agent.agent_name,
+      ),
+    )
+
+    # Stream thinking tokens from the unified generator
+    async for item in agent._execute_thinking(ctx, state.all_messages, state.tools):
+      if isinstance(item, str):
+        # Content delta — yield as ReasoningContentDelta
+        yield (
+          state,
+          ReasoningContentDeltaEvent(
+            run_id=ctx.run_id,
+            session_id=ctx.session_id,
+            agent_id=agent.agent_id,
+            agent_name=agent.agent_name,
+            reasoning_content=item,
+          ),
+        )
+      elif isinstance(item, tuple):
+        # Final result tuple: (thinking_output, thinking_text, reasoning_steps, reasoning_messages)
+        thinking_output, thinking_text, reasoning_steps, reasoning_messages = item
+        state.thinking_output = thinking_output
+        state.thinking_text = thinking_text
+        state.reasoning_steps = reasoning_steps
+        state.reasoning_messages = reasoning_messages
+
+    # Yield ReasoningCompleted
+    yield (
+      state,
+      ReasoningCompletedEvent(
+        run_id=ctx.run_id,
+        session_id=ctx.session_id,
+        agent_id=agent.agent_id,
+        agent_name=agent.agent_name,
+      ),
+    )

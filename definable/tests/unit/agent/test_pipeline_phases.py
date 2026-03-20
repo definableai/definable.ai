@@ -146,14 +146,18 @@ class TestThinkPhase:
     """ThinkPhase stores thinking output on state regardless of effort level."""
     from definable.agent.reasoning.step import ThinkingOutput
 
-    thinking_output = ThinkingOutput(analysis="deep", approach="thorough", considerations="risk noted")  # type: ignore[call-arg]
+    thinking_output = ThinkingOutput(chain_of_thought="deep", approach="thorough", considerations="risk noted")  # type: ignore[call-arg]
     thinking_config = MagicMock()
     thinking_config.effort = "high"
     thinking_config.should_use_native = MagicMock(return_value=False)
 
     agent = _mock_agent(_thinking=thinking_config)
     agent._thinking_should_run = AsyncMock(return_value=True)
-    agent._execute_thinking = AsyncMock(return_value=(thinking_output, [], []))
+
+    async def mock_execute_thinking(*args, **kwargs):
+      yield (thinking_output, "deep", [], [])
+
+    agent._execute_thinking = mock_execute_thinking
 
     phase = ThinkPhase(agent)
     state = _make_state()

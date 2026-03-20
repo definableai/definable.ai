@@ -13,53 +13,23 @@ Usage:
   python definable/examples/interfaces/01_discord_bot.py
 """
 
-import asyncio
 import os
 
 from definable.agent import Agent
 from definable.agent.interface.discord import DiscordInterface
 from definable.memory import Memory, SQLiteStore
-from definable.model.openai import OpenAIChat
 
-# Set these environment variables before running:
-#   export DISCORD_BOT_TOKEN="your-discord-bot-token"
-#   export OPENAI_API_KEY="sk-proj-..."
-#   export VOYAGEAI_API_KEY="pa-..."
-
-
-class ContentFilterHook:
-  """Example hook that filters forbidden content from responses."""
-
-  async def on_after_respond(self, message, response, session):
-    if response.content and "forbidden" in response.content.lower():
-      response.content = "I can't help with that."
-    return response
-
-
-async def main(user_id: str):
-  memory = Memory(store=SQLiteStore("./example_memory.db"))
-  agent = Agent(
-    model=OpenAIChat(id="gpt-4o-mini", api_key=os.environ["OPENAI_API_KEY"]),
-    instructions="You are a helpful assistant on Discord. Keep responses concise.",
-    memory=memory,
-  )
-
-  interface = DiscordInterface(
-    agent=agent,
+agent = Agent(
+  model="openai/gpt-4o-mini",
+  instructions="You are a helpful assistant on Discord. Keep responses concise.",
+  memory=Memory(store=SQLiteStore("./example_memory.db")),
+  interfaces=DiscordInterface(
     bot_token=os.environ["DISCORD_BOT_TOKEN"],
     # Optional: restrict to specific channels or guilds
     # allowed_guild_ids=[123456789],
     # allowed_channel_ids=[987654321],
-    # Optional: only respond to messages starting with !ask
-    # command_prefix="!ask",
-  )
-
-  interface.add_hook(ContentFilterHook())  # type: ignore[arg-type]
-
-  async with interface:
-    print("Discord bot is running! Press Ctrl+C to stop.")
-    await interface.serve_forever()
-
+  ),
+)
 
 if __name__ == "__main__":
-  asyncio.run(main(user_id="example-user-id"))
+  agent.serve()

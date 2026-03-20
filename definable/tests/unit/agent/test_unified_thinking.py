@@ -136,15 +136,15 @@ class TestDefinableFallbackEvents:
   """Definable's thinking layer emits ReasoningContentDelta via _emit (trace writer)."""
 
   @pytest.mark.asyncio
-  async def test_fallback_emits_unified_events_via_emit(self):
-    """When model doesn't support native thinking, Definable layer emits 3 events via _emit."""
+  async def test_fallback_emits_unified_events_via_stream(self):
+    """When model doesn't support native thinking, Definable layer emits 3 events via stream."""
     import json
 
     from definable.agent import Agent
     from definable.agent.testing import MockModel
 
     thinking_response = json.dumps({
-      "analysis": "The user wants weather info.",
+      "chain_of_thought": "The user wants weather info.",
       "approach": "Use the search tool.",
       "tool_plan": ["search"],
     })
@@ -154,20 +154,13 @@ class TestDefinableFallbackEvents:
       structured_responses=[thinking_response],
     )
 
-    emitted_events = []
     agent = Agent(model=model, thinking=True, instructions="Be helpful.")  # type: ignore[arg-type]
-    # Subscribe to _emit to capture trace events
-    original_emit = agent._emit
 
-    def capture_emit(event):
-      emitted_events.append(event)
-      original_emit(event)
+    streamed_events = []
+    async for event in agent.arun_stream("What's the weather?"):
+      streamed_events.append(event)
 
-    agent._emit = capture_emit  # type: ignore[method-assign]
-
-    await agent.arun("What's the weather?")
-
-    event_types = [e.event for e in emitted_events if hasattr(e, "event")]
+    event_types = [e.event for e in streamed_events if hasattr(e, "event")]
     assert "ReasoningStarted" in event_types
     assert "ReasoningContentDelta" in event_types
     assert "ReasoningCompleted" in event_types
@@ -175,15 +168,15 @@ class TestDefinableFallbackEvents:
     assert "ReasoningStep" not in event_types
 
   @pytest.mark.asyncio
-  async def test_fallback_delta_contains_analysis(self):
-    """The ReasoningContentDelta from Definable layer contains flattened analysis text."""
+  async def test_fallback_delta_contains_chain_of_thought(self):
+    """The ReasoningContentDelta from Definable layer contains the chain_of_thought text."""
     import json
 
     from definable.agent import Agent
     from definable.agent.testing import MockModel
 
     thinking_response = json.dumps({
-      "analysis": "Complex query about weather.",
+      "chain_of_thought": "Complex query about weather.",
       "approach": "Look it up.",
       "tool_plan": None,
     })
@@ -193,22 +186,16 @@ class TestDefinableFallbackEvents:
       structured_responses=[thinking_response],
     )
 
-    emitted_events = []
     agent = Agent(model=model, thinking=True, instructions="Be helpful.")  # type: ignore[arg-type]
-    original_emit = agent._emit
 
-    def capture_emit(event):
-      emitted_events.append(event)
-      original_emit(event)
+    streamed_events = []
+    async for event in agent.arun_stream("Weather?"):
+      streamed_events.append(event)
 
-    agent._emit = capture_emit  # type: ignore[method-assign]
-
-    await agent.arun("Weather?")
-
-    delta_events = [e for e in emitted_events if hasattr(e, "event") and e.event == "ReasoningContentDelta"]
-    assert len(delta_events) == 1
-    assert "Complex query about weather" in delta_events[0].reasoning_content
-    assert "Look it up" in delta_events[0].reasoning_content
+    delta_events = [e for e in streamed_events if hasattr(e, "event") and e.event == "ReasoningContentDelta"]
+    assert len(delta_events) >= 1
+    all_content = "".join(e.reasoning_content for e in delta_events)  # type: ignore[union-attr, misc]
+    assert "Complex query about weather" in all_content
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -611,14 +598,14 @@ class TestThinkingOutputConsiderations:
   def test_considerations_default_none(self):
     from definable.agent.reasoning.step import ThinkingOutput
 
-    output = ThinkingOutput(analysis="test", approach="test")  # type: ignore[call-arg]
+    output = ThinkingOutput(chain_of_thought="test", approach="test")  # type: ignore[call-arg]
     assert output.considerations is None
 
   def test_considerations_populated(self):
     from definable.agent.reasoning.step import ThinkingOutput
 
     output = ThinkingOutput(  # type: ignore[call-arg]
-      analysis="Complex query",
+      chain_of_thought="Complex query",
       approach="Multi-step plan",
       considerations="Risk: rate limits may apply. Alternative: use caching.",
     )
@@ -627,8 +614,8 @@ class TestThinkingOutputConsiderations:
   def test_considerations_with_tool_plan(self):
     from definable.agent.reasoning.step import ThinkingOutput
 
-    output = ThinkingOutput(
-      analysis="Need data",
+    output = ThinkingOutput(  # type: ignore[call-arg]
+      chain_of_thought="Need data",
       approach="Search and analyze",
       tool_plan=["search", "analyze"],
       considerations="Edge case: empty results.",
@@ -646,23 +633,23 @@ class TestReasoningStepsWithConsiderations:
   def test_no_considerations_no_extra_step(self):
     from definable.agent.reasoning.step import ThinkingOutput, thinking_output_to_reasoning_steps
 
-    output = ThinkingOutput(analysis="Simple", approach="Direct answer")  # type: ignore[call-arg]
+    output = ThinkingOutput(chain_of_thought="Simple", approach="Direct answer")  # type: ignore[call-arg]
     steps = thinking_output_to_reasoning_steps(output)
     assert len(steps) == 1
-    assert steps[0].title == "Analysis"
+    assert steps[0].title == "Chain of Thought"
 
   def test_considerations_adds_third_step(self):
     from definable.agent.reasoning.step import NextAction, ThinkingOutput, thinking_output_to_reasoning_steps
 
-    output = ThinkingOutput(
-      analysis="Complex",
+    output = ThinkingOutput(  # type: ignore[call-arg]
+      chain_of_thought="Complex",
       approach="Multi-step",
       tool_plan=["search"],
       considerations="Watch for rate limits.",
     )
     steps = thinking_output_to_reasoning_steps(output)
     assert len(steps) == 3
-    assert steps[0].title == "Analysis"
+    assert steps[0].title == "Chain of Thought"
     assert steps[1].title == "Tool Plan"
     assert steps[2].title == "Considerations"
     assert steps[2].reasoning == "Watch for rate limits."
@@ -672,21 +659,21 @@ class TestReasoningStepsWithConsiderations:
     from definable.agent.reasoning.step import ThinkingOutput, thinking_output_to_reasoning_steps
 
     output = ThinkingOutput(  # type: ignore[call-arg]
-      analysis="Complex",
+      chain_of_thought="Complex",
       approach="Reason carefully",
       considerations="Multiple valid interpretations exist.",
     )
     steps = thinking_output_to_reasoning_steps(output)
     assert len(steps) == 2
-    assert steps[0].title == "Analysis"
+    assert steps[0].title == "Chain of Thought"
     assert steps[1].title == "Considerations"
 
   def test_tool_plan_next_action_continues_when_considerations_present(self):
     """When considerations follow, tool plan step should CONTINUE, not FINAL_ANSWER."""
     from definable.agent.reasoning.step import NextAction, ThinkingOutput, thinking_output_to_reasoning_steps
 
-    output = ThinkingOutput(
-      analysis="Need data",
+    output = ThinkingOutput(  # type: ignore[call-arg]
+      chain_of_thought="Need data",
       approach="Fetch and analyze",
       tool_plan=["fetch"],
       considerations="Data may be stale.",

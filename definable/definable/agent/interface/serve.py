@@ -21,6 +21,9 @@ async def serve(
 ) -> None:
   """Run multiple interfaces concurrently with automatic restart on failure.
 
+  .. deprecated::
+      Use ``Agent(interfaces=[...]).serve()`` instead.
+
   Delegates to :func:`definable.utils.supervisor.supervise_interfaces`.
   See that function for full documentation.
 
@@ -32,6 +35,14 @@ async def serve(
   Raises:
     ValueError: If no interfaces are provided.
   """
+  import warnings
+
+  warnings.warn(
+    "standalone serve() is deprecated. Use Agent(interfaces=[...]).serve() instead.",
+    DeprecationWarning,
+    stacklevel=2,
+  )
+
   from definable.utils.supervisor import supervise_interfaces
 
   await supervise_interfaces(*interfaces, name=name, identity_resolver=identity_resolver)

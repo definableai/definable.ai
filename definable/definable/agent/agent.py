@@ -7,6 +7,7 @@ import json
 from typing import (
   TYPE_CHECKING,
   Any,
+  AsyncGenerator,
   AsyncIterator,
   Awaitable,
   Callable,
@@ -45,9 +46,6 @@ from definable.agent.events import (
   MemoryRecallStartedEvent,
   MemoryUpdateCompletedEvent,
   MemoryUpdateStartedEvent,
-  ReasoningCompletedEvent,
-  ReasoningContentDeltaEvent,
-  ReasoningStartedEvent,
   RunCompletedEvent,
   RunContext,
   RunErrorEvent,
@@ -190,6 +188,9 @@ class Agent:
     usage: Union[bool, Any, None] = None,
     # ── Plugins ──────────────────────────────────────────────
     plugins: Optional[List[Any]] = None,
+    # ── Interfaces ──────────────────────────────────────────
+    interfaces: Union["BaseInterface", List["BaseInterface"], None] = None,
+    gateway: Optional["InterfaceGateway"] = None,
     # ── Support ─────────────────────────────────────────────
     readers: Union[List["BaseReader"], bool, None] = None,
     guardrails: Optional["Guardrails"] = None,
@@ -426,6 +427,21 @@ class Agent:
     self._middleware: List[Middleware] = []
     self._interfaces: List["BaseInterface"] = []
     self._gateway: Optional["InterfaceGateway"] = None
+
+    # Resolve interfaces passed at construction
+    if interfaces is not None:
+      iface_list = interfaces if isinstance(interfaces, list) else [interfaces]
+      for iface in iface_list:
+        iface.bind(self)
+        self._interfaces.append(iface)
+
+    # Resolve gateway passed at construction
+    if gateway is not None:
+      gateway._bind_agent(self)
+      for iface in self._interfaces:
+        if iface not in gateway._interfaces:
+          gateway.add(iface)
+      self._gateway = gateway
     self._triggers: List[Any] = []
     self._before_hooks: List[Callable] = []
     self._after_hooks: List[Callable] = []
@@ -2168,15 +2184,63 @@ class Agent:
 
   # --- Thinking Layer ---
 
-  _DEFAULT_THINKING_PROMPT = "Analyze the user's request. Determine what they need, your approach, and which tools (if any) to use."
+  # Effort-scaled thinking prompts (research-backed design):
+  # - LOW: Chain-of-Draft style — minimal tokens, fast assessment
+  # - MEDIUM: Standard reasoning with step-back abstraction + self-check
+  # - HIGH: Full deliberative reasoning — metacognitive, multi-perspective, verified
+  _THINKING_PROMPTS: Dict[str, str] = {
+    "low": (
+      "You are the planning layer. Your job is to produce an execution STRATEGY — not the answer itself.\n\n"
+      "Quickly assess this request:\n"
+      "- What is the user asking?\n"
+      "- What approach should be used? (tools, knowledge, direct answer)\n"
+      "- What tools are needed, if any?\n\n"
+      "Output a brief strategy (2-4 sentences). DO NOT solve the problem or write the answer."
+    ),
+    "medium": (
+      "You are the planning layer. Your job is to produce an execution STRATEGY — not the answer itself.\n"
+      "The main model will receive your strategy and use it to produce the actual response.\n\n"
+      "1. INTENT: What does the user actually need? Look past the surface request.\n"
+      "2. APPROACH: What's the best way to fulfill this? Direct answer from knowledge, tool usage, multi-step reasoning?\n"
+      "3. TOOLS: If tools are needed, list them in order with why each is needed and what depends on what.\n"
+      "4. CONSTRAINTS: Any edge cases, risks, or things to watch for?\n\n"
+      "Output a concise strategy. DO NOT write the answer, solve the problem, or produce the final response.\n"
+      "The main model handles that — you only plan."
+    ),
+    "high": (
+      "You are the planning layer. Your job is to produce a detailed execution STRATEGY — not the answer itself.\n"
+      "The main model will receive your strategy and use it to produce the actual response.\n\n"
+      "INTENT: What is the user really asking? What are the underlying goals and constraints?\n"
+      "Identify any ambiguity or implicit requirements.\n\n"
+      "APPROACH: What's the best strategy? Consider:\n"
+      "- Can this be answered directly from knowledge, or does it need tools/research?\n"
+      "- If complex, break into sub-tasks. Which are independent vs sequential?\n"
+      "- If tools are available, which ones and in what order? Why each is needed?\n\n"
+      "ALTERNATIVES: Consider at least one alternative approach. Why is your chosen strategy better?\n\n"
+      "RISKS: Edge cases, failure modes, assumptions that need validation.\n\n"
+      "VERIFICATION: Does your strategy fully address the original request? Any gaps?\n\n"
+      "Output a detailed strategy. DO NOT solve the problem, write the answer, or produce the final response.\n"
+      "You are the planner — the main model is the executor."
+    ),
+  }
 
   def _build_thinking_prompt(
     self,
     context: RunContext,
     tools: Dict[str, Function],
   ) -> str:
-    """Build a context-aware thinking prompt with tool catalog, agent role, and context flags."""
-    parts = [self._DEFAULT_THINKING_PROMPT]
+    """Build an effort-scaled, context-aware thinking prompt.
+
+    The prompt varies by effort level:
+    - low: Chain-of-Draft style — minimal overhead, fast assessment
+    - medium: Standard reasoning with step-back abstraction + self-check
+    - high: Full deliberative reasoning — metacognitive, multi-perspective, verified
+
+    Incorporates agent role, tool catalog, and context availability flags.
+    """
+    effort = self._thinking.effort if self._thinking else "medium"
+    base_prompt = self._THINKING_PROMPTS.get(effort, self._THINKING_PROMPTS["medium"])
+    parts = [base_prompt]
 
     # Agent role (first 500 chars)
     if self.instructions:
@@ -2202,29 +2266,52 @@ class Agent:
     if flags:
       parts.append(f"\nContext: {'; '.join(flags)}.")
 
+    parts.append("\nRemember: Output only a strategy. The main model will handle the actual response.")
+
     return "\n".join(parts)
 
   @staticmethod
-  def _format_thinking_injection(output: "ThinkingOutput", effort: str = "medium") -> str:
-    """Format ThinkingOutput into a system prompt injection.
+  def _format_thinking_injection(output: "Union[ThinkingOutput, str]", effort: str = "medium") -> str:
+    """Format thinking result into a system prompt injection.
 
-    Format varies by effort level:
-    - low/medium: compact single-line ``<analysis>...</analysis>``
-    - high: expanded multi-line with labeled fields
+    Accepts either a ThinkingOutput (structured models) or a plain str
+    (non-structured models' free-form thinking text).
+
+    The injection is framed as an execution strategy directive — the main
+    model should follow it to produce the actual response.
     """
+    framing = "The following strategy was developed for this request. Use it to guide your response:"
+
+    if isinstance(output, str):
+      # Free-form text from non-structured models
+      return f"<execution_strategy>\n{framing}\n\n{output}\n</execution_strategy>"
+
+    # Structured ThinkingOutput
+    tool_names = output.flat_tool_names()
+
     if effort == "high":
-      lines = [f"Analysis: {output.analysis}", f"Approach: {output.approach}"]
-      if output.tool_plan:
-        lines.append(f"Tools: {', '.join(output.tool_plan)}")
+      lines = [
+        "<execution_strategy>",
+        framing,
+        "",
+        f"Approach: {output.approach}",
+      ]
+      if tool_names:
+        lines.append(f"Tools: {', '.join(tool_names)}")
+      if output.verification:
+        lines.append(f"Verification: {output.verification}")
       if output.considerations:
         lines.append(f"Considerations: {output.considerations}")
+      if output.confidence:
+        lines.append(f"Confidence: {output.confidence}")
+      lines.append("</execution_strategy>")
       return "\n".join(lines)
 
-    # low / medium — compact single-line
-    parts = [f"<analysis>{output.approach}"]
-    if output.tool_plan:
-      parts.append(f" Tools: {', '.join(output.tool_plan)}.")
-    parts.append("</analysis>")
+    # low / medium — compact
+    parts = [f"<execution_strategy>\nStrategy: {output.approach}"]
+    if tool_names:
+      parts.append(f" Tools: {', '.join(tool_names)}.")
+    parts.append("\n</execution_strategy>")
     return "".join(parts)
 
   def _extract_last_user_query(self, messages: List[Message]) -> Optional[str]:
@@ -2512,25 +2599,21 @@ class Agent:
 
     return events
 
-  async def _execute_thinking(
+  def _build_thinking_messages(
     self,
     context: RunContext,
     invoke_messages: List[Message],
     tools: Dict[str, Function],
-  ) -> "tuple[Optional[ThinkingOutput], list[ReasoningStep], list[Message]]":
-    """Execute Definable's fallback thinking layer (separate LLM call).
-
-    Used when the model does not support native thinking, or when
-    mode="definable" is explicitly set.
+  ) -> "tuple[list[Message], bool]":
+    """Build the messages for a thinking LLM call.
 
     Returns:
-      Tuple of (thinking_output, reasoning_steps, reasoning_messages)
+      (thinking_messages, use_structured) — the messages and whether structured output is used.
+
+    For structured models (OpenAI, Gemini): uses ThinkingOutput schema via structured output.
+    For non-structured models (Moonshot, DeepSeek, xAI): pure natural language, no format
+    instructions — produces clean free-form text.
     """
-    import json
-
-    from definable.agent.reasoning.step import ThinkingOutput, thinking_output_to_reasoning_steps
-    from definable.utils.log import log_warning
-
     assert self._thinking is not None
 
     thinking_model = self._thinking.model or self.model
@@ -2541,96 +2624,107 @@ class Agent:
     else:
       thinking_prompt = self._build_thinking_prompt(context, tools)
 
-    # Emit ReasoningStarted
-    self._emit(
-      ReasoningStartedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-      )
-    )
-
     # Build thinking messages: system prompt + user/assistant messages (no tools)
     thinking_messages: list[Message] = [Message(role="system", content=thinking_prompt)]
     for msg in invoke_messages:
       if msg.role in ("user", "assistant"):
         thinking_messages.append(msg)
 
-    # Call model — use structured output only if provider supports it
+    use_structured = thinking_model.supports_native_structured_outputs
+
+    # Non-structured models: no format instructions at all.
+    # They produce pure natural language reasoning text.
+
+    return thinking_messages, use_structured
+
+  async def _execute_thinking(
+    self,
+    context: RunContext,
+    invoke_messages: List[Message],
+    tools: Dict[str, Function],
+  ) -> "AsyncGenerator[Union[str, tuple[Optional[ThinkingOutput], Optional[str], list[ReasoningStep], list[Message]]], None]":
+    """Execute Definable's fallback thinking layer as a unified async generator.
+
+    Always streams via ainvoke_stream. Behavior splits by model capability:
+
+    - Structured models (OpenAI, Gemini): accumulates response, parses ThinkingOutput
+      at end, yields chain_of_thought tokens during stream.
+    - Non-structured models (Moonshot, DeepSeek, xAI): yields raw text tokens,
+      builds thinking_text string at end. No JSON, no XML — pure natural language.
+
+    Yields:
+      str: Content delta tokens (for ReasoningContentDelta events).
+      tuple: Final result ``(thinking_output_or_none, thinking_text_or_none, reasoning_steps, reasoning_messages)``
+        as the last item.
+    """
+    import json
+
+    from definable.agent.reasoning.step import ThinkingOutput, thinking_output_to_reasoning_steps
+
+    assert self._thinking is not None
+    thinking_model = self._thinking.model or self.model
+
+    thinking_messages, use_structured = self._build_thinking_messages(context, invoke_messages, tools)
+
     assistant_msg = Message(role="assistant")
-    if thinking_model.supports_native_structured_outputs:
+
+    if use_structured:
+      # Structured output: call with response_format, then yield chain_of_thought
       response = await thinking_model.ainvoke(
         messages=thinking_messages,
         assistant_message=assistant_msg,
         response_format=ThinkingOutput,
       )
-    else:
-      # Append JSON schema instructions for models that don't support response_format
-      thinking_messages[0] = Message(
-        role="system",
-        content=thinking_messages[0].content  # type: ignore[operator]
-        + '\n\nRespond with ONLY valid JSON: {"analysis": "string", "approach": "string", "tool_plan": ["string"] | null}',
-      )
-      response = await thinking_model.ainvoke(
-        messages=thinking_messages,
-        assistant_message=assistant_msg,
-      )
+      raw_content = response.content if isinstance(response.content, str) else str(response.content or "")
 
-    # Parse ThinkingOutput from structured response
-    from definable.agent.reasoning.step import ReasoningStep
-
-    thinking_output: Optional[ThinkingOutput] = None
-    reasoning_steps: list[ReasoningStep] = []
-    if response.content:
+      # Parse structured response
+      thinking_output: Optional[ThinkingOutput] = None
+      reasoning_steps: list[ReasoningStep] = []
       try:
-        parsed = json.loads(response.content) if isinstance(response.content, str) else response.content
+        parsed = json.loads(raw_content)
         if isinstance(parsed, dict):
+          if "analysis" in parsed and "chain_of_thought" not in parsed:
+            parsed["chain_of_thought"] = parsed.pop("analysis")
           thinking_output = ThinkingOutput(**parsed)
           reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
-      except Exception as e:
-        log_warning(f"Failed to parse thinking response: {e}")
-        # Graceful fallback
-        thinking_output = ThinkingOutput(analysis="Could not parse", approach="Respond directly")  # type: ignore[call-arg]
+      except Exception:
+        from definable.utils.log import log_warning
+
+        log_warning("Failed to parse structured thinking response, using raw content")
+        thinking_output = ThinkingOutput(chain_of_thought=raw_content, approach="Respond directly")  # type: ignore[call-arg]
         reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
 
-    # Emit unified ReasoningContentDelta (flattened text, not structured steps)
-    if thinking_output:
-      delta_text = f"Analysis: {thinking_output.analysis}\nApproach: {thinking_output.approach}"
-      if thinking_output.tool_plan:
-        delta_text += f"\nTool plan: {', '.join(thinking_output.tool_plan)}"
-      if thinking_output.considerations:
-        delta_text += f"\nConsiderations: {thinking_output.considerations}"
-      self._emit(
-        ReasoningContentDeltaEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          reasoning_content=delta_text,
-        )
-      )
+      if thinking_output:
+        yield thinking_output.chain_of_thought
 
-    # Build reasoning messages list for RunOutput
-    reasoning_agent_messages = thinking_messages + [
-      Message(
-        role="assistant",
-        content=response.content,
-        metrics=response.response_usage,  # type: ignore[arg-type]
-      )
-    ]
+      reasoning_agent_messages = thinking_messages + [
+        Message(role="assistant", content=response.content, metrics=response.response_usage)  # type: ignore[arg-type]
+      ]
+      yield (thinking_output, None, reasoning_steps, reasoning_agent_messages)
+      return
 
-    # Emit ReasoningCompleted
-    self._emit(
-      ReasoningCompletedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-      )
-    )
+    # Non-structured: stream pure natural language text token-by-token
+    accumulated = ""
+    response_usage = None
 
-    return thinking_output, reasoning_steps, reasoning_agent_messages
+    async for chunk in thinking_model.ainvoke_stream(
+      messages=thinking_messages,
+      assistant_message=assistant_msg,
+    ):
+      if chunk.content:
+        accumulated += chunk.content
+        yield chunk.content
+      if chunk.response_usage:
+        response_usage = chunk.response_usage
+
+    # Build reasoning messages
+    msg_kwargs: Dict[str, Any] = {"role": "assistant", "content": accumulated}
+    if response_usage is not None:
+      msg_kwargs["metrics"] = response_usage
+    reasoning_agent_messages = thinking_messages + [Message(**msg_kwargs)]
+
+    # No ThinkingOutput for non-structured — just free-form text
+    yield (None, accumulated or None, [], reasoning_agent_messages)
 
   def _enable_native_thinking(self) -> None:
     """Configure the model to use native extended thinking.
@@ -2696,14 +2790,15 @@ class Agent:
     tools: Dict[str, Function],
     *,
     thinking_output: "Optional[ThinkingOutput]" = None,
+    thinking_text: Optional[str] = None,
     reasoning_steps: "Optional[list[ReasoningStep]]" = None,
     reasoning_messages: "Optional[list[Message]]" = None,
   ) -> tuple:
     """Build the invoke message list with system prompt, thinking, knowledge, memory, readers.
 
     Args:
-        thinking_output: Pre-computed thinking output from ThinkPhase. If provided,
-            skips the built-in thinking call. If None, computes inline (backward compat).
+        thinking_output: Pre-computed structured thinking output from ThinkPhase.
+        thinking_text: Pre-computed free-form thinking text (non-structured models).
         reasoning_steps: Pre-computed reasoning steps from ThinkPhase.
         reasoning_messages: Pre-computed reasoning messages from ThinkPhase.
 
@@ -2729,23 +2824,23 @@ class Agent:
     # If pre-computed thinking is provided (from ThinkPhase), use it directly.
     # Otherwise, compute inline for backward compatibility.
     reasoning_agent_messages = reasoning_messages
-    if thinking_output is None:
+    if thinking_output is None and thinking_text is None:
       if await self._thinking_should_run(invoke_messages):
         if self._thinking and self._thinking.should_use_native(self.model):
           # Native thinking: configure the model, let the loop handle events.
           # No separate call needed — the model will return reasoning_content.
           self._enable_native_thinking()
         else:
-          # Definable's fallback thinking layer (separate LLM call)
-          thinking_output, reasoning_steps, reasoning_agent_messages = await self._execute_thinking(
-            context,
-            invoke_messages,
-            tools,
-          )
+          # Definable's fallback thinking layer (separate LLM call) — inline path
+          async for item in self._execute_thinking(context, invoke_messages, tools):
+            if isinstance(item, tuple):
+              thinking_output, thinking_text, reasoning_steps, reasoning_agent_messages = item
 
-    if thinking_output:
+    # Inject thinking results into system prompt
+    injection_source: "Union[ThinkingOutput, str, None]" = thinking_output or thinking_text
+    if injection_source:
       effort = self._thinking.effort if self._thinking and hasattr(self._thinking, "effort") else "medium"
-      injection = self._format_thinking_injection(thinking_output, effort=effort)
+      injection = self._format_thinking_injection(injection_source, effort=effort)
       if injection:
         system_content = f"{system_content}\n\n{injection}" if system_content else injection
 
@@ -3285,7 +3380,9 @@ class Agent:
       session_state=state.context.session_state if state.context else None,
       reasoning_steps=state.reasoning_steps or None,
       reasoning_messages=state.reasoning_messages or None,
-      reasoning_content=state.native_reasoning_content or (self._format_reasoning_context(state.reasoning_steps) if state.reasoning_steps else None),
+      reasoning_content=state.native_reasoning_content
+      or state.thinking_text
+      or (self._format_reasoning_context(state.reasoning_steps) if state.reasoning_steps else None),
       requirements=state.requirements,
       phase_metrics=state.phase_metrics or None,
     )
@@ -3548,8 +3645,16 @@ class Agent:
     """Return the InterfaceGateway, or None if not created."""
     return self._gateway
 
+  @property
+  def interfaces(self) -> List["BaseInterface"]:
+    """Read-only list of attached interfaces."""
+    return list(self._interfaces)
+
   def create_gateway(self, **kwargs: Any) -> "InterfaceGateway":
     """Create an InterfaceGateway for this agent.
+
+    .. deprecated::
+        Pass ``gateway=`` to the Agent constructor instead.
 
     Migrates any already-registered interfaces into the gateway.
     The gateway is stored on ``self._gateway`` for use by ``aserve()``
@@ -3562,6 +3667,14 @@ class Agent:
     Returns:
       The newly created InterfaceGateway.
     """
+    import warnings
+
+    warnings.warn(
+      "create_gateway() is deprecated. Pass gateway= to Agent() constructor instead.",
+      DeprecationWarning,
+      stacklevel=2,
+    )
+
     from definable.agent.interface.gateway import InterfaceGateway
 
     gw = InterfaceGateway(self, **kwargs)
@@ -3576,6 +3689,9 @@ class Agent:
   def add_interface(self, interface: "BaseInterface") -> "Agent":
     """Register an interface with this agent.
 
+    .. deprecated::
+        Pass ``interfaces=`` to the Agent constructor instead.
+
     Binds the interface to this agent and stores it for use with serve().
 
     Args:
@@ -3584,6 +3700,14 @@ class Agent:
     Returns:
       Self for method chaining.
     """
+    import warnings
+
+    warnings.warn(
+      "add_interface() is deprecated. Pass interfaces= to Agent() constructor instead.",
+      DeprecationWarning,
+      stacklevel=2,
+    )
+
     interface.bind(self)
     self._interfaces.append(interface)
     return self
@@ -3604,11 +3728,12 @@ class Agent:
     server in a single event loop.  Use :meth:`serve` for the sync
     version.
 
+    Interfaces and gateway should be passed via the Agent constructor.
+    Passing them here is deprecated.
+
     Args:
-      *interfaces: Additional interfaces to run (merged with registered ones).
-      gateway: Optional InterfaceGateway.  When provided, the runtime
-        delegates interface supervision to the gateway instead of using
-        the default supervisor.
+      *interfaces: **Deprecated.** Pass ``interfaces=`` to the Agent constructor.
+      gateway: **Deprecated.** Pass ``gateway=`` to the Agent constructor.
       name: Optional prefix for log messages (defaults to agent_name).
       host: Host to bind the HTTP server to.
       port: Port for the HTTP server.
@@ -3616,6 +3741,21 @@ class Agent:
         (default), the server starts if any Webhook triggers exist.
       dev: Enable development mode with Swagger docs and info-level logging.
     """
+    import warnings
+
+    if interfaces:
+      warnings.warn(
+        "Passing interfaces to aserve() is deprecated. Pass interfaces= to Agent() constructor instead.",
+        DeprecationWarning,
+        stacklevel=2,
+      )
+    if gateway is not None:
+      warnings.warn(
+        "Passing gateway to aserve() is deprecated. Pass gateway= to Agent() constructor instead.",
+        DeprecationWarning,
+        stacklevel=2,
+      )
+
     from definable.agent.runtime.runner import AgentRuntime
 
     # Resolve gateway: explicit param > agent's gateway > None
@@ -3628,6 +3768,15 @@ class Agent:
         iface.bind(self)
       if iface not in all_interfaces:
         all_interfaces.append(iface)
+
+    # Auto-create gateway for 2+ interfaces (production-grade supervision)
+    if resolved_gateway is None and len(all_interfaces) >= 2:
+      from definable.agent.interface.gateway import InterfaceGateway as _InterfaceGateway
+
+      resolved_gateway = _InterfaceGateway()
+      resolved_gateway._bind_agent(self)
+      for iface in all_interfaces:
+        resolved_gateway.add(iface)
 
     runtime = AgentRuntime(
       agent=self,
@@ -3656,13 +3805,16 @@ class Agent:
     Blocking call that starts interfaces, triggers, and an HTTP server.
     Equivalent to ``asyncio.run(agent.aserve(...))``.
 
+    Interfaces and gateway should be passed via the Agent constructor.
+    Passing them here is deprecated.
+
     When ``dev=True``, enables hot-reload mode: the parent process
     watches for ``.py`` file changes and automatically restarts the
     server.  Swagger docs are available at ``/docs``.
 
     Args:
-      *interfaces: Additional interfaces to run (merged with registered ones).
-      gateway: Optional InterfaceGateway for centralized interface coordination.
+      *interfaces: **Deprecated.** Pass ``interfaces=`` to the Agent constructor.
+      gateway: **Deprecated.** Pass ``gateway=`` to the Agent constructor.
       name: Optional prefix for log messages (defaults to agent_name).
       host: Host to bind the HTTP server to.
       port: Port for the HTTP server.
@@ -3670,6 +3822,21 @@ class Agent:
         (default), the server starts if any Webhook triggers exist.
       dev: Enable development mode with hot reload and Swagger docs.
     """
+    import warnings
+
+    if interfaces:
+      warnings.warn(
+        "Passing interfaces to serve() is deprecated. Pass interfaces= to Agent() constructor instead.",
+        DeprecationWarning,
+        stacklevel=2,
+      )
+    if gateway is not None:
+      warnings.warn(
+        "Passing gateway to serve() is deprecated. Pass gateway= to Agent() constructor instead.",
+        DeprecationWarning,
+        stacklevel=2,
+      )
+
     if dev:
       from definable.agent.runtime._dev import is_dev_child, run_dev_mode
 
@@ -3688,6 +3855,27 @@ class Agent:
         dev=dev,
       )
     )
+
+  # --- Manifest ---
+
+  def export_manifest(self) -> Dict[str, Any]:
+    """Export agent configuration as a manifest for platform deployment.
+
+    Returns a dictionary with agent name, model, tools, and instruction
+    summary — used by Definable Cloud's platform dashboard and packager.
+
+    Returns:
+      Dict with agent metadata.
+    """
+    return {
+      "agent_name": self.agent_name,
+      "agent_id": self.agent_id,
+      "model": self.model.id if self.model else None,
+      "tools": [{"name": t.name, "description": t.description} for t in self.tools],
+      "instructions_summary": (self.instructions[:200] + "...") if self.instructions and len(self.instructions) > 200 else self.instructions,
+      "has_memory": self.memory is not None,
+      "has_knowledge": self._knowledge is not None,
+    }
 
   # --- Replay & Compare ---
 

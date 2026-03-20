@@ -5,6 +5,7 @@ from definable.agent.reasoning.step import (
   ReasoningStep,
   ReasoningSteps,
   ThinkingOutput,
+  ToolStep,
   thinking_output_to_reasoning_steps,
 )
 from definable.agent.reasoning.thinking import Thinking
@@ -15,5 +16,6 @@ __all__ = [
   "ReasoningStep",
   "ReasoningSteps",
   "ThinkingOutput",
+  "ToolStep",
   "thinking_output_to_reasoning_steps",
 ]

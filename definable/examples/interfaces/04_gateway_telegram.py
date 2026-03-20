@@ -91,8 +91,23 @@ class AuditHook:
 
 
 async def main() -> None:
-  # -- Agent setup --
   memory = Memory(store=FileStore("./memory"))
+
+  # -- Identity resolver (cross-platform user unification) --
+  resolver = SQLiteIdentityResolver("./gateway_identity.db")
+
+  # -- Create gateway with hooks and identity linking --
+  gateway = InterfaceGateway(
+    identity_resolver=resolver,
+    enable_identity_linking=True,  # enables /link self-service flow
+    link_code_ttl=300,  # codes expire after 5 minutes
+    hooks=[AuditHook(), RateLimitHook()],  # type: ignore[list-item]
+  )
+
+  # -- Create agent with interfaces and gateway --
+  telegram = TelegramInterface(bot_token=os.environ["TELEGRAM_BOT_TOKEN"])
+  discord = DiscordInterface(bot_token=os.environ["DISCORD_BOT_TOKEN"])
+
   agent = Agent(
     model=OpenAIChat(id="gpt-4o-mini"),
     tools=[get_weather],
@@ -103,39 +118,9 @@ async def main() -> None:
     ),
     name="gateway-bot",
     memory=memory,
+    interfaces=[telegram, discord],
+    gateway=gateway,
   )
-
-  # -- Identity resolver (cross-platform user unification) --
-  resolver = SQLiteIdentityResolver("./gateway_identity.db")
-
-  # Pre-link known users (admin setup).
-  # In production, users link themselves via the /link command.
-  # async with resolver:
-  #   await resolver.link("telegram", os.environ.get("MY_TELEGRAM_ID", "12345"), "alice")
-  #   await resolver.link("discord", os.environ.get("MY_DISCORD_ID", "67890"), "alice")
-
-  # -- Create gateway --
-  gateway = InterfaceGateway(
-    agent,
-    identity_resolver=resolver,
-    enable_identity_linking=True,  # enables /link self-service flow
-    link_code_ttl=300,  # codes expire after 5 minutes
-  )
-
-  # -- Add gateway-level hooks (apply to all interfaces) --
-  gateway.add_hook(AuditHook())  # type: ignore[arg-type]
-  gateway.add_hook(RateLimitHook())  # type: ignore[arg-type]
-
-  # -- Register interfaces --
-  telegram = TelegramInterface(
-    bot_token=os.environ["TELEGRAM_BOT_TOKEN"],
-  )
-  discord = DiscordInterface(
-    bot_token=os.environ["DISCORD_BOT_TOKEN"],
-  )
-
-  gateway.add(telegram)
-  gateway.add(discord)
 
   # -- Subscribe to lifecycle events --
   @agent._event_bus.on(InterfaceStartedEvent)
@@ -159,7 +144,7 @@ async def main() -> None:
   print(f"Healthy: {gateway.is_healthy}")
 
   # -- Serve (blocks until Ctrl+C) --
-  await gateway.aserve(name="gateway-bot")
+  await agent.aserve()
 
 
 if __name__ == "__main__":

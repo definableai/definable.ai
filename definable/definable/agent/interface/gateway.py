@@ -313,7 +313,7 @@ class InterfaceGateway:
 
   def __init__(
     self,
-    agent: "Agent",
+    agent: Optional["Agent"] = None,
     *,
     shared_sessions: bool = False,
     identity_resolver: Optional["IdentityResolver"] = None,
@@ -346,6 +346,21 @@ class InterfaceGateway:
       )
       self._hooks.insert(0, self._link_hook)  # type: ignore[arg-type]
 
+  # --- Agent binding ---
+
+  def _bind_agent(self, agent: "Agent") -> None:
+    """Bind this gateway to an agent (called by Agent constructor).
+
+    Args:
+      agent: The Agent instance to bind.
+
+    Raises:
+      ValueError: If already bound to a *different* agent.
+    """
+    if self.agent is not None and self.agent is not agent:
+      raise ValueError("Gateway is already bound to a different agent")
+    self.agent = agent
+
   # --- Interface management ---
 
   def add(self, interface: "BaseInterface") -> "InterfaceGateway":
@@ -360,8 +375,8 @@ class InterfaceGateway:
     Returns:
       Self for method chaining.
     """
-    # Bind to agent
-    if interface.agent is None:
+    # Bind to agent (skip if gateway has no agent yet — deferred binding)
+    if interface.agent is None and self.agent is not None:
       interface.bind(self.agent)
 
     # Inject gateway hook bridge at position 0
@@ -472,7 +487,8 @@ class InterfaceGateway:
 
   async def _emit_event(self, event: BaseAgentRunEvent) -> None:
     """Emit an event through the agent's EventBus."""
-    await self.agent._event_bus.emit(event)
+    if self.agent is not None:
+      await self.agent._event_bus.emit(event)
 
   async def aserve(self, *, name: Optional[str] = None) -> None:
     """Start all interfaces and supervise them (async).
@@ -482,6 +498,9 @@ class InterfaceGateway:
     Args:
       name: Optional prefix for log messages.
     """
+    if self.agent is None:
+      raise ValueError("Gateway has no agent. Pass gateway= to Agent() constructor or call _bind_agent().")
+
     if not self._interfaces:
       raise ValueError("InterfaceGateway has no interfaces registered. Call add() first.")
 
