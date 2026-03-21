@@ -165,32 +165,12 @@ class TraceBrowser:
   def load_replay(self, session_id: str, run_id: str) -> Any:
     """Load a Replay object for a specific run.
 
-    Args:
-      session_id: The session identifier.
-      run_id: The run identifier.
-
-    Returns:
-      A Replay instance built from the run's events.
-
-    Raises:
-      FileNotFoundError: If the session file does not exist.
-      ValueError: If no events found for the run_id.
+    .. deprecated:: Replay module removed. Returns raw event dicts instead.
     """
-    from definable.agent.replay.replay import Replay
-    from definable.agent.run.agent import run_output_event_from_dict
-
     raw_events = self.load_run_events(session_id, run_id)
     if not raw_events:
       raise ValueError(f"No events found for run_id={run_id!r} in session={session_id!r}")
-
-    typed_events = []
-    for data in raw_events:
-      try:
-        typed_events.append(run_output_event_from_dict(data))
-      except Exception as exc:
-        log_warning(f"TraceBrowser: cannot deserialize event: {exc}")
-
-    return Replay.from_events(typed_events, run_id=run_id)
+    return {"run_id": run_id, "session_id": session_id, "events": raw_events}
 
   def session_exists(self, session_id: str) -> bool:
     """Check if a session file exists.

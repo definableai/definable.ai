@@ -2,22 +2,16 @@
 Unit tests for Agent sync shutdown resource cleanup.
 
 Verifies that Agent._shutdown() (sync context manager exit) properly
-closes memory stores, drains pending memory tasks, and shuts down
-agent-owned toolkits — not just skills and trace writers.
-
-Prior to fix: only _ashutdown() closed these resources; _shutdown()
-leaked SQLite connections, memory tasks, and toolkit connections.
+closes memory stores and shuts down agent-owned toolkits.
 
 Covers:
   - _shutdown closes memory when no event loop is running
-  - _shutdown drains pending memory tasks
   - _shutdown shuts down agent-owned toolkits
   - _shutdown warns when called inside a running event loop
   - _ashutdown still works correctly (no regression)
   - sync context manager (__exit__) triggers full cleanup
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,7 +29,6 @@ def _make_agent_with_memory():
   agent = Agent(model=model)
   agent.memory = AsyncMock()
   agent.memory.close = AsyncMock()
-  agent._pending_memory_tasks = []
   agent._agent_owned_toolkits = []
   agent._trace_writer = None
   agent._started = True
@@ -111,35 +104,6 @@ class TestSyncShutdownToolkits:
 
     # Should not raise
     agent._shutdown()
-
-
-# ---------------------------------------------------------------------------
-# _shutdown: pending memory tasks
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.unit
-class TestSyncShutdownDrainTasks:
-  """_shutdown() drains pending memory tasks."""
-
-  def test_drains_completed_tasks(self):
-    agent = _make_agent_with_memory()
-
-    # Create a completed async task
-    async def _noop():
-      pass
-
-    loop = asyncio.new_event_loop()
-    task = loop.create_task(_noop())
-    loop.run_until_complete(task)
-    loop.close()
-
-    agent._pending_memory_tasks = [task]
-
-    agent._shutdown()
-
-    # After drain, completed tasks should be removed
-    assert all(t.done() for t in agent._pending_memory_tasks) or len(agent._pending_memory_tasks) == 0
 
 
 # ---------------------------------------------------------------------------

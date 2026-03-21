@@ -549,9 +549,9 @@ class TestBackwardCompatibility:
   """Ensure REPL mode behavior is unchanged."""
 
   def test_default_repl_renderers_present(self):
-    """All 10 REPL renderers are registered."""
+    """All 9 REPL renderers are registered."""
     iface = CLIInterface(mode="repl")
-    assert len(iface._renderer_registry._renderers) == 10
+    assert len(iface._renderer_registry._renderers) == 9
 
   def test_default_commands_present(self):
     """All 9 built-in commands are registered."""

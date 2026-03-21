@@ -24,7 +24,8 @@ if TYPE_CHECKING:
     InterfaceStartedEvent,
     InterfaceStoppedEvent,
   )
-  from definable.agent.pipeline.state import PhaseMetric
+
+  pass  # PhaseMetric removed in v2 (pipeline deleted)
 
 
 @dataclass
@@ -877,9 +878,6 @@ class RunOutput:
   created_at: int = field(default_factory=lambda: int(time()))
 
   events: Optional[List[RunOutputEvent]] = None
-
-  # Pipeline phase metrics (timing, skip status)
-  phase_metrics: Optional[List["PhaseMetric"]] = None
 
   status: RunStatus = RunStatus.running
 

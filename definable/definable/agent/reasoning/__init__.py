@@ -1,4 +1,4 @@
-"""Reasoning module — structured thinking and chain-of-thought."""
+"""Reasoning module — data types for structured thinking."""
 
 from definable.agent.reasoning.step import (
   NextAction,
@@ -8,10 +8,8 @@ from definable.agent.reasoning.step import (
   ToolStep,
   thinking_output_to_reasoning_steps,
 )
-from definable.agent.reasoning.thinking import Thinking
 
 __all__ = [
-  "Thinking",
   "NextAction",
   "ReasoningStep",
   "ReasoningSteps",

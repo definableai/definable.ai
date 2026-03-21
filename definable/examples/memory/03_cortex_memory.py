@@ -23,7 +23,7 @@ import asyncio
 import os
 
 from definable.agent import Agent
-from definable.knowledge.embedder.openai import OpenAIEmbedder
+from definable.embedder import OpenAIEmbedder
 from definable.memory.cortex import CortexConfig, CortexMemory
 from definable.model.openai import OpenAIChat
 

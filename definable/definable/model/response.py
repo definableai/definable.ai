@@ -49,6 +49,11 @@ class ToolExecution:
   answered: Optional[bool] = None
 
   external_execution_required: Optional[bool] = None
+  external_execution_silent: Optional[bool] = None  # Suppress paused messages for background external execution
+
+  # Approval tracking (enterprise compliance)
+  approval_type: Optional[str] = None  # "required" (blocking) or "audit" (trail only)
+  approval_id: Optional[str] = None  # Links to external approval record
 
   @property
   def is_paused(self) -> bool:
@@ -80,6 +85,9 @@ class ToolExecution:
       requires_user_input=data.get("requires_user_input"),
       user_input_schema=[UserInputField.from_dict(field) for field in data.get("user_input_schema") or []] if "user_input_schema" in data else None,
       external_execution_required=data.get("external_execution_required"),
+      external_execution_silent=data.get("external_execution_silent"),
+      approval_type=data.get("approval_type"),
+      approval_id=data.get("approval_id"),
       metrics=Metrics(**(data.get("metrics", {}) or {})),
       **{"created_at": data["created_at"]} if "created_at" in data else {},
     )

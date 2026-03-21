@@ -29,7 +29,6 @@ from definable.agent.interface.cli.renderers.knowledge import KnowledgeRenderer
 from definable.agent.interface.cli.renderers.memory import MemoryRenderer
 from definable.agent.interface.cli.renderers.model import ModelCallRenderer
 from definable.agent.interface.cli.renderers.reasoning import ReasoningRenderer
-from definable.agent.interface.cli.renderers.research import DeepResearchRenderer
 from definable.agent.interface.cli.renderers.run import RunRenderer
 from definable.agent.interface.cli.renderers.streaming import StreamingRenderer
 from definable.agent.interface.cli.renderers.sub_agent import SubAgentRenderer
@@ -201,7 +200,6 @@ class CLIInterface(BaseInterface):
     self._renderer_registry.add(ReasoningRenderer())
     self._renderer_registry.add(KnowledgeRenderer())
     self._renderer_registry.add(MemoryRenderer())
-    self._renderer_registry.add(DeepResearchRenderer())
     self._renderer_registry.add(GuardrailRenderer())
     self._renderer_registry.add(SubAgentRenderer())
 

@@ -34,33 +34,3 @@ class TestModelExports:
 
     assert KeyRotatedEvent is not None
     assert ProviderFailoverEvent is not None
-
-
-class TestAgentUsageTracking:
-  def test_usage_none_by_default(self):
-    from definable.agent.testing import create_test_agent
-
-    agent = create_test_agent()
-    assert agent.usage_tracker is None
-
-  def test_usage_true_creates_tracker(self):
-    from definable.agent.testing import create_test_agent
-    from definable.agent.usage import UsageTracker
-
-    agent = create_test_agent(usage=True)
-    assert agent.usage_tracker is not None
-    assert isinstance(agent.usage_tracker, UsageTracker)
-
-  def test_usage_tracker_instance_accepted(self):
-    from definable.agent.testing import create_test_agent
-    from definable.agent.usage import UsageTracker
-
-    tracker = UsageTracker()
-    agent = create_test_agent(usage=tracker)
-    assert agent.usage_tracker is tracker
-
-  def test_usage_tracker_importable_from_agent(self):
-    from definable.agent import UsageTracker, UsageSnapshot
-
-    assert UsageTracker is not None
-    assert UsageSnapshot is not None

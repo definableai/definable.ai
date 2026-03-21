@@ -69,7 +69,7 @@ def openai_embedder_example():
   # Note: OpenAIEmbedder may need to be imported differently
   # depending on your definable version
   try:
-    from definable.knowledge.embedder.openai import OpenAIEmbedder
+    from definable.embedder import OpenAIEmbedder
 
     embedder = OpenAIEmbedder(
       id="text-embedding-3-large",

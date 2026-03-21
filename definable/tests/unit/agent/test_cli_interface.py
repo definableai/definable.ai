@@ -33,7 +33,6 @@ from definable.agent.interface.cli.renderers.knowledge import KnowledgeRenderer
 from definable.agent.interface.cli.renderers.memory import MemoryRenderer
 from definable.agent.interface.cli.renderers.model import ModelCallRenderer
 from definable.agent.interface.cli.renderers.reasoning import ReasoningRenderer
-from definable.agent.interface.cli.renderers.research import DeepResearchRenderer
 from definable.agent.interface.cli.renderers.run import RunRenderer
 from definable.agent.interface.cli.renderers.streaming import StreamingRenderer
 from definable.agent.interface.cli.renderers.sub_agent import SubAgentRenderer
@@ -63,9 +62,6 @@ from definable.agent.run.agent import (
   SubAgentSpawnedEvent,
   ToolCallCompletedEvent,
   ToolCallStartedEvent,
-  DeepResearchStartedEvent,
-  DeepResearchProgressEvent,
-  DeepResearchCompletedEvent,
 )
 from definable.model.message import Message
 from definable.model.metrics import Metrics
@@ -99,7 +95,6 @@ def _make_mock_agent(**overrides):
   agent._knowledge = overrides.get("knowledge", None)
   agent._thinking = overrides.get("thinking", None)
   agent._tracing = overrides.get("tracing", None)
-  agent._deep_research = overrides.get("deep_research", None)
   agent._guardrails = overrides.get("guardrails", None)
   agent._sub_agents = overrides.get("sub_agents", None)
   agent._model_id = overrides.get("model_id", "gpt-4o-mini")
@@ -678,42 +673,6 @@ class TestMemoryRenderer:
     assert "5" in output
 
 
-class TestDeepResearchRenderer:
-  def test_handles(self):
-    r = DeepResearchRenderer()
-    assert r.handles(DeepResearchStartedEvent()) is True
-    assert r.handles(DeepResearchProgressEvent()) is True
-    assert r.handles(DeepResearchCompletedEvent()) is True
-    assert r.handles(RunStartedEvent()) is False
-
-  def test_render_started(self):
-    r = DeepResearchRenderer()
-    console = _make_console()
-    config = CLIConfig()
-    event = DeepResearchStartedEvent(query="quantum computing")
-    r.render(event, console, config)
-    output = _get_console_output(console)
-    assert "quantum" in output.lower()
-
-  def test_render_progress(self):
-    r = DeepResearchRenderer()
-    console = _make_console()
-    config = CLIConfig()
-    event = DeepResearchProgressEvent(wave=2, sources_read=10, facts_extracted=5, message="Wave 2")
-    r.render(event, console, config)
-    output = _get_console_output(console)
-    assert "Wave 2" in output
-
-  def test_render_completed(self):
-    r = DeepResearchRenderer()
-    console = _make_console()
-    config = CLIConfig()
-    event = DeepResearchCompletedEvent(sources_used=15, waves_executed=3)
-    r.render(event, console, config)
-    output = _get_console_output(console)
-    assert "15" in output
-
-
 class TestGuardrailRenderer:
   def test_handles(self):
     r = GuardrailRenderer()
@@ -776,7 +735,7 @@ class TestCLIInterface:
     iface = CLIInterface()
     assert isinstance(iface.config, CLIConfig)
     assert iface._cli_config.platform == "cli"
-    assert iface._renderer_registry.renderer_count == 10
+    assert iface._renderer_registry.renderer_count == 9
     assert len(iface._command_registry.all_commands) == 9
 
   def test_init_custom_config(self):

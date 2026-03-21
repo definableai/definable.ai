@@ -18,7 +18,13 @@ from definable.skill import SkillRegistry
 
 def main():
   # Create a mock model (no API keys needed)
-  model = MockModel(responses=["I'll follow the methodology to help you."])
+  model = MockModel(
+    responses=[
+      "I'll follow the methodology to help you.",
+      "I'll follow the methodology to help you.",
+      "I'll follow the methodology to help you.",
+    ]
+  )
   tracing = Tracing(enabled=False)
 
   # --- 1. Load the built-in skill library ---
@@ -56,7 +62,6 @@ def main():
     tracing=tracing,
   )
   print(f"Agent has {len(agent.skills)} skills")
-  print(f"Skill instructions length: {len(agent._build_skill_instructions())} chars")
   output = agent.run("Review this code for bugs.")
   print(f"Response: {output.content}\n")
 

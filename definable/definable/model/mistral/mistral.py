@@ -369,4 +369,14 @@ class MistralChat(Model):
     metrics.output_tokens = response_usage.completion_tokens or 0
     metrics.total_tokens = metrics.input_tokens + metrics.output_tokens
 
+    # Extract cache read tokens from prompt_tokens_details
+    prompt_details = getattr(response_usage, "prompt_tokens_details", None)
+    if prompt_details is not None:
+      metrics.cache_read_tokens = getattr(prompt_details, "cached_tokens", 0) or 0
+
+    # Extract reasoning tokens from completion_tokens_details
+    completion_details = getattr(response_usage, "completion_tokens_details", None)
+    if completion_details is not None:
+      metrics.reasoning_tokens = getattr(completion_details, "reasoning_tokens", 0) or 0
+
     return metrics

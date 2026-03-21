@@ -1,20 +1,28 @@
-"""Agent class - production-grade wrapper around model execution."""
+"""Agent v2 — overridable methods + EventBus.
+
+Four overridable methods control flow:
+  before_model_call()  →  build system prompt, inject memory/knowledge
+  call_model()         →  call LLM with retry + streaming
+  after_model_call()   →  validate output (override for guardrails)
+  execute_tool()       →  run tool (override for HITL, sandboxing)
+
+One event system for observation (never mutates flow):
+  EventBus  →  tracing, UI streaming, logging, metrics
+"""
 
 import asyncio
 import contextlib
 import dataclasses
 import json
+from dataclasses import replace as _dc_replace
 from typing import (
   TYPE_CHECKING,
   Any,
-  AsyncGenerator,
   AsyncIterator,
-  Awaitable,
   Callable,
   Dict,
   Iterator,
   List,
-  Literal,
   Optional,
   Protocol,
   Type,
@@ -23,11 +31,9 @@ from typing import (
 )
 from uuid import uuid4
 
-from definable.agent.cancellation import AgentCancelled, CancellationToken
 from definable.agent.config import AgentConfig
 from definable.agent.event_bus import EventBus
-from definable.agent.loop import AgentLoop
-from definable.agent.middleware import Middleware
+from definable.agent.loop import CancelToken, Cancelled, ToolResult
 from definable.agent.toolkit import Toolkit
 from definable.agent.tracing.base import TraceWriter
 from definable.media import Audio, File, Image, Video
@@ -36,17 +42,14 @@ from definable.model.metrics import Metrics
 from definable.model.response import ToolExecution
 from definable.agent.events import (
   BaseRunOutputEvent,
-  DeepResearchCompletedEvent,
-  DeepResearchStartedEvent,
-  FileReadCompletedEvent,
-  FileReadStartedEvent,
-  KnowledgeRetrievalCompletedEvent,
-  KnowledgeRetrievalStartedEvent,
-  MemoryRecallCompletedEvent,
-  MemoryRecallStartedEvent,
-  MemoryUpdateCompletedEvent,
-  MemoryUpdateStartedEvent,
+  ModelCallCompletedEvent,
+  ModelCallStartedEvent,
+  ReasoningCompletedEvent,
+  ReasoningContentDeltaEvent,
+  ReasoningStartedEvent,
+  RunCancelledEvent,
   RunCompletedEvent,
+  RunContentEvent,
   RunContext,
   RunErrorEvent,
   RunInput,
@@ -55,35 +58,24 @@ from definable.agent.events import (
   RunPausedEvent,
   RunStartedEvent,
   RunStatus,
+  ToolCallCompletedEvent,
+  ToolCallStartedEvent,
+  ToolContentEvent,
 )
+from definable.agent.run.requirement import RunRequirement
 from definable.skill.base import Skill
 from definable.tool.function import Function
 from definable.utils.tools import get_function_call_for_tool_call
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-  from pathlib import Path
-
-  from definable.agent.auth.base import AuthProvider
   from definable.agent.compression import Compression, CompressionManager
-  from definable.agent.observability.config import ObservabilityConfig
-  from definable.agent.guardrail.base import Guardrails
   from definable.agent.interface.base import BaseInterface
   from definable.agent.interface.gateway import InterfaceGateway
-  from definable.agent.pipeline.debug import DebugConfig
-  from definable.agent.pipeline.pipeline import Pipeline
-  from definable.agent.pipeline.state import LoopState
-  from definable.agent.pipeline.sub_agent import SubAgentPolicy
-  from definable.agent.reasoning.thinking import Thinking
   from definable.agent.tracing.base import Tracing
   from definable.knowledge import Knowledge
   from definable.memory.manager import Memory
   from definable.model.base import Model
-  from definable.agent.reasoning.step import ReasoningStep, ThinkingOutput
-  from definable.agent.replay import Replay, ReplayComparison
-  from definable.agent.research.config import DeepResearchConfig
-  from definable.agent.research.engine import DeepResearch
-  from definable.agent.trigger.base import BaseTrigger
   from definable.reader.base import BaseReader
   from definable.skill.registry import SkillRegistry
 
@@ -94,64 +86,20 @@ _REJECTED_MSG = (
 
 @runtime_checkable
 class AsyncLifecycleToolkit(Protocol):
-  """Protocol for toolkits with async lifecycle (e.g. MCPToolkit).
-
-  Toolkits satisfying this protocol can be auto-managed by Agent:
-  - Agent.__aenter__ / arun() calls initialize() on uninitialized toolkits
-  - Agent.__aexit__ / _ashutdown() calls shutdown() on agent-owned toolkits
-  """
+  """Protocol for toolkits with async lifecycle (e.g. MCPToolkit)."""
 
   _initialized: bool
 
   async def initialize(self) -> None: ...
   async def shutdown(self) -> None: ...
 
-  @property
-  def tools(self) -> list: ...
-
 
 class Agent:
+  """Production-grade agent with overridable methods.
+
+  Override ``before_model_call``, ``call_model``, ``after_model_call``,
+  or ``execute_tool`` to customize behavior without subclassing the loop.
   """
-  Production-grade agent wrapper around model execution.
-
-  Agent provides a clean interface for running LLM-based agents with:
-  - Direct access to primary components (model, tools, toolkits, instructions)
-  - Multi-turn conversation support
-  - Middleware for cross-cutting concerns
-  - Extensible tracing system
-  - Context manager for resource cleanup
-
-  Example:
-      from definable.agent import Agent, AgentConfig
-      from definable.model import OpenAIChat
-
-      agent = Agent(
-          model=OpenAIChat(id="gpt-4"),
-          tools=[search_tool, calculate_tool],
-          instructions="You are a helpful assistant.",
-      )
-
-      # Simple run
-      output = agent.run("What is 2+2?")
-      print(output.content)
-
-      # Multi-turn conversation
-      output2 = agent.run(
-          "And what about 3+3?",
-          messages=output.messages,
-          session_id=output.session_id,
-      )
-
-      # With context manager for cleanup
-      with agent:
-          output = agent.run("Hello!")
-  """
-
-  _EFFORT_PROMPTS: dict[str, str] = {
-    "low": "Be brief and concise in your reasoning.",
-    "medium": "",
-    "high": "Think thoroughly. Include considerations of risks, trade-offs, edge cases, and alternative approaches.",
-  }
 
   def __init__(
     self,
@@ -166,9 +114,7 @@ class Agent:
     # ── Layers ──────────────────────────────────────────────
     memory: Union["Memory", bool, None] = False,
     knowledge: Union["Knowledge", str, bool, None] = False,
-    thinking: Union[bool, "Thinking", None] = None,
     compression: Union[bool, "Compression", None] = None,
-    deep_research: Union[bool, "DeepResearchConfig", "DeepResearch", None] = None,
     # ── Tools ───────────────────────────────────────────────
     tools: Optional[List[Function]] = None,
     toolkits: Optional[List[Toolkit]] = None,
@@ -176,68 +122,21 @@ class Agent:
     skill_registry: Optional["SkillRegistry"] = None,
     # ── Observability ───────────────────────────────────────
     tracing: Union[bool, "Tracing", None] = False,
-    debug: Union[bool, "DebugConfig", None] = False,
-    observability: Union[bool, "ObservabilityConfig", None] = False,
-    # ── Advanced ───────────────────────────────────────
-    sub_agents: Union[bool, "SubAgentPolicy", None] = None,
-    # ── Media ────────────────────────────────────────────────
+    debug: Union[bool, None] = False,
+    # ── Media ───────────────────────────────────────────────
     audio_transcriber: Union[bool, Any, None] = None,
-    # ── Security ──────────────────────────────────────────────
-    security: Union[bool, Any, None] = None,
-    # ── Usage Tracking ───────────────────────────────────────
-    usage: Union[bool, Any, None] = None,
-    # ── Plugins ──────────────────────────────────────────────
-    plugins: Optional[List[Any]] = None,
     # ── Interfaces ──────────────────────────────────────────
     interfaces: Union["BaseInterface", List["BaseInterface"], None] = None,
     gateway: Optional["InterfaceGateway"] = None,
     # ── Support ─────────────────────────────────────────────
     readers: Union[List["BaseReader"], bool, None] = None,
-    guardrails: Optional["Guardrails"] = None,
   ):
-    """
-    Initialize the agent.
-
-    Args:
-        model: Model instance to use for generation (required).
-        tools: List of tools (Function objects) available to the agent.
-        toolkits: List of toolkits providing additional tools.
-        skills: List of skills providing tools + domain expertise.
-            Each skill contributes tools (merged into the tool set) and
-            instructions (merged into the system prompt). Skills are
-            the highest-level abstraction — use them to give your agent
-            domain expertise alongside capabilities.
-        skill_registry: Optional SkillRegistry for markdown-based skills.
-            Uses on-demand mode: only a compact XML catalog is injected
-            into the system prompt; the model activates individual skills
-            via the ``activate_skill`` tool. Override by calling
-            ``registry.as_eager()`` or ``registry.as_lazy()`` directly
-            and passing the result to ``skills=``.
-        instructions: System instructions for the agent.
-        memory: Optional Memory instance for session history.
-        readers: File reader configuration. Accepts:
-            - None: no file reading (default)
-            - True: auto-create FileReaderRegistry with all available readers
-            - FileReaderRegistry: custom registry with user-selected readers
-            - FileReader: single reader, wrapped in a registry
-        thinking: Enable agent-level thinking/reasoning before the main execution.
-            Accepts True (default config), Thinking instance (custom), or None (disabled).
-        name: Optional human-readable name for the agent. Overrides config.agent_name.
-        session_id: Optional session ID for multi-turn memory. Generated once
-            at init if not provided. All runs reuse it by default; callers
-            can still override per-call.
-        audio_transcriber: Optional audio transcription backend. When set,
-            audio in incoming messages is automatically transcribed to text
-            before reaching the model. Accepts True (default OpenAITranscriber
-            using Whisper), an AudioTranscriber instance (custom backend), or
-            None (disabled — audio passes through raw to the model).
-        config: Optional advanced configuration settings.
-    """
-    # Direct attributes — resolve string model shorthand
+    # ── Model resolution ──────────────────────────────────
     if model is None:
       raise TypeError(
         "Agent requires a 'model' argument. Pass a Model instance "
-        "(e.g., OpenAIChat(id='gpt-4o-mini')) or a string shorthand (e.g., 'openai/gpt-4o-mini')."
+        "(e.g., OpenAIChat(id='gpt-4o-mini')) or a string shorthand "
+        "(e.g., 'openai/gpt-4o-mini')."
       )
     self.model: "Model"
     if isinstance(model, str):
@@ -246,41 +145,32 @@ class Agent:
       self.model = resolve_model_string(model)
     else:
       self.model = model
+
     self.tools = tools or []
     self.toolkits = toolkits or []
     self.skills = skills or []
     self.instructions: Optional[str] = "\n".join(str(i) for i in instructions) if isinstance(instructions, list) else instructions
     self.readers = self._init_readers(readers)
-    self.guardrails = guardrails
+    self.guardrails = None  # Preserved for interface compat
 
-    # Optional config for advanced settings
+    # ── Config ────────────────────────────────────────────
     self.config = config or AgentConfig()
     if name is not None:
       self.config = dataclasses.replace(self.config, agent_name=name)
 
-    # Resolve memory: Memory | bool → Memory | None
+    # ── Memory (tool-based) ──────────────────────────────
     self.memory = self._resolve_memory(memory)
-    self._resolve_memory_embedder()
+    if self.memory is not None and hasattr(self.memory, "get_skill"):
+      self.skills.append(self.memory.get_skill())
 
-    # Resolve knowledge: Knowledge | bool → Knowledge | None
+    # ── Knowledge ─────────────────────────────────────────
     self._knowledge: Optional["Knowledge"] = self._resolve_knowledge(knowledge)
 
-    # Resolve tracing: direct param takes precedence over config.tracing fallback
+    # ── Tracing ───────────────────────────────────────────
     self._tracing_config: Optional["Tracing"] = self._resolve_tracing(tracing, self.config)
 
-    # Debug mode: auto-add DebugExporter to tracing
-    # Accepts True (default debug config) or DebugConfig (pipeline breakpoints etc.)
-    from definable.agent.pipeline.debug import DebugConfig as _DebugConfig
-
-    self._debug_config: Optional[_DebugConfig] = None
-    if isinstance(debug, _DebugConfig):
-      self._debug_config = debug
-      # DebugConfig also implies debug=True for tracing
-      debug_enabled = True
-    else:
-      debug_enabled = bool(debug)
-
-    if debug_enabled:
+    # ── Debug mode ────────────────────────────────────────
+    if debug:
       from definable.agent.tracing.base import Tracing as _Tracing
       from definable.agent.tracing.debug import DebugExporter
 
@@ -290,68 +180,9 @@ class Agent:
         existing = self._tracing_config.exporters or []
         self._tracing_config = dataclasses.replace(self._tracing_config, exporters=[*existing, DebugExporter()])
 
-    # Observability dashboard — accepts True (default config) or ObservabilityConfig
-    # Same composition pattern as debug=True: adds ObservabilityExporter to tracing exporters
-    from definable.agent.observability.config import ObservabilityConfig as _ObsConfig
-
-    self._observability_config: Optional[_ObsConfig] = None
-    self._observability_exporter: Optional[Any] = None
-    if isinstance(observability, _ObsConfig):
-      self._observability_config = observability
-    elif observability is True:
-      self._observability_config = _ObsConfig(enabled=True)
-
-    if self._observability_config is not None and self._observability_config.enabled:
-      from definable.agent.observability.collector import ObservabilityExporter as _ObsExporter
-
-      self._observability_exporter = _ObsExporter(buffer_size=self._observability_config.buffer_size)
-      from definable.agent.tracing.base import Tracing as _Tracing
-
-      if self._tracing_config is None:
-        self._tracing_config = _Tracing(exporters=[self._observability_exporter])
-      else:
-        existing_exporters = self._tracing_config.exporters or []
-        self._tracing_config = dataclasses.replace(self._tracing_config, exporters=[*existing_exporters, self._observability_exporter])
-
-    # Thinking layer — accepts Thinking or bool
-    from definable.agent.reasoning.thinking import Thinking as _Thinking
-
-    if thinking is True:
-      self._thinking: Optional["Thinking"] = _Thinking()
-    elif isinstance(thinking, _Thinking):
-      self._thinking = thinking
-    else:
-      self._thinking = None
-
-    # Deep research layer
-    from definable.agent.research.config import DeepResearchConfig as _DRConfig
-    from definable.agent.research.engine import DeepResearch as _DREngine
-
-    if isinstance(deep_research, _DREngine):
-      self._deep_research_config: Optional[_DRConfig] = None
-      self._prebuilt_researcher: Optional[_DREngine] = deep_research
-    elif deep_research is True:
-      self._deep_research_config = _DRConfig()
-      self._prebuilt_researcher = None
-    elif isinstance(deep_research, _DRConfig):
-      self._deep_research_config = deep_research
-      self._prebuilt_researcher = None
-    else:
-      self._deep_research_config = None
-      self._prebuilt_researcher = None
-
-    # Sub-agent spawning — accepts True (default policy) or SubAgentPolicy
-    from definable.agent.pipeline.sub_agent import SubAgentPolicy as _SubAgentPolicy
-
-    if sub_agents is True:
-      self._sub_agent_policy: Optional[_SubAgentPolicy] = _SubAgentPolicy()
-    elif isinstance(sub_agents, _SubAgentPolicy):
-      self._sub_agent_policy = sub_agents
-    else:
-      self._sub_agent_policy = None
-
-    # Audio transcriber — accepts True (OpenAITranscriber) or AudioTranscriber instance
-    from definable.reader.audio import AudioTranscriber as _AudioTranscriber, OpenAITranscriber as _OpenAITranscriber
+    # ── Audio transcriber ─────────────────────────────────
+    from definable.reader.audio import AudioTranscriber as _AudioTranscriber
+    from definable.reader.audio import OpenAITranscriber as _OpenAITranscriber
 
     if audio_transcriber is True:
       self._audio_transcriber: Optional[_AudioTranscriber] = _OpenAITranscriber()
@@ -360,449 +191,618 @@ class Agent:
     else:
       self._audio_transcriber = None
 
-    # Security layer — accepts True (default), SecurityConfig, or None
-    from definable.agent.security import SecurityConfig as _SecurityConfig
-
-    if security is True:
-      self._security: Optional[_SecurityConfig] = _SecurityConfig()
-    elif isinstance(security, _SecurityConfig):
-      self._security = security
-    else:
-      self._security = None
-
-    # Auto-inject security guardrails if security is configured
-    if self._security is not None:
-      from definable.agent.guardrail.base import Guardrails as _Guardrails
-
-      if self.guardrails is None:
-        self.guardrails = _Guardrails()
-      if self._security.tool_policy is not None:
-        from definable.agent.security.tool_policy import ToolPolicyGuardrail
-
-        self.guardrails.tool.append(ToolPolicyGuardrail(policy=self._security.tool_policy))
-      if self._security.content_defense is not None and self._security.content_defense.injection_detection:
-        from definable.agent.security.content_defense import ContentDefenseGuardrail
-
-        cd = self._security.content_defense
-        self.guardrails.input.append(
-          ContentDefenseGuardrail(
-            sensitivity=cd.injection_sensitivity,
-            extra_patterns=cd.extra_patterns,
-          )
-        )
-
-    # Usage tracking — accepts True (default tracker), UsageTracker instance, or None
-    from definable.agent.usage import UsageTracker as _UsageTracker
-
-    if usage is True:
-      self._usage_tracker: Optional[_UsageTracker] = _UsageTracker()
-    elif isinstance(usage, _UsageTracker):
-      self._usage_tracker = usage
-    else:
-      self._usage_tracker = None
-
-    # Plugin registry — stores plugins, loads them lazily on first arun()
-    from definable.agent.plugin.registry import PluginRegistry as _PluginRegistry
-
-    self._plugin_registry: _PluginRegistry = _PluginRegistry()
-    self._plugins_loaded = False
-    if plugins:
-      for p in plugins:
-        self._plugin_registry.add(p)
-
-    # Convert skill_registry to on-demand skill (model picks skills based on query)
+    # ── Skill registry ────────────────────────────────────
     if skill_registry is not None:
       from definable.skill.registry import SkillRegistry
 
       if isinstance(skill_registry, SkillRegistry):
         self.skills.append(skill_registry.as_on_demand())
 
-    # Initialize skills (call setup, validate)
+    # ── Initialize skills ─────────────────────────────────
     self._init_skills()
 
-    # Internal state
+    # ── Internal state ────────────────────────────────────
     self._tools_dict: Dict[str, Function] = self._flatten_tools()
     self._trace_writer: Optional[TraceWriter] = self._init_tracing()
     self._compression_manager: Optional["CompressionManager"] = self._resolve_compression(compression)
-    self._middleware: List[Middleware] = []
     self._interfaces: List["BaseInterface"] = []
     self._gateway: Optional["InterfaceGateway"] = None
-
-    # Resolve interfaces passed at construction
-    if interfaces is not None:
-      iface_list = interfaces if isinstance(interfaces, list) else [interfaces]
-      for iface in iface_list:
-        iface.bind(self)
-        self._interfaces.append(iface)
-
-    # Resolve gateway passed at construction
-    if gateway is not None:
-      gateway._bind_agent(self)
-      for iface in self._interfaces:
-        if iface not in gateway._interfaces:
-          gateway.add(iface)
-      self._gateway = gateway
     self._triggers: List[Any] = []
     self._before_hooks: List[Callable] = []
     self._after_hooks: List[Callable] = []
-    self._auth: Optional["AuthProvider"] = None
+    self._auth: Optional[Any] = None
     self._started = False
-    self._pending_memory_tasks: list[asyncio.Task] = []
     self._event_bus: EventBus = EventBus()
     self._agent_owned_toolkits: list[Any] = []
     self._toolkit_init_lock: asyncio.Lock = asyncio.Lock()
     self._session_id_explicit = session_id is not None
     self.session_id = session_id or str(uuid4())
 
-    # Build pipeline (reused for all runs)
-    self._pipeline = self._build_pipeline()
+    # ── Interfaces ────────────────────────────────────────
+    if interfaces is not None:
+      iface_list = interfaces if isinstance(interfaces, list) else [interfaces]
+      for iface in iface_list:
+        iface.bind(self)
+        self._interfaces.append(iface)
 
-    # Deep research engine (prebuilt instance or lazy init from config)
-    self._researcher: Optional["DeepResearch"] = self._prebuilt_researcher or (
-      self._init_deep_research(self._deep_research_config) if self._deep_research_config else None
-    )
+    if gateway is not None:
+      gateway._bind_agent(self)
+      for iface in self._interfaces:
+        if iface not in gateway._interfaces:
+          gateway.add(iface)
+      self._gateway = gateway
 
-  # --- Pipeline ---
-
-  def _build_pipeline(self) -> "Pipeline":
-    """Build the default pipeline from this agent's config.
-
-    Called once during __init__. The pipeline is reused for all runs.
-    Hooks and phase customization happen on the returned Pipeline.
-    """
-    from definable.agent.pipeline.pipeline import Pipeline
-    from definable.agent.pipeline.phases.compose import ComposePhase
-    from definable.agent.pipeline.phases.guard import GuardInputPhase, GuardOutputPhase
-    from definable.agent.pipeline.phases.invoke import InvokeLoopPhase
-    from definable.agent.pipeline.phases.prepare import PreparePhase
-    from definable.agent.pipeline.phases.recall import RecallPhase
-    from definable.agent.pipeline.phases.store import StorePhase
-    from definable.agent.pipeline.phases.think import ThinkPhase
-
-    pipeline = Pipeline(
-      phases=[
-        PreparePhase(self),
-        RecallPhase(self),
-        ThinkPhase(self),
-        GuardInputPhase(self),
-        ComposePhase(self),
-        InvokeLoopPhase(self),  # streaming/cancellation set per-run
-        GuardOutputPhase(self),
-        StorePhase(self),
-      ],
-      debug=self._debug_config,
-    )
-
-    # Wire trace writer to event stream
+    # ── Tracing observer ──────────────────────────────────
     if self._trace_writer:
-      import contextlib as _cl
+      from definable.agent.helpers.tracing import TracingObserver
 
-      def _trace_handler(event: BaseRunOutputEvent) -> None:
-        with _cl.suppress(Exception):
-          self._trace_writer.write(event)  # type: ignore[union-attr]
+      self._tracing_observer = TracingObserver(self._event_bus, self._trace_writer)
 
-      pipeline.event_stream.subscribe(_trace_handler)
+  # ═══════════════════════════════════════════════════════════
+  # 4 OVERRIDABLE METHODS
+  # ═══════════════════════════════════════════════════════════
 
-    # Wire event bus to event stream
-    async def _bus_handler(event: object) -> None:
-      await self._event_bus.emit(event)
+  async def before_model_call(
+    self,
+    messages: List[Message],
+    tools: Dict[str, Function],
+    turn: int,
+  ) -> List[Message]:
+    """Prepare messages before the model call.
 
-    pipeline.event_stream.subscribe(_bus_handler)
+    Default: build system prompt on turn 0 (instructions + skills +
+    knowledge + memory), refresh memory on subsequent turns, compress
+    if needed.
 
-    return pipeline
-
-  @property
-  def pipeline(self) -> "Pipeline":
-    """Access the agent's execution pipeline for customization.
-
-    Example::
-
-        agent.pipeline.add_phase(MyPhase(), after="recall")
-        agent.pipeline.remove_phase("think")
+    Override to customize prompt assembly, inject custom context, or
+    apply input validation.
     """
-    return self._pipeline
+    if turn == 0:
+      from definable.agent.helpers.instructions import build_system_prompt
+      from definable.agent.helpers.knowledge import retrieve_context
+      from definable.agent.helpers.memory import load_working_memory
 
-  def hook(self, spec: str, callback: Optional[Callable] = None, *, priority: int = 0) -> Callable:
-    """Register a hook on the pipeline.
+      system = build_system_prompt(self.instructions, self.skills)
 
-    Delegates to ``self._pipeline.hook()``. See Pipeline.hook() for details.
+      if self._knowledge:
+        ctx = await retrieve_context(self._knowledge, messages)
+        if ctx:
+          system = f"{system}\n\n{ctx}" if system else ctx
 
-    Example::
-
-        @agent.hook("before:invoke_loop")
-        async def my_hook(state):
-            print(f"Messages: {len(state.invoke_messages)}")
-            return state
-    """
-    return self._pipeline.hook(spec, callback, priority=priority)
-
-  # --- Properties ---
-
-  @property
-  def agent_id(self) -> str:
-    """Get the agent's unique identifier."""
-    return self.config.agent_id or str(id(self))
-
-  @property
-  def agent_name(self) -> str:
-    """Get the agent's name."""
-    return self.config.agent_name or self.__class__.__name__
-
-  @property
-  def name(self) -> str:
-    """Alias for agent_name."""
-    return self.agent_name
-
-  @property
-  def tool_names(self) -> List[str]:
-    """Get list of available tool names."""
-    return list(self._tools_dict.keys())
-
-  @property
-  def events(self) -> EventBus:
-    """User-registerable event bus for callbacks on run events.
-
-    Example::
-
-        @agent.events.on(ToolCallStartedEvent)
-        def on_tool(event):
-            print(f"Tool: {event.tool.tool_name}")
-    """
-    return self._event_bus
-
-  @property
-  def observability(self) -> Optional["ObservabilityConfig"]:
-    """Observability config, if enabled."""
-    return self._observability_config
-
-  # --- Lifecycle Management ---
-
-  def __enter__(self) -> "Agent":
-    """Context manager entry."""
-    self._start()
-    return self
-
-  def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-    """Context manager exit."""
-    self._shutdown()
-
-  async def __aenter__(self) -> "Agent":
-    """Async context manager entry."""
-    self._start()
-    await self._ensure_toolkits_initialized()
-    return self
-
-  async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
-    """Async context manager exit."""
-    await self._ashutdown()
-
-  def _start(self) -> None:
-    """Initialize resources."""
-    if self._started:
-      return
-    self._started = True
-    # Future: initialize connections, warm up caches, etc.
-
-  def _shutdown(self) -> None:
-    """Cleanup resources (sync-safe).
-
-    Closes memory, drains pending memory tasks, and shuts down
-    agent-owned toolkits when called outside an async event loop.
-    If an event loop is already running (e.g. sync context manager
-    used inside async code), logs a warning — use ``_ashutdown()``
-    or ``async with`` instead.
-    """
-    # Teardown skills
-    for skill in self.skills:
-      with contextlib.suppress(Exception):
-        skill.teardown()
-    if self._trace_writer:
-      self._trace_writer.shutdown()
-    # Best-effort async resource cleanup from sync context
-    self._sync_close_async_resources()
-    self._started = False
-
-  def _sync_close_async_resources(self) -> None:
-    """Close memory, toolkits, and drain tasks from a sync context."""
-
-    async def _cleanup() -> None:
-      await self._drain_memory_tasks()
-      for toolkit in self._agent_owned_toolkits:
-        with contextlib.suppress(Exception):
-          await toolkit.shutdown()
-      self._agent_owned_toolkits.clear()
       if self.memory:
-        with contextlib.suppress(Exception):
-          await self.memory.close()
+        wm = await load_working_memory(self.memory, self._current_user_id)
+        if wm:
+          system = f"{system}\n\n{wm}" if system else wm
+
+      if self.readers and self._current_readers_context:
+        # Inject file content into last user message
+        for i in range(len(messages) - 1, -1, -1):
+          if messages[i].role == "user":
+            original = messages[i].content or ""
+            messages[i] = Message(
+              role="user",
+              content=f"{self._current_readers_context}\n\n{original}",
+              images=messages[i].images,
+              videos=messages[i].videos,
+              audio=messages[i].audio,
+            )
+            break
+
+      if system:
+        messages.insert(0, Message(role="system", content=system))
+      self._base_system_prompt = system
+    else:
+      # Refresh working memory on subsequent turns
+      if self.memory:
+        from definable.agent.helpers.memory import load_working_memory
+
+        wm = await load_working_memory(self.memory, self._current_user_id)
+        if wm and messages and messages[0].role == "system":
+          messages[0] = Message(
+            role="system",
+            content=f"{self._base_system_prompt}\n\n{wm}" if self._base_system_prompt else wm,
+          )
+
+      # Compress if needed
+      if self._compression_manager:
+        from definable.agent.helpers.compression import compress_if_needed
+
+        tools_dicts = self._build_tools_dicts(tools)
+        await compress_if_needed(self._compression_manager, messages, tools_dicts, self.model)
+
+    return messages
+
+  async def call_model(
+    self,
+    messages: List[Message],
+    tools: Dict[str, Function],
+    *,
+    streaming: bool = False,
+    output_schema: Optional[type] = None,
+  ) -> tuple:
+    """Call the LLM. Returns (content, tool_calls, metrics, parsed).
+
+    Default: delegates to model.ainvoke/ainvoke_stream with retry.
+    Override to add custom model routing, caching, or fallback logic.
+    """
+    tools_dicts = self._build_tools_dicts(tools) if tools else None
+    max_retries = self.config.max_retries if self.config.retry_transient_errors else 0
+    backoff_base = self.config.retry_backoff_base
+
+    for attempt in range(max_retries + 1):
+      try:
+        assistant_msg = Message(role="assistant")
+
+        if streaming:
+          # Streaming path — yields RunContentEvent via _streaming_events list
+          content = ""
+          tool_calls: list = []
+          metrics = None
+          parsed = None
+          reasoning = ""
+
+          async for chunk in self.model.ainvoke_stream(
+            messages=messages,
+            assistant_message=assistant_msg,
+            tools=tools_dicts,
+            response_format=output_schema,
+          ):
+            if hasattr(chunk, "reasoning_content") and chunk.reasoning_content:
+              reasoning += chunk.reasoning_content
+              self._streaming_events.append(("reasoning_delta", chunk.reasoning_content))
+            if hasattr(chunk, "content") and chunk.content:
+              content += chunk.content
+              self._streaming_events.append(("content", chunk.content))
+            if hasattr(chunk, "tool_calls") and chunk.tool_calls:
+              tool_calls = _merge_tool_call_deltas(tool_calls, chunk.tool_calls)
+            if hasattr(chunk, "response_usage") and chunk.response_usage is not None:
+              metrics = chunk.response_usage if metrics is None else metrics + chunk.response_usage
+            if hasattr(chunk, "parsed") and chunk.parsed is not None:
+              parsed = chunk.parsed
+
+          # Parse structured output if not parsed from chunks
+          if parsed is None and output_schema and content:
+            parsed = self._try_parse_output(content, output_schema)
+
+          # Store assistant message
+          assistant_final = Message(
+            role="assistant",
+            content=content or None,
+            tool_calls=tool_calls or None,
+          )
+          if reasoning:
+            assistant_final.reasoning_content = reasoning
+          if metrics:
+            assistant_final.metrics = metrics
+          messages.append(assistant_final)
+
+          return content, tool_calls, metrics, parsed
+
+        else:
+          # Non-streaming path
+          response = await self.model.ainvoke(
+            messages=messages,
+            assistant_message=assistant_msg,
+            tools=tools_dicts,
+            response_format=output_schema,
+          )
+
+          # Build assistant message
+          assistant_final = Message(
+            role="assistant",
+            content=response.content,
+            tool_calls=response.tool_calls or None,
+          )
+          if hasattr(response, "reasoning_content") and response.reasoning_content:
+            assistant_final.reasoning_content = response.reasoning_content
+          if hasattr(response, "response_usage") and response.response_usage is not None:
+            assistant_final.metrics = response.response_usage
+          messages.append(assistant_final)
+
+          parsed = getattr(response, "parsed", None)
+          # MagicMock attributes are truthy but not real parsed values
+          if parsed is not None and not isinstance(parsed, BaseModel):
+            parsed = None
+          if parsed is None and output_schema and response.content:
+            parsed = self._try_parse_output(response.content, output_schema)
+
+          return (
+            response.content or "",
+            response.tool_calls or [],
+            response.response_usage if hasattr(response, "response_usage") else None,
+            parsed,
+          )
+
+      except (ConnectionError, TimeoutError, OSError):
+        if not self.config.retry_transient_errors or attempt >= max_retries:
+          raise
+        delay = min(backoff_base * (2**attempt), 60.0)
+        await asyncio.sleep(delay)
+
+    raise RuntimeError("Exhausted retries")  # pragma: no cover
+
+  async def after_model_call(
+    self,
+    content: str,
+    tool_calls: list,
+    metrics: Optional[Metrics],
+    parsed: Any,
+    turn: int,
+  ) -> tuple:
+    """Validate/transform model output. Returns (content, tool_calls, metrics, parsed).
+
+    Default: pass through. Override to add output guardrails,
+    content filtering, or response transformation.
+    """
+    return content, tool_calls, metrics, parsed
+
+  async def execute_tool(
+    self,
+    tool_call: dict,
+    tools: Dict[str, Function],
+  ) -> ToolResult:
+    """Execute a single tool call. Returns ToolResult.
+
+    Default: look up the function, call it, handle HITL flags.
+    Override to add sandboxing, custom error handling, or tool-level
+    authorization.
+    """
+    fn_name = tool_call.get("function", {}).get("name", "unknown")
+    fn = tools.get(fn_name)
+    function_call = get_function_call_for_tool_call(tool_call, tools)
+
+    # Build ToolExecution for tracking
+    tool_execution = ToolExecution(
+      tool_call_id=tool_call.get("id"),
+      tool_name=fn_name,
+      tool_args=function_call.arguments if function_call else None,
+    )
+
+    # Emit ToolCallStarted
+    started_event = ToolCallStartedEvent(
+      run_id=self._current_run_id,
+      session_id=self._current_session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      tool=_dc_replace(tool_execution),
+    )
+    await self._event_bus.emit(started_event)
+
+    # ── HITL: requires_confirmation ──
+    if fn and fn.requires_confirmation:
+      tool_execution.requires_confirmation = True
+      requirement = RunRequirement(tool_execution)
+      return ToolResult(
+        tool_call_id=tool_call.get("id"),
+        tool_name=fn_name,
+        is_paused=True,
+        should_stop=bool(fn.stop_after_tool_call),
+        requirement=requirement,
+        tool_execution=tool_execution,
+      )
+
+    # ── HITL: requires_user_input ──
+    if fn and fn.requires_user_input:
+      tool_execution.requires_user_input = True
+      tool_execution.user_input_schema = fn.user_input_schema
+      requirement = RunRequirement(tool_execution)
+      return ToolResult(
+        tool_call_id=tool_call.get("id"),
+        tool_name=fn_name,
+        is_paused=True,
+        should_stop=bool(fn.stop_after_tool_call),
+        requirement=requirement,
+        tool_execution=tool_execution,
+      )
+
+    # ── HITL: external_execution ──
+    if fn and fn.external_execution:
+      tool_execution.external_execution_required = True
+      requirement = RunRequirement(tool_execution)
+      return ToolResult(
+        tool_call_id=tool_call.get("id"),
+        tool_name=fn_name,
+        is_paused=True,
+        should_stop=bool(fn.stop_after_tool_call),
+        requirement=requirement,
+        tool_execution=tool_execution,
+      )
+
+    # ── Execute ──
+    if function_call:
+      try:
+        result_obj = await function_call.aexecute()
+        if result_obj.status == "success":
+          tool_execution.result = await self._resolve_tool_result(result_obj.result, fn_name, tool_call.get("id"))
+        else:
+          tool_execution.result = str(result_obj.error)
+        tool_execution.tool_call_error = result_obj.status == "failure"
+      except Exception as exc:
+        from definable.exceptions import StopAgentRun as _StopAgentRun
+
+        if isinstance(exc, _StopAgentRun):
+          tool_execution.result = str(exc.user_message or exc)
+          tool_execution.tool_call_error = False
+          self._all_tool_executions.append(tool_execution)
+          return ToolResult(
+            tool_call_id=tool_call.get("id"),
+            tool_name=fn_name,
+            result=tool_execution.result,
+            should_stop=True,
+            tool_execution=tool_execution,
+          )
+        raise
+    else:
+      tool_execution.result = f"Tool '{fn_name}' not found"
+      tool_execution.tool_call_error = True
+
+    self._all_tool_executions.append(tool_execution)
+
+    # Emit ToolCallCompleted
+    completed_event = ToolCallCompletedEvent(
+      run_id=self._current_run_id,
+      session_id=self._current_session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      tool=tool_execution,
+      content=tool_execution.result,
+    )
+    await self._event_bus.emit(completed_event)
+
+    return ToolResult(
+      tool_call_id=tool_call.get("id"),
+      tool_name=fn_name,
+      result=tool_execution.result if not tool_execution.tool_call_error else None,
+      error=tool_execution.result if tool_execution.tool_call_error else None,
+      should_stop=bool(fn and fn.stop_after_tool_call),
+      tool_execution=tool_execution,
+    )
+
+  # ═══════════════════════════════════════════════════════════
+  # THE CORE LOOP
+  # ═══════════════════════════════════════════════════════════
+
+  async def _run_loop(
+    self,
+    messages: List[Message],
+    tools: Dict[str, Function],
+    *,
+    streaming: bool = False,
+    cancel: Optional[CancelToken] = None,
+    output_schema: Optional[type] = None,
+  ) -> AsyncIterator[RunOutputEvent]:
+    """The agentic loop. Yields events as they occur.
+
+    Calls the 4 overridable methods in sequence:
+    before_model_call → call_model → after_model_call → execute_tool
+    """
+    max_tool_rounds = self.config.max_tool_rounds
+    total_metrics: Optional[Metrics] = None
+    final_content: Optional[str] = None
+    final_parsed: Any = None
+    self._all_tool_executions: list[Any] = []
+    self._streaming_events: list[Any] = []
 
     try:
-      asyncio.get_running_loop()
-      # Running inside an async context — can't nest asyncio.run()
-      from definable.utils.log import log_warning
+      for turn in range(max_tool_rounds):
+        if cancel:
+          cancel.check()
 
-      log_warning(
-        "Agent._shutdown() cannot close async resources (memory, toolkits) "
-        "from inside a running event loop. Use 'async with Agent(...)' or "
-        "await agent._ashutdown() instead."
+        # 1. Prepare messages
+        messages = await self.before_model_call(messages, tools, turn)
+
+        # 2. Call model
+        started_evt = ModelCallStartedEvent(
+          run_id=self._current_run_id,
+          session_id=self._current_session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          turn=turn + 1,
+          messages=list(messages),
+          tool_definitions=self._build_tools_dicts(tools) if tools else None,
+          response_format=output_schema,
+          model_id=self.model.id,
+          model_provider=getattr(self.model, "provider", "") or "",
+        )
+        await self._event_bus.emit(started_evt)
+
+        self._streaming_events = []
+        content, tool_calls, metrics, parsed = await self.call_model(messages, tools, streaming=streaming, output_schema=output_schema)
+
+        # Yield streaming events collected during call_model
+        reasoning_started = False
+        reasoning_completed = False
+        for evt_type, evt_data in self._streaming_events:
+          if evt_type == "reasoning_delta":
+            if not reasoning_started:
+              reasoning_started = True
+              re = ReasoningStartedEvent(
+                run_id=self._current_run_id,
+                session_id=self._current_session_id,
+                agent_id=self.agent_id,
+                agent_name=self.agent_name,
+              )
+              await self._event_bus.emit(re)
+              yield re
+            rde = ReasoningContentDeltaEvent(
+              run_id=self._current_run_id,
+              session_id=self._current_session_id,
+              agent_id=self.agent_id,
+              agent_name=self.agent_name,
+              reasoning_content=evt_data,
+            )
+            await self._event_bus.emit(rde)
+            yield rde
+          elif evt_type == "content":
+            if reasoning_started and not reasoning_completed:
+              reasoning_completed = True
+              rce = ReasoningCompletedEvent(
+                run_id=self._current_run_id,
+                session_id=self._current_session_id,
+                agent_id=self.agent_id,
+                agent_name=self.agent_name,
+              )
+              await self._event_bus.emit(rce)
+              yield rce
+            ce = RunContentEvent(
+              run_id=self._current_run_id,
+              session_id=self._current_session_id,
+              agent_id=self.agent_id,
+              agent_name=self.agent_name,
+              content=evt_data,
+            )
+            await self._event_bus.emit(ce)
+            yield ce
+
+        if reasoning_started and not reasoning_completed:
+          rce = ReasoningCompletedEvent(
+            run_id=self._current_run_id,
+            session_id=self._current_session_id,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+          )
+          await self._event_bus.emit(rce)
+          yield rce
+
+        # 3. Validate output
+        content, tool_calls, metrics, parsed = await self.after_model_call(content, tool_calls, metrics, parsed, turn)
+
+        completed_evt = ModelCallCompletedEvent(
+          run_id=self._current_run_id,
+          session_id=self._current_session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          turn=turn + 1,
+          content="" if streaming else (content or None),
+          tool_calls=tool_calls or None,
+          metrics=metrics,
+          model_id=self.model.id,
+        )
+        await self._event_bus.emit(completed_evt)
+
+        if metrics is not None:
+          total_metrics = metrics if total_metrics is None else total_metrics + metrics
+
+        # 4. No tools → done
+        if not tool_calls:
+          final_content = content
+          final_parsed = parsed
+          break
+
+        # 5. Execute tools (parallel + sequential)
+        parallel_calls: list[dict] = []
+        sequential_calls: list[dict] = []
+        for tc in tool_calls:
+          fn_name = tc.get("function", {}).get("name", "")
+          fn = tools.get(fn_name)
+          if fn and fn.sequential:
+            sequential_calls.append(tc)
+          else:
+            parallel_calls.append(tc)
+
+        all_results: list[ToolResult] = []
+
+        # Parallel tools
+        if parallel_calls:
+          results = await asyncio.gather(
+            *[self.execute_tool(tc, tools) for tc in parallel_calls],
+            return_exceptions=True,
+          )
+          for i, r in enumerate(results):
+            if isinstance(r, BaseException):
+              tc = parallel_calls[i]
+              fn_name = tc.get("function", {}).get("name", "unknown")
+              messages.append(
+                Message(
+                  role="tool",
+                  content=f"Error: {r}",
+                  tool_call_id=tc.get("id"),
+                  name=fn_name,
+                )
+              )
+              all_results.append(
+                ToolResult(
+                  tool_call_id=tc.get("id"),
+                  tool_name=fn_name,
+                  error=str(r),
+                )
+              )
+            else:
+              all_results.append(r)
+
+        # Sequential tools
+        for tc in sequential_calls:
+          if cancel:
+            cancel.check()
+          result = await self.execute_tool(tc, tools)
+          all_results.append(result)
+
+        # Add successful tool results to messages
+        for r in all_results:
+          if r.tool_execution and not r.is_paused:
+            messages.append(
+              Message(
+                role="tool",
+                content=r.tool_execution.result or "",
+                tool_call_id=r.tool_call_id,
+                name=r.tool_name,
+              )
+            )
+
+        # Check stop_after_tool_call
+        if any(r.should_stop for r in all_results):
+          final_content = content
+          final_parsed = parsed
+          break
+
+        # Check HITL pause
+        paused = [r for r in all_results if r.is_paused]
+        if paused:
+          requirements = [r.requirement for r in paused if r.requirement is not None]
+          paused_tools = [r.tool_execution for r in paused if r.tool_execution is not None]
+          pe = RunPausedEvent(
+            run_id=self._current_run_id,
+            session_id=self._current_session_id,
+            agent_id=self.agent_id,
+            agent_name=self.agent_name,
+            requirements=requirements,
+            tools=paused_tools,
+          )
+          await self._event_bus.emit(pe)
+          yield pe
+          return
+
+      # Yield RunCompleted
+      completed = RunCompletedEvent(
+        run_id=self._current_run_id,
+        session_id=self._current_session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        content=final_content,
+        parsed=final_parsed,
+        metrics=total_metrics,
       )
-    except RuntimeError:
-      # No running loop — safe to create one
-      with contextlib.suppress(Exception):
-        asyncio.run(_cleanup())
+      await self._event_bus.emit(completed)
+      yield completed
 
-  async def _ashutdown(self) -> None:
-    """Async cleanup."""
-    await self._drain_memory_tasks()
-    # Shutdown toolkits we initialized (not user-managed ones)
-    for toolkit in self._agent_owned_toolkits:
-      with contextlib.suppress(Exception):
-        await toolkit.shutdown()
-    self._agent_owned_toolkits.clear()
-    if self.memory:
-      with contextlib.suppress(Exception):
-        await self.memory.close()
-    # Sync-only cleanup (skills, trace writer) — skip _sync_close_async_resources
-    # since we already handled async resources above.
-    for skill in self.skills:
-      with contextlib.suppress(Exception):
-        skill.teardown()
-    if self._trace_writer:
-      self._trace_writer.shutdown()
-    self._started = False
+    except Cancelled:
+      raise
+    except Exception as e:
+      err = RunErrorEvent(
+        run_id=self._current_run_id,
+        session_id=self._current_session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        error_type=type(e).__name__,
+        content=str(e),
+      )
+      await self._event_bus.emit(err)
+      yield err
+      raise
 
-  async def _ensure_toolkits_initialized(self) -> None:
-    """Initialize any AsyncLifecycleToolkit instances that aren't yet initialized.
-
-    Skips already-initialized toolkits (user-managed), tracks which toolkits
-    we initialized (for shutdown), and refreshes _tools_dict after init.
-    """
-    async with self._toolkit_init_lock:
-      needs_refresh = False
-      for toolkit in self.toolkits:
-        if isinstance(toolkit, AsyncLifecycleToolkit) and not toolkit._initialized:
-          try:
-            await toolkit.initialize()
-            self._agent_owned_toolkits.append(toolkit)
-            needs_refresh = True
-          except Exception as e:
-            from definable.utils.log import log_warning
-
-            log_warning(f"Toolkit {toolkit!r} init failed (non-fatal): {e}")
-      if needs_refresh:
-        self._tools_dict = self._flatten_tools()
-
-  # --- Middleware Support ---
-
-  def use(self, middleware: Middleware) -> "Agent":
-    """
-    Add middleware to the execution chain.
-
-    Middleware is executed in the order added (outside-in),
-    with post-processing in reverse order (inside-out).
-
-    Args:
-        middleware: Middleware instance to add.
-
-    Returns:
-        Self for method chaining.
-
-    Example:
-        agent.use(LoggingMiddleware(logger)).use(RetryMiddleware())
-    """
-    self._middleware.append(middleware)
-    return self
-
-  # --- Agent-Level Hooks ---
-
-  def before_request(self, fn: Optional[Callable] = None) -> Callable:
-    """Register a hook that fires before every ``arun()`` call.
-
-    Supports both ``@agent.before_request`` (no parens) and
-    ``@agent.before_request()`` (with parens).  The hook receives a
-    :class:`RunContext` and is always non-fatal (errors are logged).
-
-    Example::
-
-      @agent.before_request
-      async def log_request(context):
-          print(f"Run {context.run_id} starting")
-    """
-    if fn is not None:
-      # Used as @agent.before_request (no parens)
-      self._before_hooks.append(fn)
-      return fn
-
-    # Used as @agent.before_request() (with parens)
-    def decorator(func: Callable) -> Callable:
-      self._before_hooks.append(func)
-      return func
-
-    return decorator
-
-  def after_response(self, fn: Optional[Callable] = None) -> Callable:
-    """Register a hook that fires after every ``arun()`` call.
-
-    Supports both ``@agent.after_response`` (no parens) and
-    ``@agent.after_response()`` (with parens).  The hook receives a
-    :class:`RunOutput` and is always non-fatal (errors are logged).
-
-    Example::
-
-      @agent.after_response
-      async def log_response(output):
-          print(f"Run {output.run_id} completed: {output.content[:50]}")
-    """
-    if fn is not None:
-      self._after_hooks.append(fn)
-      return fn
-
-    def decorator(func: Callable) -> Callable:
-      self._after_hooks.append(func)
-      return func
-
-    return decorator
-
-  async def _fire_before_hooks(self, context: RunContext) -> None:
-    """Call all before_request hooks (non-fatal)."""
-    import inspect
-
-    for hook in self._before_hooks:
-      try:
-        result = hook(context)
-        if inspect.isawaitable(result):
-          await result
-      except Exception as e:
-        from definable.utils.log import log_error
-
-        log_error(f"before_request hook {hook.__name__} failed: {e}")
-
-  async def _fire_after_hooks(self, output: RunOutput) -> None:
-    """Call all after_response hooks (non-fatal)."""
-    import inspect
-
-    for hook in self._after_hooks:
-      try:
-        result = hook(output)
-        if inspect.isawaitable(result):
-          await result
-      except Exception as e:
-        from definable.utils.log import log_error
-
-        log_error(f"after_response hook {hook.__name__} failed: {e}")
-
-  # --- Auth ---
-
-  @property
-  def auth(self) -> Optional["AuthProvider"]:
-    """Get the auth provider."""
-    return self._auth
-
-  @auth.setter
-  def auth(self, provider: Optional["AuthProvider"]) -> None:
-    """Set the auth provider."""
-    self._auth = provider
-
-  # --- Run Methods ---
+  # ═══════════════════════════════════════════════════════════
+  # PUBLIC RUN METHODS
+  # ═══════════════════════════════════════════════════════════
 
   def run(
     self,
@@ -818,31 +818,13 @@ class Agent:
     files: Optional[List[File]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
   ) -> RunOutput:
-    """
-    Synchronous run with multi-turn conversation support.
-
-    Args:
-        instruction: New user message (string, Message, or list).
-        messages: Optional conversation history for multi-turn.
-        session_id: Session identifier (auto-generated if not provided).
-        run_id: Run identifier (auto-generated if not provided).
-        user_id: User identifier for memory scoping and multi-user support.
-        images: Images to include with the instruction.
-        videos: Videos to include with the instruction.
-        audio: Audio to include with the instruction.
-        files: Files to include with the instruction.
-        output_schema: Optional Pydantic model for structured output.
-
-    Returns:
-        RunOutput with response, metrics, tool executions, and messages.
-    """
+    """Synchronous run with multi-turn conversation support."""
     try:
       loop = asyncio.get_running_loop()
     except RuntimeError:
       loop = None
 
     if loop and loop.is_running():
-      # We're in an async context, create a new thread
       import concurrent.futures
 
       with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -863,15 +845,10 @@ class Agent:
         )
         return future.result()
     else:
-      # Create a new event loop to avoid "Event loop is closed" errors
-      # when making multiple sequential sync calls with async HTTP clients.
-      # Clear pending memory tasks from previous loops to avoid
-      # "Event loop is closed" errors when waiting on orphaned tasks.
-      self._pending_memory_tasks.clear()
-      loop = asyncio.new_event_loop()
-      asyncio.set_event_loop(loop)
+      new_loop = asyncio.new_event_loop()
+      asyncio.set_event_loop(new_loop)
       try:
-        return loop.run_until_complete(
+        return new_loop.run_until_complete(
           self.arun(
             instruction,
             messages=messages,
@@ -886,24 +863,19 @@ class Agent:
           )
         )
       finally:
-        # Robust cleanup sequence for async HTTP clients (httpx, etc.)
         try:
-          # 1. Cancel pending tasks
-          pending = asyncio.all_tasks(loop)
+          pending = asyncio.all_tasks(new_loop)
           for task in pending:
             task.cancel()
-          # Allow cancelled tasks to complete
           if pending:
-            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-          # 2. Shutdown async generators (critical for httpx cleanup)
-          loop.run_until_complete(loop.shutdown_asyncgens())
-          # 3. Shutdown default executor (Python 3.9+)
-          if hasattr(loop, "shutdown_default_executor"):
-            loop.run_until_complete(loop.shutdown_default_executor())
+            new_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+          new_loop.run_until_complete(new_loop.shutdown_asyncgens())
+          if hasattr(new_loop, "shutdown_default_executor"):
+            new_loop.run_until_complete(new_loop.shutdown_default_executor())
         except Exception:
           pass
         finally:
-          loop.close()
+          new_loop.close()
 
   async def arun(
     self,
@@ -918,91 +890,152 @@ class Agent:
     audio: Optional[List[Audio]] = None,
     files: Optional[List[File]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
-    cancellation_token: Optional[CancellationToken] = None,
+    cancellation_token: Optional[CancelToken] = None,
   ) -> RunOutput:
-    """
-    Async run with middleware chain execution.
-
-    Delegates to the pipeline (PreparePhase → RecallPhase → ThinkPhase →
-    GuardInputPhase → ComposePhase → InvokeLoopPhase → GuardOutputPhase →
-    StorePhase). Middleware wraps the pipeline from outside.
-
-    Args:
-        instruction: New user message (string, Message, or list).
-        messages: Optional conversation history for multi-turn.
-        session_id: Session identifier (auto-generated if not provided).
-        run_id: Run identifier (auto-generated if not provided).
-        user_id: User identifier for memory scoping and multi-user support.
-        images: Images to include with the instruction.
-        videos: Videos to include with the instruction.
-        audio: Audio to include with the instruction.
-        files: Files to include with the instruction.
-        output_schema: Optional Pydantic model for structured output.
-        cancellation_token: Optional token for cooperative cancellation.
-
-    Returns:
-        RunOutput with response, metrics, tool executions, and messages.
-    """
-    # Validate output_schema early (#95/#98)
+    """Async run — the primary entry point."""
+    # Validate output_schema
     if output_schema is not None:
       if not isinstance(output_schema, type) or not issubclass(output_schema, BaseModel):
-        raise TypeError(
-          f"output_schema must be a Pydantic BaseModel subclass, got {output_schema!r}. Example: output_schema=MyModel where MyModel(BaseModel)."
-        )
+        raise TypeError(f"output_schema must be a Pydantic BaseModel subclass, got {output_schema!r}.")
 
-    # Load plugins on first run (async lifecycle)
-    if not self._plugins_loaded and len(self._plugin_registry) > 0:
-      await self._plugin_registry.load_all(self)
-      self._plugins_loaded = True
+    # Ensure toolkits are initialized
+    await self._ensure_toolkits_initialized()
 
-    # Build initial LoopState from arguments
-    state = self._build_initial_state(
-      instruction,
-      messages=messages,
-      session_id=session_id,
-      run_id=run_id,
+    # Prepare run state
+    _run_id = run_id or str(uuid4())
+    _session_id = session_id or self.session_id
+    new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
+    all_messages = (messages or []) + new_messages
+
+    # Transcribe audio
+    await self._transcribe_audio(new_messages)
+
+    # Extract file content
+    self._current_readers_context = await self._readers_extract(new_messages)
+
+    # Set current run context for overridable methods
+    self._current_run_id = _run_id
+    self._current_session_id = _session_id
+    self._current_user_id = user_id
+
+    # Prepare context
+    context = RunContext(
+      run_id=_run_id,
+      session_id=_session_id,
       user_id=user_id,
-      images=images,
-      videos=videos,
-      audio=audio,
-      files=files,
+      dependencies=self.config.dependencies,
+      session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
-      cancellation_token=cancellation_token,
     )
 
-    # Transcribe audio in new messages (before pipeline — enriches text for all models)
-    await self._transcribe_audio(state.new_messages)
+    # Prepare tools
+    tools = self._prepare_tools_for_run(context)
 
-    assert state.context is not None
-    context = state.context
+    # Build run input
+    run_input = RunInput(
+      input_content=instruction,
+      images=images,
+      videos=videos,
+      audios=audio,
+      files=files,
+    )
 
-    # Fire agent-level before_request hooks (outside pipeline — receives RunContext)
+    # Fire before hooks
     await self._fire_before_hooks(context)
 
-    # Build middleware chain where core handler is the pipeline
-    async def core_handler(ctx: RunContext) -> RunOutput:
-      return await self._execute_via_pipeline(state)
+    # Emit RunStarted
+    started = RunStartedEvent(
+      run_id=_run_id,
+      session_id=_session_id,
+      agent_id=self.agent_id,
+      agent_name=self.agent_name,
+      model=self.model.id,
+      model_provider=getattr(self.model, "provider", None) or "",
+      run_input=run_input,
+    )
+    await self._event_bus.emit(started)
 
-    # Wrap with middleware (innermost to outermost)
-    handler = core_handler
-    for middleware in reversed(self._middleware):
-      prev_handler = handler
+    # Run the loop — use a mutable list wrapper so before_model_call
+    # mutations are visible here for output messages
+    self._loop_messages = list(all_messages)
 
-      async def wrapped_handler(ctx: RunContext, mw=middleware, h=prev_handler) -> RunOutput:
-        return await mw(ctx, h)
+    try:
+      final_content: Optional[str] = None
+      final_parsed: Any = None
+      final_metrics: Optional[Metrics] = None
+      paused_event: Optional[RunPausedEvent] = None
 
-      handler = wrapped_handler
+      async for event in self._run_loop(
+        self._loop_messages,
+        tools,
+        streaming=False,
+        cancel=cancellation_token,
+        output_schema=output_schema,
+      ):
+        if isinstance(event, RunCompletedEvent):
+          final_content = event.content
+          final_parsed = event.parsed
+          final_metrics = event.metrics
+        elif isinstance(event, RunPausedEvent):
+          paused_event = event
 
-    # Execute pipeline through middleware chain
-    result = await handler(context)
+      # Build output messages (excluding system)
+      output_messages = [m for m in self._loop_messages if m.role != "system"]
 
-    # Record usage metrics
-    if self._usage_tracker is not None and result.metrics is not None:
-      await self._usage_tracker.arecord_run(result.metrics, self.model.id if self.model else None)
+      if paused_event:
+        result = RunOutput(
+          run_id=_run_id,
+          session_id=_session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          input=run_input,
+          tools=self._all_tool_executions or None,
+          messages=output_messages,
+          model=self.model.id,
+          model_provider=getattr(self.model, "provider", None),
+          status=RunStatus.paused,
+          session_state=context.session_state,
+          requirements=paused_event.requirements,
+        )
+      else:
+        result = RunOutput(
+          run_id=_run_id,
+          session_id=_session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          input=run_input,
+          content=final_content,
+          parsed=final_parsed,
+          tools=self._all_tool_executions or None,
+          metrics=final_metrics,
+          messages=output_messages,
+          model=self.model.id,
+          model_provider=getattr(self.model, "provider", None),
+          status=RunStatus.completed,
+          session_state=context.session_state,
+        )
 
-    # Fire agent-level after_response hooks (outside pipeline — receives RunOutput)
+    except Cancelled:
+      cancelled_event = RunCancelledEvent(
+        run_id=_run_id,
+        session_id=_session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        reason="Cancelled via CancelToken",
+      )
+      await self._event_bus.emit(cancelled_event)
+      result = RunOutput(
+        run_id=_run_id,
+        session_id=_session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        status=RunStatus.cancelled,
+        model=self.model.id,
+        model_provider=getattr(self.model, "provider", None),
+      )
+
+    # Fire after hooks
     await self._fire_after_hooks(result)
-
     return result
 
   def run_stream(
@@ -1016,65 +1049,20 @@ class Agent:
     images: Optional[List[Image]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
   ) -> Iterator[RunOutputEvent]:
-    """
-    Streaming run that yields events as they occur in real-time.
-
-    Args:
-        instruction: New user message.
-        messages: Optional conversation history.
-        session_id: Session identifier.
-        run_id: Run identifier.
-        user_id: User identifier for memory scoping and multi-user support.
-        images: Images to include.
-        output_schema: Optional structured output schema.
-
-    Yields:
-        RunOutputEvent instances as the run progresses.
-    """
+    """Sync streaming run — yields events as they occur."""
     import queue
-    import sys
     import threading
-    import time
+    import time as _time
 
     event_queue: queue.Queue[Union[RunOutputEvent, Exception, None]] = queue.Queue()
     stop_event = threading.Event()
     loop_ready = threading.Event()
     loop_holder: Dict[str, asyncio.AbstractEventLoop] = {}
-    queue_errors: List[BaseException] = []
-    queue_errors_lock = threading.Lock()
 
-    timeout_seconds = self.config.stream_timeout_seconds
-    if timeout_seconds is None:
-      timeout_seconds = 300.0  # type: ignore[unreachable]
-    deadline = time.monotonic() + timeout_seconds if timeout_seconds and timeout_seconds > 0 else None
-
-    def record_queue_error(err: BaseException) -> None:
-      with queue_errors_lock:
-        queue_errors.append(err)
-
-    def safe_put(item: Union[RunOutputEvent, Exception, None]) -> None:
-      try:
-        event_queue.put(item)
-      except Exception as exc:
-        record_queue_error(exc)
-        stop_event.set()
-
-    def request_loop_cancel() -> None:
-      loop = loop_holder.get("loop")
-      if loop and loop.is_running():
-        try:
-
-          def _cancel_tasks() -> None:
-            for task in asyncio.all_tasks(loop):
-              task.cancel()
-
-          loop.call_soon_threadsafe(_cancel_tasks)
-        except Exception as exc:
-          record_queue_error(exc)
+    timeout_seconds = self.config.stream_timeout_seconds or 300.0
+    deadline = _time.monotonic() + timeout_seconds if timeout_seconds > 0 else None
 
     def run_async_stream() -> None:
-      """Run async stream in background thread, push events to queue."""
-      # Create a new event loop for this thread
       loop = asyncio.new_event_loop()
       asyncio.set_event_loop(loop)
       loop_holder["loop"] = loop
@@ -1093,82 +1081,47 @@ class Agent:
           ):
             if stop_event.is_set():
               break
-            safe_put(event)
+            event_queue.put(event)
         except Exception as e:
-          safe_put(e)
+          event_queue.put(e)
         finally:
-          safe_put(None)  # Sentinel to signal completion
+          event_queue.put(None)
 
       try:
         loop.run_until_complete(stream_to_queue())
       finally:
-        # Robust cleanup sequence for async HTTP clients (httpx, etc.)
         with contextlib.suppress(Exception):
-          # 1. Cancel pending tasks
           pending = asyncio.all_tasks(loop)
           for task in pending:
             task.cancel()
           if pending:
             loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-          # 2. Shutdown async generators (critical for httpx cleanup)
           loop.run_until_complete(loop.shutdown_asyncgens())
-          # 3. Shutdown default executor (Python 3.9+)
           if hasattr(loop, "shutdown_default_executor"):
             loop.run_until_complete(loop.shutdown_default_executor())
         with contextlib.suppress(Exception):
           loop.close()
 
-    # Start background thread
     thread = threading.Thread(target=run_async_stream, daemon=True)
     thread.start()
 
-    # Yield events as they arrive
     try:
       loop_ready.wait(timeout=1.0)
       while True:
-        with queue_errors_lock:
-          if queue_errors:
-            raise queue_errors[0]
-        if deadline is None:
-          try:
-            item = event_queue.get()
-          except Exception as exc:
-            stop_event.set()
-            request_loop_cancel()
-            raise exc
-        else:
-          remaining = deadline - time.monotonic()
-          if remaining <= 0:
-            stop_event.set()
-            request_loop_cancel()
-            raise TimeoutError(f"Stream timed out after {timeout_seconds:.0f} seconds.")
-          try:
-            item = event_queue.get(timeout=remaining)
-          except queue.Empty:
-            with queue_errors_lock:
-              if queue_errors:
-                raise queue_errors[0]
-            stop_event.set()
-            request_loop_cancel()
-            raise TimeoutError(f"Stream timed out after {timeout_seconds:.0f} seconds.")
-          except Exception as exc:
-            stop_event.set()
-            request_loop_cancel()
-            raise exc
-        if item is None:  # Sentinel - stream complete
+        remaining = (deadline - _time.monotonic()) if deadline else None
+        try:
+          item = event_queue.get(timeout=remaining)
+        except queue.Empty:
+          stop_event.set()
+          raise TimeoutError(f"Stream timed out after {timeout_seconds:.0f} seconds.")
+        if item is None:
           break
         if isinstance(item, Exception):
           raise item
         yield item
     finally:
       stop_event.set()
-      request_loop_cancel()
       thread.join(timeout=5.0)
-      if thread.is_alive():
-        request_loop_cancel()
-        thread.join(timeout=5.0)
-      if thread.is_alive() and sys.exc_info()[0] is None:
-        raise TimeoutError("Background stream thread did not terminate.")
 
   async def arun_stream(
     self,
@@ -1180,2140 +1133,21 @@ class Agent:
     user_id: Optional[str] = None,
     images: Optional[List[Image]] = None,
     output_schema: Optional[Type[BaseModel]] = None,
-    cancellation_token: Optional[CancellationToken] = None,
+    cancellation_token: Optional[CancelToken] = None,
   ) -> AsyncIterator[RunOutputEvent]:
-    """
-    Async streaming run that yields events with full agent loop support.
-
-    Delegates to the pipeline in streaming mode. Each phase yields
-    (state, event) tuples; events are forwarded to the caller.
-
-    Args:
-        instruction: New user message.
-        messages: Optional conversation history.
-        session_id: Session identifier.
-        run_id: Run identifier.
-        user_id: User identifier for memory scoping and multi-user support.
-        images: Images to include.
-        output_schema: Optional structured output schema.
-        cancellation_token: Optional token for cooperative cancellation.
-
-    Yields:
-        RunOutputEvent instances as the run progresses.
-    """
-    # Build initial LoopState with streaming=True
-    state = self._build_initial_state(
-      instruction,
-      messages=messages,
-      session_id=session_id,
-      run_id=run_id,
-      user_id=user_id,
-      images=images,
-      output_schema=output_schema,
-      cancellation_token=cancellation_token,
-      streaming=True,
-    )
-
-    # Transcribe audio in new messages (before pipeline — enriches text for all models)
-    await self._transcribe_audio(state.new_messages)
-
-    try:
-      async for updated_state, event in self._pipeline.execute(
-        state,
-        cancellation_token=state.cancellation_token,
-      ):
-        state = updated_state
-        if event is not None:
-          yield event  # type: ignore[misc]
-
-    except AgentCancelled:
-      from definable.agent.events import RunCancelledEvent
-
-      cancelled_event = RunCancelledEvent(
-        run_id=state.run_id,
-        session_id=state.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        reason="Cancelled via CancellationToken",
-      )
-      self._emit(cancelled_event)
-      yield cancelled_event
-
-    except Exception as e:
-      error_event = RunErrorEvent(
-        run_id=state.run_id,
-        session_id=state.session_id,
-        agent_id=self.agent_id,
-        error_type=type(e).__name__,
-        content=str(e),
-      )
-      self._emit(error_event)
-      yield error_event
-      raise
-
-  async def continue_run(
-    self,
-    *,
-    run_output: RunOutput,
-    cancellation_token: Optional[CancellationToken] = None,
-  ) -> RunOutput:
-    """Resume a paused run after HITL requirements are resolved.
-
-    After ``arun()`` returns a paused ``RunOutput`` (with
-    ``run_output.is_paused == True``), the caller resolves each
-    requirement (e.g. ``req.confirm()`` or ``req.reject()``) and then
-    calls ``continue_run()`` to resume execution.
-
-    Args:
-        run_output: The paused RunOutput from a previous ``arun()`` call.
-        cancellation_token: Optional token for cooperative cancellation.
-
-    Returns:
-        A new RunOutput with the resumed execution results.
-
-    Raises:
-        ValueError: If the run is not paused or has unresolved requirements.
-    """
-    if not run_output.is_paused:
-      raise ValueError("RunOutput is not paused — nothing to continue")
-    unresolved = run_output.active_requirements
-    if unresolved:
-      raise ValueError(f"{len(unresolved)} requirement(s) still unresolved. Resolve them before calling continue_run().")
-
-    # Build messages from the paused run
-    messages = run_output.messages or []
-
-    # For each resolved requirement, add the tool result message
-    for req in run_output.requirements or []:
-      te = req.tool_execution
-      if te is None:
-        continue
-      if req.confirmation is False:
-        # Rejected — add rejection message
-        messages.append(
-          Message(
-            role="tool",
-            content=_REJECTED_MSG,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-      elif req.confirmation is True:
-        # Confirmed — execute the tool now
-        fn = self._tools_dict.get(te.tool_name)  # type: ignore[arg-type]
-        if fn:
-          function_call = get_function_call_for_tool_call(
-            {
-              "id": te.tool_call_id,
-              "type": "function",
-              "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})},
-            },
-            self._tools_dict,
-          )
-          if function_call:
-            result_obj = await function_call.aexecute()
-            messages.append(
-              Message(
-                role="tool",
-                content=str(result_obj.result) if result_obj.status == "success" else str(result_obj.error),
-                tool_call_id=te.tool_call_id,
-                name=te.tool_name,
-              )
-            )
-          else:
-            messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-        else:
-          messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-      elif req.external_execution_result is not None:
-        messages.append(
-          Message(
-            role="tool",
-            content=req.external_execution_result,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-
-    # Re-enter the agent run with the updated messages
-    return await self.arun(
-      instruction=messages[-1] if messages and messages[-1].role == "user" else "Continue.",
-      messages=messages,
-      session_id=run_output.session_id,
-      run_id=None,  # New run_id for the continuation
-      cancellation_token=cancellation_token,
-    )
-
-  async def continue_run_stream(
-    self,
-    *,
-    run_output: RunOutput,
-    cancellation_token: Optional[CancellationToken] = None,
-  ) -> AsyncIterator[RunOutputEvent]:
-    """Streaming variant of :meth:`continue_run`.
-
-    Same semantics as ``continue_run`` but yields events as they occur.
-
-    Args:
-        run_output: The paused RunOutput from a previous call.
-        cancellation_token: Optional token for cooperative cancellation.
-
-    Yields:
-        RunOutputEvent instances as the resumed run progresses.
-
-    Raises:
-        ValueError: If the run is not paused or has unresolved requirements.
-    """
-    if not run_output.is_paused:
-      raise ValueError("RunOutput is not paused — nothing to continue")
-    unresolved = run_output.active_requirements
-    if unresolved:
-      raise ValueError(f"{len(unresolved)} requirement(s) still unresolved. Resolve them before calling continue_run_stream().")
-
-    # Build messages from the paused run
-    messages = run_output.messages or []
-
-    # For each resolved requirement, add the tool result message
-    for req in run_output.requirements or []:
-      te = req.tool_execution
-      if te is None:
-        continue
-      if req.confirmation is False:
-        messages.append(
-          Message(
-            role="tool",
-            content=_REJECTED_MSG,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-      elif req.confirmation is True:
-        fn = self._tools_dict.get(te.tool_name)  # type: ignore[arg-type]
-        if fn:
-          function_call = get_function_call_for_tool_call(
-            {
-              "id": te.tool_call_id,
-              "type": "function",
-              "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})},
-            },
-            self._tools_dict,
-          )
-          if function_call:
-            result_obj = await function_call.aexecute()
-            messages.append(
-              Message(
-                role="tool",
-                content=str(result_obj.result) if result_obj.status == "success" else str(result_obj.error),
-                tool_call_id=te.tool_call_id,
-                name=te.tool_name,
-              )
-            )
-          else:
-            messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-        else:
-          messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-      elif req.external_execution_result is not None:
-        messages.append(
-          Message(
-            role="tool",
-            content=req.external_execution_result,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-
-    # Re-enter the streaming agent run with the updated messages
-    async for event in self.arun_stream(
-      instruction=messages[-1] if messages and messages[-1].role == "user" else "Continue.",
-      messages=messages,
-      session_id=run_output.session_id,
-      run_id=None,
-      cancellation_token=cancellation_token,
-    ):
-      yield event
-
-  # --- Knowledge & Memory Helpers ---
-
-  async def _knowledge_retrieve(self, context: RunContext) -> List[RunOutputEvent]:
-    """Retrieve knowledge documents, emit events, inject into context."""
-    kc = self._knowledge
-    if not (kc and kc.enabled):
-      return []
-
-    messages = context.metadata.get("_messages") if context.metadata else None
-    if not messages:
-      return []
-
-    from definable.agent.middleware import KnowledgeMiddleware
-
-    km = KnowledgeMiddleware(kc)
-    query = km._extract_query(messages)
-    if not query:
-      return []
-
-    import time
-
-    events: List[RunOutputEvent] = []
-    started = KnowledgeRetrievalStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-    try:
-      documents = await kc.asearch(
-        query=query,
-        top_k=kc.top_k,
-        rerank=kc.rerank,
-      )
-    except Exception:
-      elapsed = (time.perf_counter() - start_time) * 1000
-      completed = KnowledgeRetrievalCompletedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        query=query,
-        documents_found=0,
-        documents_used=0,
-        duration_ms=elapsed,
-      )
-      self._emit(completed)
-      events.append(completed)
-      return events
-
-    documents_found = len(documents)
-
-    # Filter by min_score
-    if kc.min_score is not None:
-      documents = [d for d in documents if d.reranking_score is not None and d.reranking_score >= kc.min_score]
-
-    if documents:
-      context_text = km._format_context(documents)
-      context.knowledge_context = context_text
-      context.knowledge_documents = documents
-      context.active_layers.add("knowledge")
-      if context.metadata is None:
-        context.metadata = {}
-      context.metadata["_knowledge_position"] = kc.context_position
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-    completed = KnowledgeRetrievalCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-      documents_found=documents_found,
-      documents_used=len(documents),
-      duration_ms=elapsed,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
-
-  def _init_deep_research(self, config: "DeepResearchConfig") -> Optional["DeepResearch"]:
-    """Initialize the deep research engine if configured.
-
-    Non-fatal: returns None with a warning if search capability cannot be found.
-    """
-    from definable.utils.log import log_debug, log_warning
-
-    if not config or not config.enabled:
-      return None
-
-    try:
-      from definable.agent.research.engine import DeepResearch
-      from definable.agent.research.search import create_search_provider
-
-      # Try explicit search_fn or provider first
-      if config.search_fn is not None or config.search_provider != "duckduckgo":
-        provider = create_search_provider(
-          provider=config.search_provider,
-          config=config.search_provider_config,
-          search_fn=config.search_fn,
-        )
-      else:
-        # Try auto-discovering from WebSearch skill
-        provider = self._discover_search_provider()  # type: ignore[assignment]
-        if provider is None:
-          # Fall back to DuckDuckGo
-          provider = create_search_provider("duckduckgo")  # type: ignore[unreachable]
-
-      compression_model = config.compression_model or self.model
-      log_debug("Deep research engine initialized")
-      return DeepResearch(
-        model=self.model,
-        search_provider=provider,
-        compression_model=compression_model,
-        config=config,
-      )
-    except Exception as e:
-      log_warning(f"Failed to initialize deep research: {e}")
-      return None
-
-  def _discover_search_provider(self) -> object:
-    """Try to auto-discover a search provider from WebSearch skill."""
-    from definable.utils.log import log_debug
-
-    for skill in self.skills:
-      # Check for WebSearch skill with its _search_fn
-      skill_cls_name = type(skill).__name__
-      if skill_cls_name == "WebSearch" and hasattr(skill, "_search_fn"):
-        from definable.agent.research.search import CallableSearchProvider
-        from definable.agent.research.search.base import SearchResult
-
-        raw_fn = skill._search_fn
-
-        async def _wrapped(query: str, max_results: int = 10) -> list:
-          import asyncio
-
-          text = await asyncio.to_thread(raw_fn, query, max_results)
-          # WebSearch._search_fn returns formatted string, not SearchResult list.
-          # Parse it back into SearchResult objects.
-          results = []
-          for block in text.split("\n\n---\n\n"):
-            lines = block.strip().split("\n", 2)
-            if len(lines) >= 2:
-              title = lines[0].strip("*").strip()
-              url = lines[1].strip()
-              snippet = lines[2] if len(lines) > 2 else ""
-              results.append(SearchResult(title=title, url=url, snippet=snippet))
-          return results
-
-        log_debug("Auto-discovered search provider from WebSearch skill")
-        return CallableSearchProvider(_wrapped)
-
-    return None
-
-  async def _deep_research(self, context: RunContext) -> List[RunOutputEvent]:
-    """Execute deep research pipeline, emit events, inject context."""
-    if not self._researcher:
-      return []
-
-    config = self._deep_research_config or (self._researcher._config if self._researcher else None)
-    if not config or not config.enabled:
-      return []
-
-    # Extract query from last user message
-    messages = context.metadata.get("_messages") if context.metadata else None
-    if not messages:
-      return []
-
-    query = None
-    for msg in reversed(messages):
-      if hasattr(msg, "role") and msg.role == "user" and msg.content:
-        query = msg.content if isinstance(msg.content, str) else str(msg.content)
-        break
-    if not query:
-      return []
-
-    # Auto trigger: ask model if research is needed
-    if config.trigger == "auto":
-      try:
-        needs = await self._researcher.needs_research(query)
-        if not needs:
-          return []
-      except Exception:
-        pass  # Default to running research on failure
-
-    import time
-
-    events: List[RunOutputEvent] = []
-    started = DeepResearchStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-      depth=config.depth,
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-    try:
-      result = await self._researcher.arun(query)
-      context.research_context = result.context
-      context.research_result = result
-    except Exception as e:
-      from definable.utils.log import log_warning
-
-      log_warning(f"Deep research failed: {e}")
-      elapsed = (time.perf_counter() - start_time) * 1000
-      completed = DeepResearchCompletedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        query=query,
-        duration_ms=elapsed,
-      )
-      self._emit(completed)
-      events.append(completed)
-      return events
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-    completed = DeepResearchCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-      sources_used=result.metrics.total_sources_read,
-      facts_extracted=result.metrics.unique_facts,
-      contradictions_found=result.metrics.contradictions_found,
-      waves_executed=result.metrics.waves_executed,
-      duration_ms=elapsed,
-      compression_ratio=result.metrics.compression_ratio_avg,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
-
-  async def _drain_memory_tasks(self) -> None:
-    """Await all pending memory background tasks (with timeout)."""
-    if not self._pending_memory_tasks:
-      return
-    done, _ = await asyncio.wait(self._pending_memory_tasks, timeout=30.0)
-    for task in done:
-      with contextlib.suppress(Exception):
-        task.result()
-    self._pending_memory_tasks = [t for t in self._pending_memory_tasks if not t.done()]
-
-  async def _memory_recall(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
-    """Recall session history, emit events, inject into context.
-
-    When the memory has an embedder (semantic search), recall produces a
-    dual-layer context:
-      - Short-term: recent raw messages (conversation continuity)
-      - Long-term: top-K atoms ranked by similarity to the query
-
-    Without an embedder, falls back to chronological dump of all entries.
-    """
-    assert self.memory is not None
-    await self._drain_memory_tasks()
-    import time
-
-    session_id = context.session_id or "default"
-    user_id = context.user_id or "default"
-
-    events: List[RunOutputEvent] = []
-
-    # Extract the last user message as the query (for event metadata + search)
-    query = None
-    for msg in reversed(new_messages):
-      if msg.role == "user" and msg.content:
-        query = msg.content if isinstance(msg.content, str) else str(msg.content)
-        break
-
-    started = MemoryRecallStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query or "",
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-
-    # Ensure store is initialized
-    await self.memory._ensure_initialized()
-
-    chunks_included = 0
-
-    if self.memory.has_semantic_search and query:
-      # Dual-layer recall: short-term (recent messages) + long-term (semantic atoms).
-      context.memory_context = await self._memory_recall_semantic(session_id, user_id, query)
-      # Count chunks from the context (approximate).
-      chunks_included = context.memory_context.count("\n") if context.memory_context else 0
-    else:
-      # Chronological recall (existing behavior).
-      entries = await self.memory.get_entries(session_id, user_id)
-      chunks_included = len(entries)
-      if entries:
-        lines = []
-        for e in entries:
-          if e.role == "summary":
-            lines.append(f"[Summary]: {e.content}")
-          elif e.entry_type == "atom":
-            lines.append(f"[Fact]: {e.lossless_content or e.content}")
-          else:
-            lines.append(f"{e.role}: {e.content}")
-        context.memory_context = "<conversation_history>\n" + "\n".join(lines) + "\n</conversation_history>"
-
-    if context.memory_context:
-      context.active_layers.add("memory")
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-
-    completed = MemoryRecallCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query or "",
-      tokens_used=len(context.memory_context or "") // 4,
-      chunks_included=chunks_included,
-      chunks_available=chunks_included,
-      duration_ms=elapsed,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
-
-  async def _memory_recall_semantic(self, session_id: str, user_id: str, query: str) -> str:
-    """Build dual-layer memory context: short-term messages + long-term atoms."""
-    assert self.memory is not None
-    entries = await self.memory.get_entries(session_id, user_id)
-
-    # Split into recent messages (STM) and search for relevant atoms (LTM).
-    recent_messages = [e for e in entries if e.entry_type == "message"][-self.memory.recent_count :]
-    relevant_atoms = await self.memory.search(query, session_id, user_id)
-
-    parts: list[str] = []
-
-    # Long-term memory: relevant facts from semantic search.
-    if relevant_atoms:
-      ltm_lines = [f"- {a.lossless_content or a.content}" for a in relevant_atoms]
-      parts.append("<long_term_memory>\n" + "\n".join(ltm_lines) + "\n</long_term_memory>")
-
-    # Short-term memory: recent conversation turns.
-    if recent_messages:
-      stm_lines = []
-      for e in recent_messages:
-        if e.role == "summary":
-          stm_lines.append(f"[Summary]: {e.content}")
-        else:
-          stm_lines.append(f"{e.role}: {e.content}")
-      parts.append("<short_term_memory>\n" + "\n".join(stm_lines) + "\n</short_term_memory>")
-
-    return "\n".join(parts)
-
-  def _memory_store(self, new_messages: List[Message], context: RunContext) -> List[RunOutputEvent]:
-    """Store new messages in session memory (fire-and-forget), emit events."""
-    assert self.memory is not None
-    import time
-
-    if not self.memory.enabled:
-      return []
-
-    events: List[RunOutputEvent] = []
-    message_count = len(new_messages)
-
-    started = MemoryUpdateStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      message_count=message_count,
-    )
-    self._emit(started)
-    events.append(started)
-
-    try:
-      loop = asyncio.get_running_loop()
-      memory = self.memory
-      session_id = context.session_id or "default"
-      user_id = context.user_id or "default"
-
-      # Ensure the memory has a model for auto-optimization
-      if memory.model is None:
-        memory.model = self.model
-
-      async def _store_and_emit() -> None:
-        from definable.utils.log import log_warning
-
-        start_time = time.perf_counter()
-        try:
-          await memory._ensure_initialized()
-          for msg in new_messages:
-            await memory.add(msg, session_id=session_id, user_id=user_id)
-        except Exception as e:
-          log_warning(f"Memory store failed: {type(e).__name__}: {e}")
-        finally:
-          elapsed = (time.perf_counter() - start_time) * 1000
-          completed = MemoryUpdateCompletedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            message_count=message_count,
-            duration_ms=elapsed,
-          )
-          self._emit(completed)
-
-      task = loop.create_task(_store_and_emit())
-      self._pending_memory_tasks.append(task)
-      task.add_done_callback(lambda t: self._pending_memory_tasks.remove(t) if t in self._pending_memory_tasks else None)
-    except RuntimeError:
-      pass  # No running loop — skip memory storage
-
-    return events
-
-  # --- Readers Helpers ---
-
-  @staticmethod
-  def _init_readers(readers: "List[BaseReader] | BaseReader | bool | None") -> Optional["BaseReader"]:
-    """Resolve the readers= parameter into a BaseReader or None.
-
-    Accepts:
-      - None/False → None
-      - True → BaseReader() with all defaults
-      - BaseReader instance → use as-is
-      - BaseParser instance → wrap in BaseReader with custom ParserRegistry
-      - ProviderReader instance (e.g., MistralReader) → use as-is
-      - Legacy FileReaderRegistry → use as-is (it's now BaseReader)
-    """
-    if readers is None or readers is False:
-      return None
-    if readers is True:
-      from definable.reader import BaseReader
-
-      return BaseReader()
-    # Check if it's a BaseParser (single parser → wrap in BaseReader)
-    from definable.reader.parsers.base_parser import BaseParser
-
-    if isinstance(readers, BaseParser):
-      from definable.reader import BaseReader
-      from definable.reader.registry import ParserRegistry
-
-      registry = ParserRegistry(include_defaults=False)
-      registry.register(readers)
-      return BaseReader(registry=registry)
-    # Assume it's already a BaseReader / ProviderReader — use as-is
-    return readers  # type: ignore[return-value]
-
-  async def _readers_extract(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
-    """Extract text from files in new_messages, inject into context."""
-    if not self.readers:
-      return []
-
-    # Collect files from all new messages
-    files: List[File] = []
-    for msg in new_messages:
-      if msg.files:
-        files.extend(msg.files)
-    if not files:
-      return []
-
-    import time
-
-    events: List[RunOutputEvent] = []
-    started = FileReadStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      file_count=len(files),
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-    try:
-      results = await self.readers.aread_all(files)
-    except Exception:
-      from definable.utils.log import log_warning
-
-      log_warning("File reading failed", exc_info=True)
-      elapsed = (time.perf_counter() - start_time) * 1000
-      completed = FileReadCompletedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        file_count=len(files),
-        files_read=0,
-        files_failed=len(files),
-        duration_ms=elapsed,
-      )
-      self._emit(completed)
-      events.append(completed)
-      return events
-
-    # Format successful results into context block
-    file_blocks: List[str] = []
-    files_read = 0
-    files_failed = 0
-    for result in results:
-      if result.error:
-        files_failed += 1
-      elif result.content:
-        files_read += 1
-        mime_attr = f' type="{result.mime_type}"' if result.mime_type else ""
-        file_blocks.append(f'<file name="{result.filename}"{mime_attr}>\n{result.content}\n</file>')
-
-    if file_blocks:
-      context.readers_context = "<file_contents>\n" + "\n".join(file_blocks) + "\n</file_contents>"
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-    completed = FileReadCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      file_count=len(files),
-      files_read=files_read,
-      files_failed=files_failed,
-      duration_ms=elapsed,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
-
-  # --- Guardrail Helpers ---
-
-  def _extract_input_text(self, new_messages: List[Message]) -> str:
-    """Extract text content from the new user messages for guardrail checking."""
-    parts: List[str] = []
-    for msg in new_messages:
-      if msg.role == "user" and msg.content:
-        parts.append(msg.content if isinstance(msg.content, str) else str(msg.content))
-    return "\n".join(parts)
-
-  async def _run_input_guardrails(self, context: RunContext, new_messages: List[Message]) -> Optional[RunOutput]:
-    """Run input guardrails. Returns RunOutput if blocked, None if allowed."""
-    assert self.guardrails is not None
-
-    from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
-
-    text = self._extract_input_text(new_messages)
-    if not text:
-      return None
-
-    results = await self.guardrails.run_input_checks(text, context)
-
-    for result in results:
-      gname = (result.metadata or {}).get("guardrail_name", "unknown")
-      duration = (result.metadata or {}).get("duration_ms")
-
-      self._emit(
-        GuardrailCheckedEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          guardrail_name=gname,
-          guardrail_type="input",
-          action=result.action,
-          message=result.message,
-          duration_ms=duration,
-        )
-      )
-
-      if result.action == "block":
-        self._emit(
-          GuardrailBlockedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            guardrail_name=gname,
-            guardrail_type="input",
-            reason=result.message or "Blocked by input guardrail",
-          )
-        )
-
-        reason = result.message or "Blocked by input guardrail"
-        if self.guardrails.on_block == "raise":
-          from definable.exceptions import CheckTrigger, InputCheckError
-
-          raise InputCheckError(reason, check_trigger=CheckTrigger.GUARDRAIL_BLOCKED)
-
-        return RunOutput(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          content=reason,
-          status=RunStatus.blocked,
-        )
-
-      if result.action == "modify" and result.modified_text is not None:
-        # Replace the last user message content
-        for i in range(len(new_messages) - 1, -1, -1):
-          if new_messages[i].role == "user":
-            new_messages[i] = Message(
-              role="user",
-              content=result.modified_text,
-              images=new_messages[i].images,
-              videos=new_messages[i].videos,
-              audio=new_messages[i].audio,
-              files=new_messages[i].files,
-            )
-            break
-        # Also update all_messages in context metadata
-        all_messages = context.metadata.get("_messages") if context.metadata else None
-        if all_messages:
-          for i in range(len(all_messages) - 1, -1, -1):
-            if all_messages[i].role == "user":
-              all_messages[i] = Message(
-                role="user",
-                content=result.modified_text,
-                images=all_messages[i].images,
-                videos=all_messages[i].videos,
-                audio=all_messages[i].audio,
-                files=all_messages[i].files,
-              )
-              break
-
-    return None
-
-  async def _run_output_guardrails(self, context: RunContext, result: RunOutput) -> Optional[RunOutput]:
-    """Run output guardrails. Returns modified RunOutput if blocked/modified, None if allowed."""
-    assert self.guardrails is not None
-
-    from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
-
-    text = result.content if isinstance(result.content, str) else str(result.content or "")
-    if not text:
-      return None
-
-    results = await self.guardrails.run_output_checks(text, context)
-
-    modified = False
-    for gr in results:
-      gname = (gr.metadata or {}).get("guardrail_name", "unknown")
-      duration = (gr.metadata or {}).get("duration_ms")
-
-      self._emit(
-        GuardrailCheckedEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          guardrail_name=gname,
-          guardrail_type="output",
-          action=gr.action,
-          message=gr.message,
-          duration_ms=duration,
-        )
-      )
-
-      if gr.action == "block":
-        self._emit(
-          GuardrailBlockedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            guardrail_name=gname,
-            guardrail_type="output",
-            reason=gr.message or "Blocked by output guardrail",
-          )
-        )
-
-        reason = gr.message or "Blocked by output guardrail"
-        if self.guardrails.on_block == "raise":
-          from definable.exceptions import CheckTrigger, OutputCheckError
-
-          raise OutputCheckError(reason, check_trigger=CheckTrigger.GUARDRAIL_BLOCKED)
-
-        return RunOutput(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          content=reason,
-          status=RunStatus.blocked,
-          messages=result.messages,
-          metrics=result.metrics,
-        )
-
-      if gr.action == "modify" and gr.modified_text is not None:
-        result.content = gr.modified_text
-        if result.metadata is None:
-          result.metadata = {}
-        result.metadata["guardrail_modified"] = True
-        modified = True
-
-    return result if modified else None
-
-  async def _run_tool_guardrails(self, context: RunContext, tool_execution: ToolExecution) -> Optional[str]:
-    """Run tool guardrails. Returns block reason string if blocked, None if allowed."""
-    assert self.guardrails is not None
-
-    from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
-
-    tool_name = tool_execution.tool_name or ""
-    tool_args = tool_execution.tool_args or {}
-
-    results = await self.guardrails.run_tool_checks(tool_name, tool_args, context)
-
-    for gr in results:
-      gname = (gr.metadata or {}).get("guardrail_name", "unknown")
-      duration = (gr.metadata or {}).get("duration_ms")
-
-      self._emit(
-        GuardrailCheckedEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          guardrail_name=gname,
-          guardrail_type="tool",
-          action=gr.action,
-          message=gr.message,
-          duration_ms=duration,
-        )
-      )
-
-      if gr.action == "block":
-        reason = gr.message or f"Tool '{tool_name}' blocked by guardrail"
-        self._emit(
-          GuardrailBlockedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            guardrail_name=gname,
-            guardrail_type="tool",
-            reason=reason,
-          )
-        )
-        return reason
-
-    return None
-
-  # --- Thinking Layer ---
-
-  # Effort-scaled thinking prompts (research-backed design):
-  # - LOW: Chain-of-Draft style — minimal tokens, fast assessment
-  # - MEDIUM: Standard reasoning with step-back abstraction + self-check
-  # - HIGH: Full deliberative reasoning — metacognitive, multi-perspective, verified
-  _THINKING_PROMPTS: Dict[str, str] = {
-    "low": (
-      "You are the planning layer. Your job is to produce an execution STRATEGY — not the answer itself.\n\n"
-      "Quickly assess this request:\n"
-      "- What is the user asking?\n"
-      "- What approach should be used? (tools, knowledge, direct answer)\n"
-      "- What tools are needed, if any?\n\n"
-      "Output a brief strategy (2-4 sentences). DO NOT solve the problem or write the answer."
-    ),
-    "medium": (
-      "You are the planning layer. Your job is to produce an execution STRATEGY — not the answer itself.\n"
-      "The main model will receive your strategy and use it to produce the actual response.\n\n"
-      "1. INTENT: What does the user actually need? Look past the surface request.\n"
-      "2. APPROACH: What's the best way to fulfill this? Direct answer from knowledge, tool usage, multi-step reasoning?\n"
-      "3. TOOLS: If tools are needed, list them in order with why each is needed and what depends on what.\n"
-      "4. CONSTRAINTS: Any edge cases, risks, or things to watch for?\n\n"
-      "Output a concise strategy. DO NOT write the answer, solve the problem, or produce the final response.\n"
-      "The main model handles that — you only plan."
-    ),
-    "high": (
-      "You are the planning layer. Your job is to produce a detailed execution STRATEGY — not the answer itself.\n"
-      "The main model will receive your strategy and use it to produce the actual response.\n\n"
-      "INTENT: What is the user really asking? What are the underlying goals and constraints?\n"
-      "Identify any ambiguity or implicit requirements.\n\n"
-      "APPROACH: What's the best strategy? Consider:\n"
-      "- Can this be answered directly from knowledge, or does it need tools/research?\n"
-      "- If complex, break into sub-tasks. Which are independent vs sequential?\n"
-      "- If tools are available, which ones and in what order? Why each is needed?\n\n"
-      "ALTERNATIVES: Consider at least one alternative approach. Why is your chosen strategy better?\n\n"
-      "RISKS: Edge cases, failure modes, assumptions that need validation.\n\n"
-      "VERIFICATION: Does your strategy fully address the original request? Any gaps?\n\n"
-      "Output a detailed strategy. DO NOT solve the problem, write the answer, or produce the final response.\n"
-      "You are the planner — the main model is the executor."
-    ),
-  }
-
-  def _build_thinking_prompt(
-    self,
-    context: RunContext,
-    tools: Dict[str, Function],
-  ) -> str:
-    """Build an effort-scaled, context-aware thinking prompt.
-
-    The prompt varies by effort level:
-    - low: Chain-of-Draft style — minimal overhead, fast assessment
-    - medium: Standard reasoning with step-back abstraction + self-check
-    - high: Full deliberative reasoning — metacognitive, multi-perspective, verified
-
-    Incorporates agent role, tool catalog, and context availability flags.
-    """
-    effort = self._thinking.effort if self._thinking else "medium"
-    base_prompt = self._THINKING_PROMPTS.get(effort, self._THINKING_PROMPTS["medium"])
-    parts = [base_prompt]
-
-    # Agent role (first 500 chars)
-    if self.instructions:
-      truncated = self.instructions[:500]
-      if len(self.instructions) > 500:
-        truncated += "..."
-      parts.append(f"\nYour role: {truncated}")
-
-    # Tool catalog (name + one-line description)
-    if tools:
-      tool_lines = []
-      for name, fn in tools.items():
-        desc = (fn.description or "").split("\n")[0][:100]
-        tool_lines.append(f"- {name}: {desc}" if desc else f"- {name}")
-      parts.append("\nAvailable tools:\n" + "\n".join(tool_lines))
-
-    # Context availability flags (NOT the full content)
-    flags = []
-    if context.knowledge_context:
-      flags.append("knowledge base context is available")
-    if context.memory_context:
-      flags.append("conversation memory is available")
-    if flags:
-      parts.append(f"\nContext: {'; '.join(flags)}.")
-
-    parts.append("\nRemember: Output only a strategy. The main model will handle the actual response.")
-
-    return "\n".join(parts)
-
-  @staticmethod
-  def _format_thinking_injection(output: "Union[ThinkingOutput, str]", effort: str = "medium") -> str:
-    """Format thinking result into a system prompt injection.
-
-    Accepts either a ThinkingOutput (structured models) or a plain str
-    (non-structured models' free-form thinking text).
-
-    The injection is framed as an execution strategy directive — the main
-    model should follow it to produce the actual response.
-    """
-    framing = "The following strategy was developed for this request. Use it to guide your response:"
-
-    if isinstance(output, str):
-      # Free-form text from non-structured models
-      return f"<execution_strategy>\n{framing}\n\n{output}\n</execution_strategy>"
-
-    # Structured ThinkingOutput
-    tool_names = output.flat_tool_names()
-
-    if effort == "high":
-      lines = [
-        "<execution_strategy>",
-        framing,
-        "",
-        f"Approach: {output.approach}",
-      ]
-      if tool_names:
-        lines.append(f"Tools: {', '.join(tool_names)}")
-      if output.verification:
-        lines.append(f"Verification: {output.verification}")
-      if output.considerations:
-        lines.append(f"Considerations: {output.considerations}")
-      if output.confidence:
-        lines.append(f"Confidence: {output.confidence}")
-      lines.append("</execution_strategy>")
-      return "\n".join(lines)
-
-    # low / medium — compact
-    parts = [f"<execution_strategy>\nStrategy: {output.approach}"]
-    if tool_names:
-      parts.append(f" Tools: {', '.join(tool_names)}.")
-    parts.append("\n</execution_strategy>")
-    return "".join(parts)
-
-  def _extract_last_user_query(self, messages: List[Message]) -> Optional[str]:
-    """Extract the content of the last user message (for trigger pre-checks)."""
-    for msg in reversed(messages):
-      if hasattr(msg, "role") and msg.role == "user" and msg.content:
-        return msg.content if isinstance(msg.content, str) else str(msg.content)
-    return None
-
-  @staticmethod
-  def _build_routing_prompt(layer_name: str, query: str, context_str: str) -> str:
-    """Build a precise, layer-specific YES/NO routing prompt.
-
-    Generic prompts cause routing models to over-fire (always YES). Explicit
-    criteria with positive/negative signals produce accurate routing decisions.
-    """
-    ctx_block = f"\nRecent conversation:\n{context_str}\n" if context_str else ""
-    q = query[:300]
-
-    if layer_name == "knowledge base":
-      return (
-        f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-        f"QUESTION: Does this query need the knowledge base?\n\n"
-        f"KNOWLEDGE BASE contains factual documents: company policies, product info, procedures, uploaded content.\n\n"
-        f"Answer YES when the query asks about:\n"
-        f"- Company rules, benefits, policies (PTO, salary, leave, procedures)\n"
-        f"- Product details, features, or documentation\n"
-        f"- Factual questions about the organization or domain\n"
-        f"- 'How does X work?', 'What is the policy for Y?', 'Tell me about Z'\n\n"
-        f"Answer NO when the query is:\n"
-        f"- Simple math or calculations ('add 1 and 2', 'what is 5*7')\n"
-        f"- General conversation, greetings, or chit-chat\n"
-        f"- Coding tasks, logic puzzles, or general reasoning\n"
-        f"- Questions answerable from common world knowledge (no documents needed)\n"
-        f"- Personal-only questions about the user (memory handles those){ctx_block}\n"
-        f"Query: '{q}'\n\n"
-        f"Answer YES or NO only:"
-      )
-
-    if layer_name == "memory":
-      return (
-        f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-        f"QUESTION: Does this query need personal memory recall?\n\n"
-        f"MEMORY stores personal information about this user from past conversations.\n\n"
-        f"Answer YES when the query involves:\n"
-        f"- User's name, role, preferences, or personal details\n"
-        f"- References to past interactions ('what did I tell you', 'remember when', 'last time')\n"
-        f"- Possessive questions ('my name', 'my preference', 'my project')\n"
-        f"- Follow-ups that require knowing who the user is or what they said before\n\n"
-        f"Answer NO when the query is:\n"
-        f"- Simple math or calculations ('add 1 and 2')\n"
-        f"- General factual questions not specific to this user\n"
-        f"- Topics fully answerable without user-specific context\n"
-        f"- The very first message with no personal reference{ctx_block}\n"
-        f"Query: '{q}'\n\n"
-        f"Answer YES or NO only:"
-      )
-
-    if layer_name == "analysis/thinking":
-      return (
-        f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-        f"QUESTION: Does this query need extended step-by-step reasoning?\n\n"
-        f"THINKING enables slow, careful analysis before the assistant responds.\n\n"
-        f"Answer YES when the query involves:\n"
-        f"- Multi-step math, logic proofs, or complex reasoning\n"
-        f"- Code architecture, algorithm design, or debugging\n"
-        f"- Strategic planning, trade-off analysis, or ambiguous decisions\n"
-        f"- Tasks where rushing to an answer risks being wrong\n\n"
-        f"Answer NO when the query is:\n"
-        f"- Simple arithmetic ('add 1 and 2', 'what is 5+3')\n"
-        f"- Direct factual lookups ('what is the PTO policy')\n"
-        f"- Simple instructions ('send an email to X')\n"
-        f"- Casual conversation or greetings{ctx_block}\n"
-        f"Query: '{q}'\n\n"
-        f"Answer YES or NO only:"
-      )
-
-    # Fallback for custom layer names
-    ctx_section = f"Recent conversation:\n{context_str}\n" if context_str else ""
-    return (
-      f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-      f"QUESTION: Does this query require accessing the {layer_name}?\n\n"
-      f"{ctx_section}"
-      f"Query: '{q}'\n\n"
-      f"Answer YES or NO only:"
-    )
-
-  async def _should_invoke_layer(
-    self,
-    layer_name: str,
-    query: str,
-    decision_prompt: Optional[str] = None,
-    routing_model: Optional["Model"] = None,
-    messages: Optional[List[Message]] = None,
-  ) -> bool:
-    """Lightweight YES/NO pre-check: does this query need the given layer?
-
-    Uses routing_model (if provided) or falls back to the agent's model.
-    Includes recent conversation context so the gate has enough signal.
-    Returns True on failure to default to running the layer (fail-open).
-    """
-    model = routing_model or self.model
-
-    context_str = ""
-    if messages:
-      recent = messages[-3:]
-      context_str = "\n".join(
-        f"{m.role}: {(m.content[:200] if isinstance(m.content, str) else str(m.content)[:200])}"
-        for m in recent
-        if m.role in ("user", "assistant") and m.content
-      )
-
-    if decision_prompt:
-      prompt = decision_prompt
-    else:
-      prompt = self._build_routing_prompt(layer_name, query, context_str)
-
-    try:
-      response = await model.ainvoke(
-        messages=[Message(role="user", content=prompt)],
-        assistant_message=Message(role="assistant", content=""),
-      )
-      answer = (response.content or "").strip().upper()
-      return answer in ("YES", "Y")
-    except Exception as e:
-      from definable.utils.log import log_warning
-
-      log_warning(f"Layer routing check failed for '{layer_name}', defaulting to run: {e}")
-      return True  # fail-open: run the layer if routing fails
-
-  def _build_layer_guide(self, context: Optional[RunContext] = None) -> str:
-    """Build a capabilities menu section for the system prompt.
-
-    Only included when at least one layer has a custom description
-    or a non-default trigger (i.e., the model guides activation).
-
-    When ``context`` is provided, reflects the actual fetch state:
-    layers that were retrieved are marked as such; layers that were
-    configured with trigger="auto" but not fetched this turn are noted
-    as available-but-not-retrieved.
-    """
-    from definable.agent.config import (
-      DEFAULT_KNOWLEDGE_DESCRIPTION,
-      DEFAULT_RESEARCH_DESCRIPTION,
-      DEFAULT_THINKING_DESCRIPTION,
-    )
-
-    active = context.active_layers if context is not None else set()
-    items: List[str] = []
-
-    # Memory layer
-    if self.memory and self.memory.enabled:
-      if self.memory.description:
-        desc = self.memory.description
-        if "memory" in active:
-          items.append(f"- **Memory** [retrieved this turn]: {desc}")
-        else:
-          items.append(f"- **Memory**: {desc}")
-
-    # Knowledge layer
-    if self._knowledge:
-      needs_guide = bool(self._knowledge.description) or self._knowledge.trigger != "always"
-      if needs_guide:
-        desc = self._knowledge.description or DEFAULT_KNOWLEDGE_DESCRIPTION
-        if "knowledge" in active:
-          items.append(f"- **Knowledge Base** [retrieved this turn]: {desc}")
-        elif self._knowledge.trigger == "auto":
-          items.append(f"- **Knowledge Base** [available, not retrieved this turn]: {desc}")
-        else:
-          items.append(f"- **Knowledge Base**: {desc}")
-
-    # Thinking layer
-    if self._thinking and self._thinking.enabled:
-      needs_guide = bool(self._thinking.description) or self._thinking.trigger != "always"
-      if needs_guide:
-        desc = self._thinking.description or DEFAULT_THINKING_DESCRIPTION
-        items.append(f"- **Analysis**: {desc}")
-
-    # Deep research layer
-    if self._researcher and self._deep_research_config:
-      needs_guide = bool(self._deep_research_config.description) or self._deep_research_config.trigger != "always"
-      if needs_guide:
-        desc = self._deep_research_config.description or DEFAULT_RESEARCH_DESCRIPTION
-        items.append(f"- **Research**: {desc}")
-
-    if not items:
-      return ""
-
-    lines = [
-      "## Capabilities Available",
-      "",
-      "The following capabilities are available and will activate when relevant:",
-      "",
-    ] + items
-    return "\n".join(lines)
-
-  async def _evaluate_layer_trigger(
-    self,
-    trigger: Literal["always", "auto", "never"],
-    callback: Callable[[], Awaitable[List[RunOutputEvent]]],
-    *,
-    layer_name: str = "",
-    query_messages: Optional[List[Message]] = None,
-    all_messages: Optional[List[Message]] = None,
-    decision_prompt: Optional[str] = None,
-    routing_model: Optional["Model"] = None,
-  ) -> List[RunOutputEvent]:
-    """Evaluate a layer trigger and conditionally run the callback.
-
-    Returns callback's events if the layer runs, [] if skipped.
-    Fails open on 'auto' gate errors (returns callback result).
-    """
-    if trigger == "always":
-      return await callback()
-    if trigger == "auto":
-      if query_messages is None:
-        return []
-      query = self._extract_last_user_query(query_messages)
-      if query and await self._should_invoke_layer(
-        layer_name,
-        query,
-        decision_prompt,
-        routing_model,
-        all_messages,
-      ):
-        return await callback()
-    # "never" falls through
-    return []
-
-  def _should_store_memory(self) -> bool:
-    """Return True if memory store should run this turn."""
-    if not self.memory:
-      return False
-    return self.memory.enabled
-
-  async def _thinking_should_run(self, messages: List[Message]) -> bool:
-    """Return True if the thinking layer should execute this turn."""
-    if not (self._thinking and self._thinking.enabled):
-      return False
-    trigger = self._thinking.trigger
-    if trigger == "always":
-      return True
-    if trigger == "auto":
-      query = self._extract_last_user_query(messages)
-      if query:
-        return await self._should_invoke_layer("analysis/thinking", query)
-    return False  # "never"
-
-  async def _run_pre_execution_pipeline(
-    self,
-    context: RunContext,
-    new_messages: List[Message],
-    all_messages: List[Message],
-  ) -> List[RunOutputEvent]:
-    """Pre-execution pipeline: readers → knowledge → research → memory recall.
-
-    Populates context fields (knowledge_context, research_context, memory_context,
-    readers_context, active_layers) consumed by _execute_run() and arun_stream().
-    """
-    events: List[RunOutputEvent] = []
-
-    # File reading (before knowledge — extracted content may inform the query)
-    events.extend(await self._readers_extract(context, new_messages))
-
-    # Knowledge retrieval
-    if self._knowledge and self._knowledge.enabled:
-      events.extend(
-        await self._evaluate_layer_trigger(
-          trigger=self._knowledge.trigger,
-          callback=lambda: self._knowledge_retrieve(context),
-          layer_name="knowledge base",
-          query_messages=all_messages,
-          all_messages=all_messages,
-          decision_prompt=self._knowledge.decision_prompt,
-          routing_model=self._knowledge.routing_model,
-        )
-      )
-
-    # Deep research (after knowledge, before memory)
-    events.extend(await self._deep_research(context))
-
-    # Memory recall
-    if self.memory and self.memory.enabled:
-      events.extend(await self._memory_recall(context, new_messages))
-
-    return events
-
-  def _build_thinking_messages(
-    self,
-    context: RunContext,
-    invoke_messages: List[Message],
-    tools: Dict[str, Function],
-  ) -> "tuple[list[Message], bool]":
-    """Build the messages for a thinking LLM call.
-
-    Returns:
-      (thinking_messages, use_structured) — the messages and whether structured output is used.
-
-    For structured models (OpenAI, Gemini): uses ThinkingOutput schema via structured output.
-    For non-structured models (Moonshot, DeepSeek, xAI): pure natural language, no format
-    instructions — produces clean free-form text.
-    """
-    assert self._thinking is not None
-
-    thinking_model = self._thinking.model or self.model
-
-    # Use custom instructions if set, otherwise build context-aware prompt
-    if self._thinking.instructions:
-      thinking_prompt = self._thinking.instructions
-    else:
-      thinking_prompt = self._build_thinking_prompt(context, tools)
-
-    # Build thinking messages: system prompt + user/assistant messages (no tools)
-    thinking_messages: list[Message] = [Message(role="system", content=thinking_prompt)]
-    for msg in invoke_messages:
-      if msg.role in ("user", "assistant"):
-        thinking_messages.append(msg)
-
-    use_structured = thinking_model.supports_native_structured_outputs
-
-    # Non-structured models: no format instructions at all.
-    # They produce pure natural language reasoning text.
-
-    return thinking_messages, use_structured
-
-  async def _execute_thinking(
-    self,
-    context: RunContext,
-    invoke_messages: List[Message],
-    tools: Dict[str, Function],
-  ) -> "AsyncGenerator[Union[str, tuple[Optional[ThinkingOutput], Optional[str], list[ReasoningStep], list[Message]]], None]":
-    """Execute Definable's fallback thinking layer as a unified async generator.
-
-    Always streams via ainvoke_stream. Behavior splits by model capability:
-
-    - Structured models (OpenAI, Gemini): accumulates response, parses ThinkingOutput
-      at end, yields chain_of_thought tokens during stream.
-    - Non-structured models (Moonshot, DeepSeek, xAI): yields raw text tokens,
-      builds thinking_text string at end. No JSON, no XML — pure natural language.
-
-    Yields:
-      str: Content delta tokens (for ReasoningContentDelta events).
-      tuple: Final result ``(thinking_output_or_none, thinking_text_or_none, reasoning_steps, reasoning_messages)``
-        as the last item.
-    """
-    import json
-
-    from definable.agent.reasoning.step import ThinkingOutput, thinking_output_to_reasoning_steps
-
-    assert self._thinking is not None
-    thinking_model = self._thinking.model or self.model
-
-    thinking_messages, use_structured = self._build_thinking_messages(context, invoke_messages, tools)
-
-    assistant_msg = Message(role="assistant")
-
-    if use_structured:
-      # Structured output: call with response_format, then yield chain_of_thought
-      response = await thinking_model.ainvoke(
-        messages=thinking_messages,
-        assistant_message=assistant_msg,
-        response_format=ThinkingOutput,
-      )
-      raw_content = response.content if isinstance(response.content, str) else str(response.content or "")
-
-      # Parse structured response
-      thinking_output: Optional[ThinkingOutput] = None
-      reasoning_steps: list[ReasoningStep] = []
-      try:
-        parsed = json.loads(raw_content)
-        if isinstance(parsed, dict):
-          if "analysis" in parsed and "chain_of_thought" not in parsed:
-            parsed["chain_of_thought"] = parsed.pop("analysis")
-          thinking_output = ThinkingOutput(**parsed)
-          reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
-      except Exception:
-        from definable.utils.log import log_warning
-
-        log_warning("Failed to parse structured thinking response, using raw content")
-        thinking_output = ThinkingOutput(chain_of_thought=raw_content, approach="Respond directly")  # type: ignore[call-arg]
-        reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
-
-      if thinking_output:
-        yield thinking_output.chain_of_thought
-
-      reasoning_agent_messages = thinking_messages + [
-        Message(role="assistant", content=response.content, metrics=response.response_usage)  # type: ignore[arg-type]
-      ]
-      yield (thinking_output, None, reasoning_steps, reasoning_agent_messages)
-      return
-
-    # Non-structured: stream pure natural language text token-by-token
-    accumulated = ""
-    response_usage = None
-
-    async for chunk in thinking_model.ainvoke_stream(
-      messages=thinking_messages,
-      assistant_message=assistant_msg,
-    ):
-      if chunk.content:
-        accumulated += chunk.content
-        yield chunk.content
-      if chunk.response_usage:
-        response_usage = chunk.response_usage
-
-    # Build reasoning messages
-    msg_kwargs: Dict[str, Any] = {"role": "assistant", "content": accumulated}
-    if response_usage is not None:
-      msg_kwargs["metrics"] = response_usage
-    reasoning_agent_messages = thinking_messages + [Message(**msg_kwargs)]
-
-    # No ThinkingOutput for non-structured — just free-form text
-    yield (None, accumulated or None, [], reasoning_agent_messages)
-
-  def _enable_native_thinking(self) -> None:
-    """Configure the model to use native extended thinking.
-
-    Called when thinking=True (or Thinking(...)) and the model supports it.
-    Sets the model's thinking parameter (e.g. Claude's thinking dict,
-    Gemini's thinking_budget, OpenAI's reasoning_effort).
-    """
-    assert self._thinking is not None
-    budget = self._thinking.resolve_budget_tokens()
-
-    # Claude: thinking = {"type": "enabled", "budget_tokens": N}
-    from definable.model.anthropic.claude import Claude
-
-    if isinstance(self.model, Claude):
-      if not self.model.thinking:
-        self.model.thinking = {"type": "enabled", "budget_tokens": budget}
-      return
-
-    # Gemini: thinking_budget
-    from definable.model.google.gemini import Gemini
-
-    if isinstance(self.model, Gemini):
-      if self.model.thinking_budget is None:
-        self.model.thinking_budget = budget
-      return
-
-    # OpenAI (o1/o3): reasoning_effort
-    from definable.model.openai.chat import OpenAIChat
-
-    if isinstance(self.model, OpenAIChat):
-      if self.model.reasoning_effort is None:
-        self.model.reasoning_effort = self._thinking.effort
-      return
-
-  @staticmethod
-  def _format_reasoning_context(steps: "list[ReasoningStep]") -> str:
-    """Format reasoning steps into XML context for system prompt injection."""
-    if not steps:
-      return ""
-
-    lines = ["<reasoning>"]
-    for i, step in enumerate(steps, 1):
-      lines.append(f'  <step number="{i}">')
-      if step.title:
-        lines.append(f"    <title>{step.title}</title>")
-      if step.reasoning:
-        lines.append(f"    <reasoning>{step.reasoning}</reasoning>")
-      if step.action:
-        lines.append(f"    <action>{step.action}</action>")
-      if step.confidence is not None:
-        lines.append(f"    <confidence>{step.confidence}</confidence>")
-      lines.append("  </step>")
-    lines.append("</reasoning>")
-    return "\n".join(lines)
-
-  # --- Internal Methods ---
-
-  async def _build_invoke_messages(
-    self,
-    context: RunContext,
-    messages: List[Message],
-    tools: Dict[str, Function],
-    *,
-    thinking_output: "Optional[ThinkingOutput]" = None,
-    thinking_text: Optional[str] = None,
-    reasoning_steps: "Optional[list[ReasoningStep]]" = None,
-    reasoning_messages: "Optional[list[Message]]" = None,
-  ) -> tuple:
-    """Build the invoke message list with system prompt, thinking, knowledge, memory, readers.
-
-    Args:
-        thinking_output: Pre-computed structured thinking output from ThinkPhase.
-        thinking_text: Pre-computed free-form thinking text (non-structured models).
-        reasoning_steps: Pre-computed reasoning steps from ThinkPhase.
-        reasoning_messages: Pre-computed reasoning messages from ThinkPhase.
-
-    Returns:
-        (invoke_messages, reasoning_steps, reasoning_agent_messages)
-    """
-    invoke_messages = messages.copy()
-
-    # Build system message: instructions → skills → layer guide → thinking → knowledge → memory
-    system_content = self.instructions or ""
-
-    # Append skill instructions
-    skill_instructions = self._build_skill_instructions()
-    if skill_instructions:
-      system_content = f"{system_content}\n\n{skill_instructions}" if system_content else skill_instructions
-
-    # Layer guide
-    layer_guide = self._build_layer_guide(context)
-    if layer_guide:
-      system_content = f"{system_content}\n\n{layer_guide}" if system_content else layer_guide
-
-    # Thinking phase (BEFORE knowledge/memory)
-    # If pre-computed thinking is provided (from ThinkPhase), use it directly.
-    # Otherwise, compute inline for backward compatibility.
-    reasoning_agent_messages = reasoning_messages
-    if thinking_output is None and thinking_text is None:
-      if await self._thinking_should_run(invoke_messages):
-        if self._thinking and self._thinking.should_use_native(self.model):
-          # Native thinking: configure the model, let the loop handle events.
-          # No separate call needed — the model will return reasoning_content.
-          self._enable_native_thinking()
-        else:
-          # Definable's fallback thinking layer (separate LLM call) — inline path
-          async for item in self._execute_thinking(context, invoke_messages, tools):
-            if isinstance(item, tuple):
-              thinking_output, thinking_text, reasoning_steps, reasoning_agent_messages = item
-
-    # Inject thinking results into system prompt
-    injection_source: "Union[ThinkingOutput, str, None]" = thinking_output or thinking_text
-    if injection_source:
-      effort = self._thinking.effort if self._thinking and hasattr(self._thinking, "effort") else "medium"
-      injection = self._format_thinking_injection(injection_source, effort=effort)
-      if injection:
-        system_content = f"{system_content}\n\n{injection}" if system_content else injection
-
-    # Append knowledge context
-    if context.knowledge_context:
-      position = (context.metadata or {}).get("_knowledge_position", "system")
-      if position == "system":
-        system_content = f"{system_content}\n\n{context.knowledge_context}" if system_content else context.knowledge_context
-
-    # Append research context
-    if context.research_context:
-      system_content = f"{system_content}\n\n{context.research_context}" if system_content else context.research_context
-
-    # Append memory context
-    if context.memory_context:
-      system_content = f"{system_content}\n\n{context.memory_context}" if system_content else context.memory_context
-
-    if system_content:
-      invoke_messages.insert(0, Message(role="system", content=system_content))
-
-    # Inject extracted file content into the last user message
-    if context.readers_context:
-      for i in range(len(invoke_messages) - 1, -1, -1):
-        if invoke_messages[i].role == "user":
-          original_content = invoke_messages[i].content or ""
-          invoke_messages[i] = Message(
-            role="user",
-            content=f"{context.readers_context}\n\n{original_content}",
-            images=invoke_messages[i].images,
-            videos=invoke_messages[i].videos,
-            audio=invoke_messages[i].audio,
-          )
-          break
-
-    return invoke_messages, reasoning_steps, reasoning_agent_messages
-
-  async def _execute_via_pipeline(self, state: "LoopState") -> RunOutput:
-    """Execute the full pipeline and return RunOutput.
-
-    This is the primary execution path for arun(). The pipeline
-    orchestrates all phases (prepare, recall, think, guard, compose,
-    invoke_loop, guard_output, store) and dispatches events via
-    its EventStream.
-    """
-    try:
-      async for updated_state, _event in self._pipeline.execute(
-        state,
-        cancellation_token=state.cancellation_token,
-      ):
-        state = updated_state
-      return self._state_to_run_output(state)
-
-    except AgentCancelled:
-      from definable.agent.events import RunCancelledEvent
-
-      cancelled_event = RunCancelledEvent(
-        run_id=state.run_id,
-        session_id=state.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        reason="Cancelled via CancellationToken",
-      )
-      self._emit(cancelled_event)
-      await self._event_bus.emit(cancelled_event)
-      return RunOutput(
-        run_id=state.run_id,
-        session_id=state.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        status=RunStatus.cancelled,
-        model=self.model.id,
-        model_provider=self.model.provider,
-      )
-
-  async def _execute_run(
-    self,
-    context: RunContext,
-    messages: List[Message],
-    run_input: Optional[RunInput] = None,
-    cancellation_token: Optional[CancellationToken] = None,
-  ) -> RunOutput:
-    """Core execution logic — delegates to AgentLoop."""
-    # Prepare tools with injected context
-    tools = self._prepare_tools_for_run(context)
-
-    # Emit RunStarted
-    started_event = RunStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      model=self.model.id,
-      model_provider=self.model.provider,  # type: ignore[arg-type]
-      run_input=run_input,
-    )
-    self._emit(started_event)
-    await self._event_bus.emit(started_event)
-
-    try:
-      # Build invoke messages (system prompt, thinking, knowledge, memory, readers)
-      invoke_messages, reasoning_steps, reasoning_agent_messages = await self._build_invoke_messages(context, messages, tools)
-
-      # Detect if native thinking is active
-      _native_thinking = bool(self._thinking and self._thinking.enabled and self._thinking.should_use_native(self.model))
-
-      # Create the loop
-      loop = AgentLoop(
-        model=self.model,
-        tools=tools,
-        messages=invoke_messages,
-        context=context,
-        config=self.config,
-        streaming=False,
-        native_thinking=_native_thinking,
-        cancellation_token=cancellation_token,
-        compression_manager=self._compression_manager,
-        guardrails=self.guardrails,
-        emit_fn=self._emit,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-      )
-
-      # Run the loop, collect events
-      final_content: Optional[str] = None
-      final_parsed: Any = None
-      final_metrics: Optional[Metrics] = None
-
-      async for event in loop.run():
-        await self._event_bus.emit(event)
-        self._emit(event)
-
-        if isinstance(event, RunCompletedEvent):
-          final_content = event.content
-          final_parsed = event.parsed
-          final_metrics = event.metrics
-        elif isinstance(event, RunPausedEvent):
-          # Build paused RunOutput
-          output_messages = [m for m in loop.messages if m.role != "system"]
-          return RunOutput(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            input=run_input,
-            tools=loop.tool_executions or None,
-            messages=output_messages,
-            model=self.model.id,
-            model_provider=self.model.provider,
-            status=RunStatus.paused,
-            session_state=context.session_state,
-            requirements=event.requirements,
-          )
-
-      # Build output messages (excluding system message)
-      output_messages = [m for m in loop.messages if m.role != "system"]
-
-      # Determine reasoning content: native thinking takes priority over Definable's layer
-      final_reasoning_content = loop.native_reasoning_content or (self._format_reasoning_context(reasoning_steps) if reasoning_steps else None)
-
-      return RunOutput(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        input=run_input,
-        content=final_content,
-        parsed=final_parsed,
-        tools=loop.tool_executions or None,
-        metrics=final_metrics,
-        messages=output_messages,
-        model=self.model.id,
-        model_provider=self.model.provider,
-        status=RunStatus.completed,
-        session_state=context.session_state,
-        reasoning_steps=reasoning_steps or None,
-        reasoning_messages=reasoning_agent_messages or None,
-        reasoning_content=final_reasoning_content,
-      )
-
-    except AgentCancelled:
-      from definable.agent.events import RunCancelledEvent
-
-      cancelled_event = RunCancelledEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        reason="Cancelled via CancellationToken",
-      )
-      self._emit(cancelled_event)
-      await self._event_bus.emit(cancelled_event)
-      return RunOutput(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        input=run_input,
-        status=RunStatus.cancelled,
-        model=self.model.id,
-        model_provider=self.model.provider,
-      )
-
-    except Exception as e:
-      self._emit(
-        RunErrorEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          error_type=type(e).__name__,
-          content=str(e),
-        )
-      )
-      raise
-
-  def _init_skills(self) -> None:
-    """Initialize skills: call setup(), validate names."""
-    seen_names: Dict[str, Skill] = {}
-    for skill in self.skills:
-      # Warn on duplicate skill names (last one wins for tools)
-      if skill.name in seen_names:
-        from definable.utils.log import log_warning
-
-        log_warning(f"Duplicate skill name '{skill.name}' — tools from the later skill will override earlier ones.")
-      seen_names[skill.name] = skill
-
-      # Call setup() for one-time initialization (non-fatal)
-      try:
-        skill.setup()
-        skill._initialized = True
-      except Exception as e:
-        from definable.utils.log import log_error
-
-        log_error(f"Skill '{skill.name}' setup() failed: {e}")
-
-  def _build_skill_instructions(self) -> str:
-    """Collect instructions from all skills into a merged block.
-
-    Returns:
-      A single string with all skill instructions separated by
-      blank lines, or empty string if no skills provide instructions.
-    """
-    parts: List[str] = []
-    for skill in self.skills:
-      try:
-        text = skill.get_instructions()
-      except Exception:
-        text = ""
-      if text and text.strip():
-        parts.append(text.strip())
-    return "\n\n".join(parts)
-
-  def _flatten_tools(self) -> Dict[str, Function]:
-    """
-    Flatten tools from skills, toolkits, and direct tools into a single dict.
-
-    Processing order (later entries override earlier ones):
-      1. Skill tools (lowest priority)
-      2. Toolkit tools
-      3. Direct tools (highest priority — explicit always wins)
-    """
-    result: Dict[str, Function] = {}
-
-    # 1. Process skill tools first (lowest priority)
-    for skill in self.skills:
-      try:
-        skill_tools = skill.tools
-      except Exception:
-        skill_tools = []
-      for fn in skill_tools:
-        # Merge skill dependencies into the tool
-        if skill.dependencies:
-          existing_deps = getattr(fn, "_dependencies", None) or {}
-          fn._dependencies = {**existing_deps, **skill.dependencies}
-        result[fn.name] = fn
-
-    # 2. Process toolkits (can override skill tools)
-    for toolkit in self.toolkits:
-      for fn in toolkit.tools:
-        # Merge toolkit dependencies with tool's existing dependencies
-        if toolkit.dependencies:
-          existing_deps = getattr(fn, "_dependencies", None) or {}
-          fn._dependencies = {**existing_deps, **toolkit.dependencies}
-        result[fn.name] = fn
-
-    # 3. Process direct tools (highest priority — can override anything)
-    for fn in self.tools:
-      result[fn.name] = fn
-
-    return result
-
-  def _init_tracing(self) -> Optional[TraceWriter]:
-    """Initialize trace writer using resolved tracing config."""
-    if self._tracing_config and self._tracing_config.exporters:
-      return TraceWriter(self._tracing_config)
-    return None
-
-  # --- Layer Resolvers (called once during __init__) ---
-
-  def _resolve_memory(self, memory: "Memory | bool | None") -> Optional["Memory"]:
-    """Resolve memory param to Memory | None.
-
-    Accepts:
-      - False/None → None
-      - True → Memory with SemanticStrategy + ConsolidationPolicy (smart defaults)
-      - Memory instance → pass through
-
-    When a Memory instance has no embedder, attempts to auto-resolve one
-    from the agent's model provider.
-    """
-    if memory is False or memory is None:
-      return None
-    if memory is True:
-      from definable.memory.consolidation import ConsolidationPolicy
-      from definable.memory.manager import Memory
-      from definable.memory.store.in_memory import InMemoryStore
-      from definable.memory.strategies.semantic import SemanticStrategy
-
-      return Memory(
-        store=InMemoryStore(),
-        strategy=SemanticStrategy(),
-        consolidation=ConsolidationPolicy(),
-      )
-
-    # Memory instance — pass through
-    return memory
-
-  def _resolve_memory_embedder(self) -> None:
-    """Auto-resolve memory embedder from model provider if not set."""
-    if self.memory is None or getattr(self.memory, "embedder", None) is not None:
-      return
-
-    # Only auto-resolve for Memory instances with strategies (not CortexMemory etc.)
-    if not hasattr(self.memory, "_resolve_strategy"):
-      return
-
-    from definable.memory.strategies.semantic import SemanticStrategy
-
-    strategy = self.memory._resolve_strategy()
-    if not isinstance(strategy, SemanticStrategy):
-      return
-
-    # Try to create an embedder matching the agent's model provider.
-    embedder = self._create_embedder_for_model()
-    if embedder is not None:
-      self.memory.embedder = embedder
-
-  def _create_embedder_for_model(self) -> "Any":
-    """Create an embedder matching the agent's model provider. Returns None if unavailable."""
-    # Check model class name to determine provider.
-    model_cls = type(self.model).__name__
-    try:
-      if model_cls == "OpenAIChat":
-        from definable.knowledge.embedder.openai import OpenAIEmbedder
-
-        return OpenAIEmbedder()
-      if model_cls == "Gemini":
-        from definable.knowledge.embedder.google import GoogleEmbedder
-
-        return GoogleEmbedder()
-      if model_cls == "MistralChat":
-        from definable.knowledge.embedder.mistral import MistralEmbedder
-
-        return MistralEmbedder()
-    except Exception:
-      pass
-
-    # Default: try OpenAI embedder (most commonly available).
-    try:
-      from definable.knowledge.embedder.openai import OpenAIEmbedder
-
-      return OpenAIEmbedder()
-    except Exception:
-      return None
-
-  def _resolve_knowledge(self, knowledge: "Knowledge | str | bool | None") -> Optional["Knowledge"]:
-    """Resolve knowledge param to Knowledge | None.
-
-    Accepts:
-      - False/None → None
-      - True → ValueError (ambiguous — no path to load from)
-      - str → Knowledge.from_path(path) with auto-configured RAG pipeline
-      - Knowledge instance → pass through (has agent-integration fields)
-    """
-    if knowledge is False or knowledge is None:
-      return None
-    if knowledge is True:
-      raise ValueError(
-        "knowledge=True is not supported. Pass a path string or Knowledge instance:"
-        " Agent(knowledge='./docs/') or Agent(knowledge=Knowledge(vector_db=..., top_k=5))."
-      )
-    if isinstance(knowledge, str):
-      from definable.knowledge.base import Knowledge as _Knowledge
-
-      return _Knowledge.from_path(knowledge)
-
-    # Knowledge instance — pass through directly
-    return knowledge
-
-  @staticmethod
-  def _resolve_tracing(tracing_param: "Tracing | bool | None", config: Optional[AgentConfig]) -> Optional["Tracing"]:
-    """Resolve tracing param to Tracing | None.
-
-    Accepts Tracing, bool, or None.
-    Direct param takes precedence; config.tracing is a fallback.
-    """
-    from definable.agent.tracing.base import Tracing as _Tracing
-
-    if tracing_param is False:
-      # Fall back to config.tracing if set
-      return config.tracing if config else None
-    if tracing_param is True:
-      return _Tracing()
-    if isinstance(tracing_param, _Tracing):
-      return tracing_param
-    return config.tracing if config else None
-
-  def _resolve_compression(self, compression: Union[bool, "Compression", None]) -> Optional["CompressionManager"]:
-    """Resolve compression param into a CompressionManager (or None)."""
-    from definable.agent.compression import Compression as _Compression
-
-    if compression is True:
-      return self._build_compression_manager(_Compression())
-    if isinstance(compression, _Compression):
-      return self._build_compression_manager(compression)
-    return None
-
-  def _build_compression_manager(self, compression: "Compression") -> "CompressionManager":
-    """Build a CompressionManager from a Compression config."""
-    from definable.agent.compression import CompressionManager
-
-    compression_model: Optional["Model"] = None
-    if compression.model is None:
-      compression_model = self.model
-    elif isinstance(compression.model, str):
-      from definable.model.utils import resolve_model_string
-
-      compression_model = resolve_model_string(compression.model)
-    else:
-      compression_model = compression.model
-
-    return CompressionManager(
-      model=compression_model,
-      compress_tool_results=True,
-      compress_tool_results_limit=compression.tool_results_limit,
-      compress_token_limit=compression.token_limit,
-      compress_tool_call_instructions=compression.instructions,
-      compress_single_result_size=compression.single_result_size,
-    )
-
-  def _build_initial_state(
-    self,
-    instruction: Union[str, Message, List[Message]],
-    *,
-    messages: Optional[List[Message]] = None,
-    session_id: Optional[str] = None,
-    run_id: Optional[str] = None,
-    user_id: Optional[str] = None,
-    images: Optional[List[Image]] = None,
-    videos: Optional[List[Video]] = None,
-    audio: Optional[List[Audio]] = None,
-    files: Optional[List[File]] = None,
-    output_schema: Optional[type] = None,
-    cancellation_token: Optional[CancellationToken] = None,
-    streaming: bool = False,
-  ) -> "LoopState":
-    """Build initial LoopState from arun() arguments."""
-    from definable.agent.pipeline.state import LoopState, LoopStatus
+    """Async streaming run — yields events as they occur."""
+    await self._ensure_toolkits_initialized()
 
     _run_id = run_id or str(uuid4())
     _session_id = session_id or self.session_id
-
-    new_messages = self._normalize_instruction(instruction, images, videos, audio, files)
+    new_messages = self._normalize_instruction(instruction, images)
     all_messages = (messages or []) + new_messages
+
+    await self._transcribe_audio(new_messages)
+    self._current_readers_context = await self._readers_extract(new_messages)
+    self._current_run_id = _run_id
+    self._current_session_id = _session_id
+    self._current_user_id = user_id
 
     context = RunContext(
       run_id=_run_id,
@@ -3322,202 +1156,356 @@ class Agent:
       dependencies=self.config.dependencies,
       session_state=dict(self.config.session_state or {}),
       output_schema=output_schema,
-      metadata={"_messages": all_messages},
     )
+    tools = self._prepare_tools_for_run(context)
 
-    run_input = RunInput(
-      input_content=instruction,
-      images=images,
-      videos=videos,
-      audios=audio,
-      files=files,
-    )
+    try:
+      async for event in self._run_loop(
+        all_messages,
+        tools,
+        streaming=True,
+        cancel=cancellation_token,
+        output_schema=output_schema,
+      ):
+        yield event  # type: ignore[misc]
+    except Cancelled:
+      cancelled_event = RunCancelledEvent(
+        run_id=_run_id,
+        session_id=_session_id,
+        agent_id=self.agent_id,
+        agent_name=self.agent_name,
+        reason="Cancelled via CancelToken",
+      )
+      await self._event_bus.emit(cancelled_event)
+      yield cancelled_event
+    except Exception as e:
+      error_event = RunErrorEvent(
+        run_id=_run_id,
+        session_id=_session_id,
+        agent_id=self.agent_id,
+        error_type=type(e).__name__,
+        content=str(e),
+      )
+      await self._event_bus.emit(error_event)
+      yield error_event
+      raise
 
-    return LoopState(
-      run_id=_run_id,
-      session_id=_session_id,
-      user_id=user_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      raw_instruction=instruction,
-      new_messages=new_messages,
-      all_messages=all_messages,
-      context=context,
-      config=self.config,
-      model=self.model,
-      status=LoopStatus.pending,
-      run_input=run_input,
-      streaming=streaming,
+  async def continue_run(
+    self,
+    *,
+    run_output: RunOutput,
+    cancellation_token: Optional[CancelToken] = None,
+  ) -> RunOutput:
+    """Resume a paused run after HITL requirements are resolved."""
+    if not run_output.is_paused:
+      raise ValueError("RunOutput is not paused — nothing to continue")
+    unresolved = run_output.active_requirements
+    if unresolved:
+      raise ValueError(f"{len(unresolved)} requirement(s) still unresolved.")
+
+    msgs = run_output.messages or []
+    for req in run_output.requirements or []:
+      te = req.tool_execution
+      if te is None:
+        continue
+      if req.confirmation is False:
+        msgs.append(
+          Message(
+            role="tool",
+            content=_REJECTED_MSG,
+            tool_call_id=te.tool_call_id,
+            name=te.tool_name,
+          )
+        )
+      elif req.confirmation is True:
+        fn = self._tools_dict.get(te.tool_name)  # type: ignore[arg-type]
+        if fn:
+          function_call = get_function_call_for_tool_call(
+            {"id": te.tool_call_id, "type": "function", "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})}},
+            self._tools_dict,
+          )
+          if function_call:
+            result_obj = await function_call.aexecute()
+            msgs.append(
+              Message(
+                role="tool",
+                content=str(result_obj.result) if result_obj.status == "success" else str(result_obj.error),
+                tool_call_id=te.tool_call_id,
+                name=te.tool_name,
+              )
+            )
+          else:
+            msgs.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
+        else:
+          msgs.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
+      elif req.external_execution_result is not None:
+        msgs.append(
+          Message(
+            role="tool",
+            content=req.external_execution_result,
+            tool_call_id=te.tool_call_id,
+            name=te.tool_name,
+          )
+        )
+
+    return await self.arun(
+      instruction=msgs[-1] if msgs and msgs[-1].role == "user" else "Continue.",
+      messages=msgs,
+      session_id=run_output.session_id,
       cancellation_token=cancellation_token,
     )
 
-  def _state_to_run_output(self, state: "LoopState") -> RunOutput:
-    """Convert final LoopState to RunOutput."""
-    from definable.agent.pipeline.state import LoopStatus
-
-    status_map = {
-      LoopStatus.completed: RunStatus.completed,
-      LoopStatus.paused: RunStatus.paused,
-      LoopStatus.cancelled: RunStatus.cancelled,
-      LoopStatus.blocked: RunStatus.blocked,
-      LoopStatus.error: RunStatus.error,
-    }
-
-    return RunOutput(
-      run_id=state.run_id,
-      session_id=state.session_id,
-      agent_id=state.agent_id,
-      agent_name=state.agent_name,
-      input=state.run_input,
-      content=state.content,
-      parsed=state.parsed,
-      tools=state.tool_executions or None,
-      metrics=state.metrics,
-      messages=state.output_messages,
-      model=self.model.id,
-      model_provider=self.model.provider,
-      status=status_map.get(state.status, RunStatus.completed),
-      session_state=state.context.session_state if state.context else None,
-      reasoning_steps=state.reasoning_steps or None,
-      reasoning_messages=state.reasoning_messages or None,
-      reasoning_content=state.native_reasoning_content
-      or state.thinking_text
-      or (self._format_reasoning_context(state.reasoning_steps) if state.reasoning_steps else None),
-      requirements=state.requirements,
-      phase_metrics=state.phase_metrics or None,
-    )
-
-  def _prepare_tools_for_run(self, context: RunContext) -> Dict[str, Function]:
-    """
-    Create tool copies with injected context (thread-safe).
-
-    Each run gets its own tool instances to avoid state leakage
-    between concurrent runs.
-    """
-    tools: Dict[str, Function] = {}
-    for name, fn in self._tools_dict.items():
-      # model_copy creates a new instance
-      tool_copy = fn.model_copy()
-      tool_copy._run_context = context
-      # Merge existing deps (from toolkit) with config deps
-      existing_deps = fn._dependencies or {}
-      config_deps = self.config.dependencies or {}
-      tool_copy._dependencies = {**existing_deps, **config_deps}
-      tool_copy._session_state = context.session_state
-      tools[name] = tool_copy
-
-    # Inject spawn_agent tool when sub-agent policy is configured
-    if self._sub_agent_policy:
-      from definable.agent.pipeline.sub_agent import _build_spawn_agent_function
-
-      spawn_fn = _build_spawn_agent_function(self, self._sub_agent_policy)
-      tools["spawn_agent"] = spawn_fn
-
-    return tools
-
-  def _normalize_instruction(
+  async def continue_run_stream(
     self,
-    instruction: Union[str, Message, List[Message]],
-    images: Optional[List[Image]] = None,
-    videos: Optional[List[Video]] = None,
-    audio: Optional[List[Audio]] = None,
-    files: Optional[List[File]] = None,
-  ) -> List[Message]:
-    """Normalize various input types to List[Message]."""
-    if isinstance(instruction, str):
-      return [
-        Message(
-          role="user",
-          content=instruction,
-          images=images,
-          videos=videos,
-          audio=audio,
-          files=files,
-        )
-      ]
-    elif isinstance(instruction, Message):
-      return [instruction]
-    elif isinstance(instruction, list):
-      return instruction
-    raise TypeError(f"Unexpected instruction type: {type(instruction)}")
+    *,
+    run_output: RunOutput,
+    cancellation_token: Optional[CancelToken] = None,
+  ) -> AsyncIterator[RunOutputEvent]:
+    """Streaming variant of continue_run."""
+    if not run_output.is_paused:
+      raise ValueError("RunOutput is not paused — nothing to continue")
+    unresolved = run_output.active_requirements
+    if unresolved:
+      raise ValueError(f"{len(unresolved)} requirement(s) still unresolved.")
 
-  async def _transcribe_audio(self, messages: List[Message]) -> None:
-    """Transcribe audio in messages if a transcriber is configured.
-
-    Mutates messages in-place: populates ``audio.transcript``, injects
-    the transcript text into ``message.content``, and **clears
-    ``message.audio``** so the model layer does not send ``input_audio``
-    content blocks to models that don't support them (most models only
-    accept ``text`` and ``image_url`` blocks).
-
-    When no transcriber is set (``self._audio_transcriber is None``), this
-    is a no-op — audio passes through raw for audio-capable models.
-    """
-    if self._audio_transcriber is None:
-      return
-
-    for msg in messages:
-      if not msg.audio:
+    msgs = run_output.messages or []
+    for req in run_output.requirements or []:
+      te = req.tool_execution
+      if te is None:
         continue
-      transcripts: List[str] = []
-      for audio_item in msg.audio:
-        # Skip if already transcribed
-        if audio_item.transcript:
-          transcripts.append(audio_item.transcript)
-          continue
-        audio_bytes = audio_item.get_content_bytes()
-        if audio_bytes is None:
-          continue
-        mime = audio_item.mime_type or "audio/ogg"
-        try:
-          text = await self._audio_transcriber.atranscribe(audio_bytes, mime)
-        except Exception as e:
-          from definable.utils.log import log_warning
+      if req.confirmation is False:
+        msgs.append(Message(role="tool", content=_REJECTED_MSG, tool_call_id=te.tool_call_id, name=te.tool_name))
+      elif req.confirmation is True:
+        fn = self._tools_dict.get(te.tool_name)  # type: ignore[arg-type]
+        if fn:
+          function_call = get_function_call_for_tool_call(
+            {"id": te.tool_call_id, "type": "function", "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})}},
+            self._tools_dict,
+          )
+          if function_call:
+            result_obj = await function_call.aexecute()
+            msgs.append(
+              Message(
+                role="tool",
+                content=str(result_obj.result) if result_obj.status == "success" else str(result_obj.error),
+                tool_call_id=te.tool_call_id,
+                name=te.tool_name,
+              )
+            )
+      elif req.external_execution_result is not None:
+        msgs.append(Message(role="tool", content=req.external_execution_result, tool_call_id=te.tool_call_id, name=te.tool_name))
 
-          log_warning(f"Audio transcription failed: {e}")
-          continue
-        audio_item.transcript = text
-        transcripts.append(text)
-      if transcripts:
-        transcript_text = "\n".join(transcripts)
-        if msg.content:
-          msg.content = f"{msg.content}\n\n{transcript_text}"
-        else:
-          msg.content = transcript_text
-        # Clear audio from message — the transcript is now in .content.
-        # This prevents the model from sending input_audio blocks that
-        # non-audio models (gpt-4o-mini, DeepSeek, Claude, etc.) reject.
-        msg.audio = None
+    async for event in self.arun_stream(
+      instruction=msgs[-1] if msgs and msgs[-1].role == "user" else "Continue.",
+      messages=msgs,
+      session_id=run_output.session_id,
+      cancellation_token=cancellation_token,
+    ):
+      yield event
 
-  def _emit(self, event: BaseRunOutputEvent) -> None:
-    """Emit event to trace writer (fire-and-forget)."""
-    if self._trace_writer:
-      with contextlib.suppress(Exception):
-        # Tracing should never break the main flow
-        self._trace_writer.write(event)
-
-  # --- Triggers ---
+  # ═══════════════════════════════════════════════════════════
+  # PROPERTIES
+  # ═══════════════════════════════════════════════════════════
 
   @property
-  def triggers(self) -> List["BaseTrigger"]:
-    """Registered triggers (read-only copy)."""
+  def agent_id(self) -> str:
+    return self.config.agent_id or str(id(self))
+
+  @property
+  def agent_name(self) -> str:
+    return self.config.agent_name or self.__class__.__name__
+
+  @property
+  def name(self) -> str:
+    return self.agent_name
+
+  @property
+  def tool_names(self) -> List[str]:
+    return list(self._tools_dict.keys())
+
+  @property
+  def events(self) -> EventBus:
+    return self._event_bus
+
+  @property
+  def auth(self) -> Optional[Any]:
+    return self._auth
+
+  @auth.setter
+  def auth(self, provider: Optional[Any]) -> None:
+    self._auth = provider
+
+  @property
+  def interfaces(self) -> List["BaseInterface"]:
+    """Registered interfaces (read-only copy)."""
+    return list(self._interfaces)
+
+  @property
+  def gateway(self) -> Optional["InterfaceGateway"]:
+    """Gateway instance if configured."""
+    return self._gateway
+
+  def add_interface(self, interface: "BaseInterface") -> "Agent":
+    """Legacy: attach an interface. Prefer ``interfaces=`` constructor param."""
+    import warnings
+
+    warnings.warn(
+      "agent.add_interface() is deprecated. Pass interfaces= to Agent() constructor.",
+      DeprecationWarning,
+      stacklevel=2,
+    )
+    interface.bind(self)
+    self._interfaces.append(interface)
+    return self
+
+  def create_gateway(self, **kwargs: Any) -> "InterfaceGateway":
+    """Legacy: create and attach a gateway. Prefer ``gateway=`` constructor param."""
+    import warnings
+
+    warnings.warn(
+      "agent.create_gateway() is deprecated. Pass gateway= to Agent() constructor.",
+      DeprecationWarning,
+      stacklevel=2,
+    )
+    from definable.agent.interface.gateway import InterfaceGateway as _InterfaceGateway
+
+    gw = _InterfaceGateway(**kwargs)
+    gw._bind_agent(self)
+    for iface in self._interfaces:
+      if iface not in gw._interfaces:
+        gw.add(iface)
+    self._gateway = gw
+    return gw
+
+  # ═══════════════════════════════════════════════════════════
+  # HOOKS
+  # ═══════════════════════════════════════════════════════════
+
+  def before_request(self, fn: Optional[Callable] = None) -> Callable:
+    """Register a hook that fires before every arun() call."""
+    if fn is not None:
+      self._before_hooks.append(fn)
+      return fn
+
+    def decorator(func: Callable) -> Callable:
+      self._before_hooks.append(func)
+      return func
+
+    return decorator
+
+  def after_response(self, fn: Optional[Callable] = None) -> Callable:
+    """Register a hook that fires after every arun() call."""
+    if fn is not None:
+      self._after_hooks.append(fn)
+      return fn
+
+    def decorator(func: Callable) -> Callable:
+      self._after_hooks.append(func)
+      return func
+
+    return decorator
+
+  def use(self, middleware: Any) -> "Agent":
+    """Add middleware (kept for backward compat — wraps arun)."""
+    # Middleware is no longer a first-class concept; use before_request/after_response
+    # or override methods instead. This stub prevents AttributeError.
+    return self
+
+  # ═══════════════════════════════════════════════════════════
+  # LIFECYCLE
+  # ═══════════════════════════════════════════════════════════
+
+  def __enter__(self) -> "Agent":
+    self._start()
+    return self
+
+  def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    self._shutdown()
+
+  async def __aenter__(self) -> "Agent":
+    self._start()
+    await self._ensure_toolkits_initialized()
+    return self
+
+  async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    await self._ashutdown()
+
+  def _start(self) -> None:
+    if self._started:
+      return
+    self._started = True
+
+  def _shutdown(self) -> None:
+    for skill in self.skills:
+      with contextlib.suppress(Exception):
+        skill.teardown()
+    if self._trace_writer:
+      self._trace_writer.shutdown()
+    self._sync_close_async_resources()
+    self._started = False
+
+  def _sync_close_async_resources(self) -> None:
+    async def _cleanup() -> None:
+      for toolkit in self._agent_owned_toolkits:
+        with contextlib.suppress(Exception):
+          await toolkit.shutdown()
+      self._agent_owned_toolkits.clear()
+      if self.memory:
+        with contextlib.suppress(Exception):
+          await self.memory.close()
+
+    try:
+      asyncio.get_running_loop()
+      from definable.utils.log import log_warning
+
+      log_warning(
+        "Agent._shutdown() cannot close async resources from inside a running event loop. Use 'async with Agent(...)' or await agent._ashutdown()."
+      )
+    except RuntimeError:
+      with contextlib.suppress(Exception):
+        asyncio.run(_cleanup())
+
+  async def _ashutdown(self) -> None:
+    for toolkit in self._agent_owned_toolkits:
+      with contextlib.suppress(Exception):
+        await toolkit.shutdown()
+    self._agent_owned_toolkits.clear()
+    if self.memory:
+      with contextlib.suppress(Exception):
+        await self.memory.close()
+    for skill in self.skills:
+      with contextlib.suppress(Exception):
+        skill.teardown()
+    if self._trace_writer:
+      self._trace_writer.shutdown()
+    self._started = False
+
+  async def _ensure_toolkits_initialized(self) -> None:
+    async with self._toolkit_init_lock:
+      needs_refresh = False
+      for toolkit in self.toolkits:
+        if isinstance(toolkit, AsyncLifecycleToolkit) and not toolkit._initialized:
+          try:
+            await toolkit.initialize()
+            self._agent_owned_toolkits.append(toolkit)
+            needs_refresh = True
+          except Exception as e:
+            from definable.utils.log import log_warning
+
+            log_warning(f"Toolkit {toolkit!r} init failed (non-fatal): {e}")
+      if needs_refresh:
+        self._tools_dict = self._flatten_tools()
+
+  # ═══════════════════════════════════════════════════════════
+  # TRIGGERS
+  # ═══════════════════════════════════════════════════════════
+
+  @property
+  def triggers(self) -> List[Any]:
     return list(self._triggers)
 
-  def on(self, trigger: "BaseTrigger") -> Callable:
-    """Register a trigger handler.
-
-    Can be used as a decorator::
-
-      @agent.on(Webhook("/github"))
-      async def handle_github(event):
-          ...
-
-    Args:
-      trigger: A BaseTrigger instance (Webhook, Cron, EventTrigger).
-
-    Returns:
-      Decorator that registers the handler and returns the original function.
-    """
+  def on(self, trigger: Any) -> Callable:
+    """Register a trigger handler."""
 
     def decorator(fn: Callable) -> Callable:
       trigger.handler = fn
@@ -3528,12 +1516,7 @@ class Agent:
     return decorator
 
   def emit(self, event_name: str, data: Optional[dict] = None) -> None:
-    """Fire all EventTriggers matching *event_name* (fire-and-forget).
-
-    Args:
-      event_name: Name of the event to fire.
-      data: Optional data dict to include in the TriggerEvent body.
-    """
+    """Fire all EventTriggers matching event_name."""
     from definable.agent.trigger.base import TriggerEvent
     from definable.agent.trigger.event import EventTrigger
     from definable.agent.trigger.executor import TriggerExecutor
@@ -3553,164 +1536,11 @@ class Agent:
       for trigger in matching:
         loop.create_task(executor.execute(trigger, event))
     except RuntimeError:
-      pass  # No running loop — skip
+      pass
 
-  # --- Security ---
-
-  @property
-  def security(self) -> Optional[Any]:
-    """Return the SecurityConfig, or None if not configured."""
-    return self._security
-
-  async def security_audit(self) -> Any:
-    """Run a security audit on this agent's configuration.
-
-    Returns a SecurityReport with findings and a score (0–100).
-    """
-    from definable.agent.security.audit import security_audit
-
-    return await security_audit(self)
-
-  # --- Usage Tracking ---
-
-  @property
-  def usage_tracker(self) -> Optional[Any]:
-    """Return the UsageTracker, or None if not configured."""
-    return self._usage_tracker
-
-  # --- Scheduler ---
-
-  @property
-  def scheduler(self) -> Optional[Any]:
-    """Return a Scheduler for this agent's triggers, or None if no schedulable triggers exist."""
-    from definable.agent.trigger.interval import Interval
-    from definable.agent.trigger.oneshot import OneShot
-
-    try:
-      from definable.agent.trigger.cron import Cron
-
-      schedulable_types = (Cron, Interval, OneShot)
-    except ImportError:
-      schedulable_types = (Interval, OneShot)  # type: ignore[assignment]
-
-    schedulable = [t for t in self._triggers if isinstance(t, schedulable_types)]
-    if not schedulable:
-      return None
-
-    from definable.agent.scheduler.scheduler import Scheduler
-
-    sched = Scheduler()
-    for trigger in schedulable:
-      sched.add(trigger)
-    return sched
-
-  # --- Plugins ---
-
-  @property
-  def plugin_registry(self) -> Any:
-    """Return the PluginRegistry."""
-    return self._plugin_registry
-
-  def use_plugin(self, plugin: Any) -> "Agent":
-    """Register a plugin (loaded on next arun()).
-
-    Args:
-      plugin: Plugin instance to register.
-
-    Returns:
-      Self for chaining.
-    """
-    self._plugin_registry.add(plugin)
-    self._plugins_loaded = False  # Force reload on next run
-    return self
-
-  async def remove_plugin(self, name: str) -> "Agent":
-    """Unload and remove a plugin by name.
-
-    Args:
-      name: Plugin name to remove.
-
-    Returns:
-      Self for chaining.
-    """
-    if self._plugin_registry.is_loaded(name):
-      await self._plugin_registry.unload_one(name, self)
-    self._plugin_registry.remove(name)
-    return self
-
-  # --- Interfaces ---
-
-  @property
-  def gateway(self) -> Optional["InterfaceGateway"]:
-    """Return the InterfaceGateway, or None if not created."""
-    return self._gateway
-
-  @property
-  def interfaces(self) -> List["BaseInterface"]:
-    """Read-only list of attached interfaces."""
-    return list(self._interfaces)
-
-  def create_gateway(self, **kwargs: Any) -> "InterfaceGateway":
-    """Create an InterfaceGateway for this agent.
-
-    .. deprecated::
-        Pass ``gateway=`` to the Agent constructor instead.
-
-    Migrates any already-registered interfaces into the gateway.
-    The gateway is stored on ``self._gateway`` for use by ``aserve()``
-    and ``AgentRuntime``.
-
-    Args:
-      **kwargs: Passed to ``InterfaceGateway.__init__`` (e.g. shared_sessions,
-          identity_resolver, hooks, enable_identity_linking).
-
-    Returns:
-      The newly created InterfaceGateway.
-    """
-    import warnings
-
-    warnings.warn(
-      "create_gateway() is deprecated. Pass gateway= to Agent() constructor instead.",
-      DeprecationWarning,
-      stacklevel=2,
-    )
-
-    from definable.agent.interface.gateway import InterfaceGateway
-
-    gw = InterfaceGateway(self, **kwargs)
-
-    # Migrate pre-registered interfaces
-    for iface in self._interfaces:
-      gw.add(iface)
-
-    self._gateway = gw
-    return gw
-
-  def add_interface(self, interface: "BaseInterface") -> "Agent":
-    """Register an interface with this agent.
-
-    .. deprecated::
-        Pass ``interfaces=`` to the Agent constructor instead.
-
-    Binds the interface to this agent and stores it for use with serve().
-
-    Args:
-      interface: BaseInterface instance to register.
-
-    Returns:
-      Self for method chaining.
-    """
-    import warnings
-
-    warnings.warn(
-      "add_interface() is deprecated. Pass interfaces= to Agent() constructor instead.",
-      DeprecationWarning,
-      stacklevel=2,
-    )
-
-    interface.bind(self)
-    self._interfaces.append(interface)
-    return self
+  # ═══════════════════════════════════════════════════════════
+  # SERVE
+  # ═══════════════════════════════════════════════════════════
 
   async def aserve(
     self,
@@ -3722,46 +1552,17 @@ class Agent:
     enable_server: Optional[bool] = None,
     dev: bool = False,
   ) -> None:
-    """Async entry point: start the full agent runtime.
-
-    Starts registered interfaces, webhook/cron triggers, and an HTTP
-    server in a single event loop.  Use :meth:`serve` for the sync
-    version.
-
-    Interfaces and gateway should be passed via the Agent constructor.
-    Passing them here is deprecated.
-
-    Args:
-      *interfaces: **Deprecated.** Pass ``interfaces=`` to the Agent constructor.
-      gateway: **Deprecated.** Pass ``gateway=`` to the Agent constructor.
-      name: Optional prefix for log messages (defaults to agent_name).
-      host: Host to bind the HTTP server to.
-      port: Port for the HTTP server.
-      enable_server: Force-enable/disable the HTTP server.  When *None*
-        (default), the server starts if any Webhook triggers exist.
-      dev: Enable development mode with Swagger docs and info-level logging.
-    """
+    """Start the full agent runtime."""
     import warnings
 
     if interfaces:
-      warnings.warn(
-        "Passing interfaces to aserve() is deprecated. Pass interfaces= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
+      warnings.warn("Passing interfaces to aserve() is deprecated.", DeprecationWarning, stacklevel=2)
     if gateway is not None:
-      warnings.warn(
-        "Passing gateway to aserve() is deprecated. Pass gateway= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
+      warnings.warn("Passing gateway to aserve() is deprecated.", DeprecationWarning, stacklevel=2)
 
     from definable.agent.runtime.runner import AgentRuntime
 
-    # Resolve gateway: explicit param > agent's gateway > None
     resolved_gateway = gateway or self._gateway
-
-    # Merge passed interfaces with registered ones
     all_interfaces = list(self._interfaces)
     for iface in interfaces:
       if iface.agent is None:
@@ -3769,7 +1570,6 @@ class Agent:
       if iface not in all_interfaces:
         all_interfaces.append(iface)
 
-    # Auto-create gateway for 2+ interfaces (production-grade supervision)
     if resolved_gateway is None and len(all_interfaces) >= 2:
       from definable.agent.interface.gateway import InterfaceGateway as _InterfaceGateway
 
@@ -3800,42 +1600,13 @@ class Agent:
     enable_server: Optional[bool] = None,
     dev: bool = False,
   ) -> None:
-    """Sync entry point: start the full agent runtime.
-
-    Blocking call that starts interfaces, triggers, and an HTTP server.
-    Equivalent to ``asyncio.run(agent.aserve(...))``.
-
-    Interfaces and gateway should be passed via the Agent constructor.
-    Passing them here is deprecated.
-
-    When ``dev=True``, enables hot-reload mode: the parent process
-    watches for ``.py`` file changes and automatically restarts the
-    server.  Swagger docs are available at ``/docs``.
-
-    Args:
-      *interfaces: **Deprecated.** Pass ``interfaces=`` to the Agent constructor.
-      gateway: **Deprecated.** Pass ``gateway=`` to the Agent constructor.
-      name: Optional prefix for log messages (defaults to agent_name).
-      host: Host to bind the HTTP server to.
-      port: Port for the HTTP server.
-      enable_server: Force-enable/disable the HTTP server.  When *None*
-        (default), the server starts if any Webhook triggers exist.
-      dev: Enable development mode with hot reload and Swagger docs.
-    """
+    """Sync entry point: start the full agent runtime."""
     import warnings
 
     if interfaces:
-      warnings.warn(
-        "Passing interfaces to serve() is deprecated. Pass interfaces= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
+      warnings.warn("Passing interfaces to serve() is deprecated.", DeprecationWarning, stacklevel=2)
     if gateway is not None:
-      warnings.warn(
-        "Passing gateway to serve() is deprecated. Pass gateway= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
+      warnings.warn("Passing gateway to serve() is deprecated.", DeprecationWarning, stacklevel=2)
 
     if dev:
       from definable.agent.runtime._dev import is_dev_child, run_dev_mode
@@ -3856,220 +1627,336 @@ class Agent:
       )
     )
 
-  # --- Manifest ---
+  # ═══════════════════════════════════════════════════════════
+  # INTERNAL HELPERS
+  # ═══════════════════════════════════════════════════════════
+
+  def _emit_trace(self, event: BaseRunOutputEvent) -> None:
+    """Emit event to trace writer (fire-and-forget)."""
+    if self._trace_writer:
+      with contextlib.suppress(Exception):
+        self._trace_writer.write(event)
+
+  async def _fire_before_hooks(self, context: RunContext) -> None:
+    import inspect
+
+    for hook in self._before_hooks:
+      try:
+        result = hook(context)
+        if inspect.isawaitable(result):
+          await result
+      except Exception as e:
+        from definable.utils.log import log_error
+
+        log_error(f"before_request hook {hook.__name__} failed: {e}")
+
+  async def _fire_after_hooks(self, output: RunOutput) -> None:
+    import inspect
+
+    for hook in self._after_hooks:
+      try:
+        result = hook(output)
+        if inspect.isawaitable(result):
+          await result
+      except Exception as e:
+        from definable.utils.log import log_error
+
+        log_error(f"after_response hook {hook.__name__} failed: {e}")
+
+  def _normalize_instruction(
+    self,
+    instruction: Union[str, Message, List[Message]],
+    images: Optional[List[Image]] = None,
+    videos: Optional[List[Video]] = None,
+    audio: Optional[List[Audio]] = None,
+    files: Optional[List[File]] = None,
+  ) -> List[Message]:
+    if isinstance(instruction, str):
+      return [Message(role="user", content=instruction, images=images, videos=videos, audio=audio, files=files)]
+    elif isinstance(instruction, Message):
+      return [instruction]
+    elif isinstance(instruction, list):
+      return instruction
+    raise TypeError(f"Unexpected instruction type: {type(instruction)}")
+
+  async def _transcribe_audio(self, messages: List[Message]) -> None:
+    if self._audio_transcriber is None:
+      return
+    for msg in messages:
+      if not msg.audio:
+        continue
+      transcripts: List[str] = []
+      for audio_item in msg.audio:
+        if audio_item.transcript:
+          transcripts.append(audio_item.transcript)
+          continue
+        audio_bytes = audio_item.get_content_bytes()
+        if audio_bytes is None:
+          continue
+        mime = audio_item.mime_type or "audio/ogg"
+        try:
+          text = await self._audio_transcriber.atranscribe(audio_bytes, mime)
+        except Exception:
+          continue
+        audio_item.transcript = text
+        transcripts.append(text)
+      if transcripts:
+        transcript_text = "\n".join(transcripts)
+        if msg.content:
+          msg.content = f"{msg.content}\n\n{transcript_text}"
+        else:
+          msg.content = transcript_text
+        msg.audio = None
+
+  async def _readers_extract(self, new_messages: List[Message]) -> Optional[str]:
+    """Extract text from files in new_messages."""
+    if not self.readers:
+      return None
+    file_items: List[File] = []
+    for msg in new_messages:
+      if msg.files:
+        file_items.extend(msg.files)
+    if not file_items:
+      return None
+    try:
+      results = await self.readers.aread_all(file_items)
+    except Exception:
+      return None
+    blocks: List[str] = []
+    for result in results:
+      if result.error or not result.content:
+        continue
+      mime_attr = f' type="{result.mime_type}"' if result.mime_type else ""
+      blocks.append(f'<file name="{result.filename}"{mime_attr}>\n{result.content}\n</file>')
+    if blocks:
+      return "<file_contents>\n" + "\n".join(blocks) + "\n</file_contents>"
+    return None
+
+  def _flatten_tools(self) -> Dict[str, Function]:
+    """Flatten tools from skills, toolkits, and direct tools."""
+    result: Dict[str, Function] = {}
+    for skill in self.skills:
+      try:
+        skill_tools = skill.tools
+      except Exception:
+        skill_tools = []
+      for fn in skill_tools:
+        if skill.dependencies:
+          existing_deps = getattr(fn, "_dependencies", None) or {}
+          fn._dependencies = {**existing_deps, **skill.dependencies}
+        result[fn.name] = fn
+    for toolkit in self.toolkits:
+      for fn in toolkit.tools:
+        if toolkit.dependencies:
+          existing_deps = getattr(fn, "_dependencies", None) or {}
+          fn._dependencies = {**existing_deps, **toolkit.dependencies}
+        result[fn.name] = fn
+    for fn in self.tools:
+      result[fn.name] = fn
+    return result
+
+  def _init_skills(self) -> None:
+    seen_names: Dict[str, Skill] = {}
+    for skill in self.skills:
+      if skill.name in seen_names:
+        from definable.utils.log import log_warning
+
+        log_warning(f"Duplicate skill name '{skill.name}'")
+      seen_names[skill.name] = skill
+      try:
+        skill.setup()
+        skill._initialized = True
+      except Exception as e:
+        from definable.utils.log import log_error
+
+        log_error(f"Skill '{skill.name}' setup() failed: {e}")
+
+  def _init_tracing(self) -> Optional[TraceWriter]:
+    if self._tracing_config and self._tracing_config.exporters:
+      return TraceWriter(self._tracing_config)
+    return None
+
+  def _prepare_tools_for_run(self, context: RunContext) -> Dict[str, Function]:
+    tools: Dict[str, Function] = {}
+    for name, fn in self._tools_dict.items():
+      tool_copy = fn.model_copy()
+      tool_copy._run_context = context
+      existing_deps = fn._dependencies or {}
+      config_deps = self.config.dependencies or {}
+      tool_copy._dependencies = {**existing_deps, **config_deps}
+      tool_copy._session_state = context.session_state
+      tools[name] = tool_copy
+
+    # Inject memory tools when v2 Memory is configured
+    if self.memory and hasattr(self.memory, "get_tools"):
+      user_id = context.user_id
+      session_id = context.session_id
+      for tool_fn in self.memory.get_tools(user_id, session_id):
+        tc = tool_fn.model_copy()
+        tc._run_context = context
+        tc._session_state = context.session_state
+        tools[tc.name] = tc
+
+    return tools
+
+  @staticmethod
+  def _build_tools_dicts(tools: Dict[str, Function]) -> Optional[List[Dict]]:
+    if not tools:
+      return None
+    return [{"type": "function", "function": fn.to_dict()} for fn in tools.values()]
+
+  @staticmethod
+  def _try_parse_output(content: str, output_schema: type) -> Any:
+    try:
+      parsed_data = json.loads(content)
+      if isinstance(output_schema, type) and issubclass(output_schema, BaseModel):
+        return output_schema.model_validate(parsed_data)
+    except Exception:
+      pass
+    return None
+
+  async def _resolve_tool_result(self, result: Any, fn_name: str, tool_call_id: Optional[str]) -> str:
+    """Consume a tool result, handling async/sync generators."""
+    from inspect import isasyncgen, isgenerator
+
+    if isasyncgen(result):
+      chunks: list[str] = []
+      idx = 0
+      async for chunk in result:
+        chunk_str = str(chunk)
+        chunks.append(chunk_str)
+        evt = ToolContentEvent(
+          run_id=self._current_run_id,
+          session_id=self._current_session_id,
+          agent_id=self.agent_id,
+          agent_name=self.agent_name,
+          tool_name=fn_name,
+          tool_call_id=tool_call_id,
+          chunk=chunk_str,
+          chunk_index=idx,
+        )
+        await self._event_bus.emit(evt)
+        idx += 1
+      return "".join(chunks)
+    elif isgenerator(result):
+      chunks = []
+      idx = 0
+      for chunk in result:
+        chunk_str = str(chunk)
+        chunks.append(chunk_str)
+        idx += 1
+      return "".join(chunks)
+    return str(result)
+
+  def _resolve_memory(self, memory: Any) -> Any:
+    if memory is False or memory is None:
+      return None
+    if memory is True:
+      from definable.memory.v2 import Memory as MemoryV2
+      from definable.memory.v2 import SQLiteStore
+
+      return MemoryV2(store=SQLiteStore(".definable/memory.db"))
+    return memory
+
+  def _resolve_knowledge(self, knowledge: Any) -> Optional["Knowledge"]:
+    if knowledge is False or knowledge is None:
+      return None
+    if knowledge is True:
+      raise ValueError("knowledge=True is not supported. Pass a path string or Knowledge instance.")
+    if isinstance(knowledge, str):
+      from definable.knowledge.base import Knowledge as _Knowledge
+
+      return _Knowledge.from_path(knowledge)
+    return knowledge
+
+  @staticmethod
+  def _resolve_tracing(tracing_param: Any, config: Optional[AgentConfig]) -> Optional["Tracing"]:
+    from definable.agent.tracing.base import Tracing as _Tracing
+
+    if tracing_param is False:
+      return config.tracing if config else None
+    if tracing_param is True:
+      return _Tracing()
+    if isinstance(tracing_param, _Tracing):
+      return tracing_param
+    return config.tracing if config else None
+
+  def _resolve_compression(self, compression: Any) -> Optional["CompressionManager"]:
+    from definable.agent.compression import Compression as _Compression
+
+    if compression is True:
+      return self._build_compression_manager(_Compression())
+    if isinstance(compression, _Compression):
+      return self._build_compression_manager(compression)
+    return None
+
+  def _build_compression_manager(self, compression: "Compression") -> "CompressionManager":
+    from definable.agent.compression import CompressionManager
+
+    compression_model = self.model
+    if compression.model is not None:
+      if isinstance(compression.model, str):
+        from definable.model.utils import resolve_model_string
+
+        compression_model = resolve_model_string(compression.model)
+      else:
+        compression_model = compression.model
+
+    return CompressionManager(
+      model=compression_model,
+      compress_tool_results=True,
+      compress_tool_results_limit=compression.tool_results_limit,
+      compress_token_limit=compression.token_limit,
+      compress_tool_call_instructions=compression.instructions,
+      compress_single_result_size=compression.single_result_size,
+    )
+
+  @staticmethod
+  def _init_readers(readers: Any) -> Optional["BaseReader"]:
+    if readers is None or readers is False:
+      return None
+    if readers is True:
+      from definable.reader import BaseReader
+
+      return BaseReader()
+    from definable.reader.parsers.base_parser import BaseParser
+
+    if isinstance(readers, BaseParser):
+      from definable.reader import BaseReader
+      from definable.reader.registry import ParserRegistry
+
+      registry = ParserRegistry(include_defaults=False)
+      registry.register(readers)
+      return BaseReader(registry=registry)
+    return readers
 
   def export_manifest(self) -> Dict[str, Any]:
-    """Export agent configuration as a manifest for platform deployment.
-
-    Returns a dictionary with agent name, model, tools, and instruction
-    summary — used by Definable Cloud's platform dashboard and packager.
-
-    Returns:
-      Dict with agent metadata.
-    """
+    """Export agent configuration as a manifest."""
     return {
-      "agent_name": self.agent_name,
-      "agent_id": self.agent_id,
+      "name": self.agent_name,
       "model": self.model.id if self.model else None,
-      "tools": [{"name": t.name, "description": t.description} for t in self.tools],
-      "instructions_summary": (self.instructions[:200] + "...") if self.instructions and len(self.instructions) > 200 else self.instructions,
-      "has_memory": self.memory is not None,
-      "has_knowledge": self._knowledge is not None,
+      "tools": [fn.to_dict() for fn in self._tools_dict.values()],
+      "instructions": self.instructions,
     }
 
-  # --- Replay & Compare ---
 
-  def replay(
-    self,
-    *,
-    run_output: Optional[RunOutput] = None,
-    trace_file: Optional[Union[str, "Path"]] = None,
-    run_id: Optional[str] = None,
-    events: Optional[List[BaseRunOutputEvent]] = None,
-    model: Optional["Model"] = None,
-    instructions: Optional[str] = None,
-    tools: Optional[List[Function]] = None,
-  ) -> Union["Replay", RunOutput]:
-    """Load a past run for inspection, or re-execute with overrides.
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    Provide exactly one source: run_output, trace_file, run_id, or events.
-    If override args (model, instructions, tools) are also given, the
-    original input is re-executed live and a RunOutput is returned.
 
-    Args:
-      run_output: A RunOutput from a previous agent.run() call.
-      trace_file: Path to a JSONL trace file.
-      run_id: Run ID to find in the agent's configured trace directory.
-      events: Pre-loaded list of trace events.
-      model: Override model for re-execution.
-      instructions: Override instructions for re-execution.
-      tools: Override tools for re-execution.
-
-    Returns:
-      Replay for inspection, or RunOutput if re-executing.
-    """
-    try:
-      loop = asyncio.get_running_loop()
-    except RuntimeError:
-      loop = None
-
-    if loop and loop.is_running():
-      import concurrent.futures
-
-      with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(
-          asyncio.run,
-          self.areplay(
-            run_output=run_output,
-            trace_file=trace_file,
-            run_id=run_id,
-            events=events,
-            model=model,
-            instructions=instructions,
-            tools=tools,
-          ),
-        )
-        return future.result()
-    else:
-      new_loop = asyncio.new_event_loop()
-      asyncio.set_event_loop(new_loop)
-      try:
-        return new_loop.run_until_complete(
-          self.areplay(
-            run_output=run_output,
-            trace_file=trace_file,
-            run_id=run_id,
-            events=events,
-            model=model,
-            instructions=instructions,
-            tools=tools,
-          )
-        )
-      finally:
-        try:
-          pending = asyncio.all_tasks(new_loop)
-          for task in pending:
-            task.cancel()
-          if pending:
-            new_loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-          new_loop.run_until_complete(new_loop.shutdown_asyncgens())
-          if hasattr(new_loop, "shutdown_default_executor"):
-            new_loop.run_until_complete(new_loop.shutdown_default_executor())
-        except Exception:
-          pass
-        finally:
-          new_loop.close()
-
-  async def areplay(
-    self,
-    *,
-    run_output: Optional[RunOutput] = None,
-    trace_file: Optional[Union[str, "Path"]] = None,
-    run_id: Optional[str] = None,
-    events: Optional[List[BaseRunOutputEvent]] = None,
-    model: Optional["Model"] = None,
-    instructions: Optional[str] = None,
-    tools: Optional[List[Function]] = None,
-  ) -> Union["Replay", RunOutput]:
-    """Async version of replay(). See replay() for documentation."""
-    from pathlib import Path as _Path
-
-    from definable.agent.replay import Replay
-
-    # Build Replay from the provided source
-    replay: Optional[Replay] = None
-
-    if run_output is not None:
-      replay = Replay.from_run_output(run_output)
-    elif events is not None:
-      replay = Replay.from_events(events, run_id=run_id)
-    elif trace_file is not None:
-      replay = Replay.from_trace_file(_Path(trace_file), run_id=run_id)
-    elif run_id is not None:
-      # Auto-discover trace file from configured trace dir
-      replay = self._replay_from_trace_dir(run_id)
-    else:
-      raise ValueError("Provide one of: run_output, trace_file, run_id, or events")
-
-    # If no overrides, return the Replay for inspection
-    has_overrides = model is not None or instructions is not None or tools is not None
-    if not has_overrides:
-      return replay
-
-    # Re-execute: extract original input and run with overrides
-    original_input = replay.input
-    if original_input is None:
-      raise ValueError("Cannot re-execute: original run input not available in the replay source")
-
-    # Create a new agent with overrides applied
-    re_agent = Agent(
-      model=model or self.model,
-      tools=tools if tools is not None else self.tools,
-      toolkits=self.toolkits,
-      skills=self.skills,
-      instructions=instructions if instructions is not None else self.instructions,
-      config=self.config,
-    )
-
-    input_content = original_input.input_content
-
-    return await re_agent.arun(
-      input_content,
-      images=list(original_input.images) if original_input.images else None,
-      videos=list(original_input.videos) if original_input.videos else None,
-      audio=list(original_input.audios) if original_input.audios else None,
-      files=list(original_input.files) if original_input.files else None,
-    )
-
-  def _replay_from_trace_dir(self, run_id: str) -> "Replay":
-    """Find a run_id in the agent's configured trace directory."""
-    from definable.agent.replay import Replay
-
-    if not (self.config.tracing and self.config.tracing.exporters):
-      raise ValueError("No tracing configured on this agent; cannot auto-discover trace files. Provide trace_file= instead.")
-
-    from definable.agent.tracing.jsonl import JSONLExporter
-
-    for exporter in self.config.tracing.exporters:
-      if isinstance(exporter, JSONLExporter):
-        trace_dir = exporter.trace_dir
-        # Scan JSONL files for the run_id
-        for jsonl_path in sorted(trace_dir.glob("*.jsonl")):
-          # Quick check: scan file text for run_id before full parse
-          try:
-            text = jsonl_path.read_text(encoding="utf-8")
-          except OSError:
-            continue
-          if run_id not in text:
-            continue
-          # Full parse
-          replay = Replay.from_trace_file(jsonl_path, run_id=run_id)
-          if replay.run_id == run_id:
-            return replay
-
-    raise ValueError(f"Run ID {run_id!r} not found in any trace file")
-
-  def compare(
-    self,
-    a: Union["Replay", RunOutput],
-    b: Union["Replay", RunOutput],
-  ) -> "ReplayComparison":
-    """Compare two runs side-by-side.
-
-    Args:
-      a: First run (Replay or RunOutput).
-      b: Second run (Replay or RunOutput).
-
-    Returns:
-      ReplayComparison with diffs for content, cost, tokens, and tool calls.
-    """
-    from definable.agent.replay.compare import compare_runs
-
-    return compare_runs(a, b)
-
-  def __repr__(self) -> str:
-    parts = [f"model={self.model.id!r}", f"tools={len(self._tools_dict)}"]
-    if self.skills:
-      parts.append(f"skills={len(self.skills)}")
-    parts.append(f"name={self.agent_name!r}")
-    return f"Agent({', '.join(parts)})"
+def _merge_tool_call_deltas(accumulated: list[dict], new_deltas: list[dict]) -> list[dict]:
+  """Merge streaming tool call deltas into accumulated list."""
+  for delta in new_deltas:
+    idx = delta.get("index", len(accumulated))
+    while len(accumulated) <= idx:
+      accumulated.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+    entry = accumulated[idx]
+    if delta.get("id"):
+      entry["id"] = delta["id"]
+    fn_delta = delta.get("function", {})
+    if fn_delta.get("name"):
+      entry["function"]["name"] += fn_delta["name"]
+    if fn_delta.get("arguments"):
+      entry["function"]["arguments"] += fn_delta["arguments"]
+  return accumulated

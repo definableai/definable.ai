@@ -160,6 +160,34 @@ class TestToolExecutionHITLFields:
     te = ToolExecution()
     assert te.external_execution_required is None
 
+  def test_external_execution_silent_default_none(self):
+    te = ToolExecution()
+    assert te.external_execution_silent is None
+
+  def test_external_execution_silent_stored(self):
+    te = ToolExecution(external_execution_silent=True)
+    assert te.external_execution_silent is True
+
+  def test_approval_type_default_none(self):
+    te = ToolExecution()
+    assert te.approval_type is None
+
+  def test_approval_type_required_stored(self):
+    te = ToolExecution(approval_type="required")
+    assert te.approval_type == "required"
+
+  def test_approval_type_audit_stored(self):
+    te = ToolExecution(approval_type="audit")
+    assert te.approval_type == "audit"
+
+  def test_approval_id_default_none(self):
+    te = ToolExecution()
+    assert te.approval_id is None
+
+  def test_approval_id_stored(self):
+    te = ToolExecution(approval_id="approval-xyz-123")
+    assert te.approval_id == "approval-xyz-123"
+
 
 # ---------------------------------------------------------------------------
 # ToolExecution: is_paused property
@@ -234,6 +262,17 @@ class TestToolExecutionToDict:
     assert "metrics" in d
     assert d["metrics"]["input_tokens"] == 5
 
+  def test_approval_fields_serialized(self):
+    te = ToolExecution(
+      approval_type="audit",
+      approval_id="audit-456",
+      external_execution_silent=False,
+    )
+    d = te.to_dict()
+    assert d["approval_type"] == "audit"
+    assert d["approval_id"] == "audit-456"
+    assert d["external_execution_silent"] is False
+
 
 # ---------------------------------------------------------------------------
 # ToolExecution: from_dict() round-trip
@@ -275,6 +314,18 @@ class TestToolExecutionFromDict:
     assert restored.requires_confirmation is True
     assert restored.confirmed is False
     assert restored.confirmation_note == "Pending"
+
+  def test_preserves_approval_fields(self):
+    original = ToolExecution(
+      approval_type="required",
+      approval_id="approval-abc-789",
+      external_execution_silent=True,
+    )
+    d = original.to_dict()
+    restored = ToolExecution.from_dict(d)
+    assert restored.approval_type == "required"
+    assert restored.approval_id == "approval-abc-789"
+    assert restored.external_execution_silent is True
 
   def test_from_dict_with_empty_dict(self):
     restored = ToolExecution.from_dict({})

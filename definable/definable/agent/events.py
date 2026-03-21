@@ -1,13 +1,10 @@
-"""
-Definable Events — All agent run event types in one place.
+"""Definable Events — All agent run event types in one place.
 
 Usage:
     from definable.agent.events import RunContentEvent, ToolCallStartedEvent, RunCompletedEvent
-    from definable.agent.events import BrowserActionEvent
 """
 
 from definable.agent.run.base import BaseRunOutputEvent, RunContext, RunStatus
-from definable.browser.events import BrowserActionEvent
 from definable.agent.run.agent import (
   BaseAgentRunEvent,
   CompressionCompletedEvent,
@@ -31,8 +28,6 @@ from definable.agent.run.agent import (
   OutputModelResponseStartedEvent,
   ParserModelResponseCompletedEvent,
   ParserModelResponseStartedEvent,
-  PhaseCompletedEvent,
-  PhaseStartedEvent,
   PostHookCompletedEvent,
   PostHookStartedEvent,
   PreHookCompletedEvent,
@@ -55,38 +50,10 @@ from definable.agent.run.agent import (
   RunStartedEvent,
   SessionSummaryCompletedEvent,
   SessionSummaryStartedEvent,
-  SubAgentCompletedEvent,
-  SubAgentFailedEvent,
-  SubAgentKilledEvent,
-  SubAgentSpawnedEvent,
   ToolCallCompletedEvent,
   ToolCallErrorEvent,
   ToolCallStartedEvent,
   ToolContentEvent,
-)
-
-from definable.agent.team.events import (
-  MemberCompletedEvent,
-  MemberDelegatedEvent,
-  MemberErrorEvent,
-  MemberRoutedEvent,
-  TaskCreatedEvent,
-  TaskIterationEvent,
-  TaskStatusChangedEvent,
-  TeamRunCompletedEvent,
-  TeamRunErrorEvent,
-  TeamRunStartedEvent,
-)
-
-from definable.agent.workflow.events import (
-  LoopIterationEvent as WorkflowLoopIterationEvent,
-  StepCompletedEvent as WorkflowStepCompletedEvent,
-  StepErrorEvent as WorkflowStepErrorEvent,
-  StepSkippedEvent as WorkflowStepSkippedEvent,
-  StepStartedEvent as WorkflowStepStartedEvent,
-  WorkflowRunCompletedEvent,
-  WorkflowRunErrorEvent,
-  WorkflowRunStartedEvent,
 )
 
 __all__ = [
@@ -151,52 +118,24 @@ __all__ = [
   "ParserModelResponseCompletedEvent",
   "OutputModelResponseStartedEvent",
   "OutputModelResponseCompletedEvent",
-  # Pipeline phases
-  "PhaseStartedEvent",
-  "PhaseCompletedEvent",
-  # Sub-agent
-  "SubAgentSpawnedEvent",
-  "SubAgentCompletedEvent",
-  "SubAgentFailedEvent",
-  "SubAgentKilledEvent",
   # Compression
   "CompressionStartedEvent",
   "CompressionCompletedEvent",
   # Custom
   "CustomEvent",
-  # Browser
-  "BrowserActionEvent",
-  # Desktop bridge (lazy-loaded via __getattr__ to avoid circular import)
+  # Desktop bridge (lazy-loaded)
   "BridgeCallEvent",  # noqa: F822
   "DesktopActionEvent",  # noqa: F822
-  # Team
-  "TeamRunStartedEvent",
-  "TeamRunCompletedEvent",
-  "TeamRunErrorEvent",
-  "MemberDelegatedEvent",
-  "MemberCompletedEvent",
-  "MemberErrorEvent",
-  "MemberRoutedEvent",
-  "TaskCreatedEvent",
-  "TaskStatusChangedEvent",
-  "TaskIterationEvent",
-  # Workflow
-  "WorkflowRunStartedEvent",
-  "WorkflowRunCompletedEvent",
-  "WorkflowRunErrorEvent",
-  "WorkflowStepStartedEvent",
-  "WorkflowStepCompletedEvent",
-  "WorkflowStepErrorEvent",
-  "WorkflowStepSkippedEvent",
-  "WorkflowLoopIterationEvent",
+  # Browser
+  "BrowserActionEvent",  # noqa: F822
 ]
 
 
-# Lazy imports to avoid circular dependency:
-# agent/events → agent/interface/desktop/events → agent/interface/__init__ → agent/events
+# Lazy imports for optional event types
 _LAZY_IMPORTS = {
   "BridgeCallEvent": "definable.agent.interface.desktop.events",
   "DesktopActionEvent": "definable.agent.interface.desktop.events",
+  "BrowserActionEvent": "definable.browser.events",
 }
 
 

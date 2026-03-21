@@ -1,6 +1,6 @@
 # Definable Examples
 
-This directory contains runnable code examples demonstrating all major features of the Definable library.
+Runnable code examples demonstrating all major features of the Definable library.
 
 ## Setup
 
@@ -9,140 +9,118 @@ This directory contains runnable code examples demonstrating all major features 
    pip install definable
    ```
 
-2. Set your API keys as environment variables:
+2. Set your API keys:
    ```bash
    export OPENAI_API_KEY=sk-...
-   export DEEPSEEK_API_KEY=sk-...       # Optional: for DeepSeek examples
-   export MOONSHOT_API_KEY=sk-...       # Optional: for Moonshot examples
-   export XAI_API_KEY=...               # Optional: for xAI/Grok examples
+   export DEEPSEEK_API_KEY=sk-...       # Optional: for DeepSeek
+   export MOONSHOT_API_KEY=sk-...       # Optional: for Moonshot
+   export XAI_API_KEY=...               # Optional: for xAI/Grok
    export VOYAGE_API_KEY=pa-...         # Optional: for VoyageAI embeddings
    export COHERE_API_KEY=...            # Optional: for Cohere reranking
    ```
 
 3. Run any example:
    ```bash
-   python examples/models/01_basic_invoke.py
+   python examples/agents/01_simple_agent.py
    ```
 
 ## Directory Structure
 
 ```
 examples/
-├── models/                    # LLM model invocation
-│   ├── 01_basic_invoke.py     # Sync invocation
-│   ├── 02_async_invoke.py     # Async invocation
-│   ├── 03_streaming.py        # Streaming responses
-│   ├── 04_structured_output.py# Pydantic response models
-│   ├── 05_multi_provider.py   # OpenAI, DeepSeek, Moonshot, xAI
-│   └── 06_vision_and_audio.py # Multimodal inputs
+├── agents/                     # Agent framework (start here)
+│   ├── 01_simple_agent.py      # Basic agent setup + config
+│   ├── 02_agent_with_tools.py  # @tool decorator
+│   ├── 03_agent_with_toolkit.py# Custom Toolkit class
+│   ├── 04_multi_turn.py        # Conversation sessions
+│   ├── 05_streaming_agent.py   # run_stream() usage
+│   ├── 06_async_agent.py       # arun() and arun_stream()
+│   ├── 07_tracing.py           # JSONLExporter for debugging
+│   └── 08_error_handling.py    # Retry logic and exceptions
 │
-├── agents/                    # Agent framework
-│   ├── 01_simple_agent.py     # Basic agent setup
-│   ├── 02_agent_with_tools.py # Agent using @tool decorator
-│   ├── 03_agent_with_toolkit.py # Custom Toolkit class
-│   ├── 04_multi_turn.py       # Conversation sessions
-│   ├── 05_streaming_agent.py  # run_stream() usage
-│   ├── 06_async_agent.py      # arun() and arun_stream()
-│   └── 07_thinking_agent.py   # Thinking layer with reasoning steps
+├── models/                     # LLM model invocation
+│   ├── 01_basic_invoke.py      # Sync invocation
+│   ├── 02_async_invoke.py      # Async + parallel requests
+│   ├── 03_streaming.py         # Streaming responses
+│   ├── 04_structured_output.py # Pydantic response models
+│   ├── 05_multi_provider.py    # OpenAI, DeepSeek, Moonshot, xAI
+│   └── 06_vision_and_audio.py  # Image + audio inputs
 │
-├── tools/                     # Tool definitions
-│   ├── 01_basic_tool.py       # Simple @tool decorator
-│   ├── 02_tool_parameters.py  # Complex parameter types
-│   ├── 03_async_tools.py      # Async tool functions
-│   ├── 04_tool_hooks.py       # pre_hook and post_hook
-│   ├── 05_tool_caching.py     # cache_results and cache_ttl
-│   └── 06_tool_dependencies.py# Injected dependencies
+├── tools/                      # Tool definitions
+│   ├── 01_tool_parameters.py   # Complex parameter types
+│   ├── 02_async_tools.py       # Async tool functions
+│   ├── 03_tool_hooks.py        # pre_hook and post_hook
+│   ├── 04_tool_caching.py      # cache_results and cache_ttl
+│   └── 05_tool_dependencies.py # Injected dependencies via Toolkit
 │
-├── toolkits/                  # Toolkit classes
-│   ├── 01_custom_toolkit.py   # Building a Toolkit class
-│   ├── 02_toolkit_dependencies.py # Shared dependencies
-│   └── 03_knowledge_toolkit.py# KnowledgeToolkit usage
+├── knowledge/                  # RAG and knowledge bases
+│   ├── 01_basic_rag.py         # Setup, add docs, search
+│   ├── 02_chunking_strategies.py# TextChunker vs RecursiveChunker
+│   ├── 03_custom_embedder.py   # OpenAI, VoyageAI, custom embedders
+│   ├── 04_agent_with_knowledge.py# Agent + Knowledge integration
+│   └── 05_reranking.py         # CohereReranker usage
 │
-├── knowledge/                 # RAG and knowledge bases
-│   ├── 01_basic_rag.py        # Simple RAG setup
-│   ├── 02_document_management.py # Adding/removing documents
-│   ├── 03_chunking_strategies.py # TextChunker vs RecursiveChunker
-│   ├── 04_custom_embedder.py  # OpenAI and VoyageAI embedders
-│   ├── 05_vector_databases.py # InMemory vs PgVector
-│   ├── 06_agent_with_knowledge.py # Knowledge integration
-│   └── 07_reranking.py        # CohereReranker usage
+├── memory/                     # Session-history memory
+│   ├── 01_basic_memory.py      # Agent with persistent SQLite memory
+│   ├── 02_stores.py            # MemoryStore protocol + backend smoke test
+│   └── 03_cortex_memory.py     # CortexMemory (next-gen memory)
 │
-├── memory/                    # Session-history memory
-│   ├── 01_basic_memory.py     # Agent with persistent memory
-│   ├── 02_store_protocol.py   # MemoryStore protocol walkthrough (no deps)
-│   └── 03_store_backends.py   # Smoke-test all store backends
+├── mcp/                        # Model Context Protocol
+│   ├── 01_basic_mcp.py         # MCP server connection + agent
+│   ├── 02_resources.py         # MCP resources and prompts
+│   └── 03_error_handling.py    # Error handling patterns
 │
-├── runtime/                   # Agent-centric runtime
-│   ├── 01_webhook_basic.py    # Webhook trigger + agent.serve()
-│   ├── 02_cron_basic.py       # Cron trigger + agent.serve()
-│   └── 03_unified.py         # Interface + webhook + cron + auth + hooks
+├── skills/                     # Skills and skill registry
+│   ├── 01_markdown_skills.py   # SkillRegistry eager/lazy/auto modes
+│   ├── 02_coding_agent_skills.py# Programmatic MarkdownSkill creation
+│   ├── 03_macos.py             # macOS Desktop skill
+│   └── 04_library_skill_discovery.py# Full library inventory + on-demand mode
 │
-├── interfaces/                # Messaging interfaces
-│   ├── 01_discord_bot.py      # Discord bot interface
-│   ├── 02_multi_interface.py  # Multiple interfaces on one agent
-│   ├── 03_desktop_control_via_telegram.py  # Desktop control via Telegram
-│   └── 04_gateway_telegram.py # InterfaceGateway with Telegram
+├── interfaces/                 # Messaging interfaces
+│   ├── 01_discord_bot.py       # Discord bot interface
+│   ├── 02_multi_interface.py   # Telegram + Discord on one agent
+│   ├── 03_desktop_control_via_telegram.py
+│   └── 04_gateway_telegram.py  # InterfaceGateway + identity linking
 │
-├── readers/                   # File reading and parsing
-│   ├── 01_basic_readers.py    # Read common file formats
-│   ├── 02_custom_reader.py    # Custom parser implementation
-│   ├── 03_standalone_usage.py # Readers without an agent
-│   ├── 04_provider_override.py# Override format detection
-│   ├── 05_mistral_ocr.py     # Mistral OCR provider
-│   └── 06_multimodal_agent.py # Agent with reader integration
+├── readers/                    # File reading and parsing
+│   ├── 01_basic_readers.py     # Read common file formats
+│   ├── 02_custom_reader.py     # Custom parser implementation
+│   ├── 03_standalone_usage.py  # Readers without an agent
+│   ├── 04_provider_override.py # Override format detection
+│   ├── 05_mistral_ocr.py       # Mistral OCR provider
+│   └── 06_multimodal_agent.py  # Agent with files + images + audio
 │
-├── auth/                      # Authentication
-│   └── 01_unified_auth.py     # APIKeyAuth, AllowlistAuth, CompositeAuth
+├── runtime/                    # Agent-centric runtime
+│   ├── 01_webhook_basic.py     # Webhook trigger
+│   ├── 02_cron_basic.py        # Cron trigger
+│   └── 03_unified.py           # Interfaces + webhooks + cron + auth
 │
-├── guardrails/                # Content policy and safety
-│   ├── 01_basic_guardrails.py # Built-in guardrails with Agent
-│   └── 02_custom_guardrails.py# Custom + composable guardrails
+├── observability/              # Dashboard and metrics
+│   ├── 01_basic_dashboard.py   # observability=True one-liner
+│   └── 02_custom_config.py     # Custom ObservabilityConfig
 │
-├── skills/                    # Skills and skill registry
-│   ├── 01_markdown_skills.py  # SkillRegistry eager/lazy/auto modes
-│   └── 02_macos_basic.py      # macOS Desktop skill
+├── call/                       # Voice call interfaces
+│   ├── 01_managed_voice_agent.py# Twilio ConversationRelay
+│   ├── 02_cascading_pipeline.py # Deepgram STT + Cartesia TTS
+│   ├── 03_realtime_pipeline.py  # OpenAI Realtime API
+│   └── 04_plivo_cascading.py    # Plivo provider
 │
-├── replay/                    # Run inspection and comparison
-│   └── 01_basic_replay.py     # Replay inspection + compare_runs
+├── claude_code/                # Claude Code model
+│   ├── 01_basic.py             # ClaudeCodeAgent basics
+│   ├── 02_full_features.py     # Memory + knowledge + guardrails
+│   ├── 03_coding_agent.py      # Full coding assistant
+│   └── 04_chatbot_full_stack.py# Agent with ClaudeCode as model
 │
-├── research/                  # Deep research
-│   ├── 01_basic_research.py   # Standalone DeepResearch usage
-│   └── 02_agent_with_research.py # Agent with deep_research enabled
+├── slack/                      # Slack integration
+│   ├── 01_slack_bot.py         # Socket Mode bot
+│   ├── 02_slack_webhook.py     # HTTP Events API
+│   └── 03_slack_with_tools.py  # Tools + memory
 │
-├── mcp/                       # Model Context Protocol
-│   ├── 01_basic_mcp.py        # Basic MCP server connection
-│   ├── 02_multiple_servers.py # Multiple MCP servers
-│   ├── 03_resources.py        # MCP resource access
-│   ├── 04_config_file.py      # Config file-based setup
-│   ├── 05_mock_server_basics.py # Mock server for testing
-│   ├── 06_prompts_provider.py # MCP prompts provider
-│   ├── 07_error_handling.py   # Error handling patterns
-│   └── 08_mock_server_agent.py# Mock server with agent integration
-│
-└── advanced/                  # Advanced features
-    ├── 01_middleware.py       # Custom middleware
-    ├── 02_tracing.py          # JSONLExporter for debugging
-    ├── 03_error_handling.py   # Retry logic and exceptions
-    ├── 04_cost_tracking.py    # Metrics and pricing
-    ├── 05_pipeline_customization.py  # Pipeline phases and hooks
-    └── 06_all_features.py     # All features combined
+└── whatsapp/                   # WhatsApp integration
+    └── 01_basic_agent.py       # Baileys (QR-based) setup
 ```
 
-## Quick Start Examples
-
-### Basic Model Invocation
-
-```python
-from definable.model.openai import OpenAIChat
-from definable.model.message import Message
-
-model = OpenAIChat(id="gpt-4o-mini")
-response = model.invoke(
-  messages=[Message(role="user", content="Hello!")],
-  assistant_message=Message(role="assistant", content=""),
-)
-print(response.content)
-```
+## Quick Start
 
 ### Basic Agent with Tools
 
@@ -158,8 +136,7 @@ def add(a: int, b: int) -> int:
   return a + b
 
 
-model = OpenAIChat(id="gpt-4o-mini")
-agent = Agent(model=model, tools=[add])
+agent = Agent(model=OpenAIChat(id="gpt-4o-mini"), tools=[add])
 output = agent.run("What is 5 + 3?")
 print(output.content)
 ```
@@ -173,28 +150,17 @@ from definable.knowledge import Document, Knowledge
 from definable.vectordb import InMemoryVectorDB
 from definable.model.openai import OpenAIChat
 
-# Setup knowledge base
-kb = Knowledge(
-  vector_db=InMemoryVectorDB(),
-  embedder=VoyageAIEmbedder(),
-  top_k=3,
-)
-kb.add(Document(content="Company policy: Employees get 20 days PTO per year."))
+kb = Knowledge(vector_db=InMemoryVectorDB(), embedder=VoyageAIEmbedder(), top_k=3)
+kb.add(Document(content="Employees get 20 days PTO per year."))
 
-# Create agent with automatic RAG
-agent = Agent(
-  model=OpenAIChat(id="gpt-4o-mini"),
-  instructions="You are a helpful HR assistant.",
-  knowledge=kb,
-)
-
+agent = Agent(model=OpenAIChat(id="gpt-4o-mini"), knowledge=kb)
 output = agent.run("How many vacation days do I get?")
 print(output.content)
 ```
 
 ## Notes
 
-- Each example is self-contained and can be run independently
+- Each example is self-contained and runnable independently
 - Examples use environment variables for API keys (never hardcode secrets)
-- Some examples require specific API keys (noted in each file)
-- Knowledge examples can work without API keys using pre-computed embeddings
+- Knowledge/memory examples can work without API keys using mock embedders
+- Interface/call/slack/whatsapp examples require respective service credentials

@@ -113,6 +113,7 @@ class Gemini(Model):
   # Client parameters
   credentials: Optional[Credentials] = None
   api_key: Optional[str] = None
+  timeout: Optional[float] = None  # Request timeout in seconds (converted to ms for gRPC)
   vertexai: bool = False
   project_id: Optional[str] = None
   location: Optional[str] = None
@@ -158,6 +159,11 @@ class Gemini(Model):
       if self.credentials:
         client_params["credentials"] = self.credentials
 
+    if self.timeout is not None:
+      from google.genai.types import HttpOptions
+
+      client_params["http_options"] = HttpOptions(timeout=int(self.timeout * 1000))
+
     client_params = {k: v for k, v in client_params.items() if v is not None}
 
     if self.client_params:
@@ -191,6 +197,7 @@ class Gemini(Model):
       "thinking_budget": self.thinking_budget,
       "include_thoughts": self.include_thoughts,
       "thinking_level": self.thinking_level,
+      "timeout": self.timeout,
       "vertexai": self.vertexai,
       "project_id": self.project_id,
       "location": self.location,

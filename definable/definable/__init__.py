@@ -32,10 +32,7 @@ Lego Blocks:
 Agent-scoped:
     from definable.agent import Agent, AgentConfig
     from definable.agent.tracing import Tracing, JSONLExporter
-    from definable.agent.guardrail import Guardrails
     from definable.agent.interface import TelegramInterface
-    from definable.agent.reasoning import Thinking
-    from definable.agent.research import DeepResearch
 
 Events:
     from definable.agent.events import RunContentEvent, ToolCallStartedEvent, RunCompletedEvent
@@ -55,7 +52,6 @@ from definable.agent.config import (
   AgentConfig,
   ReadersConfig,
 )
-from definable.agent.research.config import DeepResearchConfig
 from definable.agent.toolkit import Toolkit
 from definable.skill.base import Skill
 from definable.tool.decorator import tool
@@ -67,8 +63,6 @@ from definable.exceptions import AgentRunException, RetryAgentRun, StopAgentRun
 
 
 if TYPE_CHECKING:
-  from definable.agent.guardrail import Guardrails
-  from definable.agent.reasoning import Thinking
   from definable.agent.tracing import Tracing
   from definable.knowledge import Document, Knowledge
   from definable.composio import ComposioToolkit
@@ -116,20 +110,12 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   # Knowledge
   "Knowledge": ("definable.knowledge", "Knowledge"),
   "Document": ("definable.knowledge", "Document"),
-  # Guardrails
-  "Guardrails": ("definable.agent.guardrail", "Guardrails"),
   # Skills
   "SkillRegistry": ("definable.skill.registry", "SkillRegistry"),
   # Claude Code
   "ClaudeCodeAgent": ("definable.claude_code", "ClaudeCodeAgent"),
   # New blocks
-  "Thinking": ("definable.agent.reasoning", "Thinking"),
   "Tracing": ("definable.agent.tracing", "Tracing"),
-  # Pipeline
-  "Pipeline": ("definable.agent.pipeline", "Pipeline"),
-  "ToolRetry": ("definable.agent.pipeline", "ToolRetry"),
-  "DebugConfig": ("definable.agent.pipeline", "DebugConfig"),
-  "SubAgentPolicy": ("definable.agent.pipeline", "SubAgentPolicy"),
   # Audio transcription
   "OpenAITranscriber": ("definable.reader.audio", "OpenAITranscriber"),
   # Observability
@@ -154,7 +140,6 @@ __all__ = [
   "AgentConfig",
   "Compression",
   "ReadersConfig",
-  "DeepResearchConfig",
   "Toolkit",
   "Skill",
   # Tools
@@ -195,14 +180,11 @@ __all__ = [
   # Lazy — Knowledge
   "Knowledge",
   "Document",
-  # Lazy — Guardrails
-  "Guardrails",
   # Lazy — Skills
   "SkillRegistry",
   # Lazy — Claude Code
   "ClaudeCodeAgent",
   # Lazy — New blocks
-  "Thinking",
   "Tracing",
   # Lazy — Audio
   "OpenAITranscriber",
