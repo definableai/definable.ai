@@ -116,6 +116,8 @@ class LoopState:
   phase_metrics: List[PhaseMetric] = field(default_factory=list)
 
   # ── Extra state for phases ────────────────────────────────
+  context_stats: Optional[Dict[str, Any]] = None
+
   extra: Dict[str, Any] = field(default_factory=dict)
 
   # ── Output messages (post-loop, excludes system) ──────────

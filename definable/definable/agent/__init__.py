@@ -46,6 +46,7 @@ from definable.agent.agent import Agent
 from definable.agent.cancellation import AgentCancelled, CancellationToken
 from definable.agent.compression import Compression
 from definable.agent.config import AgentConfig, ReadersConfig
+from definable.agent.context import Context, TokenBudget
 from definable.agent.event_bus import EventBus
 from definable.agent.research.config import DeepResearchConfig
 from definable.agent.middleware import (
@@ -196,6 +197,8 @@ __all__ = [
   "EventBus",
   "Tracing",
   "Compression",
+  "Context",
+  "TokenBudget",
   "ReadersConfig",
   "DeepResearchConfig",
   "ObservabilityConfig",

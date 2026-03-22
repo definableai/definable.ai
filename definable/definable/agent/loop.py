@@ -104,6 +104,7 @@ class AgentLoop:
     emit_fn: Callable[[BaseRunOutputEvent], None],
     agent_id: str,
     agent_name: str,
+    deferred_tool_manager: Optional[Any] = None,
   ) -> None:
     self._model = model
     self._tools = tools
@@ -119,6 +120,7 @@ class AgentLoop:
     self._emit_fn = emit_fn
     self._agent_id = agent_id
     self._agent_name = agent_name
+    self._deferred_tool_manager = deferred_tool_manager
 
     # Precompute tool dicts for model API (OpenAI format)
     self._tools_dicts: Optional[list[dict]] = [{"type": "function", "function": t.to_dict()} for t in tools.values()] if tools else None
@@ -371,7 +373,14 @@ class AgentLoop:
           )
           return  # Caller must use continue_run()
 
-        # 9. Append tool results to messages (already done in _execute_tools)
+        # 9. Deferred tools: if load_tools was called, refresh the tool set
+        if self._deferred_tool_manager is not None:
+          refreshed = self._deferred_tool_manager.get_active_tools()
+          if len(refreshed) != len(self._tools):
+            self._tools = refreshed
+            self._tools_dicts = [{"type": "function", "function": t.to_dict()} for t in refreshed.values()]
+
+        # 10. Append tool results to messages (already done in _execute_tools)
         # Loop continues
 
       # Yield RunCompleted with final content
