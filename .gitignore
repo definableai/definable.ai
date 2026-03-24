@@ -183,13 +183,20 @@ definable_runs.db
 *pgadmin*
 servers.json
 
-# Claude Code agents
-.claude/memory/credentials.md
-.claude/settings.local.json
-.claude/reports/
-.claude/server/.env
+# Claude Code
+.claude/
 .workspace/
 .env.test
+
+# Definable workspace
+.definable/
+
+# Sandbox (ephemeral experiments)
+sandbox/
+
+# Outreach (non-code assets)
+linkedin-outreach/
+outreach/
 
 # Agent team (ephemeral pipeline state)
 .agents/queue/task.md
