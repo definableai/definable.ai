@@ -179,6 +179,7 @@ class TestLoadToolsExecution:
     loader = mgr.get_loader_tool()
 
     # The model calls load_tools(names=["search", "write_file"])
+    assert loader.entrypoint is not None
     result = loader.entrypoint(names=["search", "write_file"])
     assert "Loaded: search, write_file" in result
 
@@ -191,6 +192,7 @@ class TestLoadToolsExecution:
     mgr = DeferredToolManager(_make_tools())
     loader = mgr.get_loader_tool()
 
+    assert loader.entrypoint is not None
     result = loader.entrypoint(names=["search", "nonexistent_tool"])
     assert "Loaded: search" in result
     assert "Not found: nonexistent_tool" in result
@@ -199,6 +201,7 @@ class TestLoadToolsExecution:
     mgr = DeferredToolManager(_make_tools())
     loader = mgr.get_loader_tool()
 
+    assert loader.entrypoint is not None
     result = loader.entrypoint(names=[])
     assert "No tools specified" in result
 
@@ -207,6 +210,7 @@ class TestLoadToolsExecution:
     mgr = DeferredToolManager(_make_tools())
     loader = mgr.get_loader_tool()
 
+    assert loader.entrypoint is not None
     result = loader.entrypoint(names=["load_tools", "search"])
     assert "Loaded: search" in result
     # load_tools should not appear as "loaded" — it's always available

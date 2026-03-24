@@ -56,29 +56,29 @@ class TestGetContextWindow:
 
     mock = MockModel()
     mock.id = "gpt-4o"
-    assert get_context_window(mock) == 128_000
+    assert get_context_window(mock) == 128_000  # type: ignore[arg-type]
 
   def test_known_model_prefix_match(self):
     from definable.agent.testing import MockModel
 
     mock = MockModel()
     mock.id = "gpt-4o-2024-08-06"
-    assert get_context_window(mock) == 128_000
+    assert get_context_window(mock) == 128_000  # type: ignore[arg-type]
 
   def test_explicit_context_window_takes_priority(self):
     from definable.agent.testing import MockModel
 
     mock = MockModel()
     mock.id = "gpt-4o"
-    mock.context_window = 256_000
-    assert get_context_window(mock) == 256_000
+    mock.context_window = 256_000  # type: ignore[attr-defined]
+    assert get_context_window(mock) == 256_000  # type: ignore[arg-type]
 
   def test_unknown_model_returns_none(self):
     from definable.agent.testing import MockModel
 
     mock = MockModel()
     mock.id = "some-unknown-model-xyz"
-    assert get_context_window(mock) is None
+    assert get_context_window(mock) is None  # type: ignore[arg-type]
 
   def test_claude_models_in_lookup(self):
     assert "claude-sonnet-4-5-20250929" in MODEL_CONTEXT_WINDOWS
@@ -99,7 +99,7 @@ class TestResolveAllocation:
     mock = MockModel()
     mock.id = "gpt-4o"
     budget = TokenBudget()  # No explicit context_window
-    alloc = resolve_allocation(budget, model=mock)
+    alloc = resolve_allocation(budget, model=mock)  # type: ignore[arg-type]
     assert alloc is not None
     assert alloc.context_window == 128_000
 
@@ -109,7 +109,7 @@ class TestResolveAllocation:
     mock = MockModel()
     mock.id = "unknown-model"
     budget = TokenBudget()
-    alloc = resolve_allocation(budget, model=mock)
+    alloc = resolve_allocation(budget, model=mock)  # type: ignore[arg-type]
     assert alloc is None
 
   def test_non_budget_object_returns_none(self):
