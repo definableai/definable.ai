@@ -171,7 +171,7 @@ class SQLiteStore(MemoryStore):
       sql = """
         SELECT mi.id, mi.user_id, mi.summary, mi.category, mi.tags, mi.created_at, mi.session_id
         FROM memory_index mi
-        JOIN memory_fts ON mi.rowid = memory_fts.rowid
+        JOIN memory_fts ON mi.id = memory_fts.id
         WHERE memory_fts MATCH ? AND mi.user_id = ?
       """
       params: list = [fts_query, user_id]

@@ -582,6 +582,7 @@ class BaileysProvider(WhatsAppProvider):
         log_info("[whatsapp:baileys] WebSocket reconnected successfully")
 
         # Wait for fresh ready/connected status
+        self._ready_event.clear()
         try:
           await asyncio.wait_for(self._ready_event.wait(), timeout=10.0)
         except asyncio.TimeoutError:
