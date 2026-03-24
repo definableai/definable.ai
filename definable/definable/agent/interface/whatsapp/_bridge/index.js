@@ -9,7 +9,7 @@
  *   node index.js --port=PORT --auth-dir=./auth [--heartbeat=60] [--verbose]
  */
 
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import { makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore, DisconnectReason, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 import { WebSocketServer } from "ws";
 import { writeFileSync, copyFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -58,6 +58,13 @@ let selfJid = null;
 let heartbeatTimer = null;
 let watchdogTimer = null;
 
+// Credential save queue — ensures sequential saves, prevents corruption
+let credSavePromise = Promise.resolve();
+
+// Baileys message retry counter (LRU-bounded)
+const msgRetryCounterCache = new Map();
+const MSG_RETRY_CACHE_MAX = 1000;
+
 /** @type {Map<string, { resolve: Function, reject: Function }>} */
 const pendingCommands = new Map();
 
@@ -67,13 +74,18 @@ const pendingCommands = new Map();
 
 function send(data) {
   if (wsClient && wsClient.readyState === 1) {
-    wsClient.send(JSON.stringify(data));
+    try {
+      const payload = JSON.stringify(data);
+      wsClient.send(payload);
+    } catch (err) {
+      console.error(`[bridge] Failed to send WebSocket frame: ${err.message}`);
+    }
   }
 }
 
 function startWsServer() {
   return new Promise((resolve) => {
-    const wss = new WebSocketServer({ port: PORT, host: "127.0.0.1" }, () => {
+    const wss = new WebSocketServer({ port: PORT, host: "127.0.0.1", maxPayload: 50 * 1024 * 1024 }, () => {
       const addr = wss.address();
       const actualPort = typeof addr === "object" ? addr.port : PORT;
       // Print port on stdout so Python can read it
@@ -191,6 +203,16 @@ async function handleCommand(msg) {
           await sock.logout();
         }
         send({ type: "logout_result", id, success: true });
+        break;
+      }
+      case "check_on_whatsapp": {
+        const result = await handleCheckOnWhatsApp(msg);
+        send({ type: "check_on_whatsapp_result", id, ...result });
+        break;
+      }
+      case "save_contact": {
+        const result = await handleSaveContact(msg);
+        send({ type: "save_contact_result", id, ...result });
         break;
       }
       case "shutdown": {
@@ -311,6 +333,70 @@ async function handleSendReaction(msg) {
 }
 
 // --------------------------------------------------------------------------- //
+// Contact validation & management                                              //
+// --------------------------------------------------------------------------- //
+
+async function handleCheckOnWhatsApp(msg) {
+  if (!sock) return { success: false, error: "Not connected" };
+
+  const phones = msg.phones; // Array of E.164 strings, e.g. ["+919810464995"]
+  if (!phones || !Array.isArray(phones) || phones.length === 0) {
+    return { success: false, error: "phones array is required" };
+  }
+
+  try {
+    // Baileys accepts JIDs or bare numbers with country code
+    const results = await sock.onWhatsApp(...phones);
+    const checked = (results || []).map((r) => ({
+      jid: r.jid || null,
+      exists: !!r.exists,
+    }));
+    if (VERBOSE) console.error(`[bridge] Checked ${phones.length} numbers: ${checked.filter((r) => r.exists).length} on WhatsApp`);
+    return { success: true, results: checked };
+  } catch (err) {
+    console.error(`[bridge] Check on WhatsApp failed: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+async function handleSaveContact(msg) {
+  if (!sock) return { success: false, error: "Not connected" };
+
+  const jid = msg.jid; // e.g. "919810464995@s.whatsapp.net"
+  const name = msg.name; // e.g. "Dr Sanjeev Chawla"
+  if (!jid || !name) {
+    return { success: false, error: "jid and name are required" };
+  }
+
+  try {
+    await sock.addOrEditContact(jid, { fullName: name });
+    if (VERBOSE) console.error(`[bridge] Saved contact: ${redactPhone(jid)} as "${name}"`);
+    return { success: true };
+  } catch (err) {
+    console.error(`[bridge] Save contact failed: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
+// --------------------------------------------------------------------------- //
+// Credential save queue — prevents concurrent writes that corrupt creds.json   //
+// --------------------------------------------------------------------------- //
+
+function queueCredSave(saveCreds) {
+  credSavePromise = credSavePromise
+    .then(async () => {
+      const credsPath = join(AUTH_DIR, "creds.json");
+      if (existsSync(credsPath)) {
+        try { copyFileSync(credsPath, credsPath + ".bak"); } catch {}
+      }
+      await saveCreds();
+    })
+    .catch((err) => {
+      console.error(`[bridge] Credential save failed: ${err.message}`);
+    });
+}
+
+// --------------------------------------------------------------------------- //
 // Baileys socket                                                               //
 // --------------------------------------------------------------------------- //
 
@@ -318,31 +404,42 @@ async function startBaileys() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
 
+  // Wrap signal key store with caching layer to reduce I/O
+  let authState = state;
+  try {
+    authState = {
+      ...state,
+      keys: makeCacheableSignalKeyStore(state.keys, logger),
+    };
+  } catch {
+    // Fallback to raw state if caching fails (older Baileys versions)
+  }
+
   sock = makeWASocket({
     version,
-    auth: state,
+    auth: authState,
     logger,
     generateHighQualityLinkPreview: false,
     syncFullHistory: false,
+    // Message retry counter with bounded cache
+    msgRetryCounterCache,
+    // Reduce memory: don't cache messages we've already forwarded
+    shouldIgnoreJid: (jid) => isGroupJid(jid) && false, // keep groups for now
+    markOnlineOnConnect: false,
+    // Browser identification
+    browser: ["Definable", "Chrome", "22.0"],
   });
 
-  // --- Auth state save (queued to prevent races) ---
-  let saveQueued = false;
-  const queueSave = async () => {
-    if (saveQueued) return;
-    saveQueued = true;
-    try {
-      // Backup creds before save
-      const credsPath = join(AUTH_DIR, "creds.json");
-      if (existsSync(credsPath)) {
-        try { copyFileSync(credsPath, credsPath + ".bak"); } catch {}
-      }
-      await saveCreds();
-    } finally {
-      saveQueued = false;
+  // Prune retry cache to prevent unbounded growth
+  if (msgRetryCounterCache.size > MSG_RETRY_CACHE_MAX) {
+    const keysToDelete = [...msgRetryCounterCache.keys()].slice(0, msgRetryCounterCache.size - MSG_RETRY_CACHE_MAX);
+    for (const key of keysToDelete) {
+      msgRetryCounterCache.delete(key);
     }
-  };
-  sock.ev.on("creds.update", queueSave);
+  }
+
+  // --- Auth state save (properly queued) ---
+  sock.ev.on("creds.update", () => queueCredSave(saveCreds));
 
   // --- Connection state ---
   sock.ev.on("connection.update", (update) => {
@@ -441,29 +538,42 @@ async function startBaileys() {
       const senderJid = isGroup ? (msg.key.participant || "") : chatJid;
       const senderPhone = phoneFromJid(senderJid) || normalizeE164(senderJid.split("@")[0] || "") || "";
 
-      // Extract text
+      // Extract text — check all known message wrapper types
       let body = "";
       const m = msg.message;
-      if (m.conversation) body = m.conversation;
-      else if (m.extendedTextMessage?.text) body = m.extendedTextMessage.text;
-      else if (m.imageMessage?.caption) body = m.imageMessage.caption;
-      else if (m.videoMessage?.caption) body = m.videoMessage.caption;
-      else if (m.documentMessage?.caption) body = m.documentMessage.caption;
+      // viewOnceMessageV2 and ephemeralMessage wrappers
+      const inner = m.viewOnceMessageV2?.message || m.ephemeralMessage?.message || m;
+      if (inner.conversation) body = inner.conversation;
+      else if (inner.extendedTextMessage?.text) body = inner.extendedTextMessage.text;
+      else if (inner.imageMessage?.caption) body = inner.imageMessage.caption;
+      else if (inner.videoMessage?.caption) body = inner.videoMessage.caption;
+      else if (inner.documentMessage?.caption) body = inner.documentMessage.caption;
+      else if (inner.buttonsResponseMessage?.selectedButtonId) body = inner.buttonsResponseMessage.selectedButtonId;
+      else if (inner.listResponseMessage?.singleSelectReply?.selectedRowId) body = inner.listResponseMessage.singleSelectReply.selectedRowId;
+      else if (inner.templateButtonReplyMessage?.selectedId) body = inner.templateButtonReplyMessage.selectedId;
 
       // Extract media
       let media = null;
+      let mediaError = null;
       if (hasMedia(msg)) {
         media = await downloadAndEncode(msg);
+        if (!media) {
+          mediaError = "Media download failed (expired key or network error)";
+        }
       }
 
       // Extract reply context
-      const quotedMsg = m.extendedTextMessage?.contextInfo?.quotedMessage;
-      const quotedStanza = m.extendedTextMessage?.contextInfo?.stanzaId;
-      const quotedParticipant = m.extendedTextMessage?.contextInfo?.participant;
+      const quotedCtx = inner.extendedTextMessage?.contextInfo
+        || inner.imageMessage?.contextInfo
+        || inner.videoMessage?.contextInfo
+        || inner.documentMessage?.contextInfo;
+      const quotedMsg = quotedCtx?.quotedMessage;
+      const quotedStanza = quotedCtx?.stanzaId;
+      const quotedParticipant = quotedCtx?.participant;
 
       // Group context
       const groupSubject = null; // Would need groupMetadata call
-      const mentionedJids = m.extendedTextMessage?.contextInfo?.mentionedJid || null;
+      const mentionedJids = quotedCtx?.mentionedJid || null;
 
       const event = {
         type: "message",
@@ -484,8 +594,9 @@ async function startBaileys() {
         mentioned_jids: mentionedJids,
         was_mentioned: mentionedJids ? mentionedJids.includes(selfJid) : false,
         media,
-        location: m.locationMessage
-          ? { latitude: m.locationMessage.degreesLatitude, longitude: m.locationMessage.degreesLongitude }
+        media_error: mediaError,
+        location: inner.locationMessage
+          ? { latitude: inner.locationMessage.degreesLatitude, longitude: inner.locationMessage.degreesLongitude }
           : null,
       };
 
@@ -553,6 +664,19 @@ process.on("SIGINT", () => {
   clearInterval(heartbeatTimer);
   clearInterval(watchdogTimer);
   setTimeout(() => process.exit(0), 1000);
+});
+
+// Handle uncaught errors to prevent silent crashes
+process.on("uncaughtException", (err) => {
+  console.error(`[bridge] Uncaught exception: ${err.message}`);
+  console.error(err.stack);
+  send({ type: "error", code: "UNCAUGHT_EXCEPTION", message: err.message });
+});
+
+process.on("unhandledRejection", (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  console.error(`[bridge] Unhandled rejection: ${message}`);
+  send({ type: "error", code: "UNHANDLED_REJECTION", message });
 });
 
 main().catch((err) => {

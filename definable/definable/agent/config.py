@@ -119,7 +119,7 @@ class AgentConfig:
 
   # Execution settings
   max_iterations: int = 10  # Max tool call loops before stopping
-  max_tool_rounds: int = 30  # Max agent loop iterations (tool-call rounds) before forced stop
+  max_tool_rounds: int = 500  # Max agent loop iterations (tool-call rounds) before forced stop
   max_tokens: Optional[int] = None  # Optional token limit per run
   stream_timeout_seconds: float = 300.0  # Timeout for run_stream in seconds
 

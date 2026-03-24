@@ -466,6 +466,7 @@ class Claude(Model):
     system_message: str,
     tools: Optional[List[Dict[str, Any]]] = None,
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
+    system_blocks: Optional[List[Dict[str, Any]]] = None,
   ) -> Dict[str, Any]:
     """
     Prepare the request keyword arguments for the API call.
@@ -481,6 +482,9 @@ class Claude(Model):
         request_kwargs["system"] = [{"text": system_message, "type": "text", "cache_control": cache_control}]
       else:
         request_kwargs["system"] = [{"text": system_message, "type": "text"}]
+    # Context engine cache optimization: pre-split static/dynamic blocks
+    if system_blocks:
+      request_kwargs["system"] = system_blocks
 
     # Add code execution tool if skills are enabled
     if self.skills:
@@ -503,6 +507,21 @@ class Claude(Model):
       log_debug(f"Calling {self.provider} with request parameters: {request_kwargs}", log_level=2)
     return request_kwargs
 
+  @staticmethod
+  def _extract_cache_blocks(messages: List[Message]) -> Optional[List[Dict[str, Any]]]:
+    """Extract pre-structured cache blocks from system messages.
+
+    If any system message carries ``_cache_blocks`` (set by the context
+    engine's cache optimization), return those blocks for direct use in
+    the API request.
+    """
+    for msg in messages:
+      if msg.role == "system" and hasattr(msg, "_cache_blocks"):
+        blocks = getattr(msg, "_cache_blocks", None)
+        if blocks:
+          return blocks  # type: ignore[return-value]
+    return None
+
   def invoke(
     self,
     messages: List[Message],
@@ -521,7 +540,8 @@ class Claude(Model):
         run_response.metrics.set_time_to_first_token()
 
       chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results)
-      request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format)
+      _cache_blocks = self._extract_cache_blocks(messages)
+      request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format, system_blocks=_cache_blocks)
 
       if self._has_beta_features(response_format=response_format, tools=tools):
         assistant_message.metrics.start_timer()
@@ -571,7 +591,8 @@ class Claude(Model):
     Stream a response from the Anthropic API.
     """
     chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results)
-    request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format)
+    _cache_blocks = self._extract_cache_blocks(messages)
+    request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format, system_blocks=_cache_blocks)
 
     try:
       if run_response and run_response.metrics:

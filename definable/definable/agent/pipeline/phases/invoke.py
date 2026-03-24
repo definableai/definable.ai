@@ -56,10 +56,16 @@ class InvokeLoopPhase(BasePhase):
     # Detect if native thinking is active
     _native_thinking = bool(self._agent._thinking and self._agent._thinking.enabled and self._agent._thinking.should_use_native(self._agent.model))
 
+    # Deferred tools: swap full tool set with just load_tools + any loaded tools
+    _loop_tools = state.tools
+    _deferred = self._agent._deferred_tool_manager
+    if _deferred is not None:
+      _loop_tools = _deferred.get_active_tools()
+
     # Create the loop — streaming and cancellation come from state
     loop = AgentLoop(
       model=state.model,
-      tools=state.tools,
+      tools=_loop_tools,
       messages=state.invoke_messages,
       context=state.context,
       config=state.config or self._agent.config,
@@ -71,6 +77,7 @@ class InvokeLoopPhase(BasePhase):
       emit_fn=self._agent._emit,
       agent_id=state.agent_id,
       agent_name=state.agent_name,
+      deferred_tool_manager=_deferred,
     )
 
     # Use unified run() — streaming is controlled by state.streaming

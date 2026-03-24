@@ -110,6 +110,9 @@ class Model(ABC):
   provider: Optional[str] = None
   # Provider-specific client instance. Subclasses override with their client type.
   client: Any = None
+  # Optional context window size (max input + output tokens).
+  # Used by token budget allocation. Auto-detected from a lookup table if not set.
+  context_window: Optional[int] = None
 
   # -*- Do not set the following attributes directly -*-
   # -*- Set them on the Agent instead -*-

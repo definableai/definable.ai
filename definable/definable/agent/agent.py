@@ -66,6 +66,9 @@ if TYPE_CHECKING:
 
   from definable.agent.auth.base import AuthProvider
   from definable.agent.compression import Compression, CompressionManager
+  from definable.agent.context import Context
+  from definable.agent.context.deferred import DeferredToolManager
+  from definable.agent.context.manager import ContextManager
   from definable.agent.observability.config import ObservabilityConfig
   from definable.agent.guardrail.base import Guardrails
   from definable.agent.interface.base import BaseInterface
@@ -168,6 +171,7 @@ class Agent:
     knowledge: Union["Knowledge", str, bool, None] = False,
     thinking: Union[bool, "Thinking", None] = None,
     compression: Union[bool, "Compression", None] = None,
+    context: Union[bool, "Context", None] = None,
     deep_research: Union[bool, "DeepResearchConfig", "DeepResearch", None] = None,
     # ── Tools ───────────────────────────────────────────────
     tools: Optional[List[Function]] = None,
@@ -424,6 +428,8 @@ class Agent:
     self._tools_dict: Dict[str, Function] = self._flatten_tools()
     self._trace_writer: Optional[TraceWriter] = self._init_tracing()
     self._compression_manager: Optional["CompressionManager"] = self._resolve_compression(compression)
+    self._context_manager: Optional["ContextManager"] = self._resolve_context(context)
+    self._deferred_tool_manager: Optional["DeferredToolManager"] = self._resolve_deferred_tools()
     self._middleware: List[Middleware] = []
     self._interfaces: List["BaseInterface"] = []
     self._gateway: Optional["InterfaceGateway"] = None
@@ -2805,25 +2811,11 @@ class Agent:
     Returns:
         (invoke_messages, reasoning_steps, reasoning_agent_messages)
     """
-    invoke_messages = messages.copy()
-
-    # Build system message: instructions → skills → layer guide → thinking → knowledge → memory
-    system_content = self.instructions or ""
-
-    # Append skill instructions
-    skill_instructions = self._build_skill_instructions()
-    if skill_instructions:
-      system_content = f"{system_content}\n\n{skill_instructions}" if system_content else skill_instructions
-
-    # Layer guide
-    layer_guide = self._build_layer_guide(context)
-    if layer_guide:
-      system_content = f"{system_content}\n\n{layer_guide}" if system_content else layer_guide
-
-    # Thinking phase (BEFORE knowledge/memory)
+    # Thinking phase (BEFORE system prompt assembly)
     # If pre-computed thinking is provided (from ThinkPhase), use it directly.
     # Otherwise, compute inline for backward compatibility.
     reasoning_agent_messages = reasoning_messages
+    invoke_messages = messages.copy()
     if thinking_output is None and thinking_text is None:
       if await self._thinking_should_run(invoke_messages):
         if self._thinking and self._thinking.should_use_native(self.model):
@@ -2836,30 +2828,82 @@ class Agent:
             if isinstance(item, tuple):
               thinking_output, thinking_text, reasoning_steps, reasoning_agent_messages = item
 
-    # Inject thinking results into system prompt
+    # Format thinking injection (used by both code paths)
+    thinking_injection: Optional[str] = None
     injection_source: "Union[ThinkingOutput, str, None]" = thinking_output or thinking_text
     if injection_source:
       effort = self._thinking.effort if self._thinking and hasattr(self._thinking, "effort") else "medium"
-      injection = self._format_thinking_injection(injection_source, effort=effort)
-      if injection:
-        system_content = f"{system_content}\n\n{injection}" if system_content else injection
+      thinking_injection = self._format_thinking_injection(injection_source, effort=effort)
 
-    # Append knowledge context
-    if context.knowledge_context:
-      position = (context.metadata or {}).get("_knowledge_position", "system")
-      if position == "system":
-        system_content = f"{system_content}\n\n{context.knowledge_context}" if system_content else context.knowledge_context
+    # ── Context Manager path (structured, priority-based) ───────────
+    if self._context_manager is not None:
+      # Trim history (tool-pair-aware, async for summarize strategy)
+      invoke_messages = await self._context_manager.atrim_history(invoke_messages)
 
-    # Append research context
-    if context.research_context:
-      system_content = f"{system_content}\n\n{context.research_context}" if system_content else context.research_context
+      # Deferred tools: inject catalog into layer guide, swap tool set
+      _layer_guide = self._build_layer_guide(context)
+      if self._deferred_tool_manager is not None:
+        self._deferred_tool_manager.prepare_for_run()
+        catalog = self._deferred_tool_manager.build_catalog()
+        if catalog:
+          _layer_guide = f"{_layer_guide}\n\n{catalog}" if _layer_guide else catalog
 
-    # Append memory context
-    if context.memory_context:
-      system_content = f"{system_content}\n\n{context.memory_context}" if system_content else context.memory_context
+      # Common kwargs for system prompt assembly
+      _prompt_kwargs = dict(
+        instructions=self.instructions,
+        skill_instructions=self._build_skill_instructions(),
+        layer_guide=_layer_guide,
+        thinking_injection=thinking_injection,
+        knowledge_context=context.knowledge_context if (context.metadata or {}).get("_knowledge_position", "system") == "system" else None,
+        research_context=context.research_context,
+        memory_context=context.memory_context,
+      )
+
+      # Build system prompt via layered prompt
+      system_content = self._context_manager.build_system_prompt(**_prompt_kwargs)
+    # ── Legacy path (flat concatenation) ────────────────────────────
+    else:
+      system_content = self.instructions or ""
+
+      # Append skill instructions
+      skill_instructions = self._build_skill_instructions()
+      if skill_instructions:
+        system_content = f"{system_content}\n\n{skill_instructions}" if system_content else skill_instructions
+
+      # Layer guide
+      layer_guide = self._build_layer_guide(context)
+      if layer_guide:
+        system_content = f"{system_content}\n\n{layer_guide}" if system_content else layer_guide
+
+      # Inject thinking results into system prompt
+      if thinking_injection:
+        system_content = f"{system_content}\n\n{thinking_injection}" if system_content else thinking_injection
+
+      # Append knowledge context
+      if context.knowledge_context:
+        position = (context.metadata or {}).get("_knowledge_position", "system")
+        if position == "system":
+          system_content = f"{system_content}\n\n{context.knowledge_context}" if system_content else context.knowledge_context
+
+      # Append research context
+      if context.research_context:
+        system_content = f"{system_content}\n\n{context.research_context}" if system_content else context.research_context
+
+      # Append memory context
+      if context.memory_context:
+        system_content = f"{system_content}\n\n{context.memory_context}" if system_content else context.memory_context
 
     if system_content:
-      invoke_messages.insert(0, Message(role="system", content=system_content))
+      system_msg = Message(role="system", content=system_content)
+      # Cache optimization: attach static/dynamic split for Claude adapter
+      if self._context_manager is not None and self._context_manager.config.cache_optimization:
+        static, dynamic = self._context_manager.build_system_prompt_split(**_prompt_kwargs)  # type: ignore[name-defined]
+        if static:
+          system_msg._cache_blocks = [  # type: ignore[attr-defined]
+            {"text": static, "type": "text", "cache_control": {"type": "ephemeral"}},
+            {"text": dynamic, "type": "text"},
+          ]
+      invoke_messages.insert(0, system_msg)
 
     # Inject extracted file content into the last user message
     if context.readers_context:
@@ -3256,6 +3300,28 @@ class Agent:
     if isinstance(tracing_param, _Tracing):
       return tracing_param
     return config.tracing if config else None
+
+  def _resolve_context(self, context: Union[bool, "Context", None]) -> Optional["ContextManager"]:
+    """Resolve context param into a ContextManager (or None)."""
+    from definable.agent.context import Context as _Context
+    from definable.agent.context.manager import ContextManager
+
+    if context is True:
+      return ContextManager(_Context(), model=self.model)
+    if isinstance(context, _Context):
+      return ContextManager(context, model=self.model)
+    return None
+
+  def _resolve_deferred_tools(self) -> Optional["DeferredToolManager"]:
+    """Create a DeferredToolManager if deferred_tools is enabled."""
+    if self._context_manager is None:
+      return None
+    if not self._context_manager.config.deferred_tools:
+      return None
+
+    from definable.agent.context.deferred import DeferredToolManager
+
+    return DeferredToolManager(self._tools_dict)
 
   def _resolve_compression(self, compression: Union[bool, "Compression", None]) -> Optional["CompressionManager"]:
     """Resolve compression param into a CompressionManager (or None)."""
