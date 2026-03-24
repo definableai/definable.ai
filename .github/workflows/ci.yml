@@ -112,7 +112,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install -e ".[dev,mem0-memory,readers,runtime,research,serve,cron,jwt,discord]"
+          pip install -e ".[dev,mem0-memory,readers,runtime,research,serve,cron,jwt,discord,anthropic]"
       - name: Run integration tests
         run: |
           pytest definable/tests/ \

@@ -52,7 +52,7 @@ class TestKnowledgePipeline:
     kb = Knowledge(
       vector_db=db,
       embedder=openai_embedder,
-      chunker=TextChunker(chunk_size=200, separator="\n"),
+      chunker=TextChunker(chunk_size=500, separator="\n"),
     )
     yield kb
     db.drop()
