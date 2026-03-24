@@ -334,28 +334,39 @@ class WhatsAppInterface(BaseInterface):
     if self.config.typing_indicator:
       await self._provider.send_composing(to)
 
-    # Send text (chunked)
+    # Send text (chunked) with delivery tracking
     if response.content:
       text = response.content
       if self._markdown_conversion:
         text = markdown_to_whatsapp(text)
       chunks = self._split_message(text, self._text_chunk_limit)
-      for chunk in chunks:
-        await self._provider.send_text(to, chunk)
+      for i, chunk in enumerate(chunks):
+        result = await self._provider.send_text(to, chunk)
+        if not result.success:
+          log_error(f"[whatsapp] Failed to send text chunk {i + 1}/{len(chunks)} to {to}: {result.error}")
+          break  # Don't send remaining chunks if one fails
 
-    # Send media
+    # Send media with delivery tracking
     if response.images:
       for img in response.images:
-        await self._provider.send_media(OutboundMessage(to=to, image=img))
+        result = await self._provider.send_media(OutboundMessage(to=to, image=img))
+        if not result.success:
+          log_error(f"[whatsapp] Failed to send image to {to}: {result.error}")
     if response.audio:
       for aud in response.audio:
-        await self._provider.send_media(OutboundMessage(to=to, audio=aud))
+        result = await self._provider.send_media(OutboundMessage(to=to, audio=aud))
+        if not result.success:
+          log_error(f"[whatsapp] Failed to send audio to {to}: {result.error}")
     if response.videos:
       for vid in response.videos:
-        await self._provider.send_media(OutboundMessage(to=to, video=vid))
+        result = await self._provider.send_media(OutboundMessage(to=to, video=vid))
+        if not result.success:
+          log_error(f"[whatsapp] Failed to send video to {to}: {result.error}")
     if response.files:
       for f in response.files:
-        await self._provider.send_media(OutboundMessage(to=to, file=f))
+        result = await self._provider.send_media(OutboundMessage(to=to, file=f))
+        if not result.success:
+          log_error(f"[whatsapp] Failed to send file to {to}: {result.error}")
 
   # --- Public API ---
 
