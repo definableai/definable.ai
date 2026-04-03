@@ -1,5 +1,6 @@
 """SQLite-backed memory store with FTS5 search."""
 
+import re
 import sqlite3
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -9,6 +10,8 @@ import aiosqlite
 
 from definable.memory.v2.models import IndexEntry, MemoryEntry, WorkingMemory
 from definable.memory.v2.stores.base import MemoryStore
+
+_SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS working_memory (
@@ -41,17 +44,30 @@ CREATE TABLE IF NOT EXISTS memory_entries (
   source_turn INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS _schema_version (
+  version INTEGER NOT NULL
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
   id UNINDEXED,
   user_id UNINDEXED,
   summary,
-  tags
+  tags,
+  content_text
 );
 """
 
+# Strip FTS5 special characters to prevent syntax errors
+_FTS_SPECIAL = re.compile(r'["\*\(\)\{\}\[\]:^~\-]')
+
+
+def _sanitize_fts_word(word: str) -> str:
+  """Remove FTS5 special characters from a search word."""
+  return _FTS_SPECIAL.sub("", word).strip()
+
 
 class SQLiteStore(MemoryStore):
-  """SQLite memory store with FTS5 full-text search on summaries."""
+  """SQLite memory store with FTS5 full-text search on summaries, tags, and content."""
 
   def __init__(self, db_path: str = "./memory.db") -> None:
     self._db_path = db_path
@@ -65,8 +81,37 @@ class SQLiteStore(MemoryStore):
     if not self._initialized:
       await self._db.executescript(_SCHEMA)
       await self._db.commit()
+      await self._migrate_if_needed(self._db)
       self._initialized = True
     return self._db
+
+  async def _migrate_if_needed(self, db: aiosqlite.Connection) -> None:
+    """Check schema version and run migrations if needed."""
+    cursor = await db.execute("SELECT version FROM _schema_version LIMIT 1")
+    row = await cursor.fetchone()
+    current_version = row["version"] if row else 0
+
+    if current_version < _SCHEMA_VERSION:
+      # Migration to v2: rebuild FTS with content_text column
+      await db.execute("DROP TABLE IF EXISTS memory_fts")
+      await db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(id UNINDEXED, user_id UNINDEXED, summary, tags, content_text)")
+      # Re-populate FTS from existing data
+      cursor = await db.execute(
+        "SELECT mi.id, mi.user_id, mi.summary, mi.tags, COALESCE(me.content, '') as content "
+        "FROM memory_index mi LEFT JOIN memory_entries me ON mi.id = me.id"
+      )
+      rows = await cursor.fetchall()
+      for row in rows:
+        await db.execute(
+          "INSERT INTO memory_fts (id, user_id, summary, tags, content_text) VALUES (?, ?, ?, ?, ?)",
+          (row["id"], row["user_id"], row["summary"], row["tags"], row["content"]),
+        )
+      # Upsert schema version
+      if current_version == 0:
+        await db.execute("INSERT INTO _schema_version (version) VALUES (?)", (_SCHEMA_VERSION,))
+      else:
+        await db.execute("UPDATE _schema_version SET version = ?", (_SCHEMA_VERSION,))
+      await db.commit()
 
   async def get_working_memory(self, user_id: str) -> Optional[WorkingMemory]:
     db = await self._ensure_initialized()
@@ -126,10 +171,10 @@ class SQLiteStore(MemoryStore):
       (entry_id, user_id, summary, category, tags_json, now, session_id),
     )
 
-    # Insert into FTS index (manual sync — no triggers)
+    # Insert into FTS index (summary + tags + content for full-text search)
     await db.execute(
-      "INSERT INTO memory_fts (id, user_id, summary, tags) VALUES (?, ?, ?, ?)",
-      (entry_id, user_id, summary, tags_json),
+      "INSERT INTO memory_fts (id, user_id, summary, tags, content_text) VALUES (?, ?, ?, ?, ?)",
+      (entry_id, user_id, summary, tags_json, content),
     )
 
     # Insert into entries
@@ -161,13 +206,14 @@ class SQLiteStore(MemoryStore):
     import json
 
     if query:
-      # FTS5 search scoped to user — tokenize into words for broad matching
-      # Each word gets a * suffix for prefix matching (e.g., "Pyth" matches "Python")
-      words = [w.strip() for w in query.split() if w.strip()]
+      # FTS5 search scoped to user — tokenize, sanitize, prefix-match
+      words = [_sanitize_fts_word(w) for w in query.split() if w.strip()]
+      words = [w for w in words if w]
       if not words:
         return await self._search_like(db, user_id, query, category, limit)
+      # Each word gets a * suffix for prefix matching (e.g., "Pyth" matches "Python")
       # Join with OR for broad recall (any word matches)
-      fts_query = " OR ".join(f'"{w}"' for w in words)
+      fts_query = " OR ".join(f"{w}*" for w in words)
       sql = """
         SELECT mi.id, mi.user_id, mi.summary, mi.category, mi.tags, mi.created_at, mi.session_id
         FROM memory_index mi
@@ -184,7 +230,7 @@ class SQLiteStore(MemoryStore):
       try:
         cursor = await db.execute(sql, params)
         rows = await cursor.fetchall()
-        # If FTS returned nothing, try LIKE fallback (handles stemming misses, tag-only matches)
+        # If FTS returned nothing, try LIKE fallback
         if not rows:
           return await self._search_like(db, user_id, query, category, limit)
       except Exception:
@@ -221,13 +267,16 @@ class SQLiteStore(MemoryStore):
     category: Optional[str],
     limit: int,
   ) -> List[IndexEntry]:
-    """Fallback search using LIKE when FTS5 match fails."""
+    """Fallback search using case-insensitive LIKE on summary, tags, and content."""
     import json
 
-    sql = (
-      "SELECT id, user_id, summary, category, tags, created_at, session_id FROM memory_index WHERE user_id = ? AND (summary LIKE ? OR tags LIKE ?)"
-    )
     like_pat = f"%{query}%"
+
+    # First: search summary + tags (fast, index-only)
+    sql = (
+      "SELECT id, user_id, summary, category, tags, created_at, session_id "
+      "FROM memory_index WHERE user_id = ? AND (LOWER(summary) LIKE LOWER(?) OR LOWER(tags) LIKE LOWER(?))"
+    )
     params: list = [user_id, like_pat, like_pat]
     if category:
       sql += " AND category = ?"
@@ -236,6 +285,23 @@ class SQLiteStore(MemoryStore):
     params.append(limit)
     cursor = await db.execute(sql, params)
     rows = await cursor.fetchall()
+
+    # Second: if no summary/tag hits, search content (slower but catches more)
+    if not rows:
+      sql_content = (
+        "SELECT mi.id, mi.user_id, mi.summary, mi.category, mi.tags, mi.created_at, mi.session_id "
+        "FROM memory_entries me JOIN memory_index mi ON me.id = mi.id "
+        "WHERE mi.user_id = ? AND LOWER(me.content) LIKE LOWER(?)"
+      )
+      params_content: list = [user_id, like_pat]
+      if category:
+        sql_content += " AND mi.category = ?"
+        params_content.append(category)
+      sql_content += " ORDER BY mi.created_at DESC LIMIT ?"
+      params_content.append(limit)
+      cursor = await db.execute(sql_content, params_content)
+      rows = await cursor.fetchall()
+
     return [
       IndexEntry(
         id=row["id"],
