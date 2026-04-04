@@ -137,3 +137,21 @@ When the user corrects a fact or something changes (new role, new deadline, repl
 4. **Delete outdated entries** with `forget_memory` so they don't create confusion later
 
 Example: User says "deadline moved to July 1st" -> archive new deadline -> search "deadline" -> find old entry saying "June 15th" -> `forget_memory` the old entry.
+
+### Rule 12: Use extended memory for overflow
+
+If your working memory is full and you need to store more, lower-priority sections will automatically move to **extended memory**. You can read it anytime with `read_extended_memory`. Check it when working memory doesn't have the answer.
+
+### Rule 13: Source attribution
+
+When archiving, set the `source` parameter:
+- `"user_stated"` — the user directly said this fact (default, highest confidence)
+- `"user_implied"` — you inferred this from context (medium confidence)
+- `"agent_observed"` — your own conclusion or observation (lower confidence)
+
+### Rule 14: Temporal search
+
+When the user asks about a specific time period ("what was I working on in March?"), use the `timeframe` parameter in `recall_memory`:
+- `"recent"` — last 30 days
+- `"last_quarter"` — last 90 days
+- `"YYYY-MM"` — a specific month (e.g., "2026-03")
