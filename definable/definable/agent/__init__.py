@@ -84,6 +84,7 @@ if TYPE_CHECKING:
     SubAgentPolicy,
     ToolRetry,
   )
+  from definable.agent.pipeline.state import RunState
   from definable.agent.reasoning import Thinking
   from definable.mcp.toolkit import MCPToolkit
   from definable.memory import Memory
@@ -281,4 +282,6 @@ __all__ = [
   # Plugins
   "Plugin",  # noqa: F822
   "PluginRegistry",  # noqa: F822
+  # State alias
+  "RunState",
 ]

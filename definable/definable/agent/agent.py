@@ -334,7 +334,8 @@ class Agent:
     self._session_id_explicit = session_id is not None
     self.session_id = session_id or str(uuid4())
 
-    # Build pipeline (reused for all runs)
+    # Build pipeline (deprecated — harness.py is the primary path)
+    # Kept for backward compat: agent.pipeline, agent.hook() still work
     self._pipeline = self._build_pipeline()
 
     # Deep research engine (prebuilt instance or lazy init from config)
@@ -1023,12 +1024,17 @@ class Agent:
     await self._transcribe_audio(state.new_messages)
 
     try:
-      async for updated_state, event in self._pipeline.execute(
+      from definable.agent.harness import execute_run
+
+      async for updated_state, event in execute_run(
+        self,
         state,
         cancellation_token=state.cancellation_token,
       ):
         state = updated_state
         if event is not None:
+          self._emit(event)
+          await self._event_bus.emit(event)
           yield event  # type: ignore[misc]
 
     except AgentCancelled:
@@ -1448,19 +1454,19 @@ class Agent:
     )
 
   async def _execute_via_pipeline(self, state: "LoopState") -> RunOutput:
-    """Execute the full pipeline and return RunOutput.
+    """Execute the full run via harness and return RunOutput."""
+    from definable.agent.harness import execute_run
 
-    This is the primary execution path for arun(). The pipeline
-    orchestrates all phases (prepare, recall, think, guard, compose,
-    invoke_loop, guard_output, store) and dispatches events via
-    its EventStream.
-    """
     try:
-      async for updated_state, _event in self._pipeline.execute(
+      async for updated_state, event in execute_run(
+        self,
         state,
         cancellation_token=state.cancellation_token,
       ):
         state = updated_state
+        if event is not None:
+          self._emit(event)
+          await self._event_bus.emit(event)
       return self._state_to_run_output(state)
 
     except AgentCancelled:
