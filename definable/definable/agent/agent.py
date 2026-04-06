@@ -36,16 +36,6 @@ from definable.model.metrics import Metrics
 from definable.model.response import ToolExecution
 from definable.agent.events import (
   BaseRunOutputEvent,
-  DeepResearchCompletedEvent,
-  DeepResearchStartedEvent,
-  FileReadCompletedEvent,
-  FileReadStartedEvent,
-  KnowledgeRetrievalCompletedEvent,
-  KnowledgeRetrievalStartedEvent,
-  MemoryRecallCompletedEvent,
-  MemoryRecallStartedEvent,
-  MemoryUpdateCompletedEvent,
-  MemoryUpdateStartedEvent,
   RunCompletedEvent,
   RunContext,
   RunErrorEvent,
@@ -150,11 +140,7 @@ class Agent:
           output = agent.run("Hello!")
   """
 
-  _EFFORT_PROMPTS: dict[str, str] = {
-    "low": "Be brief and concise in your reasoning.",
-    "medium": "",
-    "high": "Think thoroughly. Include considerations of risks, trade-offs, edge cases, and alternative approaches.",
-  }
+  # _EFFORT_PROMPTS moved to definable.agent.layers
 
   def __init__(
     self,
@@ -1253,246 +1239,24 @@ class Agent:
   # --- Knowledge & Memory Helpers ---
 
   async def _knowledge_retrieve(self, context: RunContext) -> List[RunOutputEvent]:
-    """Retrieve knowledge documents, emit events, inject into context."""
-    kc = self._knowledge
-    if not (kc and kc.enabled):
-      return []
+    from definable.agent.layers import knowledge_retrieve
 
-    messages = context.metadata.get("_messages") if context.metadata else None
-    if not messages:
-      return []
-
-    from definable.agent.middleware import KnowledgeMiddleware
-
-    km = KnowledgeMiddleware(kc)
-    query = km._extract_query(messages)
-    if not query:
-      return []
-
-    import time
-
-    events: List[RunOutputEvent] = []
-    started = KnowledgeRetrievalStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-    try:
-      documents = await kc.asearch(
-        query=query,
-        top_k=kc.top_k,
-        rerank=kc.rerank,
-      )
-    except Exception:
-      elapsed = (time.perf_counter() - start_time) * 1000
-      completed = KnowledgeRetrievalCompletedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        query=query,
-        documents_found=0,
-        documents_used=0,
-        duration_ms=elapsed,
-      )
-      self._emit(completed)
-      events.append(completed)
-      return events
-
-    documents_found = len(documents)
-
-    # Filter by min_score
-    if kc.min_score is not None:
-      documents = [d for d in documents if d.reranking_score is not None and d.reranking_score >= kc.min_score]
-
-    if documents:
-      context_text = km._format_context(documents)
-      context.knowledge_context = context_text
-      context.knowledge_documents = documents
-      context.active_layers.add("knowledge")
-      if context.metadata is None:
-        context.metadata = {}
-      context.metadata["_knowledge_position"] = kc.context_position
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-    completed = KnowledgeRetrievalCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-      documents_found=documents_found,
-      documents_used=len(documents),
-      duration_ms=elapsed,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
+    return await knowledge_retrieve(self, context)
 
   def _init_deep_research(self, config: "DeepResearchConfig") -> Optional["DeepResearch"]:
-    """Initialize the deep research engine if configured.
+    from definable.agent.layers import init_deep_research
 
-    Non-fatal: returns None with a warning if search capability cannot be found.
-    """
-    from definable.utils.log import log_debug, log_warning
-
-    if not config or not config.enabled:
-      return None
-
-    try:
-      from definable.agent.research.engine import DeepResearch
-      from definable.agent.research.search import create_search_provider
-
-      # Try explicit search_fn or provider first
-      if config.search_fn is not None or config.search_provider != "duckduckgo":
-        provider = create_search_provider(
-          provider=config.search_provider,
-          config=config.search_provider_config,
-          search_fn=config.search_fn,
-        )
-      else:
-        # Try auto-discovering from WebSearch skill
-        provider = self._discover_search_provider()  # type: ignore[assignment]
-        if provider is None:
-          # Fall back to DuckDuckGo
-          provider = create_search_provider("duckduckgo")  # type: ignore[unreachable]
-
-      compression_model = config.compression_model or self.model
-      log_debug("Deep research engine initialized")
-      return DeepResearch(
-        model=self.model,
-        search_provider=provider,
-        compression_model=compression_model,
-        config=config,
-      )
-    except Exception as e:
-      log_warning(f"Failed to initialize deep research: {e}")
-      return None
+    return init_deep_research(self, config)
 
   def _discover_search_provider(self) -> object:
-    """Try to auto-discover a search provider from WebSearch skill."""
-    from definable.utils.log import log_debug
+    from definable.agent.layers import discover_search_provider
 
-    for skill in self.skills:
-      # Check for WebSearch skill with its _search_fn
-      skill_cls_name = type(skill).__name__
-      if skill_cls_name == "WebSearch" and hasattr(skill, "_search_fn"):
-        from definable.agent.research.search import CallableSearchProvider
-        from definable.agent.research.search.base import SearchResult
-
-        raw_fn = skill._search_fn
-
-        async def _wrapped(query: str, max_results: int = 10) -> list:
-          import asyncio
-
-          text = await asyncio.to_thread(raw_fn, query, max_results)
-          # WebSearch._search_fn returns formatted string, not SearchResult list.
-          # Parse it back into SearchResult objects.
-          results = []
-          for block in text.split("\n\n---\n\n"):
-            lines = block.strip().split("\n", 2)
-            if len(lines) >= 2:
-              title = lines[0].strip("*").strip()
-              url = lines[1].strip()
-              snippet = lines[2] if len(lines) > 2 else ""
-              results.append(SearchResult(title=title, url=url, snippet=snippet))
-          return results
-
-        log_debug("Auto-discovered search provider from WebSearch skill")
-        return CallableSearchProvider(_wrapped)
-
-    return None
+    return discover_search_provider(self)
 
   async def _deep_research(self, context: RunContext) -> List[RunOutputEvent]:
-    """Execute deep research pipeline, emit events, inject context."""
-    if not self._researcher:
-      return []
+    from definable.agent.layers import deep_research
 
-    config = self._deep_research_config or (self._researcher._config if self._researcher else None)
-    if not config or not config.enabled:
-      return []
-
-    # Extract query from last user message
-    messages = context.metadata.get("_messages") if context.metadata else None
-    if not messages:
-      return []
-
-    query = None
-    for msg in reversed(messages):
-      if hasattr(msg, "role") and msg.role == "user" and msg.content:
-        query = msg.content if isinstance(msg.content, str) else str(msg.content)
-        break
-    if not query:
-      return []
-
-    # Auto trigger: ask model if research is needed
-    if config.trigger == "auto":
-      try:
-        needs = await self._researcher.needs_research(query)
-        if not needs:
-          return []
-      except Exception:
-        pass  # Default to running research on failure
-
-    import time
-
-    events: List[RunOutputEvent] = []
-    started = DeepResearchStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-      depth=config.depth,
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-    try:
-      result = await self._researcher.arun(query)
-      context.research_context = result.context
-      context.research_result = result
-    except Exception as e:
-      from definable.utils.log import log_warning
-
-      log_warning(f"Deep research failed: {e}")
-      elapsed = (time.perf_counter() - start_time) * 1000
-      completed = DeepResearchCompletedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        query=query,
-        duration_ms=elapsed,
-      )
-      self._emit(completed)
-      events.append(completed)
-      return events
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-    completed = DeepResearchCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query,
-      sources_used=result.metrics.total_sources_read,
-      facts_extracted=result.metrics.unique_facts,
-      contradictions_found=result.metrics.contradictions_found,
-      waves_executed=result.metrics.waves_executed,
-      duration_ms=elapsed,
-      compression_ratio=result.metrics.compression_ratio_avg,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
+    return await deep_research(self, context)
 
   async def _drain_memory_tasks(self) -> None:
     from definable.agent.lifecycle import drain_memory_tasks
@@ -1500,718 +1264,69 @@ class Agent:
     await drain_memory_tasks(self)
 
   async def _memory_recall(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
-    """Recall session history, emit events, inject into context.
+    from definable.agent.layers import memory_recall
 
-    When the memory has an embedder (semantic search), recall produces a
-    dual-layer context:
-      - Short-term: recent raw messages (conversation continuity)
-      - Long-term: top-K atoms ranked by similarity to the query
-
-    Without an embedder, falls back to chronological dump of all entries.
-    """
-    assert self.memory is not None
-    await self._drain_memory_tasks()
-    import time
-
-    session_id = context.session_id or "default"
-    user_id = context.user_id or "default"
-
-    events: List[RunOutputEvent] = []
-
-    # Extract the last user message as the query (for event metadata + search)
-    query = None
-    for msg in reversed(new_messages):
-      if msg.role == "user" and msg.content:
-        query = msg.content if isinstance(msg.content, str) else str(msg.content)
-        break
-
-    started = MemoryRecallStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query or "",
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-
-    # Ensure store is initialized
-    await self.memory._ensure_initialized()
-
-    chunks_included = 0
-
-    if self.memory.has_semantic_search and query:
-      # Dual-layer recall: short-term (recent messages) + long-term (semantic atoms).
-      context.memory_context = await self._memory_recall_semantic(session_id, user_id, query)
-      # Count chunks from the context (approximate).
-      chunks_included = context.memory_context.count("\n") if context.memory_context else 0
-    else:
-      # Chronological recall (existing behavior).
-      entries = await self.memory.get_entries(session_id, user_id)
-      chunks_included = len(entries)
-      if entries:
-        lines = []
-        for e in entries:
-          if e.role == "summary":
-            lines.append(f"[Summary]: {e.content}")
-          elif e.entry_type == "atom":
-            lines.append(f"[Fact]: {e.lossless_content or e.content}")
-          else:
-            lines.append(f"{e.role}: {e.content}")
-        context.memory_context = "<conversation_history>\n" + "\n".join(lines) + "\n</conversation_history>"
-
-    if context.memory_context:
-      context.active_layers.add("memory")
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-
-    completed = MemoryRecallCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      query=query or "",
-      tokens_used=len(context.memory_context or "") // 4,
-      chunks_included=chunks_included,
-      chunks_available=chunks_included,
-      duration_ms=elapsed,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
+    return await memory_recall(self, context, new_messages)
 
   async def _memory_recall_semantic(self, session_id: str, user_id: str, query: str) -> str:
-    """Build dual-layer memory context: short-term messages + long-term atoms."""
-    assert self.memory is not None
-    entries = await self.memory.get_entries(session_id, user_id)
+    from definable.agent.layers import memory_recall_semantic
 
-    # Split into recent messages (STM) and search for relevant atoms (LTM).
-    recent_messages = [e for e in entries if e.entry_type == "message"][-self.memory.recent_count :]
-    relevant_atoms = await self.memory.search(query, session_id, user_id)
-
-    parts: list[str] = []
-
-    # Long-term memory: relevant facts from semantic search.
-    if relevant_atoms:
-      ltm_lines = [f"- {a.lossless_content or a.content}" for a in relevant_atoms]
-      parts.append("<long_term_memory>\n" + "\n".join(ltm_lines) + "\n</long_term_memory>")
-
-    # Short-term memory: recent conversation turns.
-    if recent_messages:
-      stm_lines = []
-      for e in recent_messages:
-        if e.role == "summary":
-          stm_lines.append(f"[Summary]: {e.content}")
-        else:
-          stm_lines.append(f"{e.role}: {e.content}")
-      parts.append("<short_term_memory>\n" + "\n".join(stm_lines) + "\n</short_term_memory>")
-
-    return "\n".join(parts)
+    return await memory_recall_semantic(self, session_id, user_id, query)
 
   def _memory_store(self, new_messages: List[Message], context: RunContext) -> List[RunOutputEvent]:
-    """Store new messages in session memory (fire-and-forget), emit events."""
-    assert self.memory is not None
-    import time
+    from definable.agent.layers import memory_store
 
-    if not self.memory.enabled:
-      return []
-
-    events: List[RunOutputEvent] = []
-    message_count = len(new_messages)
-
-    started = MemoryUpdateStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      message_count=message_count,
-    )
-    self._emit(started)
-    events.append(started)
-
-    try:
-      loop = asyncio.get_running_loop()
-      memory = self.memory
-      session_id = context.session_id or "default"
-      user_id = context.user_id or "default"
-
-      # Ensure the memory has a model for auto-optimization
-      if memory.model is None:
-        memory.model = self.model
-
-      async def _store_and_emit() -> None:
-        from definable.utils.log import log_warning
-
-        start_time = time.perf_counter()
-        try:
-          await memory._ensure_initialized()
-          for msg in new_messages:
-            await memory.add(msg, session_id=session_id, user_id=user_id)
-        except Exception as e:
-          log_warning(f"Memory store failed: {type(e).__name__}: {e}")
-        finally:
-          elapsed = (time.perf_counter() - start_time) * 1000
-          completed = MemoryUpdateCompletedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            message_count=message_count,
-            duration_ms=elapsed,
-          )
-          self._emit(completed)
-
-      task = loop.create_task(_store_and_emit())
-      self._pending_memory_tasks.append(task)
-      task.add_done_callback(lambda t: self._pending_memory_tasks.remove(t) if t in self._pending_memory_tasks else None)
-    except RuntimeError:
-      pass  # No running loop — skip memory storage
-
-    return events
+    return memory_store(self, new_messages, context)
 
   # --- Readers Helpers ---
 
   @staticmethod
   def _init_readers(readers: "List[BaseReader] | BaseReader | bool | None") -> Optional["BaseReader"]:
-    """Resolve the readers= parameter into a BaseReader or None.
+    from definable.agent.resolution import init_readers
 
-    Accepts:
-      - None/False → None
-      - True → BaseReader() with all defaults
-      - BaseReader instance → use as-is
-      - BaseParser instance → wrap in BaseReader with custom ParserRegistry
-      - ProviderReader instance (e.g., MistralReader) → use as-is
-      - Legacy FileReaderRegistry → use as-is (it's now BaseReader)
-    """
-    if readers is None or readers is False:
-      return None
-    if readers is True:
-      from definable.reader import BaseReader
-
-      return BaseReader()
-    # Check if it's a BaseParser (single parser → wrap in BaseReader)
-    from definable.reader.parsers.base_parser import BaseParser
-
-    if isinstance(readers, BaseParser):
-      from definable.reader import BaseReader
-      from definable.reader.registry import ParserRegistry
-
-      registry = ParserRegistry(include_defaults=False)
-      registry.register(readers)
-      return BaseReader(registry=registry)
-    # Assume it's already a BaseReader / ProviderReader — use as-is
-    return readers  # type: ignore[return-value]
+    return init_readers(readers)
 
   async def _readers_extract(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
-    """Extract text from files in new_messages, inject into context."""
-    if not self.readers:
-      return []
+    from definable.agent.layers import readers_extract
 
-    # Collect files from all new messages
-    files: List[File] = []
-    for msg in new_messages:
-      if msg.files:
-        files.extend(msg.files)
-    if not files:
-      return []
-
-    import time
-
-    events: List[RunOutputEvent] = []
-    started = FileReadStartedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      file_count=len(files),
-    )
-    self._emit(started)
-    events.append(started)
-
-    start_time = time.perf_counter()
-    try:
-      results = await self.readers.aread_all(files)
-    except Exception:
-      from definable.utils.log import log_warning
-
-      log_warning("File reading failed", exc_info=True)
-      elapsed = (time.perf_counter() - start_time) * 1000
-      completed = FileReadCompletedEvent(
-        run_id=context.run_id,
-        session_id=context.session_id,
-        agent_id=self.agent_id,
-        agent_name=self.agent_name,
-        file_count=len(files),
-        files_read=0,
-        files_failed=len(files),
-        duration_ms=elapsed,
-      )
-      self._emit(completed)
-      events.append(completed)
-      return events
-
-    # Format successful results into context block
-    file_blocks: List[str] = []
-    files_read = 0
-    files_failed = 0
-    for result in results:
-      if result.error:
-        files_failed += 1
-      elif result.content:
-        files_read += 1
-        mime_attr = f' type="{result.mime_type}"' if result.mime_type else ""
-        file_blocks.append(f'<file name="{result.filename}"{mime_attr}>\n{result.content}\n</file>')
-
-    if file_blocks:
-      context.readers_context = "<file_contents>\n" + "\n".join(file_blocks) + "\n</file_contents>"
-
-    elapsed = (time.perf_counter() - start_time) * 1000
-    completed = FileReadCompletedEvent(
-      run_id=context.run_id,
-      session_id=context.session_id,
-      agent_id=self.agent_id,
-      agent_name=self.agent_name,
-      file_count=len(files),
-      files_read=files_read,
-      files_failed=files_failed,
-      duration_ms=elapsed,
-    )
-    self._emit(completed)
-    events.append(completed)
-    return events
+    return await readers_extract(self, context, new_messages)
 
   # --- Guardrail Helpers ---
 
   def _extract_input_text(self, new_messages: List[Message]) -> str:
-    """Extract text content from the new user messages for guardrail checking."""
-    parts: List[str] = []
-    for msg in new_messages:
-      if msg.role == "user" and msg.content:
-        parts.append(msg.content if isinstance(msg.content, str) else str(msg.content))
-    return "\n".join(parts)
+    from definable.agent.layers import extract_input_text
+
+    return extract_input_text(new_messages)
 
   async def _run_input_guardrails(self, context: RunContext, new_messages: List[Message]) -> Optional[RunOutput]:
-    """Run input guardrails. Returns RunOutput if blocked, None if allowed."""
-    assert self.guardrails is not None
+    from definable.agent.layers import run_input_guardrails
 
-    from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
-
-    text = self._extract_input_text(new_messages)
-    if not text:
-      return None
-
-    results = await self.guardrails.run_input_checks(text, context)
-
-    for result in results:
-      gname = (result.metadata or {}).get("guardrail_name", "unknown")
-      duration = (result.metadata or {}).get("duration_ms")
-
-      self._emit(
-        GuardrailCheckedEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          guardrail_name=gname,
-          guardrail_type="input",
-          action=result.action,
-          message=result.message,
-          duration_ms=duration,
-        )
-      )
-
-      if result.action == "block":
-        self._emit(
-          GuardrailBlockedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            guardrail_name=gname,
-            guardrail_type="input",
-            reason=result.message or "Blocked by input guardrail",
-          )
-        )
-
-        reason = result.message or "Blocked by input guardrail"
-        if self.guardrails.on_block == "raise":
-          from definable.exceptions import CheckTrigger, InputCheckError
-
-          raise InputCheckError(reason, check_trigger=CheckTrigger.GUARDRAIL_BLOCKED)
-
-        return RunOutput(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          content=reason,
-          status=RunStatus.blocked,
-        )
-
-      if result.action == "modify" and result.modified_text is not None:
-        # Replace the last user message content
-        for i in range(len(new_messages) - 1, -1, -1):
-          if new_messages[i].role == "user":
-            new_messages[i] = Message(
-              role="user",
-              content=result.modified_text,
-              images=new_messages[i].images,
-              videos=new_messages[i].videos,
-              audio=new_messages[i].audio,
-              files=new_messages[i].files,
-            )
-            break
-        # Also update all_messages in context metadata
-        all_messages = context.metadata.get("_messages") if context.metadata else None
-        if all_messages:
-          for i in range(len(all_messages) - 1, -1, -1):
-            if all_messages[i].role == "user":
-              all_messages[i] = Message(
-                role="user",
-                content=result.modified_text,
-                images=all_messages[i].images,
-                videos=all_messages[i].videos,
-                audio=all_messages[i].audio,
-                files=all_messages[i].files,
-              )
-              break
-
-    return None
+    return await run_input_guardrails(self, context, new_messages)
 
   async def _run_output_guardrails(self, context: RunContext, result: RunOutput) -> Optional[RunOutput]:
-    """Run output guardrails. Returns modified RunOutput if blocked/modified, None if allowed."""
-    assert self.guardrails is not None
+    from definable.agent.layers import run_output_guardrails
 
-    from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
-
-    text = result.content if isinstance(result.content, str) else str(result.content or "")
-    if not text:
-      return None
-
-    results = await self.guardrails.run_output_checks(text, context)
-
-    modified = False
-    for gr in results:
-      gname = (gr.metadata or {}).get("guardrail_name", "unknown")
-      duration = (gr.metadata or {}).get("duration_ms")
-
-      self._emit(
-        GuardrailCheckedEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          guardrail_name=gname,
-          guardrail_type="output",
-          action=gr.action,
-          message=gr.message,
-          duration_ms=duration,
-        )
-      )
-
-      if gr.action == "block":
-        self._emit(
-          GuardrailBlockedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            guardrail_name=gname,
-            guardrail_type="output",
-            reason=gr.message or "Blocked by output guardrail",
-          )
-        )
-
-        reason = gr.message or "Blocked by output guardrail"
-        if self.guardrails.on_block == "raise":
-          from definable.exceptions import CheckTrigger, OutputCheckError
-
-          raise OutputCheckError(reason, check_trigger=CheckTrigger.GUARDRAIL_BLOCKED)
-
-        return RunOutput(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          content=reason,
-          status=RunStatus.blocked,
-          messages=result.messages,
-          metrics=result.metrics,
-        )
-
-      if gr.action == "modify" and gr.modified_text is not None:
-        result.content = gr.modified_text
-        if result.metadata is None:
-          result.metadata = {}
-        result.metadata["guardrail_modified"] = True
-        modified = True
-
-    return result if modified else None
+    return await run_output_guardrails(self, context, result)
 
   async def _run_tool_guardrails(self, context: RunContext, tool_execution: ToolExecution) -> Optional[str]:
-    """Run tool guardrails. Returns block reason string if blocked, None if allowed."""
-    assert self.guardrails is not None
+    from definable.agent.layers import run_tool_guardrails
 
-    from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailCheckedEvent
-
-    tool_name = tool_execution.tool_name or ""
-    tool_args = tool_execution.tool_args or {}
-
-    results = await self.guardrails.run_tool_checks(tool_name, tool_args, context)
-
-    for gr in results:
-      gname = (gr.metadata or {}).get("guardrail_name", "unknown")
-      duration = (gr.metadata or {}).get("duration_ms")
-
-      self._emit(
-        GuardrailCheckedEvent(
-          run_id=context.run_id,
-          session_id=context.session_id,
-          agent_id=self.agent_id,
-          agent_name=self.agent_name,
-          guardrail_name=gname,
-          guardrail_type="tool",
-          action=gr.action,
-          message=gr.message,
-          duration_ms=duration,
-        )
-      )
-
-      if gr.action == "block":
-        reason = gr.message or f"Tool '{tool_name}' blocked by guardrail"
-        self._emit(
-          GuardrailBlockedEvent(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            guardrail_name=gname,
-            guardrail_type="tool",
-            reason=reason,
-          )
-        )
-        return reason
-
-    return None
+    return await run_tool_guardrails(self, context, tool_execution)
 
   # --- Thinking Layer ---
 
-  # Effort-scaled thinking prompts (research-backed design):
-  # - LOW: Chain-of-Draft style — minimal tokens, fast assessment
-  # - MEDIUM: Standard reasoning with step-back abstraction + self-check
-  # - HIGH: Full deliberative reasoning — metacognitive, multi-perspective, verified
-  _THINKING_PROMPTS: Dict[str, str] = {
-    "low": (
-      "You are the planning layer. Your job is to produce an execution STRATEGY — not the answer itself.\n\n"
-      "Quickly assess this request:\n"
-      "- What is the user asking?\n"
-      "- What approach should be used? (tools, knowledge, direct answer)\n"
-      "- What tools are needed, if any?\n\n"
-      "Output a brief strategy (2-4 sentences). DO NOT solve the problem or write the answer."
-    ),
-    "medium": (
-      "You are the planning layer. Your job is to produce an execution STRATEGY — not the answer itself.\n"
-      "The main model will receive your strategy and use it to produce the actual response.\n\n"
-      "1. INTENT: What does the user actually need? Look past the surface request.\n"
-      "2. APPROACH: What's the best way to fulfill this? Direct answer from knowledge, tool usage, multi-step reasoning?\n"
-      "3. TOOLS: If tools are needed, list them in order with why each is needed and what depends on what.\n"
-      "4. CONSTRAINTS: Any edge cases, risks, or things to watch for?\n\n"
-      "Output a concise strategy. DO NOT write the answer, solve the problem, or produce the final response.\n"
-      "The main model handles that — you only plan."
-    ),
-    "high": (
-      "You are the planning layer. Your job is to produce a detailed execution STRATEGY — not the answer itself.\n"
-      "The main model will receive your strategy and use it to produce the actual response.\n\n"
-      "INTENT: What is the user really asking? What are the underlying goals and constraints?\n"
-      "Identify any ambiguity or implicit requirements.\n\n"
-      "APPROACH: What's the best strategy? Consider:\n"
-      "- Can this be answered directly from knowledge, or does it need tools/research?\n"
-      "- If complex, break into sub-tasks. Which are independent vs sequential?\n"
-      "- If tools are available, which ones and in what order? Why each is needed?\n\n"
-      "ALTERNATIVES: Consider at least one alternative approach. Why is your chosen strategy better?\n\n"
-      "RISKS: Edge cases, failure modes, assumptions that need validation.\n\n"
-      "VERIFICATION: Does your strategy fully address the original request? Any gaps?\n\n"
-      "Output a detailed strategy. DO NOT solve the problem, write the answer, or produce the final response.\n"
-      "You are the planner — the main model is the executor."
-    ),
-  }
-
-  def _build_thinking_prompt(
-    self,
-    context: RunContext,
-    tools: Dict[str, Function],
-  ) -> str:
-    """Build an effort-scaled, context-aware thinking prompt.
-
-    The prompt varies by effort level:
-    - low: Chain-of-Draft style — minimal overhead, fast assessment
-    - medium: Standard reasoning with step-back abstraction + self-check
-    - high: Full deliberative reasoning — metacognitive, multi-perspective, verified
-
-    Incorporates agent role, tool catalog, and context availability flags.
-    """
-    effort = self._thinking.effort if self._thinking else "medium"
-    base_prompt = self._THINKING_PROMPTS.get(effort, self._THINKING_PROMPTS["medium"])
-    parts = [base_prompt]
-
-    # Agent role (first 500 chars)
-    if self.instructions:
-      truncated = self.instructions[:500]
-      if len(self.instructions) > 500:
-        truncated += "..."
-      parts.append(f"\nYour role: {truncated}")
-
-    # Tool catalog (name + one-line description)
-    if tools:
-      tool_lines = []
-      for name, fn in tools.items():
-        desc = (fn.description or "").split("\n")[0][:100]
-        tool_lines.append(f"- {name}: {desc}" if desc else f"- {name}")
-      parts.append("\nAvailable tools:\n" + "\n".join(tool_lines))
-
-    # Context availability flags (NOT the full content)
-    flags = []
-    if context.knowledge_context:
-      flags.append("knowledge base context is available")
-    if context.memory_context:
-      flags.append("conversation memory is available")
-    if flags:
-      parts.append(f"\nContext: {'; '.join(flags)}.")
-
-    parts.append("\nRemember: Output only a strategy. The main model will handle the actual response.")
-
-    return "\n".join(parts)
-
-  @staticmethod
-  def _format_thinking_injection(output: "Union[ThinkingOutput, str]", effort: str = "medium") -> str:
-    """Format thinking result into a system prompt injection.
-
-    Accepts either a ThinkingOutput (structured models) or a plain str
-    (non-structured models' free-form thinking text).
-
-    The injection is framed as an execution strategy directive — the main
-    model should follow it to produce the actual response.
-    """
-    framing = "The following strategy was developed for this request. Use it to guide your response:"
-
-    if isinstance(output, str):
-      # Free-form text from non-structured models
-      return f"<execution_strategy>\n{framing}\n\n{output}\n</execution_strategy>"
-
-    # Structured ThinkingOutput
-    tool_names = output.flat_tool_names()
-
-    if effort == "high":
-      lines = [
-        "<execution_strategy>",
-        framing,
-        "",
-        f"Approach: {output.approach}",
-      ]
-      if tool_names:
-        lines.append(f"Tools: {', '.join(tool_names)}")
-      if output.verification:
-        lines.append(f"Verification: {output.verification}")
-      if output.considerations:
-        lines.append(f"Considerations: {output.considerations}")
-      if output.confidence:
-        lines.append(f"Confidence: {output.confidence}")
-      lines.append("</execution_strategy>")
-      return "\n".join(lines)
-
-    # low / medium — compact
-    parts = [f"<execution_strategy>\nStrategy: {output.approach}"]
-    if tool_names:
-      parts.append(f" Tools: {', '.join(tool_names)}.")
-    parts.append("\n</execution_strategy>")
-    return "".join(parts)
+  # _THINKING_PROMPTS moved to definable.agent.layers
 
   def _extract_last_user_query(self, messages: List[Message]) -> Optional[str]:
-    """Extract the content of the last user message (for trigger pre-checks)."""
-    for msg in reversed(messages):
-      if hasattr(msg, "role") and msg.role == "user" and msg.content:
-        return msg.content if isinstance(msg.content, str) else str(msg.content)
-    return None
+    from definable.agent.layers import extract_last_user_query
+
+    return extract_last_user_query(messages)
 
   @staticmethod
   def _build_routing_prompt(layer_name: str, query: str, context_str: str) -> str:
-    """Build a precise, layer-specific YES/NO routing prompt.
+    from definable.agent.layers import build_routing_prompt
 
-    Generic prompts cause routing models to over-fire (always YES). Explicit
-    criteria with positive/negative signals produce accurate routing decisions.
-    """
-    ctx_block = f"\nRecent conversation:\n{context_str}\n" if context_str else ""
-    q = query[:300]
-
-    if layer_name == "knowledge base":
-      return (
-        f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-        f"QUESTION: Does this query need the knowledge base?\n\n"
-        f"KNOWLEDGE BASE contains factual documents: company policies, product info, procedures, uploaded content.\n\n"
-        f"Answer YES when the query asks about:\n"
-        f"- Company rules, benefits, policies (PTO, salary, leave, procedures)\n"
-        f"- Product details, features, or documentation\n"
-        f"- Factual questions about the organization or domain\n"
-        f"- 'How does X work?', 'What is the policy for Y?', 'Tell me about Z'\n\n"
-        f"Answer NO when the query is:\n"
-        f"- Simple math or calculations ('add 1 and 2', 'what is 5*7')\n"
-        f"- General conversation, greetings, or chit-chat\n"
-        f"- Coding tasks, logic puzzles, or general reasoning\n"
-        f"- Questions answerable from common world knowledge (no documents needed)\n"
-        f"- Personal-only questions about the user (memory handles those){ctx_block}\n"
-        f"Query: '{q}'\n\n"
-        f"Answer YES or NO only:"
-      )
-
-    if layer_name == "memory":
-      return (
-        f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-        f"QUESTION: Does this query need personal memory recall?\n\n"
-        f"MEMORY stores personal information about this user from past conversations.\n\n"
-        f"Answer YES when the query involves:\n"
-        f"- User's name, role, preferences, or personal details\n"
-        f"- References to past interactions ('what did I tell you', 'remember when', 'last time')\n"
-        f"- Possessive questions ('my name', 'my preference', 'my project')\n"
-        f"- Follow-ups that require knowing who the user is or what they said before\n\n"
-        f"Answer NO when the query is:\n"
-        f"- Simple math or calculations ('add 1 and 2')\n"
-        f"- General factual questions not specific to this user\n"
-        f"- Topics fully answerable without user-specific context\n"
-        f"- The very first message with no personal reference{ctx_block}\n"
-        f"Query: '{q}'\n\n"
-        f"Answer YES or NO only:"
-      )
-
-    if layer_name == "analysis/thinking":
-      return (
-        f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-        f"QUESTION: Does this query need extended step-by-step reasoning?\n\n"
-        f"THINKING enables slow, careful analysis before the assistant responds.\n\n"
-        f"Answer YES when the query involves:\n"
-        f"- Multi-step math, logic proofs, or complex reasoning\n"
-        f"- Code architecture, algorithm design, or debugging\n"
-        f"- Strategic planning, trade-off analysis, or ambiguous decisions\n"
-        f"- Tasks where rushing to an answer risks being wrong\n\n"
-        f"Answer NO when the query is:\n"
-        f"- Simple arithmetic ('add 1 and 2', 'what is 5+3')\n"
-        f"- Direct factual lookups ('what is the PTO policy')\n"
-        f"- Simple instructions ('send an email to X')\n"
-        f"- Casual conversation or greetings{ctx_block}\n"
-        f"Query: '{q}'\n\n"
-        f"Answer YES or NO only:"
-      )
-
-    # Fallback for custom layer names
-    ctx_section = f"Recent conversation:\n{context_str}\n" if context_str else ""
-    return (
-      f"You are a routing system. Answer ONLY with YES or NO.\n\n"
-      f"QUESTION: Does this query require accessing the {layer_name}?\n\n"
-      f"{ctx_section}"
-      f"Query: '{q}'\n\n"
-      f"Answer YES or NO only:"
-    )
+    return build_routing_prompt(layer_name, query, context_str)
 
   async def _should_invoke_layer(
     self,
@@ -2221,106 +1336,14 @@ class Agent:
     routing_model: Optional["Model"] = None,
     messages: Optional[List[Message]] = None,
   ) -> bool:
-    """Lightweight YES/NO pre-check: does this query need the given layer?
+    from definable.agent.layers import should_invoke_layer
 
-    Uses routing_model (if provided) or falls back to the agent's model.
-    Includes recent conversation context so the gate has enough signal.
-    Returns True on failure to default to running the layer (fail-open).
-    """
-    model = routing_model or self.model
-
-    context_str = ""
-    if messages:
-      recent = messages[-3:]
-      context_str = "\n".join(
-        f"{m.role}: {(m.content[:200] if isinstance(m.content, str) else str(m.content)[:200])}"
-        for m in recent
-        if m.role in ("user", "assistant") and m.content
-      )
-
-    if decision_prompt:
-      prompt = decision_prompt
-    else:
-      prompt = self._build_routing_prompt(layer_name, query, context_str)
-
-    try:
-      response = await model.ainvoke(
-        messages=[Message(role="user", content=prompt)],
-        assistant_message=Message(role="assistant", content=""),
-      )
-      answer = (response.content or "").strip().upper()
-      return answer in ("YES", "Y")
-    except Exception as e:
-      from definable.utils.log import log_warning
-
-      log_warning(f"Layer routing check failed for '{layer_name}', defaulting to run: {e}")
-      return True  # fail-open: run the layer if routing fails
+    return await should_invoke_layer(self, layer_name, query, decision_prompt, routing_model, messages)
 
   def _build_layer_guide(self, context: Optional[RunContext] = None) -> str:
-    """Build a capabilities menu section for the system prompt.
+    from definable.agent.prompt import build_layer_guide
 
-    Only included when at least one layer has a custom description
-    or a non-default trigger (i.e., the model guides activation).
-
-    When ``context`` is provided, reflects the actual fetch state:
-    layers that were retrieved are marked as such; layers that were
-    configured with trigger="auto" but not fetched this turn are noted
-    as available-but-not-retrieved.
-    """
-    from definable.agent.config import (
-      DEFAULT_KNOWLEDGE_DESCRIPTION,
-      DEFAULT_RESEARCH_DESCRIPTION,
-      DEFAULT_THINKING_DESCRIPTION,
-    )
-
-    active = context.active_layers if context is not None else set()
-    items: List[str] = []
-
-    # Memory layer
-    if self.memory and self.memory.enabled:
-      if self.memory.description:
-        desc = self.memory.description
-        if "memory" in active:
-          items.append(f"- **Memory** [retrieved this turn]: {desc}")
-        else:
-          items.append(f"- **Memory**: {desc}")
-
-    # Knowledge layer
-    if self._knowledge:
-      needs_guide = bool(self._knowledge.description) or self._knowledge.trigger != "always"
-      if needs_guide:
-        desc = self._knowledge.description or DEFAULT_KNOWLEDGE_DESCRIPTION
-        if "knowledge" in active:
-          items.append(f"- **Knowledge Base** [retrieved this turn]: {desc}")
-        elif self._knowledge.trigger == "auto":
-          items.append(f"- **Knowledge Base** [available, not retrieved this turn]: {desc}")
-        else:
-          items.append(f"- **Knowledge Base**: {desc}")
-
-    # Thinking layer
-    if self._thinking and self._thinking.enabled:
-      needs_guide = bool(self._thinking.description) or self._thinking.trigger != "always"
-      if needs_guide:
-        desc = self._thinking.description or DEFAULT_THINKING_DESCRIPTION
-        items.append(f"- **Analysis**: {desc}")
-
-    # Deep research layer
-    if self._researcher and self._deep_research_config:
-      needs_guide = bool(self._deep_research_config.description) or self._deep_research_config.trigger != "always"
-      if needs_guide:
-        desc = self._deep_research_config.description or DEFAULT_RESEARCH_DESCRIPTION
-        items.append(f"- **Research**: {desc}")
-
-    if not items:
-      return ""
-
-    lines = [
-      "## Capabilities Available",
-      "",
-      "The following capabilities are available and will activate when relevant:",
-      "",
-    ] + items
-    return "\n".join(lines)
+    return build_layer_guide(self, context)
 
   async def _evaluate_layer_trigger(
     self,
@@ -2333,46 +1356,28 @@ class Agent:
     decision_prompt: Optional[str] = None,
     routing_model: Optional["Model"] = None,
   ) -> List[RunOutputEvent]:
-    """Evaluate a layer trigger and conditionally run the callback.
+    from definable.agent.layers import evaluate_layer_trigger
 
-    Returns callback's events if the layer runs, [] if skipped.
-    Fails open on 'auto' gate errors (returns callback result).
-    """
-    if trigger == "always":
-      return await callback()
-    if trigger == "auto":
-      if query_messages is None:
-        return []
-      query = self._extract_last_user_query(query_messages)
-      if query and await self._should_invoke_layer(
-        layer_name,
-        query,
-        decision_prompt,
-        routing_model,
-        all_messages,
-      ):
-        return await callback()
-    # "never" falls through
-    return []
+    return await evaluate_layer_trigger(
+      self,
+      trigger,
+      callback,
+      layer_name=layer_name,
+      query_messages=query_messages,
+      all_messages=all_messages,
+      decision_prompt=decision_prompt,
+      routing_model=routing_model,
+    )
 
   def _should_store_memory(self) -> bool:
-    """Return True if memory store should run this turn."""
-    if not self.memory:
-      return False
-    return self.memory.enabled
+    from definable.agent.layers import should_store_memory
+
+    return should_store_memory(self)
 
   async def _thinking_should_run(self, messages: List[Message]) -> bool:
-    """Return True if the thinking layer should execute this turn."""
-    if not (self._thinking and self._thinking.enabled):
-      return False
-    trigger = self._thinking.trigger
-    if trigger == "always":
-      return True
-    if trigger == "auto":
-      query = self._extract_last_user_query(messages)
-      if query:
-        return await self._should_invoke_layer("analysis/thinking", query)
-    return False  # "never"
+    from definable.agent.layers import thinking_should_run
+
+    return await thinking_should_run(self, messages)
 
   async def _run_pre_execution_pipeline(
     self,
@@ -2380,38 +1385,9 @@ class Agent:
     new_messages: List[Message],
     all_messages: List[Message],
   ) -> List[RunOutputEvent]:
-    """Pre-execution pipeline: readers → knowledge → research → memory recall.
+    from definable.agent.layers import run_pre_execution_pipeline
 
-    Populates context fields (knowledge_context, research_context, memory_context,
-    readers_context, active_layers) consumed by _execute_run() and arun_stream().
-    """
-    events: List[RunOutputEvent] = []
-
-    # File reading (before knowledge — extracted content may inform the query)
-    events.extend(await self._readers_extract(context, new_messages))
-
-    # Knowledge retrieval
-    if self._knowledge and self._knowledge.enabled:
-      events.extend(
-        await self._evaluate_layer_trigger(
-          trigger=self._knowledge.trigger,
-          callback=lambda: self._knowledge_retrieve(context),
-          layer_name="knowledge base",
-          query_messages=all_messages,
-          all_messages=all_messages,
-          decision_prompt=self._knowledge.decision_prompt,
-          routing_model=self._knowledge.routing_model,
-        )
-      )
-
-    # Deep research (after knowledge, before memory)
-    events.extend(await self._deep_research(context))
-
-    # Memory recall
-    if self.memory and self.memory.enabled:
-      events.extend(await self._memory_recall(context, new_messages))
-
-    return events
+    return await run_pre_execution_pipeline(self, context, new_messages, all_messages)
 
   def _build_thinking_messages(
     self,
@@ -2419,37 +1395,9 @@ class Agent:
     invoke_messages: List[Message],
     tools: Dict[str, Function],
   ) -> "tuple[list[Message], bool]":
-    """Build the messages for a thinking LLM call.
+    from definable.agent.layers import build_thinking_messages
 
-    Returns:
-      (thinking_messages, use_structured) — the messages and whether structured output is used.
-
-    For structured models (OpenAI, Gemini): uses ThinkingOutput schema via structured output.
-    For non-structured models (Moonshot, DeepSeek, xAI): pure natural language, no format
-    instructions — produces clean free-form text.
-    """
-    assert self._thinking is not None
-
-    thinking_model = self._thinking.model or self.model
-
-    # Use custom instructions if set, otherwise build context-aware prompt
-    if self._thinking.instructions:
-      thinking_prompt = self._thinking.instructions
-    else:
-      thinking_prompt = self._build_thinking_prompt(context, tools)
-
-    # Build thinking messages: system prompt + user/assistant messages (no tools)
-    thinking_messages: list[Message] = [Message(role="system", content=thinking_prompt)]
-    for msg in invoke_messages:
-      if msg.role in ("user", "assistant"):
-        thinking_messages.append(msg)
-
-    use_structured = thinking_model.supports_native_structured_outputs
-
-    # Non-structured models: no format instructions at all.
-    # They produce pure natural language reasoning text.
-
-    return thinking_messages, use_structured
+    return build_thinking_messages(self, context, invoke_messages, tools)
 
   async def _execute_thinking(
     self,
@@ -2457,143 +1405,21 @@ class Agent:
     invoke_messages: List[Message],
     tools: Dict[str, Function],
   ) -> "AsyncGenerator[Union[str, tuple[Optional[ThinkingOutput], Optional[str], list[ReasoningStep], list[Message]]], None]":
-    """Execute Definable's fallback thinking layer as a unified async generator.
+    from definable.agent.layers import execute_thinking
 
-    Always streams via ainvoke_stream. Behavior splits by model capability:
-
-    - Structured models (OpenAI, Gemini): accumulates response, parses ThinkingOutput
-      at end, yields chain_of_thought tokens during stream.
-    - Non-structured models (Moonshot, DeepSeek, xAI): yields raw text tokens,
-      builds thinking_text string at end. No JSON, no XML — pure natural language.
-
-    Yields:
-      str: Content delta tokens (for ReasoningContentDelta events).
-      tuple: Final result ``(thinking_output_or_none, thinking_text_or_none, reasoning_steps, reasoning_messages)``
-        as the last item.
-    """
-    import json
-
-    from definable.agent.reasoning.step import ThinkingOutput, thinking_output_to_reasoning_steps
-
-    assert self._thinking is not None
-    thinking_model = self._thinking.model or self.model
-
-    thinking_messages, use_structured = self._build_thinking_messages(context, invoke_messages, tools)
-
-    assistant_msg = Message(role="assistant")
-
-    if use_structured:
-      # Structured output: call with response_format, then yield chain_of_thought
-      response = await thinking_model.ainvoke(
-        messages=thinking_messages,
-        assistant_message=assistant_msg,
-        response_format=ThinkingOutput,
-      )
-      raw_content = response.content if isinstance(response.content, str) else str(response.content or "")
-
-      # Parse structured response
-      thinking_output: Optional[ThinkingOutput] = None
-      reasoning_steps: list[ReasoningStep] = []
-      try:
-        parsed = json.loads(raw_content)
-        if isinstance(parsed, dict):
-          if "analysis" in parsed and "chain_of_thought" not in parsed:
-            parsed["chain_of_thought"] = parsed.pop("analysis")
-          thinking_output = ThinkingOutput(**parsed)
-          reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
-      except Exception:
-        from definable.utils.log import log_warning
-
-        log_warning("Failed to parse structured thinking response, using raw content")
-        thinking_output = ThinkingOutput(chain_of_thought=raw_content, approach="Respond directly")  # type: ignore[call-arg]
-        reasoning_steps = thinking_output_to_reasoning_steps(thinking_output)
-
-      if thinking_output:
-        yield thinking_output.chain_of_thought
-
-      reasoning_agent_messages = thinking_messages + [
-        Message(role="assistant", content=response.content, metrics=response.response_usage)  # type: ignore[arg-type]
-      ]
-      yield (thinking_output, None, reasoning_steps, reasoning_agent_messages)
-      return
-
-    # Non-structured: stream pure natural language text token-by-token
-    accumulated = ""
-    response_usage = None
-
-    async for chunk in thinking_model.ainvoke_stream(
-      messages=thinking_messages,
-      assistant_message=assistant_msg,
-    ):
-      if chunk.content:
-        accumulated += chunk.content
-        yield chunk.content
-      if chunk.response_usage:
-        response_usage = chunk.response_usage
-
-    # Build reasoning messages
-    msg_kwargs: Dict[str, Any] = {"role": "assistant", "content": accumulated}
-    if response_usage is not None:
-      msg_kwargs["metrics"] = response_usage
-    reasoning_agent_messages = thinking_messages + [Message(**msg_kwargs)]
-
-    # No ThinkingOutput for non-structured — just free-form text
-    yield (None, accumulated or None, [], reasoning_agent_messages)
+    async for item in execute_thinking(self, context, invoke_messages, tools):
+      yield item
 
   def _enable_native_thinking(self) -> None:
-    """Configure the model to use native extended thinking.
+    from definable.agent.layers import enable_native_thinking
 
-    Called when thinking=True (or Thinking(...)) and the model supports it.
-    Sets the model's thinking parameter (e.g. Claude's thinking dict,
-    Gemini's thinking_budget, OpenAI's reasoning_effort).
-    """
-    assert self._thinking is not None
-    budget = self._thinking.resolve_budget_tokens()
-
-    # Claude: thinking = {"type": "enabled", "budget_tokens": N}
-    from definable.model.anthropic.claude import Claude
-
-    if isinstance(self.model, Claude):
-      if not self.model.thinking:
-        self.model.thinking = {"type": "enabled", "budget_tokens": budget}
-      return
-
-    # Gemini: thinking_budget
-    from definable.model.google.gemini import Gemini
-
-    if isinstance(self.model, Gemini):
-      if self.model.thinking_budget is None:
-        self.model.thinking_budget = budget
-      return
-
-    # OpenAI (o1/o3): reasoning_effort
-    from definable.model.openai.chat import OpenAIChat
-
-    if isinstance(self.model, OpenAIChat):
-      if self.model.reasoning_effort is None:
-        self.model.reasoning_effort = self._thinking.effort
-      return
+    enable_native_thinking(self)
 
   @staticmethod
   def _format_reasoning_context(steps: "list[ReasoningStep]") -> str:
-    """Format reasoning steps into XML context for system prompt injection."""
-    if not steps:
-      return ""
+    from definable.agent.prompt import format_reasoning_context
 
-    lines = ["<reasoning>"]
-    for i, step in enumerate(steps, 1):
-      lines.append(f'  <step number="{i}">')
-      if step.title:
-        lines.append(f"    <title>{step.title}</title>")
-      if step.reasoning:
-        lines.append(f"    <reasoning>{step.reasoning}</reasoning>")
-      if step.action:
-        lines.append(f"    <action>{step.action}</action>")
-      if step.confidence is not None:
-        lines.append(f"    <confidence>{step.confidence}</confidence>")
-      lines.append("  </step>")
-    lines.append("</reasoning>")
-    return "\n".join(lines)
+    return format_reasoning_context(steps)
 
   # --- Internal Methods ---
 
@@ -2608,126 +1434,18 @@ class Agent:
     reasoning_steps: "Optional[list[ReasoningStep]]" = None,
     reasoning_messages: "Optional[list[Message]]" = None,
   ) -> tuple:
-    """Build the invoke message list with system prompt, thinking, knowledge, memory, readers.
+    from definable.agent.prompt import build_invoke_messages
 
-    Args:
-        thinking_output: Pre-computed structured thinking output from ThinkPhase.
-        thinking_text: Pre-computed free-form thinking text (non-structured models).
-        reasoning_steps: Pre-computed reasoning steps from ThinkPhase.
-        reasoning_messages: Pre-computed reasoning messages from ThinkPhase.
-
-    Returns:
-        (invoke_messages, reasoning_steps, reasoning_agent_messages)
-    """
-    # Thinking phase (BEFORE system prompt assembly)
-    # If pre-computed thinking is provided (from ThinkPhase), use it directly.
-    # Otherwise, compute inline for backward compatibility.
-    reasoning_agent_messages = reasoning_messages
-    invoke_messages = messages.copy()
-    if thinking_output is None and thinking_text is None:
-      if await self._thinking_should_run(invoke_messages):
-        if self._thinking and self._thinking.should_use_native(self.model):
-          # Native thinking: configure the model, let the loop handle events.
-          # No separate call needed — the model will return reasoning_content.
-          self._enable_native_thinking()
-        else:
-          # Definable's fallback thinking layer (separate LLM call) — inline path
-          async for item in self._execute_thinking(context, invoke_messages, tools):
-            if isinstance(item, tuple):
-              thinking_output, thinking_text, reasoning_steps, reasoning_agent_messages = item
-
-    # Format thinking injection (used by both code paths)
-    thinking_injection: Optional[str] = None
-    injection_source: "Union[ThinkingOutput, str, None]" = thinking_output or thinking_text
-    if injection_source:
-      effort = self._thinking.effort if self._thinking and hasattr(self._thinking, "effort") else "medium"
-      thinking_injection = self._format_thinking_injection(injection_source, effort=effort)
-
-    # ── Context Manager path (structured, priority-based) ───────────
-    if self._context_manager is not None:
-      # Trim history (tool-pair-aware, async for summarize strategy)
-      invoke_messages = await self._context_manager.atrim_history(invoke_messages)
-
-      # Deferred tools: inject catalog into layer guide, swap tool set
-      _layer_guide = self._build_layer_guide(context)
-      if self._deferred_tool_manager is not None:
-        self._deferred_tool_manager.prepare_for_run()
-        catalog = self._deferred_tool_manager.build_catalog()
-        if catalog:
-          _layer_guide = f"{_layer_guide}\n\n{catalog}" if _layer_guide else catalog
-
-      # Common kwargs for system prompt assembly
-      _prompt_kwargs = dict(
-        instructions=self.instructions,
-        skill_instructions=self._build_skill_instructions(),
-        layer_guide=_layer_guide,
-        thinking_injection=thinking_injection,
-        knowledge_context=context.knowledge_context if (context.metadata or {}).get("_knowledge_position", "system") == "system" else None,
-        research_context=context.research_context,
-        memory_context=context.memory_context,
-      )
-
-      # Build system prompt via layered prompt
-      system_content = self._context_manager.build_system_prompt(**_prompt_kwargs)
-    # ── Legacy path (flat concatenation) ────────────────────────────
-    else:
-      system_content = self.instructions or ""
-
-      # Append skill instructions
-      skill_instructions = self._build_skill_instructions()
-      if skill_instructions:
-        system_content = f"{system_content}\n\n{skill_instructions}" if system_content else skill_instructions
-
-      # Layer guide
-      layer_guide = self._build_layer_guide(context)
-      if layer_guide:
-        system_content = f"{system_content}\n\n{layer_guide}" if system_content else layer_guide
-
-      # Inject thinking results into system prompt
-      if thinking_injection:
-        system_content = f"{system_content}\n\n{thinking_injection}" if system_content else thinking_injection
-
-      # Append knowledge context
-      if context.knowledge_context:
-        position = (context.metadata or {}).get("_knowledge_position", "system")
-        if position == "system":
-          system_content = f"{system_content}\n\n{context.knowledge_context}" if system_content else context.knowledge_context
-
-      # Append research context
-      if context.research_context:
-        system_content = f"{system_content}\n\n{context.research_context}" if system_content else context.research_context
-
-      # Append memory context
-      if context.memory_context:
-        system_content = f"{system_content}\n\n{context.memory_context}" if system_content else context.memory_context
-
-    if system_content:
-      system_msg = Message(role="system", content=system_content)
-      # Cache optimization: attach static/dynamic split for Claude adapter
-      if self._context_manager is not None and self._context_manager.config.cache_optimization:
-        static, dynamic = self._context_manager.build_system_prompt_split(**_prompt_kwargs)  # type: ignore[name-defined]
-        if static:
-          system_msg._cache_blocks = [  # type: ignore[attr-defined]
-            {"text": static, "type": "text", "cache_control": {"type": "ephemeral"}},
-            {"text": dynamic, "type": "text"},
-          ]
-      invoke_messages.insert(0, system_msg)
-
-    # Inject extracted file content into the last user message
-    if context.readers_context:
-      for i in range(len(invoke_messages) - 1, -1, -1):
-        if invoke_messages[i].role == "user":
-          original_content = invoke_messages[i].content or ""
-          invoke_messages[i] = Message(
-            role="user",
-            content=f"{context.readers_context}\n\n{original_content}",
-            images=invoke_messages[i].images,
-            videos=invoke_messages[i].videos,
-            audio=invoke_messages[i].audio,
-          )
-          break
-
-    return invoke_messages, reasoning_steps, reasoning_agent_messages
+    return await build_invoke_messages(
+      self,
+      context,
+      messages,
+      tools,
+      thinking_output=thinking_output,
+      thinking_text=thinking_text,
+      reasoning_steps=reasoning_steps,
+      reasoning_messages=reasoning_messages,
+    )
 
   async def _execute_via_pipeline(self, state: "LoopState") -> RunOutput:
     """Execute the full pipeline and return RunOutput.
@@ -2908,261 +1626,72 @@ class Agent:
       raise
 
   def _init_skills(self) -> None:
-    """Initialize skills: call setup(), validate names."""
-    seen_names: Dict[str, Skill] = {}
-    for skill in self.skills:
-      # Warn on duplicate skill names (last one wins for tools)
-      if skill.name in seen_names:
-        from definable.utils.log import log_warning
+    from definable.agent.resolution import init_skills
 
-        log_warning(f"Duplicate skill name '{skill.name}' — tools from the later skill will override earlier ones.")
-      seen_names[skill.name] = skill
-
-      # Call setup() for one-time initialization (non-fatal)
-      try:
-        skill.setup()
-        skill._initialized = True
-      except Exception as e:
-        from definable.utils.log import log_error
-
-        log_error(f"Skill '{skill.name}' setup() failed: {e}")
+    init_skills(self.skills)
 
   def _build_skill_instructions(self) -> str:
-    """Collect instructions from all skills into a merged block.
+    from definable.agent.prompt import build_skill_instructions
 
-    Returns:
-      A single string with all skill instructions separated by
-      blank lines, or empty string if no skills provide instructions.
-    """
-    parts: List[str] = []
-    for skill in self.skills:
-      try:
-        text = skill.get_instructions()
-      except Exception:
-        text = ""
-      if text and text.strip():
-        parts.append(text.strip())
-    return "\n\n".join(parts)
+    return build_skill_instructions(self)
 
   def _flatten_tools(self) -> Dict[str, Function]:
-    """
-    Flatten tools from skills, toolkits, and direct tools into a single dict.
+    from definable.agent.resolution import flatten_tools
 
-    Processing order (later entries override earlier ones):
-      1. Skill tools (lowest priority)
-      2. Toolkit tools
-      3. Direct tools (highest priority — explicit always wins)
-    """
-    result: Dict[str, Function] = {}
-
-    # 1. Process skill tools first (lowest priority)
-    for skill in self.skills:
-      try:
-        skill_tools = skill.tools
-      except Exception:
-        skill_tools = []
-      for fn in skill_tools:
-        # Merge skill dependencies into the tool
-        if skill.dependencies:
-          existing_deps = getattr(fn, "_dependencies", None) or {}
-          fn._dependencies = {**existing_deps, **skill.dependencies}
-        result[fn.name] = fn
-
-    # 2. Process toolkits (can override skill tools)
-    for toolkit in self.toolkits:
-      for fn in toolkit.tools:
-        # Merge toolkit dependencies with tool's existing dependencies
-        if toolkit.dependencies:
-          existing_deps = getattr(fn, "_dependencies", None) or {}
-          fn._dependencies = {**existing_deps, **toolkit.dependencies}
-        result[fn.name] = fn
-
-    # 3. Process direct tools (highest priority — can override anything)
-    for fn in self.tools:
-      result[fn.name] = fn
-
-    return result
+    return flatten_tools(self.skills, self.toolkits, self.tools)
 
   def _init_tracing(self) -> Optional[TraceWriter]:
-    """Initialize trace writer using resolved tracing config."""
-    if self._tracing_config and self._tracing_config.exporters:
-      return TraceWriter(self._tracing_config)
-    return None
+    from definable.agent.resolution import init_tracing
+
+    return init_tracing(self._tracing_config)
 
   # --- Layer Resolvers (called once during __init__) ---
 
   def _resolve_memory(self, memory: "Memory | bool | None") -> Optional["Memory"]:
-    """Resolve memory param to Memory | None.
+    from definable.agent.resolution import resolve_memory
 
-    Accepts:
-      - False/None → None
-      - True → Memory with SemanticStrategy + ConsolidationPolicy (smart defaults)
-      - Memory instance → pass through
-
-    When a Memory instance has no embedder, attempts to auto-resolve one
-    from the agent's model provider.
-    """
-    if memory is False or memory is None:
-      return None
-    if memory is True:
-      from definable.memory.consolidation import ConsolidationPolicy
-      from definable.memory.manager import Memory
-      from definable.memory.store.in_memory import InMemoryStore
-      from definable.memory.strategies.semantic import SemanticStrategy
-
-      return Memory(
-        store=InMemoryStore(),
-        strategy=SemanticStrategy(),
-        consolidation=ConsolidationPolicy(),
-      )
-
-    # Memory instance — pass through
-    return memory
+    return resolve_memory(memory)
 
   def _resolve_memory_embedder(self) -> None:
-    """Auto-resolve memory embedder from model provider if not set."""
-    if self.memory is None or getattr(self.memory, "embedder", None) is not None:
-      return
+    from definable.agent.resolution import resolve_memory_embedder
 
-    # Only auto-resolve for Memory instances with strategies (not CortexMemory etc.)
-    if not hasattr(self.memory, "_resolve_strategy"):
-      return
-
-    from definable.memory.strategies.semantic import SemanticStrategy
-
-    strategy = self.memory._resolve_strategy()
-    if not isinstance(strategy, SemanticStrategy):
-      return
-
-    # Try to create an embedder matching the agent's model provider.
-    embedder = self._create_embedder_for_model()
-    if embedder is not None:
-      self.memory.embedder = embedder
+    resolve_memory_embedder(self.memory, self.model)
 
   def _create_embedder_for_model(self) -> "Any":
-    """Create an embedder matching the agent's model provider. Returns None if unavailable."""
-    # Check model class name to determine provider.
-    model_cls = type(self.model).__name__
-    try:
-      if model_cls == "OpenAIChat":
-        from definable.knowledge.embedder.openai import OpenAIEmbedder
+    from definable.agent.resolution import create_embedder_for_model
 
-        return OpenAIEmbedder()
-      if model_cls == "Gemini":
-        from definable.knowledge.embedder.google import GoogleEmbedder
-
-        return GoogleEmbedder()
-      if model_cls == "MistralChat":
-        from definable.knowledge.embedder.mistral import MistralEmbedder
-
-        return MistralEmbedder()
-    except Exception:
-      pass
-
-    # Default: try OpenAI embedder (most commonly available).
-    try:
-      from definable.knowledge.embedder.openai import OpenAIEmbedder
-
-      return OpenAIEmbedder()
-    except Exception:
-      return None
+    return create_embedder_for_model(self.model)
 
   def _resolve_knowledge(self, knowledge: "Knowledge | str | bool | None") -> Optional["Knowledge"]:
-    """Resolve knowledge param to Knowledge | None.
+    from definable.agent.resolution import resolve_knowledge
 
-    Accepts:
-      - False/None → None
-      - True → ValueError (ambiguous — no path to load from)
-      - str → Knowledge.from_path(path) with auto-configured RAG pipeline
-      - Knowledge instance → pass through (has agent-integration fields)
-    """
-    if knowledge is False or knowledge is None:
-      return None
-    if knowledge is True:
-      raise ValueError(
-        "knowledge=True is not supported. Pass a path string or Knowledge instance:"
-        " Agent(knowledge='./docs/') or Agent(knowledge=Knowledge(vector_db=..., top_k=5))."
-      )
-    if isinstance(knowledge, str):
-      from definable.knowledge.base import Knowledge as _Knowledge
-
-      return _Knowledge.from_path(knowledge)
-
-    # Knowledge instance — pass through directly
-    return knowledge
+    return resolve_knowledge(knowledge)
 
   @staticmethod
   def _resolve_tracing(tracing_param: "Tracing | bool | None", config: Optional[AgentConfig]) -> Optional["Tracing"]:
-    """Resolve tracing param to Tracing | None.
+    from definable.agent.resolution import resolve_tracing
 
-    Accepts Tracing, bool, or None.
-    Direct param takes precedence; config.tracing is a fallback.
-    """
-    from definable.agent.tracing.base import Tracing as _Tracing
-
-    if tracing_param is False:
-      # Fall back to config.tracing if set
-      return config.tracing if config else None
-    if tracing_param is True:
-      return _Tracing()
-    if isinstance(tracing_param, _Tracing):
-      return tracing_param
-    return config.tracing if config else None
+    return resolve_tracing(tracing_param, config)
 
   def _resolve_context(self, context: Union[bool, "Context", None]) -> Optional["ContextManager"]:
-    """Resolve context param into a ContextManager (or None)."""
-    from definable.agent.context import Context as _Context
-    from definable.agent.context.manager import ContextManager
+    from definable.agent.resolution import resolve_context
 
-    if context is True:
-      return ContextManager(_Context(), model=self.model)
-    if isinstance(context, _Context):
-      return ContextManager(context, model=self.model)
-    return None
+    return resolve_context(context, self.model)
 
   def _resolve_deferred_tools(self) -> Optional["DeferredToolManager"]:
-    """Create a DeferredToolManager if deferred_tools is enabled."""
-    if self._context_manager is None:
-      return None
-    if not self._context_manager.config.deferred_tools:
-      return None
+    from definable.agent.resolution import resolve_deferred_tools
 
-    from definable.agent.context.deferred import DeferredToolManager
-
-    return DeferredToolManager(self._tools_dict)
+    return resolve_deferred_tools(self._context_manager, self._tools_dict)
 
   def _resolve_compression(self, compression: Union[bool, "Compression", None]) -> Optional["CompressionManager"]:
-    """Resolve compression param into a CompressionManager (or None)."""
-    from definable.agent.compression import Compression as _Compression
+    from definable.agent.resolution import resolve_compression
 
-    if compression is True:
-      return self._build_compression_manager(_Compression())
-    if isinstance(compression, _Compression):
-      return self._build_compression_manager(compression)
-    return None
+    return resolve_compression(compression, self.model)
 
   def _build_compression_manager(self, compression: "Compression") -> "CompressionManager":
-    """Build a CompressionManager from a Compression config."""
-    from definable.agent.compression import CompressionManager
+    from definable.agent.resolution import build_compression_manager
 
-    compression_model: Optional["Model"] = None
-    if compression.model is None:
-      compression_model = self.model
-    elif isinstance(compression.model, str):
-      from definable.model.utils import resolve_model_string
-
-      compression_model = resolve_model_string(compression.model)
-    else:
-      compression_model = compression.model
-
-    return CompressionManager(
-      model=compression_model,
-      compress_tool_results=True,
-      compress_tool_results_limit=compression.tool_results_limit,
-      compress_token_limit=compression.token_limit,
-      compress_tool_call_instructions=compression.instructions,
-      compress_single_result_size=compression.single_result_size,
-    )
+    return build_compression_manager(compression, self.model)
 
   def _build_initial_state(
     self,

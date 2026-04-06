@@ -197,7 +197,9 @@ async def build_invoke_messages(
   injection_source: "Union[ThinkingOutput, str, None]" = thinking_output or thinking_text
   if injection_source:
     effort = agent._thinking.effort if agent._thinking and hasattr(agent._thinking, "effort") else "medium"
-    thinking_injection = agent._format_thinking_injection(injection_source, effort=effort)
+    from definable.agent.layers import format_thinking_injection
+
+    thinking_injection = format_thinking_injection(injection_source, effort=effort)
 
   # -- Context Manager path (structured, priority-based) -------------------
   if agent._context_manager is not None:
