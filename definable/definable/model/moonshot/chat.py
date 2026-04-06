@@ -108,7 +108,18 @@ class MoonshotChat(OpenAILike):
         if file_part:
           message_dict["content"].insert(0, file_part)
 
-    # Manually add the content field even if it is None
-    if message.content is None:
+    # For non-assistant roles (user, system, tool): ensure content is always present.
+    # For assistant roles: content=None is valid when tool_calls exist, so we leave it absent.
+    is_assistant = message_dict.get("role") == "assistant"
+    has_tool_calls = "tool_calls" in message_dict
+
+    if message.content is None and not is_assistant:
       message_dict["content"] = ""
+
+    # Moonshot strictly rejects assistant messages with empty content (other providers don't).
+    # Only apply fallback for plain assistant messages — tool-call messages don't need content.
+    content = (message_dict.get("content") or "").strip()
+    if is_assistant and not has_tool_calls and not content:
+      message_dict["content"] = "..."
+
     return message_dict
