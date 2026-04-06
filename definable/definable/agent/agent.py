@@ -238,23 +238,16 @@ class Agent:
         config: Optional advanced configuration settings.
     """
     # Direct attributes — resolve string model shorthand
-    if model is None:
-      raise TypeError(
-        "Agent requires a 'model' argument. Pass a Model instance "
-        "(e.g., OpenAIChat(id='gpt-4o-mini')) or a string shorthand (e.g., 'openai/gpt-4o-mini')."
-      )
-    self.model: "Model"
-    if isinstance(model, str):
-      from definable.model.utils import resolve_model_string
+    from definable.agent.resolution import resolve_model
 
-      self.model = resolve_model_string(model)
-    else:
-      self.model = model
+    self.model: "Model" = resolve_model(model)
     self.tools = tools or []
     self.toolkits = toolkits or []
     self.skills = skills or []
     self.instructions: Optional[str] = "\n".join(str(i) for i in instructions) if isinstance(instructions, list) else instructions
-    self.readers = self._init_readers(readers)
+    from definable.agent.resolution import init_readers
+
+    self.readers = init_readers(readers)
     self.guardrails = guardrails
 
     # Optional config for advanced settings
@@ -263,156 +256,49 @@ class Agent:
       self.config = dataclasses.replace(self.config, agent_name=name)
 
     # Resolve memory: Memory | bool → Memory | None
-    self.memory = self._resolve_memory(memory)
-    self._resolve_memory_embedder()
+    from definable.agent.resolution import resolve_memory, resolve_memory_embedder
+
+    self.memory = resolve_memory(memory)
+    resolve_memory_embedder(self.memory, self.model)
+    # v2 memory: auto-inject the memory-manager skill into the system prompt
+    if self.memory and hasattr(self.memory, "get_skill"):
+      self.skills = list(self.skills) + [self.memory.get_skill()]
 
     # Resolve knowledge: Knowledge | bool → Knowledge | None
-    self._knowledge: Optional["Knowledge"] = self._resolve_knowledge(knowledge)
+    from definable.agent.resolution import (
+      resolve_audio_transcriber,
+      resolve_compression,
+      resolve_context,
+      resolve_debug,
+      resolve_deep_research,
+      resolve_deferred_tools,
+      resolve_knowledge,
+      resolve_observability,
+      resolve_plugins,
+      resolve_security,
+      resolve_sub_agents,
+      resolve_thinking,
+      resolve_tracing,
+      resolve_usage,
+    )
 
-    # Resolve tracing: direct param takes precedence over config.tracing fallback
-    self._tracing_config: Optional["Tracing"] = self._resolve_tracing(tracing, self.config)
+    self._knowledge: Optional["Knowledge"] = resolve_knowledge(knowledge)
 
-    # Debug mode: auto-add DebugExporter to tracing
-    # Accepts True (default debug config) or DebugConfig (pipeline breakpoints etc.)
-    from definable.agent.pipeline.debug import DebugConfig as _DebugConfig
+    # Resolve tracing → debug → observability (each may augment tracing exporters)
+    self._tracing_config: Optional["Tracing"] = resolve_tracing(tracing, self.config)
+    self._debug_config, self._tracing_config = resolve_debug(debug, self._tracing_config)
+    self._observability_config, self._observability_exporter, self._tracing_config = resolve_observability(observability, self._tracing_config)
 
-    self._debug_config: Optional[_DebugConfig] = None
-    if isinstance(debug, _DebugConfig):
-      self._debug_config = debug
-      # DebugConfig also implies debug=True for tracing
-      debug_enabled = True
-    else:
-      debug_enabled = bool(debug)
+    # Thinking, deep research, sub-agents
+    self._thinking: Optional["Thinking"] = resolve_thinking(thinking)
+    self._deep_research_config, self._prebuilt_researcher = resolve_deep_research(deep_research)
+    self._sub_agent_policy = resolve_sub_agents(sub_agents)
 
-    if debug_enabled:
-      from definable.agent.tracing.base import Tracing as _Tracing
-      from definable.agent.tracing.debug import DebugExporter
-
-      if self._tracing_config is None:
-        self._tracing_config = _Tracing(exporters=[DebugExporter()])
-      else:
-        existing = self._tracing_config.exporters or []
-        self._tracing_config = dataclasses.replace(self._tracing_config, exporters=[*existing, DebugExporter()])
-
-    # Observability dashboard — accepts True (default config) or ObservabilityConfig
-    # Same composition pattern as debug=True: adds ObservabilityExporter to tracing exporters
-    from definable.agent.observability.config import ObservabilityConfig as _ObsConfig
-
-    self._observability_config: Optional[_ObsConfig] = None
-    self._observability_exporter: Optional[Any] = None
-    if isinstance(observability, _ObsConfig):
-      self._observability_config = observability
-    elif observability is True:
-      self._observability_config = _ObsConfig(enabled=True)
-
-    if self._observability_config is not None and self._observability_config.enabled:
-      from definable.agent.observability.collector import ObservabilityExporter as _ObsExporter
-
-      self._observability_exporter = _ObsExporter(buffer_size=self._observability_config.buffer_size)
-      from definable.agent.tracing.base import Tracing as _Tracing
-
-      if self._tracing_config is None:
-        self._tracing_config = _Tracing(exporters=[self._observability_exporter])
-      else:
-        existing_exporters = self._tracing_config.exporters or []
-        self._tracing_config = dataclasses.replace(self._tracing_config, exporters=[*existing_exporters, self._observability_exporter])
-
-    # Thinking layer — accepts Thinking or bool
-    from definable.agent.reasoning.thinking import Thinking as _Thinking
-
-    if thinking is True:
-      self._thinking: Optional["Thinking"] = _Thinking()
-    elif isinstance(thinking, _Thinking):
-      self._thinking = thinking
-    else:
-      self._thinking = None
-
-    # Deep research layer
-    from definable.agent.research.config import DeepResearchConfig as _DRConfig
-    from definable.agent.research.engine import DeepResearch as _DREngine
-
-    if isinstance(deep_research, _DREngine):
-      self._deep_research_config: Optional[_DRConfig] = None
-      self._prebuilt_researcher: Optional[_DREngine] = deep_research
-    elif deep_research is True:
-      self._deep_research_config = _DRConfig()
-      self._prebuilt_researcher = None
-    elif isinstance(deep_research, _DRConfig):
-      self._deep_research_config = deep_research
-      self._prebuilt_researcher = None
-    else:
-      self._deep_research_config = None
-      self._prebuilt_researcher = None
-
-    # Sub-agent spawning — accepts True (default policy) or SubAgentPolicy
-    from definable.agent.pipeline.sub_agent import SubAgentPolicy as _SubAgentPolicy
-
-    if sub_agents is True:
-      self._sub_agent_policy: Optional[_SubAgentPolicy] = _SubAgentPolicy()
-    elif isinstance(sub_agents, _SubAgentPolicy):
-      self._sub_agent_policy = sub_agents
-    else:
-      self._sub_agent_policy = None
-
-    # Audio transcriber — accepts True (OpenAITranscriber) or AudioTranscriber instance
-    from definable.reader.audio import AudioTranscriber as _AudioTranscriber, OpenAITranscriber as _OpenAITranscriber
-
-    if audio_transcriber is True:
-      self._audio_transcriber: Optional[_AudioTranscriber] = _OpenAITranscriber()
-    elif isinstance(audio_transcriber, _AudioTranscriber):
-      self._audio_transcriber = audio_transcriber
-    else:
-      self._audio_transcriber = None
-
-    # Security layer — accepts True (default), SecurityConfig, or None
-    from definable.agent.security import SecurityConfig as _SecurityConfig
-
-    if security is True:
-      self._security: Optional[_SecurityConfig] = _SecurityConfig()
-    elif isinstance(security, _SecurityConfig):
-      self._security = security
-    else:
-      self._security = None
-
-    # Auto-inject security guardrails if security is configured
-    if self._security is not None:
-      from definable.agent.guardrail.base import Guardrails as _Guardrails
-
-      if self.guardrails is None:
-        self.guardrails = _Guardrails()
-      if self._security.tool_policy is not None:
-        from definable.agent.security.tool_policy import ToolPolicyGuardrail
-
-        self.guardrails.tool.append(ToolPolicyGuardrail(policy=self._security.tool_policy))
-      if self._security.content_defense is not None and self._security.content_defense.injection_detection:
-        from definable.agent.security.content_defense import ContentDefenseGuardrail
-
-        cd = self._security.content_defense
-        self.guardrails.input.append(
-          ContentDefenseGuardrail(
-            sensitivity=cd.injection_sensitivity,
-            extra_patterns=cd.extra_patterns,
-          )
-        )
-
-    # Usage tracking — accepts True (default tracker), UsageTracker instance, or None
-    from definable.agent.usage import UsageTracker as _UsageTracker
-
-    if usage is True:
-      self._usage_tracker: Optional[_UsageTracker] = _UsageTracker()
-    elif isinstance(usage, _UsageTracker):
-      self._usage_tracker = usage
-    else:
-      self._usage_tracker = None
-
-    # Plugin registry — stores plugins, loads them lazily on first arun()
-    from definable.agent.plugin.registry import PluginRegistry as _PluginRegistry
-
-    self._plugin_registry: _PluginRegistry = _PluginRegistry()
-    self._plugins_loaded = False
-    if plugins:
-      for p in plugins:
-        self._plugin_registry.add(p)
+    # Audio, security, usage, plugins
+    self._audio_transcriber = resolve_audio_transcriber(audio_transcriber)
+    self._security, self.guardrails = resolve_security(security, self.guardrails)
+    self._usage_tracker = resolve_usage(usage)
+    self._plugin_registry, self._plugins_loaded = resolve_plugins(plugins)
 
     # Convert skill_registry to on-demand skill (model picks skills based on query)
     if skill_registry is not None:
@@ -422,14 +308,16 @@ class Agent:
         self.skills.append(skill_registry.as_on_demand())
 
     # Initialize skills (call setup, validate)
-    self._init_skills()
+    from definable.agent.resolution import flatten_tools, init_skills, init_tracing
+
+    init_skills(self.skills)
 
     # Internal state
-    self._tools_dict: Dict[str, Function] = self._flatten_tools()
-    self._trace_writer: Optional[TraceWriter] = self._init_tracing()
-    self._compression_manager: Optional["CompressionManager"] = self._resolve_compression(compression)
-    self._context_manager: Optional["ContextManager"] = self._resolve_context(context)
-    self._deferred_tool_manager: Optional["DeferredToolManager"] = self._resolve_deferred_tools()
+    self._tools_dict: Dict[str, Function] = flatten_tools(self.skills, self.toolkits, self.tools)
+    self._trace_writer: Optional[TraceWriter] = init_tracing(self._tracing_config)
+    self._compression_manager: Optional["CompressionManager"] = resolve_compression(compression, self.model)
+    self._context_manager: Optional["ContextManager"] = resolve_context(context, self.model)
+    self._deferred_tool_manager: Optional["DeferredToolManager"] = resolve_deferred_tools(self._context_manager, self._tools_dict)
     self._middleware: List[Middleware] = []
     self._interfaces: List["BaseInterface"] = []
     self._gateway: Optional["InterfaceGateway"] = None
@@ -603,99 +491,24 @@ class Agent:
     await self._ashutdown()
 
   def _start(self) -> None:
-    """Initialize resources."""
-    if self._started:
-      return
-    self._started = True
-    # Future: initialize connections, warm up caches, etc.
+    from definable.agent.lifecycle import start
+
+    start(self)
 
   def _shutdown(self) -> None:
-    """Cleanup resources (sync-safe).
+    from definable.agent.lifecycle import shutdown
 
-    Closes memory, drains pending memory tasks, and shuts down
-    agent-owned toolkits when called outside an async event loop.
-    If an event loop is already running (e.g. sync context manager
-    used inside async code), logs a warning — use ``_ashutdown()``
-    or ``async with`` instead.
-    """
-    # Teardown skills
-    for skill in self.skills:
-      with contextlib.suppress(Exception):
-        skill.teardown()
-    if self._trace_writer:
-      self._trace_writer.shutdown()
-    # Best-effort async resource cleanup from sync context
-    self._sync_close_async_resources()
-    self._started = False
-
-  def _sync_close_async_resources(self) -> None:
-    """Close memory, toolkits, and drain tasks from a sync context."""
-
-    async def _cleanup() -> None:
-      await self._drain_memory_tasks()
-      for toolkit in self._agent_owned_toolkits:
-        with contextlib.suppress(Exception):
-          await toolkit.shutdown()
-      self._agent_owned_toolkits.clear()
-      if self.memory:
-        with contextlib.suppress(Exception):
-          await self.memory.close()
-
-    try:
-      asyncio.get_running_loop()
-      # Running inside an async context — can't nest asyncio.run()
-      from definable.utils.log import log_warning
-
-      log_warning(
-        "Agent._shutdown() cannot close async resources (memory, toolkits) "
-        "from inside a running event loop. Use 'async with Agent(...)' or "
-        "await agent._ashutdown() instead."
-      )
-    except RuntimeError:
-      # No running loop — safe to create one
-      with contextlib.suppress(Exception):
-        asyncio.run(_cleanup())
+    shutdown(self)
 
   async def _ashutdown(self) -> None:
-    """Async cleanup."""
-    await self._drain_memory_tasks()
-    # Shutdown toolkits we initialized (not user-managed ones)
-    for toolkit in self._agent_owned_toolkits:
-      with contextlib.suppress(Exception):
-        await toolkit.shutdown()
-    self._agent_owned_toolkits.clear()
-    if self.memory:
-      with contextlib.suppress(Exception):
-        await self.memory.close()
-    # Sync-only cleanup (skills, trace writer) — skip _sync_close_async_resources
-    # since we already handled async resources above.
-    for skill in self.skills:
-      with contextlib.suppress(Exception):
-        skill.teardown()
-    if self._trace_writer:
-      self._trace_writer.shutdown()
-    self._started = False
+    from definable.agent.lifecycle import ashutdown
+
+    await ashutdown(self)
 
   async def _ensure_toolkits_initialized(self) -> None:
-    """Initialize any AsyncLifecycleToolkit instances that aren't yet initialized.
+    from definable.agent.lifecycle import ensure_toolkits_initialized
 
-    Skips already-initialized toolkits (user-managed), tracks which toolkits
-    we initialized (for shutdown), and refreshes _tools_dict after init.
-    """
-    async with self._toolkit_init_lock:
-      needs_refresh = False
-      for toolkit in self.toolkits:
-        if isinstance(toolkit, AsyncLifecycleToolkit) and not toolkit._initialized:
-          try:
-            await toolkit.initialize()
-            self._agent_owned_toolkits.append(toolkit)
-            needs_refresh = True
-          except Exception as e:
-            from definable.utils.log import log_warning
-
-            log_warning(f"Toolkit {toolkit!r} init failed (non-fatal): {e}")
-      if needs_refresh:
-        self._tools_dict = self._flatten_tools()
+    await ensure_toolkits_initialized(self)
 
   # --- Middleware Support ---
 
@@ -1682,14 +1495,9 @@ class Agent:
     return events
 
   async def _drain_memory_tasks(self) -> None:
-    """Await all pending memory background tasks (with timeout)."""
-    if not self._pending_memory_tasks:
-      return
-    done, _ = await asyncio.wait(self._pending_memory_tasks, timeout=30.0)
-    for task in done:
-      with contextlib.suppress(Exception):
-        task.result()
-    self._pending_memory_tasks = [t for t in self._pending_memory_tasks if not t.done()]
+    from definable.agent.lifecycle import drain_memory_tasks
+
+    await drain_memory_tasks(self)
 
   async def _memory_recall(self, context: RunContext, new_messages: List[Message]) -> List[RunOutputEvent]:
     """Recall session history, emit events, inject into context.
@@ -3479,6 +3287,12 @@ class Agent:
       spawn_fn = _build_spawn_agent_function(self, self._sub_agent_policy)
       tools["spawn_agent"] = spawn_fn
 
+    if self.memory and hasattr(self.memory, "get_tools"):
+      user_id = context.user_id or "default"
+      session_id = context.session_id or "default"
+      for fn in self.memory.get_tools(user_id, session_id):
+        tools[fn.name] = fn
+
     return tools
 
   def _normalize_instruction(
@@ -3508,52 +3322,9 @@ class Agent:
     raise TypeError(f"Unexpected instruction type: {type(instruction)}")
 
   async def _transcribe_audio(self, messages: List[Message]) -> None:
-    """Transcribe audio in messages if a transcriber is configured.
+    from definable.agent.lifecycle import transcribe_audio
 
-    Mutates messages in-place: populates ``audio.transcript``, injects
-    the transcript text into ``message.content``, and **clears
-    ``message.audio``** so the model layer does not send ``input_audio``
-    content blocks to models that don't support them (most models only
-    accept ``text`` and ``image_url`` blocks).
-
-    When no transcriber is set (``self._audio_transcriber is None``), this
-    is a no-op — audio passes through raw for audio-capable models.
-    """
-    if self._audio_transcriber is None:
-      return
-
-    for msg in messages:
-      if not msg.audio:
-        continue
-      transcripts: List[str] = []
-      for audio_item in msg.audio:
-        # Skip if already transcribed
-        if audio_item.transcript:
-          transcripts.append(audio_item.transcript)
-          continue
-        audio_bytes = audio_item.get_content_bytes()
-        if audio_bytes is None:
-          continue
-        mime = audio_item.mime_type or "audio/ogg"
-        try:
-          text = await self._audio_transcriber.atranscribe(audio_bytes, mime)
-        except Exception as e:
-          from definable.utils.log import log_warning
-
-          log_warning(f"Audio transcription failed: {e}")
-          continue
-        audio_item.transcript = text
-        transcripts.append(text)
-      if transcripts:
-        transcript_text = "\n".join(transcripts)
-        if msg.content:
-          msg.content = f"{msg.content}\n\n{transcript_text}"
-        else:
-          msg.content = transcript_text
-        # Clear audio from message — the transcript is now in .content.
-        # This prevents the model from sending input_audio blocks that
-        # non-audio models (gpt-4o-mini, DeepSeek, Claude, etc.) reject.
-        msg.audio = None
+    await transcribe_audio(self, messages)
 
   def _emit(self, event: BaseRunOutputEvent) -> None:
     """Emit event to trace writer (fire-and-forget)."""
