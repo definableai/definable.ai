@@ -40,7 +40,7 @@ obs_config = ObservabilityConfig(
 tracing = Tracing(exporters=[JSONLExporter(trace_dir="./my-traces")])
 
 agent = Agent(
-  model=OpenAIChat(id="gpt-4o-mini"),
+  model=OpenAIChat(id="gpt-5.2"),
   tools=[search],
   instructions="You are a research assistant.",
   tracing=tracing,
