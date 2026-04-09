@@ -91,6 +91,7 @@ class TestBuildAskUserTool:
     assert q.text == "Pick one"
     assert q.header == "Choice"
     assert q.allow_multiple is True
+    assert q.options is not None
     assert len(q.options) == 2
     assert q.options[0].label == "a"
     assert q.options[0].description == "Option A"

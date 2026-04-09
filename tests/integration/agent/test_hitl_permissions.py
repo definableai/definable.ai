@@ -179,7 +179,7 @@ class TestHITLPermissions:
 
     # Second run: settings say "allow", resolver should NOT be called
     model2 = MockModel(side_effect=_make_tool_call_side_effect("dangerous_delete", '{"target": "b"}'))
-    agent2 = Agent(model=model2, tools=[dangerous_delete], config=NO_TRACE)
+    agent2 = Agent(model=model2, tools=[dangerous_delete], config=NO_TRACE)  # type: ignore[arg-type]
     agent2._permission_service = perm_service
 
     await agent2.arun("Delete b")
