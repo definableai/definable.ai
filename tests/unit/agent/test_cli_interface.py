@@ -780,8 +780,7 @@ class TestCLIInterface:
     assert len(iface._command_registry.all_commands) == 9
 
   def test_init_custom_config(self):
-    config = CLIConfig(prompt="$ ", show_banner=False)
-    iface = CLIInterface(config=config)
+    iface = CLIInterface(prompt="$ ", show_banner=False)
     assert iface._cli_config.prompt == "$ "
     assert iface._cli_config.show_banner is False
 
@@ -951,7 +950,7 @@ class TestStreamingFlagIntegration:
   @pytest.mark.asyncio
   async def test_send_response_prints_when_not_streamed(self):
     """If content was NOT streamed, _send_response should print it."""
-    iface = CLIInterface(config=CLIConfig(markdown_output=False))
+    iface = CLIInterface(markdown_output=False)
     iface._output._console = _make_console()
 
     # No streaming occurred

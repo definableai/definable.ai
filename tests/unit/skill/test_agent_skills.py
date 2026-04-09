@@ -637,14 +637,6 @@ class TestBackwardCompat:
     assert len(eager) == 1
     assert eager[0].get_instructions() != ""
 
-  def test_as_lazy_still_works(self):
-    s = _make_skill("l1", description="Lazy test")
-    reg = SkillRegistry(skills=[s], include_library=False)
-    lazy = reg.as_lazy()
-    assert lazy.name == "skill_library"
-    assert len(lazy.tools) == 1
-    assert lazy.tools[0].name == "read_skill"
-
   def test_flat_skill_repr(self):
     skill = _make_skill("test", tags=["a"])
     assert "file" in repr(skill)

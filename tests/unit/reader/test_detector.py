@@ -518,25 +518,3 @@ class TestBaseReader:
     f = File(name="data.unknownformat", content=b"\x00\x01")
     parser = reader.get_parser(f)
     assert parser is None
-
-
-@pytest.mark.unit
-class TestBaseReaderBackwardsCompat:
-  """Tests for backwards-compatible aliases."""
-
-  def test_file_reader_alias(self):
-    from definable.reader.base import BaseReader, FileReader
-
-    assert FileReader is BaseReader
-
-  def test_reader_config_alias(self):
-    from definable.reader.base import FileReaderConfig
-    from definable.reader.models import ReaderConfig
-
-    assert FileReaderConfig is ReaderConfig
-
-  def test_reader_result_alias(self):
-    from definable.reader.base import ReaderResult
-    from definable.reader.models import ReaderOutput
-
-    assert ReaderResult is ReaderOutput

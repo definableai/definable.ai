@@ -248,11 +248,9 @@ class TestDesktopInterfaceContract:
 
   def test_desktop_interface_is_not_abstract(self):
     """DesktopInterface must be concrete (all abstract methods implemented)."""
-    from definable.agent.interface.desktop.config import DesktopConfig
     from definable.agent.interface.desktop.interface import DesktopInterface
 
-    cfg = DesktopConfig()
-    iface = DesktopInterface(config=cfg)
+    iface = DesktopInterface()
     assert iface is not None
 
 

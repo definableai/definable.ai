@@ -44,12 +44,6 @@ class TestWebSocketInterface:
     iface = WebSocketInterface(max_connections=50)
     assert iface._ws_config.max_connections == 50
 
-  def test_deprecated_config_param(self):
-    config = WebSocketConfig(path="/old")
-    with pytest.warns(DeprecationWarning):
-      iface = WebSocketInterface(config=config)
-    assert iface._ws_config.path == "/old"
-
   def test_create_router(self):
     """create_router() returns a FastAPI APIRouter."""
     iface = WebSocketInterface()

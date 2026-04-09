@@ -466,12 +466,6 @@ class TestCallInterfaceConstruction:
         pipeline="realtime",
       )
 
-  def test_deprecated_config_kwarg(self):
-    config = CallConfig(phone_number="+1555", telephony_provider="twilio")
-    with pytest.warns(DeprecationWarning, match="config= to CallInterface is deprecated"):
-      ci = CallInterface(config=config, account_sid="AC", auth_token="test")
-    assert ci._call_config.phone_number == "+1555"
-
   def test_active_calls_initially_empty(self):
     ci = CallInterface(
       provider="twilio",

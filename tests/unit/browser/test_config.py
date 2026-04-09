@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 
 from definable.browser.config import BrowserConfig
@@ -65,46 +63,6 @@ class TestDefaults:
   def test_extra_args_tuple(self):
     c = BrowserConfig(extra_args=("--window-size=800,600", "--incognito"))
     assert c.extra_args == ("--window-size=800,600", "--incognito")
-
-
-class TestDeprecation:
-  def test_host_port_to_cdp_url(self):
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      c = BrowserConfig(host="127.0.0.1", port=9222)
-      assert len(w) == 1
-      assert "deprecated" in str(w[0].message).lower()
-      assert c.cdp_url == "ws://127.0.0.1:9222"
-
-  def test_host_port_does_not_override_cdp_url(self):
-    with warnings.catch_warnings(record=True):
-      warnings.simplefilter("always")
-      c = BrowserConfig(cdp_url="ws://custom:1234", host="127.0.0.1", port=9222)
-      assert c.cdp_url == "ws://custom:1234"
-
-  def test_sandbox_false_to_no_sandbox(self):
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      c = BrowserConfig(sandbox=False)
-      deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-      assert len(deprecation_warnings) >= 1
-      assert c.no_sandbox is True
-
-  def test_browser_executable_path_migration(self):
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      c = BrowserConfig(browser_executable_path="/usr/bin/chromium")
-      deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-      assert len(deprecation_warnings) >= 1
-      assert c.executable_path == "/usr/bin/chromium"
-
-  def test_browser_args_migration(self):
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      c = BrowserConfig(browser_args=("--foo",))
-      deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-      assert len(deprecation_warnings) >= 1
-      assert c.extra_args == ("--foo",)
 
 
 class TestConnectionModes:

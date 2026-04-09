@@ -1,14 +1,9 @@
 """Tests for direct-kwargs interface construction (config class elimination from public API)."""
 
-import warnings
-
 import pytest
 
 from definable.agent.interface.cli.config import CLIConfig
-from definable.agent.interface.desktop.config import DesktopConfig
-from definable.agent.interface.discord.config import DiscordConfig
 from definable.agent.interface.errors import InterfaceError
-from definable.agent.interface.telegram.config import TelegramConfig
 
 
 # ---------------------------------------------------------------------------
@@ -76,18 +71,6 @@ class TestTelegramDirectKwargs:
     assert iface.config.max_message_length == 2000
     assert iface.config.rate_limit_messages_per_minute == 60
 
-  def test_backwards_compat_config_kwarg(self):
-    from definable.agent.interface.telegram import TelegramInterface
-
-    cfg = TelegramConfig(bot_token="legacy-token")
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      iface = TelegramInterface(config=cfg)
-      assert len(w) == 1
-      assert issubclass(w[0].category, DeprecationWarning)
-      assert "config=" in str(w[0].message)
-    assert iface._tg_config.bot_token == "legacy-token"
-
   def test_missing_bot_token_raises(self):
     from definable.agent.interface.telegram import TelegramInterface
 
@@ -147,17 +130,6 @@ class TestDiscordDirectKwargs:
     assert iface._dc_config.command_prefix == "!"
     assert iface._dc_config.connect_timeout == 15.0
 
-  def test_backwards_compat_config_kwarg(self):
-    from definable.agent.interface.discord import DiscordInterface
-
-    cfg = DiscordConfig(bot_token="legacy")
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      iface = DiscordInterface(config=cfg)
-      assert len(w) == 1
-      assert issubclass(w[0].category, DeprecationWarning)
-    assert iface._dc_config.bot_token == "legacy"
-
   def test_missing_bot_token_raises(self):
     from definable.agent.interface.discord import DiscordInterface
 
@@ -198,17 +170,6 @@ class TestDesktopDirectKwargs:
     assert iface._config.auto_screenshot is True
     assert iface._config.screenshot_on_error is False
     assert iface._config.websocket_port == 7777
-
-  def test_backwards_compat_config_kwarg(self):
-    from definable.agent.interface.desktop import DesktopInterface
-
-    cfg = DesktopConfig(websocket_port=5555)
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      iface = DesktopInterface(config=cfg)
-      assert len(w) == 1
-      assert issubclass(w[0].category, DeprecationWarning)
-    assert iface._config.websocket_port == 5555
 
   def test_default_max_message_length(self):
     from definable.agent.interface.desktop import DesktopInterface
@@ -260,18 +221,6 @@ class TestCLIDirectKwargs:
     assert iface._cli_config.command_prefix == "!"
     assert iface._cli_config.enable_completions is False
     assert iface._cli_config.user_id == "test-user"
-
-  def test_backwards_compat_config_kwarg(self):
-    from definable.agent.interface.cli import CLIInterface
-
-    cfg = CLIConfig(prompt=">> ", show_banner=False)
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      iface = CLIInterface(config=cfg)
-      assert len(w) == 1
-      assert issubclass(w[0].category, DeprecationWarning)
-    assert iface._cli_config.prompt == ">> "
-    assert iface._cli_config.show_banner is False
 
   def test_default_values_match_cli_config(self):
     from definable.agent.interface.cli import CLIInterface

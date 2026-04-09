@@ -466,46 +466,6 @@ class TestSupervision:
 
 
 class TestAgentIntegration:
-  def test_create_gateway_on_agent(self) -> None:
-    """Agent.create_gateway() creates and stores a gateway."""
-    from definable.agent.agent import Agent
-    from definable.model.openai.chat import OpenAIChat
-
-    with patch.object(OpenAIChat, "__init__", lambda self, **kw: None):
-      model = OpenAIChat.__new__(OpenAIChat)
-      model.id = "gpt-4o-mini"
-      model.name = "gpt-4o-mini"
-      model.provider = "OpenAI"
-      model.metrics = {}  # type: ignore[attr-defined]
-      model.provider_request_headers = None  # type: ignore[attr-defined]
-      agent = Agent(model=model)
-
-    gw = agent.create_gateway()
-    assert agent.gateway is gw
-    assert isinstance(gw, InterfaceGateway)
-    assert gw.agent is agent
-
-  def test_create_gateway_migrates_interfaces(self) -> None:
-    """Pre-registered interfaces are migrated to the gateway."""
-    from definable.agent.agent import Agent
-    from definable.model.openai.chat import OpenAIChat
-
-    with patch.object(OpenAIChat, "__init__", lambda self, **kw: None):
-      model = OpenAIChat.__new__(OpenAIChat)
-      model.id = "gpt-4o-mini"
-      model.name = "gpt-4o-mini"
-      model.provider = "OpenAI"
-      model.metrics = {}  # type: ignore[attr-defined]
-      model.provider_request_headers = None  # type: ignore[attr-defined]
-      agent = Agent(model=model)
-
-    iface = _StubInterface("telegram")
-    iface.bind(agent)
-    agent._interfaces.append(iface)
-
-    gw = agent.create_gateway()
-    assert iface in gw.interfaces
-
   def test_gateway_property_default_none(self) -> None:
     from definable.agent.agent import Agent
     from definable.model.openai.chat import OpenAIChat

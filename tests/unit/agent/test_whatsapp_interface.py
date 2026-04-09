@@ -47,12 +47,6 @@ class TestWhatsAppInterface:
     assert iface._wa_config.from_number == "whatsapp:+1234567890"
     assert iface._wa_config.webhook_path == "/wa/hook"
 
-  def test_deprecated_config_param(self):
-    config = WhatsAppConfig(account_sid="AC123")
-    with pytest.warns(DeprecationWarning):
-      iface = WhatsAppInterface(config=config)
-    assert iface._wa_config.account_sid == "AC123"
-
   def test_create_router(self):
     iface = WhatsAppInterface()
     router = iface.create_router()

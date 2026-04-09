@@ -54,12 +54,6 @@ class TestEmailInterface:
     assert iface._email_config.smtp_host == "smtp.test.com"
     assert iface._email_config.email_address == "bot@test.com"
 
-  def test_deprecated_config_param(self):
-    config = EmailConfig(imap_host="imap.test.com")
-    with pytest.warns(DeprecationWarning):
-      iface = EmailInterface(config=config)
-    assert iface._email_config.imap_host == "imap.test.com"
-
   @pytest.mark.asyncio
   async def test_start_without_imap_host_raises(self):
     iface = EmailInterface()

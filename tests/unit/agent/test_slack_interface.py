@@ -240,15 +240,6 @@ class TestSlackInterfaceConstruction:
       assert interface._slack_config.mode == "http"
       assert interface._slack_config.signing_secret == "secret"
 
-  def test_constructor_deprecated_config(self):
-    with patch("definable.agent.interface.slack.interface._ensure_slack_deps"):
-      from definable.agent.interface.slack.interface import SlackInterface
-
-      config = SlackConfig(bot_token="xoxb-test", app_token="xapp-test")
-      with pytest.warns(DeprecationWarning, match="Passing config= to SlackInterface is deprecated"):
-        interface = SlackInterface(config=config)
-      assert interface._slack_config.bot_token == "xoxb-test"
-
   def test_constructor_custom_params(self):
     with patch("definable.agent.interface.slack.interface._ensure_slack_deps"):
       from definable.agent.interface.slack.interface import SlackInterface

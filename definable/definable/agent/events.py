@@ -50,6 +50,7 @@ from definable.agent.run.agent import (
   RunInput,
   RunOutput,
   RunOutputEvent,
+  RunPausedEvent,
   RunStartedEvent,
   SessionSummaryCompletedEvent,
   SessionSummaryStartedEvent,
@@ -106,6 +107,7 @@ __all__ = [
   "RunCompletedEvent",
   "RunErrorEvent",
   "RunCancelledEvent",
+  "RunPausedEvent",
   # Reasoning
   "ReasoningStartedEvent",
   "ReasoningStepEvent",

@@ -72,6 +72,9 @@ def tool(
   cache_results: bool = False,
   cache_dir: Optional[str] = None,
   cache_ttl: int = 3600,
+  requires_confirmation: bool = False,
+  external_execution: bool = False,
+  requires_user_input: bool = False,
 ) -> Callable[[F], Function]: ...
 
 

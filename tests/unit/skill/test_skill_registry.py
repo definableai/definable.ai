@@ -141,18 +141,3 @@ class TestAsEager:
     reg = SkillRegistry(skills=[s1, s2], include_library=False)
     eager = reg.as_eager()
     assert len(eager) == 2
-
-
-@pytest.mark.unit
-class TestAsLazy:
-  """Tests for SkillRegistry.as_lazy()."""
-
-  def test_as_lazy_returns_single_skill(self):
-    """as_lazy returns a single Skill with catalog instructions and a read_skill tool."""
-    s = _make_skill("lazy_target", description="A lazy skill")
-    reg = SkillRegistry(skills=[s], include_library=False)
-    lazy = reg.as_lazy()
-    assert lazy.name == "skill_library"
-    assert "lazy_target" in lazy.get_instructions()
-    assert len(lazy.tools) == 1
-    assert lazy.tools[0].name == "read_skill"
