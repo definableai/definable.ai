@@ -1,0 +1,50 @@
+---
+title: Deep Research
+sidebarTitle: Deep Research
+description: "Multi-wave research configuration for broader retrieval and synthesis."
+icon: binoculars
+---
+
+`definable.agent.research` is the long-horizon retrieval layer. It is designed for cases where a single search or vector lookup is not enough and the agent needs to read multiple sources, compress them, and synthesize a broader context block.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `DeepResearch` | Engine that executes the research workflow |
+| `DeepResearchConfig` | Controls depth, providers, concurrency, and context output |
+| `ResearchResult`, `ResearchMetrics` | Final synthesized context and execution statistics |
+| `CKU`, `Fact`, `SourceInfo`, `TopicGap`, `Contradiction` | Research records used by the synthesis pipeline |
+
+## What it is good for
+
+- open-ended research tasks,
+- questions that need multiple web sources,
+- workflows where citations and contradiction handling matter.
+
+## Tested example
+
+```python
+from definable.agent.research import DeepResearchConfig, ResearchMetrics, ResearchResult
+
+config = DeepResearchConfig(depth="deep", trigger="auto").with_depth_preset()
+result = ResearchResult(
+    context="<research_context />",
+    metrics=ResearchMetrics(waves_executed=2, total_sources_read=6),
+)
+
+assert config.max_sources == 30
+assert config.max_waves == 5
+assert result.metrics.waves_executed == 2
+```
+
+## Operational notes
+
+- Real research runs need a search provider and the optional research dependencies.
+- `trigger="auto"` is the safest production default because not every question needs a full research pass.
+- The research result is injected back into the main agent prompt as context.
+
+## Related pages
+
+- [`Thinking`](/reasoning/thinking)
+- [`Knowledge`](/knowledge/overview)

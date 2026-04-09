@@ -1,0 +1,80 @@
+---
+title: Definable
+sidebarTitle: Introduction
+description: Build agents, teams, workflows, and runtime integrations on one execution stack.
+mode: wide
+---
+
+import RunAgentStep from "./_snippets/run-agent-step.mdx";
+
+Definable is a Python framework for building agent systems that keep one consistent execution model from local prototypes to production services. Models, tools, knowledge, memory, interfaces, teams, and workflows all plug into the same run loop.
+
+## Start here if you want to
+
+- build a single agent with tools, retrieval, or memory
+- expose that agent through chat, web, voice, or custom transports
+- compose multiple agents with teams or workflows
+- keep the same execution model while adding observability, replay, and production runtime features
+
+## Choose the right abstraction
+
+| Start with | Use it when | Move up when |
+| --- | --- | --- |
+| [`Agent`](/agents/overview) | one model-driven worker should reason, call tools, and return a result | you need multiple specialists or explicit multi-step control flow |
+| [`Team`](/teams/overview) | several specialists should coordinate under a model-driven leader | the process must become explicit and reproducible |
+| [`Workflow`](/workflows/overview) | the sequence of steps should be deterministic and inspectable | a step still needs model-driven delegation, in which case embed an agent or team |
+| [`Runtime`](/agents/runtime) | the system needs HTTP routes, interfaces, schedules, or long-running supervision | you want to expose the same agent stack as a service |
+
+## How the stack fits together
+
+1. A model produces tokens, tool calls, and structured responses.
+2. An agent assembles context, optional knowledge, optional memory, and tool access around that model.
+3. Teams and workflows orchestrate one or more agents when the task outgrows a single worker.
+4. Interfaces and runtime expose the system to users, routes, and scheduled execution.
+5. Replay, tracing, and observability make the resulting runs inspectable in production.
+
+## Environment setup
+
+<RunAgentStep />
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.tool.decorator import tool
+
+
+@tool
+def search_docs(query: str) -> str:
+    return f"results:{query}"
+
+
+agent = Agent(
+    model=MockModel(responses=["Use the docs search tool when needed."]),
+    tools=[search_docs],
+    instructions="You are a documentation assistant.",
+)
+
+result = agent.run("How do I search the docs?")
+
+assert result.content == "Use the docs search tool when needed."
+assert agent.tool_names == ["search_docs"]
+```
+
+## Documentation map
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="rocket" href="/quickstart">
+    Install the framework, run a deterministic first agent, and understand the core execution loop.
+  </Card>
+  <Card title="Core Abstractions" icon="robot" href="/agents/overview">
+    Learn when to use agents, teams, workflows, runtime, and interfaces.
+  </Card>
+  <Card title="Capabilities" icon="toolbox" href="/tools/overview">
+    Add tools, knowledge, memory, browser automation, MCP, and structured output.
+  </Card>
+  <Card title="Production" icon="server" href="/production/overview">
+    Ship the same stack with auth, observability, replay, and deployment guidance.
+  </Card>
+</CardGroup>

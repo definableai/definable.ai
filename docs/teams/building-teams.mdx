@@ -1,0 +1,77 @@
+---
+title: Building Teams
+sidebarTitle: Building Teams
+description: "Create member agents, choose a mode, and let the leader coordinate them."
+mode: "wide"
+---
+
+Building a team has three parts:
+
+1. define member agents,
+2. choose the leader model,
+3. pick a coordination mode.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+
+from examples.docs.support import mock_model_response
+
+
+async def main() -> None:
+    state = {"calls": 0}
+
+    def leader_side_effect(messages, tools, **kwargs):
+        state["calls"] += 1
+        if state["calls"] == 1:
+            return mock_model_response(
+                tool_calls=[
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {
+                            "name": "delegate_to_member",
+                            "arguments": '{"member_name": "researcher", "task_input": "research quantum computing"}',
+                        },
+                    }
+                ]
+            )
+        return mock_model_response(content="Final combined answer.")
+
+    researcher = Agent(
+        model=MockModel(responses=["Research: qubits and superposition."]),
+        name="researcher",
+        instructions="Research specialist.",
+    )
+    team = Team(
+        name="content-team",
+        model=MockModel(side_effect=leader_side_effect),
+        members=[researcher],
+        mode=TeamMode.coordinate,
+        instructions="Produce accurate technical explanations.",
+    )
+
+    output = await team.arun("Explain quantum computing.")
+
+    assert output.content == "Final combined answer."
+    assert state["calls"] == 2
+
+
+asyncio.run(main())
+```
+
+## Design choices
+
+- Put specialist instructions on the members.
+- Put orchestration policy on the team's `instructions`.
+- Add extra leader-only tools with `tools=[...]` when the leader needs capabilities beyond delegation.
+
+## Related pages
+
+- [`Running Teams`](/teams/running-teams)
+- [`Delegation`](/teams/delegation)

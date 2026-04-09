@@ -1,0 +1,38 @@
+---
+title: WebSocket
+sidebarTitle: WebSocket
+description: Serve an agent over a bidirectional WebSocket endpoint.
+---
+
+`WebSocketInterface` is the transport to use when you control both sides of the protocol and want low-latency browser or application clients. It mounts a WebSocket route on the runtime and converts incoming JSON payloads into the same standardized interface message flow as the platform-specific integrations.
+
+## Tested example
+
+```python
+from definable.agent.interface import WebSocketInterface
+
+interface = WebSocketInterface(path="/agent/ws", heartbeat_interval=10.0)
+router = interface.create_router()
+paths = {route.path for route in router.routes}
+
+assert interface.needs_server() is True
+assert interface.active_connections == 0
+assert "/agent/ws" in paths
+```
+
+## Wire format
+
+- Inbound messages send `type="message"` plus text, session, and user identifiers.
+- The interface also understands `ping` and answers with `pong`.
+- Outbound responses include content, session context, and run metadata.
+
+## Operational notes
+
+- The interface requires a runtime HTTP server because it exposes a mounted WebSocket route.
+- `path`, `heartbeat_interval`, and `max_connections` are the main deployment controls.
+- If you want a browser-facing custom transport with a different payload shape, subclass `BaseInterface` instead of modifying this one.
+
+## Related pages
+
+- [`Custom Interfaces`](/interfaces/custom-interfaces)
+- [`Runtime`](/agents/runtime)

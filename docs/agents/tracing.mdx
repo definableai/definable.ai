@@ -1,0 +1,83 @@
+---
+title: Tracing
+description: Record structured run events and export them to JSONL or custom backends.
+icon: chart-gantt
+---
+
+Tracing captures run lifecycle events such as `RunStarted`, `ModelCallStarted`, `ToolCallCompleted`, and `RunCompleted`. Exporters receive those events synchronously, and exporter failures are suppressed so tracing does not break the main run.
+
+## Tested JSONL export
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from definable.agent import Agent, JSONLExporter, MockModel
+from definable.agent.tracing import Tracing
+from definable.agent.tracing.jsonl import read_trace_events, read_trace_file
+
+
+with TemporaryDirectory() as tmp:
+    agent = Agent(
+        model=MockModel(responses=["hello"]),
+        session_id="trace-session",
+        tracing=Tracing(exporters=[JSONLExporter(tmp, mirror_stdout=False)]),
+    )
+
+    output = agent.run("Hi")
+    trace_path = Path(tmp) / "trace-session.jsonl"
+
+    raw_events = read_trace_file(trace_path)
+    typed_events = read_trace_events(trace_path)
+
+    assert output.content == "hello"
+    assert [event["event"] for event in raw_events] == [
+        "RunStarted",
+        "ModelCallStarted",
+        "ModelCallCompleted",
+        "RunCompleted",
+    ]
+    assert [event.event for event in typed_events] == [
+        "RunStarted",
+        "ModelCallStarted",
+        "ModelCallCompleted",
+        "RunCompleted",
+    ]
+```
+
+## Filtering events
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from definable.agent import Agent, JSONLExporter, MockModel
+from definable.agent.tracing import Tracing
+from definable.agent.tracing.jsonl import read_trace_file
+
+
+with TemporaryDirectory() as tmp:
+    agent = Agent(
+        model=MockModel(responses=["hello"]),
+        session_id="trace-session",
+        tracing=Tracing(
+            exporters=[JSONLExporter(tmp, mirror_stdout=False)],
+            event_filter=lambda event: event.event != "RunStarted",
+        ),
+    )
+
+    agent.run("Hi")
+    events = read_trace_file(Path(tmp) / "trace-session.jsonl")
+
+    assert [event["event"] for event in events] == [
+        "ModelCallStarted",
+        "ModelCallCompleted",
+        "RunCompleted",
+    ]
+```
+
+## Notes
+
+- Use explicit `session_id` values when you want stable file names.
+- `debug=True` is a separate convenience flag that appends a debug exporter to tracing.
+- `JSONLExporter` writes one file per session and flushes on every event by default.

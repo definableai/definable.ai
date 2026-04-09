@@ -1,0 +1,63 @@
+---
+title: Interfaces
+sidebarTitle: Overview
+description: "Connect an agent to CLI, chat, voice, or custom transports."
+icon: message
+mode: wide
+---
+
+`definable.agent.interface` is the transport layer for agents. Interfaces translate platform events into agent runs and translate run output back into platform-native responses.
+
+## What interfaces do
+
+Interfaces let one agent stack reach users across different transports without rewriting business logic:
+
+- chat platforms such as Telegram, Discord, Slack, and WhatsApp
+- local operator experiences such as CLI or REPL flows
+- custom web, websocket, email, or call integrations
+
+Use an interface when you need platform translation. Use [`AgentRuntime`](/agents/runtime) when you need supervision, HTTP routes, scheduling, or several interfaces in one service.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `BaseInterface` | Base contract for transports |
+| `InterfaceConfig` | Shared interface configuration |
+| `CLIInterface` | Local terminal and REPL interface |
+| `TelegramInterface`, `DiscordInterface`, `SlackInterface`, `WhatsAppInterface`, `EmailInterface`, `WebSocketInterface`, `CallInterface` | Platform integrations |
+| `SessionManager` | Session persistence and expiry |
+| `LoggingHook`, `AllowlistHook` | Cross-interface hooks |
+
+## How interfaces fit the runtime
+
+Interfaces are optional. You can pass them directly to `Agent(...)` for configuration and use [`AgentRuntime`](/agents/runtime) to supervise them alongside HTTP routes and triggers.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.interface import CLIInterface
+from definable.agent.testing import MockModel
+
+agent = Agent(
+    model=MockModel(responses=["hello"]),
+    interfaces=[CLIInterface(show_banner=False, mode="repl")],
+)
+
+interface = agent.interfaces[0]
+
+assert type(interface).__name__ == "CLIInterface"
+assert interface.config.platform == "cli"
+```
+
+## Choosing the right interface
+
+- Use `CLIInterface` for local development and operator workflows.
+- Use chat interfaces when the platform already provides identity and delivery.
+- Use router-based interfaces when you want them mounted inside the same HTTP runtime.
+
+## Related pages
+
+- [`Runtime`](/agents/runtime)
+- [`Auth`](/agents/auth)

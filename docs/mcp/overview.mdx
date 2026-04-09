@@ -1,0 +1,80 @@
+---
+title: MCP
+sidebarTitle: Overview
+description: "Model Context Protocol client, toolkit, resources, and prompt providers."
+icon: network-wired
+mode: wide
+---
+
+`definable.mcp` connects agents to Model Context Protocol servers. It can consume tools, resources, and prompts from local subprocess servers or remote HTTP/SSE servers and expose them through the same agent tool system as native Definable tools.
+
+## What MCP adds to the stack
+
+Use MCP when capabilities should live outside your process but still feel native inside the agent:
+
+- tools hosted by another service
+- resources that should be listed and read on demand
+- prompts that come from a shared remote source
+
+MCP is especially useful when several agents or applications should share the same capability surface without copying tool code into each runtime.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `MCPServerConfig`, `MCPConfig` | Configure one or more MCP servers |
+| `MCPClient` | Direct client for tools, resources, and prompts |
+| `MCPToolkit` | Wrap server tools as agent tools |
+| `MCPResourceProvider`, `MCPPromptProvider` | Direct helpers for resources and prompts |
+
+## Choose the right surface
+
+- Use `MCPClient` when you want direct control over server interactions.
+- Use `MCPToolkit` when you want an agent to call MCP tools as part of its normal loop.
+- Use the providers when resources or prompts are the main value and you do not need tool wrapping.
+
+## Tested example
+
+```python
+import asyncio
+import sys
+
+from definable.mcp import MCPClient, MCPConfig, MCPServerConfig, MCPToolkit
+
+from examples.docs.support import mock_mcp_server_path
+
+config = MCPConfig(
+    servers=[
+        MCPServerConfig(
+            name="mock",
+            command=sys.executable,
+            args=[str(mock_mcp_server_path())],
+        )
+    ]
+)
+
+
+async def main() -> None:
+    async with MCPClient(config) as client:
+        tools = await client.list_tools("mock")
+        result = await client.call_tool("mock", "echo", {"text": "hello"})
+        resources = await client.list_all_resources()
+        prompt = await client.get_prompt("mock", "summarize", {"topic": "testing"})
+
+        assert [tool.name for tool in tools] == ["echo"]
+        assert result.content[0].text == "Echo: hello"
+        assert resources["mock"][0].uri == "docs://handbook"
+        assert prompt.messages[0].content.text == "Summarize testing in three bullets."
+
+    async with MCPToolkit(config) as toolkit:
+        assert [tool.name for tool in toolkit.tools] == ["mock_echo"]
+
+
+asyncio.run(main())
+```
+
+## Related pages
+
+- [`Getting Started`](/mcp/getting-started)
+- [`Configuration`](/mcp/configuration)
+- [`Toolkits`](/toolkits/mcp-toolkit)

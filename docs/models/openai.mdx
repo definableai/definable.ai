@@ -1,0 +1,61 @@
+---
+title: OpenAI
+description: Configure OpenAI chat-completions models through `OpenAIChat`.
+icon: brain
+---
+
+`OpenAIChat` is the primary adapter for OpenAI chat-completions models. It is the most feature-complete provider surface in the library: native JSON-schema output, vision inputs, audio output, and the full OpenAI request parameter set all hang off this class.
+
+## What this adapter is for
+
+- Use it when you want an explicit OpenAI model instance instead of a model string.
+- Use it when you need OpenAI-specific request controls such as `reasoning_effort`, `service_tier`, or audio modalities.
+- Use [`OpenAILike`](/models/openai-like) instead when the endpoint speaks the OpenAI protocol but is not OpenAI.
+
+## Tested construction
+
+```python
+from definable.model import OpenAIChat
+from pydantic import BaseModel
+
+
+class Ticket(BaseModel):
+    title: str
+    priority: str
+
+
+model = OpenAIChat(
+    id="gpt-4o-mini",
+    api_key="test-key",
+    temperature=0.2,
+    max_completion_tokens=256,
+    service_tier="flex",
+)
+
+params = model.get_request_params(response_format=Ticket)
+
+assert model.provider == "OpenAI"
+assert model.id == "gpt-4o-mini"
+assert params["temperature"] == 0.2
+assert params["max_completion_tokens"] == 256
+assert params["service_tier"] == "flex"
+assert params["response_format"]["type"] == "json_schema"
+assert params["response_format"]["json_schema"]["name"] == "Ticket"
+```
+
+## Key options
+
+| Option | Use it for |
+| --- | --- |
+| `reasoning_effort` | Request a higher or lower reasoning budget on supported models |
+| `verbosity` | Ask the model for shorter or more expansive answers |
+| `modalities` and `audio` | Return text plus generated audio from one call |
+| `max_completion_tokens` | Put a hard ceiling on output size |
+| `base_url` | Point the OpenAI SDK at a compatible proxy or gateway |
+| `strict_output` | Enforce exact JSON-schema adherence for native structured output |
+
+## Related pages
+
+- [`Structured Output`](/models/structured-output)
+- [`Vision and Audio`](/models/vision-and-audio)
+- [`Model as String`](/models/model-as-string)

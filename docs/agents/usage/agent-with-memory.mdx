@@ -1,0 +1,41 @@
+---
+title: Agent with Memory
+description: "Attach a memory store to an agent and keep runs scoped by session and user."
+---
+
+The example below validates the memory integration path with an in-memory store. The model responses are fixed, but the memory store is populated by the actual agent runtime.
+
+```python
+import asyncio
+
+from definable.agent import Agent, MockModel
+from definable.memory import InMemoryStore, Memory
+
+
+async def main() -> None:
+    async with Memory(store=InMemoryStore()) as memory:
+        agent = Agent(
+            model=MockModel(
+                responses=["Hello Ada.", "You told me your name is Ada."]
+            ),
+            memory=memory,
+        )
+
+        await agent.arun("My name is Ada.", session_id="docs", user_id="user-1")
+        second = await agent.arun(
+            "What is my name?",
+            session_id="docs",
+            user_id="user-1",
+        )
+
+        entries = await memory.get_entries("docs", user_id="user-1")
+
+        assert second.content == "You told me your name is Ada."
+        assert len(entries) == 4
+        assert entries[0].content == "My name is Ada."
+
+
+asyncio.run(main())
+```
+
+In production, use the same pattern with a persistent store and a real model so the second response is grounded in recalled memory rather than a fixed mock answer.

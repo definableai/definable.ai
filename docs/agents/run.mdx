@@ -1,0 +1,49 @@
+---
+title: Run
+sidebarTitle: Run
+description: "Shared run context, statuses, and event types produced by the agent execution loop."
+icon: play
+---
+
+`definable.agent.run` is the support package that defines the shared vocabulary for agent execution. Most developers interact with it indirectly through `RunOutput`, streaming events, and status checks.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `RunContext` | Per-run metadata carried through the pipeline |
+| `RunStatus` | High-level run status such as completed, blocked, or cancelled |
+
+The richer event and output types live in `definable.agent.run.agent`. They are intentionally lower-level because most applications consume them through `Agent.run()`, `Agent.run_stream()`, or replay tooling.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.run import RunContext, RunStatus
+from definable.agent.testing import MockModel
+
+context = RunContext(
+    run_id="run-1",
+    session_id="session-1",
+    metadata={"source": "docs"},
+)
+
+agent = Agent(model=MockModel(responses=["pong"]), instructions="Reply briefly.")
+output = agent.run("ping", session_id=context.session_id)
+
+assert output.status == RunStatus.completed
+assert output.session_id == "session-1"
+assert context.metadata["source"] == "docs"
+```
+
+## When to use it directly
+
+- Build middleware or plugins that need per-run metadata.
+- Interpret run state in orchestration code.
+- Work with streaming or replay at the event level.
+
+## Related pages
+
+- [`Runtime`](/agents/runtime)
+- [`Replay`](/replay/overview)

@@ -1,0 +1,38 @@
+---
+title: Troubleshooting
+sidebarTitle: Overview
+description: Diagnose the most common Definable failures quickly with symptom-driven checks.
+icon: life-ring
+---
+
+The fastest way to debug a Definable issue is to reduce it to one layer at a time:
+
+1. Verify the smallest local agent run.
+2. Verify the capability layer involved, such as tools, knowledge, or memory.
+3. Verify the transport or runtime wrapper.
+4. Reintroduce real provider credentials and deployment concerns last.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["ok"]), instructions="Reply briefly.")
+output = agent.run("ping")
+events = [event.event for event in agent.run_stream("ping") if hasattr(event, "event")]
+
+assert output.content == "ok"
+assert "RunCompleted" in events
+```
+
+## Start with the matching symptom
+
+- [`Models and Auth`](/troubleshooting/models-and-auth): model resolution, credentials, and 401 responses
+- [`Retrieval and Memory`](/troubleshooting/retrieval-and-memory): missing recall, poor retrieval, or empty context
+- [`Runtime and Interfaces`](/troubleshooting/runtime-and-interfaces): missing routes, server wiring, and transport mounting
+- [`Tools and Structured Output`](/troubleshooting/tools-and-structured-output): missing tool registration and schema mismatches
+
+## General rule
+
+If the mock-backed local version fails, fix the local shape first. If the local version passes and the provider-backed version fails, the problem is almost always configuration, credentials, network access, or provider behavior.

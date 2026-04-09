@@ -1,0 +1,50 @@
+---
+title: Async Tools
+sidebarTitle: Async Tools
+description: Define non-blocking tools with async entrypoints.
+icon: rotate
+---
+
+Async tools use the same decorator and schema generation as sync tools. The difference is only in the entrypoint: the runtime awaits the coroutine for you.
+
+## When to use them
+
+- HTTP requests
+- database calls
+- filesystem or network I/O
+- any tool that would otherwise block the run loop
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.tool import tool
+from definable.tool.function import FunctionCall
+
+
+@tool
+async def fetch_record(record_id: str) -> str:
+    """Fetch a record asynchronously."""
+    await asyncio.sleep(0)
+    return f"record:{record_id}"
+
+
+async def main() -> None:
+    result = await FunctionCall(function=fetch_record, arguments={"record_id": "42"}).aexecute()
+    assert result.result == "record:42"
+
+
+asyncio.run(main())
+```
+
+## Guidance
+
+- Prefer `async def` whenever the tool spends most of its time waiting on I/O.
+- You can mix sync and async tools on the same agent.
+- Generator-style tools are supported too, but keep them for actual streaming cases.
+
+## Related pages
+
+- [`Caching`](/tools/caching)
+- [`Dependencies`](/tools/dependencies)

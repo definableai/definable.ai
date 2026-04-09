@@ -1,0 +1,52 @@
+---
+title: AgentConfig
+description: Immutable execution settings for Agent.
+---
+
+`AgentConfig` is the immutable settings object for execution behavior. It controls loop limits, retries, validation, reader defaults, and tracing compatibility settings. It does not hold the major capability layers themselves.
+
+## What belongs in AgentConfig
+
+| Category | Fields |
+| --- | --- |
+| Identity defaults | `agent_id`, `agent_name` |
+| Context defaults | `session_state`, `dependencies`, `readers` |
+| Loop control | `max_iterations`, `max_tool_rounds`, `max_tokens`, `stream_timeout_seconds` |
+| Error handling | `retry_transient_errors`, `max_retries`, `retry_backoff_base` |
+| Validation | `validate_tool_args`, `strict_output_schema` |
+
+## Important distinction
+
+- Put `memory`, `knowledge`, `thinking`, `interfaces`, and `guardrails` on `Agent(...)`.
+- Put retry limits, iteration limits, and validation defaults on `AgentConfig(...)`.
+
+## Update pattern
+
+`AgentConfig` is a frozen dataclass. The intended mutation pattern is `config.with_updates(...)`, which returns a new config object.
+
+## Tested example
+
+```python
+from definable.agent import AgentConfig
+
+base = AgentConfig(max_iterations=5, max_retries=1)
+updated = base.with_updates(agent_name="docs-agent", strict_output_schema=True)
+
+assert base.agent_name is None
+assert updated.agent_name == "docs-agent"
+assert updated.max_iterations == 5
+assert updated.max_retries == 1
+assert updated.strict_output_schema is True
+```
+
+## Commonly tuned fields
+
+- Increase `max_iterations` when you expect more tool-loop depth.
+- Lower `max_retries` in tests to fail faster.
+- Set `strict_output_schema=True` when downstream consumers require hard schema conformance.
+- Set `stream_timeout_seconds` deliberately for long-running streaming use cases.
+
+## Related pages
+
+- [`Agent`](/reference/agents/agent)
+- [`Running Agents`](/agents/running-agents)

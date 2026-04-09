@@ -1,0 +1,41 @@
+---
+title: Basic Workflow
+description: Compose a short sequential pipeline with explicit named steps.
+---
+
+Use a basic workflow when you want explicit step boundaries and deterministic context flow between those steps.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent.workflow import Step, Workflow
+
+
+async def research(step_input):
+    return "Research notes"
+
+
+def draft(step_input):
+    return f"Draft from {step_input.get_last_step_content()}"
+
+
+workflow = Workflow(
+    name="publish",
+    steps=[
+        Step(name="research", executor=research),
+        Step(name="draft", executor=draft),
+    ],
+)
+
+output = asyncio.run(workflow.arun("Write an overview."))
+
+assert output.content == "Draft from Research notes"
+assert output.get_step_content("research") == "Research notes"
+```
+
+## Related pages
+
+- [`Workflows Overview`](/workflows/overview)
+- [`Patterns: Sequential`](/workflows/patterns/sequential)

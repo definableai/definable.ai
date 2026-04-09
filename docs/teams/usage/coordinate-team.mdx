@@ -1,0 +1,33 @@
+---
+title: Coordinate Team
+description: Let a leader decide which members to involve and synthesize the outcome.
+---
+
+Coordinate mode is the default team pattern when delegation should be selective rather than broadcast to every member.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+
+researcher = Agent(model=MockModel(responses=["research notes"]), name="researcher")
+writer = Agent(model=MockModel(responses=["draft"]), name="writer")
+editor = Agent(model=MockModel(responses=["polished draft"]), name="editor")
+
+team = Team(
+    name="content-team",
+    model=MockModel(responses=["final synthesis"]),
+    members=[researcher, writer, editor],
+    mode=TeamMode.coordinate,
+)
+
+assert team.mode.value == "coordinate"
+assert team.member_names == ["researcher", "writer", "editor"]
+```
+
+## Related pages
+
+- [`Teams Overview`](/teams/overview)
+- [`Delegation`](/teams/delegation)

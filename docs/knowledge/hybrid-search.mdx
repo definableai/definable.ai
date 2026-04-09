@@ -1,0 +1,37 @@
+---
+title: Hybrid Search
+sidebarTitle: Hybrid Search
+description: Combine vector retrieval with full-text search and downstream scoring layers.
+icon: magnifying-glass-chart
+---
+
+The knowledge search pipeline can do more than plain vector similarity. When an `FTSIndex` and `HybridSearchConfig` are attached, the pipeline merges vector results with SQLite FTS5 keyword matches before later stages like reranking, temporal decay, or MMR diversity.
+
+## Tested example
+
+```python
+from examples.docs.knowledge_pipeline import main
+
+summary = main()
+
+assert summary["hybrid_top_content"] == "Python powers the agent runtime."
+assert summary["hybrid_result_count"] >= 2
+```
+
+## Pipeline order
+
+- Vector search produces the initial semantic candidates.
+- Full-text search adds keyword-sensitive candidates when hybrid search is enabled.
+- Hybrid merge combines those lists with the configured strategy.
+- Optional reranking, temporal scoring, and MMR run after retrieval.
+
+## Guidance
+
+- Use hybrid search when exact keywords matter as much as semantics.
+- Use pure vector search when your corpus is mostly conceptual and keyword variation is high.
+- Keep the hybrid weights simple at first; tune them only after looking at real misses.
+
+## Related pages
+
+- [`Rerankers`](/knowledge/rerankers)
+- [`Usage: Hybrid Search`](/knowledge/usage/hybrid-search-example)

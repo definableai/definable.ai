@@ -1,0 +1,48 @@
+---
+title: Installation
+description: Install Definable and verify the core execution loop locally.
+---
+
+Definable requires Python `3.12+`. Start with the base package for the core agent stack, then add extras only for the providers and capabilities you plan to use in your environment.
+
+## System requirements
+
+- Python `3.12` or newer
+- a virtual environment for local development
+- provider credentials only for the model backends you actually intend to call
+
+## Choose an install profile
+
+| Install profile | Use it for |
+| --- | --- |
+| `definable` | core agents, tools, teams, workflows, and local testing |
+| `definable[runtime]` | HTTP routes, serving, and scheduled execution |
+| `definable[readers]` | document parsing for RAG and ingestion |
+| `definable[browser]` | Playwright-backed browser automation |
+| `definable[discord]`, `definable[slack]`, `definable[jwt]`, `definable[anthropic]` | platform- or provider-specific capabilities |
+
+For local development, keep the install narrow. Add extras only when the code path actually needs them.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["hello"]))
+output = agent.run("Say hello.")
+
+assert output.content == "hello"
+```
+
+## What to configure next
+
+- Add the credentials for the model provider you want to call in production.
+- Install runtime or interface extras only when you are ready to expose the system.
+- Keep local examples on `MockModel` until you need real provider behavior.
+
+## Recommended next steps
+
+- Configure the model provider credentials you actually plan to use.
+- Start with [`First Agent`](/first-agent) for the smallest working build.
+- Add interfaces and runtime extras only when you are ready to expose the agent.

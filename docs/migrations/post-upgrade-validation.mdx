@@ -1,0 +1,41 @@
+---
+title: Post-Upgrade Validation
+description: Re-validate local execution, runtime shape, and docs-backed examples after an upgrade.
+icon: flask
+---
+
+After an upgrade, validate the runtime in layers. Do not jump straight to provider debugging.
+
+## Validation order
+
+1. local agent run,
+2. runtime `/health` and `/run`,
+3. transport routes,
+4. observability and usage surfaces,
+5. provider-backed traffic.
+
+## Tested example
+
+```python
+from pathlib import Path
+
+docs_test = Path("tests/docs/test_documentation_examples.py")
+docs_tree = Path("docs")
+
+assert docs_test.exists()
+assert docs_tree.exists()
+assert any(path.name == "docs.json" for path in docs_tree.iterdir())
+```
+
+## Recommended upgrade checks
+
+- rerun the documentation example suite,
+- rerun the smallest runtime smoke test,
+- re-check mounted interface paths,
+- re-check auth behavior on `/run`,
+- inspect observability endpoints before exposing traffic.
+
+## Related pages
+
+- [`Troubleshooting`](/troubleshooting/overview)
+- [`Production Overview`](/production/overview)

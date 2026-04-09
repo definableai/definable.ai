@@ -1,0 +1,49 @@
+---
+title: Agent Integration
+sidebarTitle: Agent Integration
+description: Attach a knowledge base to an agent so retrieved context is injected before the model call.
+icon: robot
+---
+
+import KnowledgeTrueWarning from "../_snippets/knowledge-true-warning.mdx";
+
+Knowledge can sit behind the agent in two main ways:
+
+- pass a `Knowledge` instance to `Agent(knowledge=...)` for automatic retrieval,
+- expose the same knowledge base through `KnowledgeToolkit` when you want the agent to decide when to search.
+
+Path shorthand such as `Agent(knowledge="/path/to/docs")` and `Knowledge.from_path(...)` is also supported, but it depends on a working embedder and local source files in your environment.
+
+<KnowledgeTrueWarning />
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.knowledge import Document, Knowledge
+
+from examples.docs.support import MockVectorDB
+
+knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
+knowledge.add(
+    Document(content="The handbook says to escalate billing issues to finance."),
+    chunk=False,
+)
+
+model = MockModel(responses=["Escalate billing issues to finance."])
+agent = Agent(model=model, knowledge=knowledge)
+
+output = agent.run("What should I do with billing issues?")
+messages = model.call_history[0]["messages"]
+
+assert messages[0].role == "system"
+assert "billing issues" in messages[0].content
+assert output.content == "Escalate billing issues to finance."
+```
+
+## Guidance
+
+- Use direct agent integration when retrieval should happen automatically every turn.
+- Use `KnowledgeToolkit` when retrieval is optional or part of a longer reasoning chain.
+- Keep the knowledge base narrow and curated. Retrieval quality depends more on source quality than on volume.

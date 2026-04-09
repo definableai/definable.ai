@@ -1,0 +1,39 @@
+---
+title: Guardrail Examples
+sidebarTitle: Guardrails
+description: Verified examples for input, output, and tool guardrails.
+icon: shield
+---
+
+## Curated script
+
+| Script | Covers |
+| --- | --- |
+| `python examples/docs/agent_guardrails.py` | Blocking overlong input with `Guardrails` |
+
+## Tested guardrail flow
+
+```python
+import asyncio
+
+from definable.agent import Agent, MockModel
+from definable.agent.guardrail import Guardrails, max_tokens
+from definable.agent.run import RunStatus
+
+
+async def main() -> None:
+    agent = Agent(
+        model=MockModel(responses=["ok"]),
+        guardrails=Guardrails(
+            input=[max_tokens(2)],
+            on_block="return_message",
+        ),
+    )
+
+    output = await agent.arun("This input should be blocked before the model runs.")
+
+    assert output.status == RunStatus.blocked
+
+
+asyncio.run(main())
+```

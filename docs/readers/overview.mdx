@@ -1,0 +1,66 @@
+---
+title: File Readers
+sidebarTitle: Overview
+description: Extract text and structured content from File objects before they reach the model.
+icon: file-lines
+---
+
+The readers layer is the agent-facing file extraction surface. It turns `File` objects into `ReaderOutput` objects by loading bytes, selecting a parser, and normalizing the extracted content into `ContentBlock` entries.
+
+## Tested reader flow
+
+```python
+from definable.media import File
+from definable.reader import BaseReader, ReaderConfig
+from definable.reader.models import ContentBlock, ReaderOutput
+from definable.reader.registry import ParserRegistry
+
+
+file = File.from_base64(
+    "QmFzaWMgcmVhZGVyIHRlc3Q=",
+    mime_type="text/plain",
+    filename="notes.txt",
+    format_="txt",
+)
+
+reader = BaseReader(config=ReaderConfig(max_content_length=1000))
+result = reader.read(file)
+registry = ParserRegistry()
+parser = registry.get_parser("text/plain", ".txt")
+block = ContentBlock(content_type="text", content="hello")
+
+assert isinstance(result, ReaderOutput)
+assert result.filename == "notes.txt"
+assert result.content == "Basic reader test"
+assert result.blocks[0].content_type == "text"
+assert type(parser).__name__ == "TextParser"
+assert block.as_message_content() == {"type": "text", "text": "hello"}
+```
+
+## Parser selection
+
+```python
+from definable.media import File
+from definable.reader import BaseReader
+
+
+reader = BaseReader()
+text_file = File(content=b"hello", filename="note.txt", mime_type="text/plain")
+json_file = File(content=b'{"name": "Alice"}', filename="user.json", mime_type="application/json")
+
+assert type(reader.get_parser(text_file)).__name__ == "TextParser"
+assert reader.read(json_file).content == '{"name": "Alice"}'
+```
+
+## Main pieces
+
+- `BaseReader` orchestrates loading, parser dispatch, and output assembly.
+- `ParserRegistry` maps MIME types and file extensions to parsers.
+- `ContentBlock` represents one extracted chunk of text, image, audio, table, or raw content.
+- `ReaderOutput` is the normalized result for one file.
+
+## Notes
+
+- `readers=True` on an agent creates a default `BaseReader`.
+- Optional parser dependencies are loaded opportunistically; missing extras are skipped.
+- Audio normalization helpers live in `definable.reader.audio`, but agent-level voice transcription is usually better handled through `audio_transcriber=...`.

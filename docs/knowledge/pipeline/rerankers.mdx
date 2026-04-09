@@ -1,0 +1,22 @@
+---
+title: Pipeline Rerankers
+description: The optional second-pass scoring stage for retrieval results.
+icon: ranking-star
+---
+
+Rerankers are not part of ingestion. They run during retrieval after the initial candidate set has already been produced. This page exists in the pipeline section because reranking still belongs to the overall knowledge query path.
+
+## Tested example
+
+```python
+from examples.docs.knowledge_pipeline import main
+
+summary = main()
+
+assert summary["reranked_top_content"] == "Python powers the runtime."
+```
+
+## Related pages
+
+- [`Rerankers`](/knowledge/rerankers)
+- [`Hybrid Search`](/knowledge/hybrid-search)

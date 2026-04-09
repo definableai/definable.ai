@@ -1,0 +1,57 @@
+---
+title: Building Workflows
+sidebarTitle: Building Workflows
+description: "Build workflows from steps, then compose them into larger patterns."
+mode: "wide"
+---
+
+Start with a single `Step`, then compose steps with `Parallel`, `Condition`, `Loop`, or `Router`.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent.workflow import Parallel, Step, Workflow
+
+
+async def research(step_input):
+    return "Research notes"
+
+
+def analysis(step_input):
+    return "Business analysis"
+
+
+def draft(step_input):
+    return f"Draft from {step_input.get_last_step_content()}"
+
+
+async def main() -> None:
+    workflow = Workflow(
+        name="launch-plan",
+        steps=[
+            Parallel(
+                name="research",
+                steps=[
+                    Step(name="technical", executor=research),
+                    Step(name="business", executor=analysis),
+                ],
+            ),
+            Step(name="draft", executor=draft),
+        ],
+    )
+    output = await workflow.arun("Prepare a launch brief.")
+
+    assert "[technical]: Research notes" in output.get_step_content("research")
+    assert output.content.startswith("Draft from [technical]: Research notes")
+
+
+asyncio.run(main())
+```
+
+## Guidance
+
+- Use a callable `executor=` when a step does not need an agent.
+- Keep step names stable. `WorkflowOutput.get_step_output(name)` depends on them.
+- Compose small steps first; add nesting only when the control flow is clear.

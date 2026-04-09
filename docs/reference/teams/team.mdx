@@ -1,0 +1,73 @@
+---
+title: Team
+description: Full reference for the Team coordination container.
+---
+
+`Team` is the model-led multi-agent coordinator. It wraps member agents or nested teams under one leader and executes them in one of the supported team modes.
+
+## Constructor shape
+
+| Group | Important fields |
+| --- | --- |
+| Identity | `name`, `instructions`, `description` |
+| Leader model | `model` |
+| Members | `members` |
+| Coordination | `mode`, `max_iterations`, `share_member_interactions` |
+| Leader capabilities | `tools`, `output_schema` |
+| Debugging | `debug` |
+
+## Supported modes
+
+| Mode | Behavior |
+| --- | --- |
+| `coordinate` | leader delegates to selected members and synthesizes a response |
+| `route` | leader chooses one member and returns that member's result |
+| `collaborate` | all members receive the same task and the leader synthesizes |
+| `tasks` | leader manages a shared task list until the goal is complete |
+
+## Public API
+
+- `run(...)` is the synchronous entrypoint and delegates to `arun(...)` internally.
+- `arun(...)` is the primary async execution path.
+- `member_names` exposes the resolved member registry.
+- `events` exposes the team event bus.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+
+
+async def main() -> None:
+    researcher = Agent(model=MockModel(responses=["notes"]), name="researcher")
+    writer = Agent(model=MockModel(responses=["draft"]), name="writer")
+    team = Team(
+        name="docs-team",
+        model=MockModel(responses=["team synthesis"]),
+        members=[researcher, writer],
+        mode=TeamMode.collaborate,
+    )
+
+    output = await team.arun("Write a summary.")
+
+    assert output.content == "team synthesis"
+    assert team.member_names == ["researcher", "writer"]
+    assert team.mode.value == "collaborate"
+
+
+asyncio.run(main())
+```
+
+## When to use Team instead of Workflow
+
+Use `Team` when delegation itself should remain model-driven. Use [`Workflow`](/reference/workflows/workflow) when you already know the control flow and want it explicit in code.
+
+## Related pages
+
+- [`Teams Overview`](/teams/overview)
+- [`Delegation`](/teams/delegation)
+- [`Workflow`](/reference/workflows/workflow)

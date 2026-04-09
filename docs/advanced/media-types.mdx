@@ -1,0 +1,41 @@
+---
+title: Media Types
+description: The shared media container types used across agents, models, readers, and tools.
+icon: photo-film
+---
+
+The media layer is intentionally separate from provider support. `Image`, `Audio`, `Video`, and `File` are validated containers first; whether a given provider accepts them is a separate question.
+
+## Tested media validation
+
+```python
+from definable.media import Audio, File, Image, Video
+
+image = Image(url="https://example.com/image.png", detail="high")
+audio = Audio.from_base64("aGVsbG8=", mime_type="audio/wav")
+video = Video(content=b"123", format="mp4", mime_type="video/mp4")
+document = File.from_base64("aGVsbG8=", mime_type="text/plain", filename="notes.txt", format_="txt")
+
+assert image.to_dict()["detail"] == "high"
+assert audio.to_dict()["mime_type"] == "audio/wav"
+assert video.to_dict()["format"] == "mp4"
+assert document.to_dict()["filename"] == "notes.txt"
+
+try:
+    Image(url="https://example.com/image.png", filepath="local.png")
+except Exception as exc:
+    assert "Only one of" in str(exc)
+else:
+    raise AssertionError("Image must reject multiple content sources")
+```
+
+## Common rules
+
+- `Image`, `Audio`, and `Video` require exactly one primary source.
+- `File` requires at least one source and also supports provider-specific `external` objects.
+- All media types support serialization through `to_dict()`.
+
+## Notes
+
+- Validation happens locally before the framework tries to call a provider.
+- Readers, interfaces, and model adapters all reuse the same media objects, which is why these types are broader than any one provider's request format.

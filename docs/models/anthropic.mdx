@@ -1,0 +1,47 @@
+---
+title: Anthropic
+description: Configure Claude models through the `Claude` adapter.
+---
+
+`Claude` wraps Anthropic's Messages API. Use it when you want Anthropic-specific controls such as prompt caching, `thinking`, or Anthropic betas exposed directly on the model instance.
+
+## What it exposes
+
+- Public class: `definable.model.Claude`
+- Provider label: `Anthropic`
+- Native structured output flag: `False`
+- Model-specific extras: `thinking`, `cache_system_prompt`, `extended_cache_time`, `betas`
+
+## Tested construction
+
+```python
+from definable.model import Claude
+
+model = Claude(
+    id="claude-sonnet-4-5-20250929",
+    api_key="test-key",
+    max_tokens=2048,
+    temperature=0.1,
+    cache_system_prompt=True,
+)
+
+assert model.provider == "Anthropic"
+assert model.id.startswith("claude")
+assert model.max_tokens == 2048
+assert model.temperature == 0.1
+assert model.cache_system_prompt is True
+```
+
+## Key options
+
+| Option | Use it for |
+| --- | --- |
+| `thinking` | Pass Anthropic-native reasoning controls when the target model supports them |
+| `cache_system_prompt` | Reuse large static instructions more efficiently |
+| `extended_cache_time` | Ask Anthropic to keep prompt cache entries alive longer |
+| `betas` | Opt into Anthropic beta features from the SDK surface |
+
+## Notes
+
+- The adapter does not advertise native structured outputs, so schema-constrained flows should be tested per model before you depend on them.
+- If you only need provider selection at runtime, a model string such as `anthropic/claude-sonnet-4-5-20250929` keeps configuration simpler.

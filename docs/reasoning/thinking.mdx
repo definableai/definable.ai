@@ -1,0 +1,67 @@
+---
+title: Thinking
+sidebarTitle: Thinking
+description: "Structured reasoning phase that runs before the agent produces its final answer."
+icon: brain
+---
+
+`definable.agent.reasoning` adds an explicit reasoning step before answer generation. It is useful when you want the model to plan, decompose a problem, or emit structured reasoning events during streaming.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `Thinking` | High-level reasoning configuration |
+| `ThinkingOutput` | Structured reasoning payload |
+| `ReasoningStep`, `ReasoningSteps`, `ToolStep`, `NextAction` | Reasoning primitives and normalized steps |
+
+## When to enable it
+
+- When tools need a more deliberate plan.
+- When you want streaming insight into reasoning progress.
+- When you need a structured reasoning record for replay or debugging.
+
+## Tested example
+
+```python
+import asyncio
+import json
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+thinking_response = json.dumps(
+    {
+        "chain_of_thought": "Compare the trade-offs directly.",
+        "approach": "Recommend the simpler default first.",
+        "tool_plan": [],
+    }
+)
+
+
+async def main() -> None:
+    agent = Agent(
+        model=MockModel(
+            responses=["Start with a monolith when speed and coordination matter most."],
+            structured_responses=[thinking_response],
+        ),
+        thinking=True,
+        instructions="Be concise.",
+    )
+
+    events = []
+    async for event in agent.arun_stream("Should I start with a monolith or microservices?"):
+        if hasattr(event, "event"):
+            events.append(event.event)
+
+    assert "ReasoningStarted" in events
+    assert "ReasoningCompleted" in events
+
+
+asyncio.run(main())
+```
+
+## Related pages
+
+- [`Pipeline`](/agents/pipeline)
+- [`Replay`](/replay/overview)
