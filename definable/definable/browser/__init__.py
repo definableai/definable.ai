@@ -56,17 +56,4 @@ def __getattr__(name: str):  # type: ignore[no-untyped-def]
 
     return BrowserToolkit
 
-  # Backward compat: old name still works, emits deprecation warning
-  if name == "SeleniumBaseBrowser":
-    import warnings
-
-    warnings.warn(
-      "SeleniumBaseBrowser has been removed. Use PlaywrightBrowser instead.",
-      DeprecationWarning,
-      stacklevel=2,
-    )
-    from definable.browser.playwright_browser import PlaywrightBrowser
-
-    return PlaywrightBrowser
-
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
