@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import dataclasses
-import json
 from typing import (
   TYPE_CHECKING,
   Any,
@@ -42,13 +41,11 @@ from definable.agent.events import (
   RunInput,
   RunOutput,
   RunOutputEvent,
-  RunPausedEvent,
   RunStartedEvent,
   RunStatus,
 )
 from definable.skill.base import Skill
 from definable.tool.function import Function
-from definable.utils.tools import get_function_call_for_tool_call
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
@@ -79,10 +76,6 @@ if TYPE_CHECKING:
   from definable.agent.trigger.base import BaseTrigger
   from definable.reader.base import BaseReader
   from definable.skill.registry import SkillRegistry
-
-_REJECTED_MSG = (
-  "[REJECTED] The user rejected this tool call. Do NOT retry this tool. Respond to the user explaining that the action was not performed."
-)
 
 
 @runtime_checkable
@@ -184,6 +177,10 @@ class Agent:
     # ── Support ─────────────────────────────────────────────
     readers: Union[List["BaseReader"], bool, None] = None,
     guardrails: Optional["Guardrails"] = None,
+    # ── HITL ──────────────────────────────────────────────
+    permission_resolver: Optional[Any] = None,
+    permission_defaults: Optional[Dict[str, Any]] = None,
+    question_resolver: Optional[Any] = None,
   ):
     """
     Initialize the agent.
@@ -201,7 +198,7 @@ class Agent:
             Uses on-demand mode: only a compact XML catalog is injected
             into the system prompt; the model activates individual skills
             via the ``activate_skill`` tool. Override by calling
-            ``registry.as_eager()`` or ``registry.as_lazy()`` directly
+            ``registry.as_eager()`` or ``registry.as_on_demand()`` directly
             and passing the result to ``skills=``.
         instructions: System instructions for the agent.
         memory: Optional Memory instance for session history.
@@ -308,7 +305,22 @@ class Agent:
     self._interfaces: List["BaseInterface"] = []
     self._gateway: Optional["InterfaceGateway"] = None
 
-    # Resolve interfaces passed at construction
+    # HITL: Permission service + question resolver (must init before interface bind)
+    self._permission_service: Optional[Any] = None
+    self._question_resolver: Optional[Any] = None
+    if permission_resolver is not None or permission_defaults is not None:
+      from definable.agent.hitl.permissions import PermissionService
+      from definable.agent.hitl.settings import Settings
+
+      self._permission_service = PermissionService(
+        resolver=permission_resolver,
+        defaults=dict(permission_defaults or {}),
+        settings=Settings.load(),
+      )
+    if question_resolver is not None:
+      self._question_resolver = question_resolver
+
+    # Resolve interfaces passed at construction (after HITL init so bind() can check)
     if interfaces is not None:
       iface_list = interfaces if isinstance(interfaces, list) else [interfaces]
       for iface in iface_list:
@@ -1062,186 +1074,6 @@ class Agent:
       yield error_event
       raise
 
-  async def continue_run(
-    self,
-    *,
-    run_output: RunOutput,
-    cancellation_token: Optional[CancellationToken] = None,
-  ) -> RunOutput:
-    """Resume a paused run after HITL requirements are resolved.
-
-    After ``arun()`` returns a paused ``RunOutput`` (with
-    ``run_output.is_paused == True``), the caller resolves each
-    requirement (e.g. ``req.confirm()`` or ``req.reject()``) and then
-    calls ``continue_run()`` to resume execution.
-
-    Args:
-        run_output: The paused RunOutput from a previous ``arun()`` call.
-        cancellation_token: Optional token for cooperative cancellation.
-
-    Returns:
-        A new RunOutput with the resumed execution results.
-
-    Raises:
-        ValueError: If the run is not paused or has unresolved requirements.
-    """
-    if not run_output.is_paused:
-      raise ValueError("RunOutput is not paused — nothing to continue")
-    unresolved = run_output.active_requirements
-    if unresolved:
-      raise ValueError(f"{len(unresolved)} requirement(s) still unresolved. Resolve them before calling continue_run().")
-
-    # Build messages from the paused run
-    messages = run_output.messages or []
-
-    # For each resolved requirement, add the tool result message
-    for req in run_output.requirements or []:
-      te = req.tool_execution
-      if te is None:
-        continue
-      if req.confirmation is False:
-        # Rejected — add rejection message
-        messages.append(
-          Message(
-            role="tool",
-            content=_REJECTED_MSG,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-      elif req.confirmation is True:
-        # Confirmed — execute the tool now
-        fn = self._tools_dict.get(te.tool_name)  # type: ignore[arg-type]
-        if fn:
-          function_call = get_function_call_for_tool_call(
-            {
-              "id": te.tool_call_id,
-              "type": "function",
-              "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})},
-            },
-            self._tools_dict,
-          )
-          if function_call:
-            result_obj = await function_call.aexecute()
-            messages.append(
-              Message(
-                role="tool",
-                content=str(result_obj.result) if result_obj.status == "success" else str(result_obj.error),
-                tool_call_id=te.tool_call_id,
-                name=te.tool_name,
-              )
-            )
-          else:
-            messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-        else:
-          messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-      elif req.external_execution_result is not None:
-        messages.append(
-          Message(
-            role="tool",
-            content=req.external_execution_result,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-
-    # Re-enter the agent run with the updated messages
-    return await self.arun(
-      instruction=messages[-1] if messages and messages[-1].role == "user" else "Continue.",
-      messages=messages,
-      session_id=run_output.session_id,
-      run_id=None,  # New run_id for the continuation
-      cancellation_token=cancellation_token,
-    )
-
-  async def continue_run_stream(
-    self,
-    *,
-    run_output: RunOutput,
-    cancellation_token: Optional[CancellationToken] = None,
-  ) -> AsyncIterator[RunOutputEvent]:
-    """Streaming variant of :meth:`continue_run`.
-
-    Same semantics as ``continue_run`` but yields events as they occur.
-
-    Args:
-        run_output: The paused RunOutput from a previous call.
-        cancellation_token: Optional token for cooperative cancellation.
-
-    Yields:
-        RunOutputEvent instances as the resumed run progresses.
-
-    Raises:
-        ValueError: If the run is not paused or has unresolved requirements.
-    """
-    if not run_output.is_paused:
-      raise ValueError("RunOutput is not paused — nothing to continue")
-    unresolved = run_output.active_requirements
-    if unresolved:
-      raise ValueError(f"{len(unresolved)} requirement(s) still unresolved. Resolve them before calling continue_run_stream().")
-
-    # Build messages from the paused run
-    messages = run_output.messages or []
-
-    # For each resolved requirement, add the tool result message
-    for req in run_output.requirements or []:
-      te = req.tool_execution
-      if te is None:
-        continue
-      if req.confirmation is False:
-        messages.append(
-          Message(
-            role="tool",
-            content=_REJECTED_MSG,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-      elif req.confirmation is True:
-        fn = self._tools_dict.get(te.tool_name)  # type: ignore[arg-type]
-        if fn:
-          function_call = get_function_call_for_tool_call(
-            {
-              "id": te.tool_call_id,
-              "type": "function",
-              "function": {"name": te.tool_name, "arguments": json.dumps(te.tool_args or {})},
-            },
-            self._tools_dict,
-          )
-          if function_call:
-            result_obj = await function_call.aexecute()
-            messages.append(
-              Message(
-                role="tool",
-                content=str(result_obj.result) if result_obj.status == "success" else str(result_obj.error),
-                tool_call_id=te.tool_call_id,
-                name=te.tool_name,
-              )
-            )
-          else:
-            messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-        else:
-          messages.append(Message(role="tool", content=f"Tool '{te.tool_name}' not found", tool_call_id=te.tool_call_id, name=te.tool_name))
-      elif req.external_execution_result is not None:
-        messages.append(
-          Message(
-            role="tool",
-            content=req.external_execution_result,
-            tool_call_id=te.tool_call_id,
-            name=te.tool_name,
-          )
-        )
-
-    # Re-enter the streaming agent run with the updated messages
-    async for event in self.arun_stream(
-      instruction=messages[-1] if messages and messages[-1].role == "user" else "Continue.",
-      messages=messages,
-      session_id=run_output.session_id,
-      run_id=None,
-      cancellation_token=cancellation_token,
-    ):
-      yield event
-
   # --- Knowledge & Memory Helpers ---
 
   async def _knowledge_retrieve(self, context: RunContext) -> List[RunOutputEvent]:
@@ -1552,23 +1384,6 @@ class Agent:
           final_content = event.content
           final_parsed = event.parsed
           final_metrics = event.metrics
-        elif isinstance(event, RunPausedEvent):
-          # Build paused RunOutput
-          output_messages = [m for m in loop.messages if m.role != "system"]
-          return RunOutput(
-            run_id=context.run_id,
-            session_id=context.session_id,
-            agent_id=self.agent_id,
-            agent_name=self.agent_name,
-            input=run_input,
-            tools=loop.tool_executions or None,
-            messages=output_messages,
-            model=self.model.id,
-            model_provider=self.model.provider,
-            status=RunStatus.paused,
-            session_state=context.session_state,
-            requirements=event.requirements,
-          )
 
       # Build output messages (excluding system message)
       output_messages = [m for m in loop.messages if m.role != "system"]
@@ -1792,7 +1607,6 @@ class Agent:
       reasoning_content=state.native_reasoning_content
       or state.thinking_text
       or (self._format_reasoning_context(state.reasoning_steps) if state.reasoning_steps else None),
-      requirements=state.requirements,
       phase_metrics=state.phase_metrics or None,
     )
 
@@ -1827,6 +1641,12 @@ class Agent:
       session_id = context.session_id or "default"
       for fn in self.memory.get_tools(user_id, session_id):
         tools[fn.name] = fn
+
+    # Inject ask_user tool when question resolver is configured
+    if self._question_resolver is not None:
+      from definable.agent.hitl.question import build_ask_user_tool
+
+      tools["ask_user"] = build_ask_user_tool(self._question_resolver)
 
     return tools
 
@@ -2022,72 +1842,9 @@ class Agent:
     """Read-only list of attached interfaces."""
     return list(self._interfaces)
 
-  def create_gateway(self, **kwargs: Any) -> "InterfaceGateway":
-    """Create an InterfaceGateway for this agent.
-
-    .. deprecated::
-        Pass ``gateway=`` to the Agent constructor instead.
-
-    Migrates any already-registered interfaces into the gateway.
-    The gateway is stored on ``self._gateway`` for use by ``aserve()``
-    and ``AgentRuntime``.
-
-    Args:
-      **kwargs: Passed to ``InterfaceGateway.__init__`` (e.g. shared_sessions,
-          identity_resolver, hooks, enable_identity_linking).
-
-    Returns:
-      The newly created InterfaceGateway.
-    """
-    import warnings
-
-    warnings.warn(
-      "create_gateway() is deprecated. Pass gateway= to Agent() constructor instead.",
-      DeprecationWarning,
-      stacklevel=2,
-    )
-
-    from definable.agent.interface.gateway import InterfaceGateway
-
-    gw = InterfaceGateway(self, **kwargs)
-
-    # Migrate pre-registered interfaces
-    for iface in self._interfaces:
-      gw.add(iface)
-
-    self._gateway = gw
-    return gw
-
-  def add_interface(self, interface: "BaseInterface") -> "Agent":
-    """Register an interface with this agent.
-
-    .. deprecated::
-        Pass ``interfaces=`` to the Agent constructor instead.
-
-    Binds the interface to this agent and stores it for use with serve().
-
-    Args:
-      interface: BaseInterface instance to register.
-
-    Returns:
-      Self for method chaining.
-    """
-    import warnings
-
-    warnings.warn(
-      "add_interface() is deprecated. Pass interfaces= to Agent() constructor instead.",
-      DeprecationWarning,
-      stacklevel=2,
-    )
-
-    interface.bind(self)
-    self._interfaces.append(interface)
-    return self
-
   async def aserve(
     self,
-    *interfaces: "BaseInterface",
-    gateway: Optional["InterfaceGateway"] = None,
+    *,
     name: Optional[str] = None,
     host: str = "0.0.0.0",
     port: int = 8000,
@@ -2100,12 +1857,7 @@ class Agent:
     server in a single event loop.  Use :meth:`serve` for the sync
     version.
 
-    Interfaces and gateway should be passed via the Agent constructor.
-    Passing them here is deprecated.
-
     Args:
-      *interfaces: **Deprecated.** Pass ``interfaces=`` to the Agent constructor.
-      gateway: **Deprecated.** Pass ``gateway=`` to the Agent constructor.
       name: Optional prefix for log messages (defaults to agent_name).
       host: Host to bind the HTTP server to.
       port: Port for the HTTP server.
@@ -2113,33 +1865,11 @@ class Agent:
         (default), the server starts if any Webhook triggers exist.
       dev: Enable development mode with Swagger docs and info-level logging.
     """
-    import warnings
-
-    if interfaces:
-      warnings.warn(
-        "Passing interfaces to aserve() is deprecated. Pass interfaces= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-    if gateway is not None:
-      warnings.warn(
-        "Passing gateway to aserve() is deprecated. Pass gateway= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-
     from definable.agent.runtime.runner import AgentRuntime
 
-    # Resolve gateway: explicit param > agent's gateway > None
-    resolved_gateway = gateway or self._gateway
+    resolved_gateway = self._gateway
 
-    # Merge passed interfaces with registered ones
     all_interfaces = list(self._interfaces)
-    for iface in interfaces:
-      if iface.agent is None:
-        iface.bind(self)
-      if iface not in all_interfaces:
-        all_interfaces.append(iface)
 
     # Auto-create gateway for 2+ interfaces (production-grade supervision)
     if resolved_gateway is None and len(all_interfaces) >= 2:
@@ -2164,8 +1894,7 @@ class Agent:
 
   def serve(
     self,
-    *interfaces: "BaseInterface",
-    gateway: Optional["InterfaceGateway"] = None,
+    *,
     name: Optional[str] = None,
     host: str = "0.0.0.0",
     port: int = 8000,
@@ -2177,16 +1906,11 @@ class Agent:
     Blocking call that starts interfaces, triggers, and an HTTP server.
     Equivalent to ``asyncio.run(agent.aserve(...))``.
 
-    Interfaces and gateway should be passed via the Agent constructor.
-    Passing them here is deprecated.
-
     When ``dev=True``, enables hot-reload mode: the parent process
     watches for ``.py`` file changes and automatically restarts the
     server.  Swagger docs are available at ``/docs``.
 
     Args:
-      *interfaces: **Deprecated.** Pass ``interfaces=`` to the Agent constructor.
-      gateway: **Deprecated.** Pass ``gateway=`` to the Agent constructor.
       name: Optional prefix for log messages (defaults to agent_name).
       host: Host to bind the HTTP server to.
       port: Port for the HTTP server.
@@ -2194,21 +1918,6 @@ class Agent:
         (default), the server starts if any Webhook triggers exist.
       dev: Enable development mode with hot reload and Swagger docs.
     """
-    import warnings
-
-    if interfaces:
-      warnings.warn(
-        "Passing interfaces to serve() is deprecated. Pass interfaces= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-    if gateway is not None:
-      warnings.warn(
-        "Passing gateway to serve() is deprecated. Pass gateway= to Agent() constructor instead.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-
     if dev:
       from definable.agent.runtime._dev import is_dev_child, run_dev_mode
 
@@ -2218,8 +1927,6 @@ class Agent:
 
     asyncio.run(
       self.aserve(
-        *interfaces,
-        gateway=gateway,
         name=name,
         host=host,
         port=port,
