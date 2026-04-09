@@ -3,7 +3,6 @@
 import contextlib
 import io
 import re
-import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set
 
 from definable.agent.interface.base import BaseInterface
@@ -105,47 +104,37 @@ class SlackInterface(BaseInterface):
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[SlackConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to SlackInterface is deprecated. Pass bot_token and other params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = SlackConfig(
-        bot_token=bot_token,
-        app_token=app_token,
-        signing_secret=signing_secret,
-        mode=mode,
-        events_path=events_path,
-        interactions_path=interactions_path,
-        respond_to_mentions=respond_to_mentions,
-        respond_to_dms=respond_to_dms,
-        respond_to_thread_replies=respond_to_thread_replies,
-        thread_replies_in_channel=thread_replies_in_channel,
-        thread_replies_in_dm=thread_replies_in_dm,
-        typing_reaction=typing_reaction,
-        done_reaction=done_reaction,
-        convert_markdown=convert_markdown,
-        allowed_user_ids=allowed_user_ids,
-        allowed_channel_ids=allowed_channel_ids,
-        max_retries=max_retries,
-        connect_timeout=connect_timeout,
-        request_timeout=request_timeout,
-        slash_commands=slash_commands,
-        route_commands_to_agent=route_commands_to_agent,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = SlackConfig(
+      bot_token=bot_token,
+      app_token=app_token,
+      signing_secret=signing_secret,
+      mode=mode,
+      events_path=events_path,
+      interactions_path=interactions_path,
+      respond_to_mentions=respond_to_mentions,
+      respond_to_dms=respond_to_dms,
+      respond_to_thread_replies=respond_to_thread_replies,
+      thread_replies_in_channel=thread_replies_in_channel,
+      thread_replies_in_dm=thread_replies_in_dm,
+      typing_reaction=typing_reaction,
+      done_reaction=done_reaction,
+      convert_markdown=convert_markdown,
+      allowed_user_ids=allowed_user_ids,
+      allowed_channel_ids=allowed_channel_ids,
+      max_retries=max_retries,
+      connect_timeout=connect_timeout,
+      request_timeout=request_timeout,
+      slash_commands=slash_commands,
+      route_commands_to_agent=route_commands_to_agent,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
     super().__init__(
       agent=agent,
       config=resolved_config,

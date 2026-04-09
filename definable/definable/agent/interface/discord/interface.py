@@ -2,7 +2,6 @@
 
 import asyncio
 import contextlib
-import warnings
 from typing import TYPE_CHECKING, Any, List, Optional
 
 from definable.agent.interface.base import BaseInterface
@@ -66,33 +65,23 @@ class DiscordInterface(BaseInterface):
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[DiscordConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to DiscordInterface is deprecated. Pass bot_token and other params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = DiscordConfig(
-        bot_token=bot_token,
-        intents_message_content=intents_message_content,
-        allowed_guild_ids=allowed_guild_ids,
-        allowed_channel_ids=allowed_channel_ids,
-        respond_to_bots=respond_to_bots,
-        command_prefix=command_prefix,
-        connect_timeout=connect_timeout,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = DiscordConfig(
+      bot_token=bot_token,
+      intents_message_content=intents_message_content,
+      allowed_guild_ids=allowed_guild_ids,
+      allowed_channel_ids=allowed_channel_ids,
+      respond_to_bots=respond_to_bots,
+      command_prefix=command_prefix,
+      connect_timeout=connect_timeout,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
     super().__init__(
       agent=agent,
       config=resolved_config,

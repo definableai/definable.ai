@@ -9,7 +9,6 @@ import email.mime.text
 import email.utils
 import imaplib
 import smtplib
-import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from definable.agent.interface.base import BaseInterface
@@ -76,37 +75,27 @@ class EmailInterface(BaseInterface):
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[EmailConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to EmailInterface is deprecated. Pass params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = EmailConfig(
-        imap_host=imap_host,
-        imap_port=imap_port,
-        smtp_host=smtp_host,
-        smtp_port=smtp_port,
-        email_address=email_address,
-        email_password=email_password,
-        imap_folder=imap_folder,
-        poll_interval=poll_interval,
-        mark_as_read=mark_as_read,
-        subject_prefix=subject_prefix,
-        reply_quote_original=reply_quote_original,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = EmailConfig(
+      imap_host=imap_host,
+      imap_port=imap_port,
+      smtp_host=smtp_host,
+      smtp_port=smtp_port,
+      email_address=email_address,
+      email_password=email_password,
+      imap_folder=imap_folder,
+      poll_interval=poll_interval,
+      mark_as_read=mark_as_read,
+      subject_prefix=subject_prefix,
+      reply_quote_original=reply_quote_original,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
     super().__init__(
       agent=agent,
       config=resolved_config,
