@@ -91,7 +91,7 @@ class TestHITLPermissions:
 
     model = MockModel(side_effect=_make_tool_call_side_effect("dangerous_delete", '{"target": "tmp"}'))
     agent = Agent(
-      model=model,
+      model=model,  # type: ignore[arg-type]
       tools=[dangerous_delete],
       config=NO_TRACE,
       permission_resolver=resolver,
@@ -109,7 +109,7 @@ class TestHITLPermissions:
 
     model = MockModel(side_effect=_make_tool_call_side_effect("dangerous_delete", '{"target": "prod"}'))
     agent = Agent(
-      model=model,
+      model=model,  # type: ignore[arg-type]
       tools=[dangerous_delete],
       config=NO_TRACE,
       permission_resolver=resolver,
@@ -127,7 +127,7 @@ class TestHITLPermissions:
 
     model = MockModel(side_effect=_make_tool_call_side_effect("safe_read"))
     agent = Agent(
-      model=model,
+      model=model,  # type: ignore[arg-type]
       tools=[safe_read],
       config=NO_TRACE,
       permission_resolver=should_not_be_called,
@@ -141,7 +141,7 @@ class TestHITLPermissions:
     """Agent without resolver should auto-allow all tools."""
     model = MockModel(side_effect=_make_tool_call_side_effect("dangerous_delete", '{"target": "x"}'))
     agent = Agent(
-      model=model,
+      model=model,  # type: ignore[arg-type]
       tools=[dangerous_delete],
       config=NO_TRACE,
       permission_defaults={"dangerous_delete": PermissionAction.ask},
@@ -166,7 +166,7 @@ class TestHITLPermissions:
 
     model = MockModel(side_effect=_make_tool_call_side_effect("dangerous_delete", '{"target": "a"}'))
     agent = Agent(
-      model=model,
+      model=model,  # type: ignore[arg-type]
       tools=[dangerous_delete],
       config=NO_TRACE,
     )

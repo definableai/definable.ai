@@ -561,8 +561,8 @@ class MemoryV2Evaluator:
       for t in sm.turns:
         all_tools.extend(t.tool_calls_made)
       tool_counts: dict[str, int] = {}
-      for t in all_tools:
-        tool_counts[t] = tool_counts.get(t, 0) + 1
+      for tc in all_tools:
+        tool_counts[str(tc)] = tool_counts.get(str(tc), 0) + 1
       print(f"  Session {sm.session_id}: {tool_counts}")
     print()
 

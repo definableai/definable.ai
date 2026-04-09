@@ -27,6 +27,7 @@ class TestBuildAskUserTool:
       return [Answer(question_text="Favorite color?", selected=["blue"])]
 
     fn = build_ask_user_tool(resolver)
+    assert fn.entrypoint is not None
     result = await fn.entrypoint(json.dumps([{"text": "Favorite color?", "options": [{"label": "blue"}, {"label": "red"}]}]))
     assert "Q: Favorite color?" in result
     assert "A: blue" in result
@@ -36,6 +37,7 @@ class TestBuildAskUserTool:
       return [Answer(question_text="Your name?", custom_text="Alice")]
 
     fn = build_ask_user_tool(resolver)
+    assert fn.entrypoint is not None
     result = await fn.entrypoint(json.dumps([{"text": "Your name?"}]))
     assert "A: Alice" in result
 
@@ -44,6 +46,7 @@ class TestBuildAskUserTool:
       return [Answer(question_text="Anything?")]
 
     fn = build_ask_user_tool(resolver)
+    assert fn.entrypoint is not None
     result = await fn.entrypoint(json.dumps([{"text": "Anything?"}]))
     assert "(no answer)" in result
 
@@ -55,6 +58,7 @@ class TestBuildAskUserTool:
       ]
 
     fn = build_ask_user_tool(resolver)
+    assert fn.entrypoint is not None
     result = await fn.entrypoint(json.dumps([{"text": "Q1", "options": [{"label": "yes"}]}, {"text": "Q2"}]))
     assert "Q: Q1" in result
     assert "Q: Q2" in result
@@ -69,6 +73,7 @@ class TestBuildAskUserTool:
       return [Answer(question_text="Pick", selected=["a"])]
 
     fn = build_ask_user_tool(resolver)
+    assert fn.entrypoint is not None
     await fn.entrypoint(
       json.dumps([
         {
