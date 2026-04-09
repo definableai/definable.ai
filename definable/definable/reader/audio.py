@@ -17,7 +17,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Protocol, Set, Tuple, runtime_checkable
 
 from definable.media import File
-from definable.reader.base import FileReader, FileReaderConfig, ReaderResult
+from definable.reader.base import BaseReader
+from definable.reader.models import ReaderConfig, ReaderOutput
 from definable.utils.log import log_debug
 
 
@@ -193,14 +194,14 @@ class OpenAITranscriber:
 
 
 @dataclass
-class AudioFileReader(FileReader):
+class AudioFileReader(BaseReader):
   """Reads audio files by transcribing them to text.
 
   Uses ``OpenAITranscriber`` by default. Pass a custom ``AudioTranscriber``
   implementation to use a different backend.
   """
 
-  config: Optional[FileReaderConfig] = None
+  config: Optional[ReaderConfig] = None
   transcriber: Any = None  # set in __post_init__
 
   def __post_init__(self) -> None:
@@ -213,14 +214,14 @@ class AudioFileReader(FileReader):
   def supported_extensions(self) -> Set[str]:
     return {".mp3", ".wav", ".ogg", ".flac", ".m4a", ".webm"}
 
-  def read_file(self, file: File) -> ReaderResult:
+  def read_file(self, file: File) -> ReaderOutput:
     try:
       raw = self._get_file_bytes(file)  # type: ignore[attr-defined]
       self._check_file_size(raw)
       mime = file.mime_type or "audio/mpeg"
       text: str = self.transcriber.transcribe(raw, mime)
       text, truncated = self._truncate(text)  # type: ignore[attr-defined]
-      return ReaderResult(
+      return ReaderOutput(
         filename=self._get_filename(file),  # type: ignore[attr-defined]
         content=text,  # type: ignore[call-arg]
         mime_type=mime,
@@ -230,14 +231,14 @@ class AudioFileReader(FileReader):
     except Exception as e:
       return self._make_error_result(file, str(e))  # type: ignore[attr-defined]
 
-  async def aread_file(self, file: File) -> ReaderResult:
+  async def aread_file(self, file: File) -> ReaderOutput:
     try:
       raw = await self._aget_file_bytes(file)  # type: ignore[attr-defined]
       self._check_file_size(raw)
       mime = file.mime_type or "audio/mpeg"
       text: str = await self.transcriber.atranscribe(raw, mime)
       text, truncated = self._truncate(text)  # type: ignore[attr-defined]
-      return ReaderResult(
+      return ReaderOutput(
         filename=self._get_filename(file),  # type: ignore[attr-defined]
         content=text,  # type: ignore[call-arg]
         mime_type=mime,
