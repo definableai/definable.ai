@@ -17,7 +17,6 @@ from definable.agent.events import (
   ReasoningStartedEvent,
   RunCompletedEvent,
   RunOutput,
-  RunPausedEvent,
   RunStartedEvent,
 )
 from definable.agent.loop import AgentLoop
@@ -270,6 +269,7 @@ async def _run_agent_loop(
     agent_id=state.agent_id,
     agent_name=state.agent_name,
     deferred_tool_manager=_deferred,
+    permission_service=getattr(agent, "_permission_service", None),
   )
 
   # Run the loop — streaming is controlled by state.streaming
@@ -278,9 +278,6 @@ async def _run_agent_loop(
       state.content = event.content
       state.parsed = event.parsed
       state.metrics = event.metrics
-    elif isinstance(event, RunPausedEvent):
-      state.status = LoopStatus.paused
-      state.requirements = event.requirements
     yield state, event
 
   # Capture output messages and tool executions

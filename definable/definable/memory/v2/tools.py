@@ -5,7 +5,7 @@ tool has access to the store. The agent never calls them directly —
 the LLM decides when to use them during its response.
 """
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from definable.tool.function import Function
 
@@ -27,6 +27,36 @@ _VAGUE_PATTERNS = [
 _REQUIRED_SECTIONS = ["## Identity", "## Preferences", "## Projects", "## Team", "## Other"]
 
 
+def _strip_text(value: Any) -> str:
+  if value is None:
+    return ""
+  return str(value).strip()
+
+
+def _first_fact_line(content: str) -> str:
+  for raw_line in content.splitlines():
+    line = raw_line.strip()
+    if not line:
+      continue
+    if line.lower().startswith("fact:"):
+      return line[5:].strip()
+    if line.lower().startswith("why:") or line.lower().startswith("how to apply:"):
+      continue
+    return line
+  return ""
+
+
+def _normalize_tags(tags: Any) -> list[str]:
+  if tags is None:
+    return []
+  if isinstance(tags, str):
+    return [tag.strip() for tag in tags.split(",") if tag.strip()]
+  if isinstance(tags, (list, tuple, set)):
+    return [_strip_text(tag) for tag in tags if _strip_text(tag)]
+  tag = _strip_text(tags)
+  return [tag] if tag else []
+
+
 def build_memory_tools(memory: "Memory", user_id: str, session_id: str) -> List[Function]:
   """Build all memory tools as closures over the memory instance.
 
@@ -37,7 +67,7 @@ def build_memory_tools(memory: "Memory", user_id: str, session_id: str) -> List[
   max_chars = memory.working_memory_max_chars
   warm_max = memory.warm_memory_max_chars
 
-  async def update_working_memory(content: str) -> str:
+  async def update_working_memory(content: Optional[str] = None) -> str:
     """Rewrite the user's working memory scratchpad.
 
     CRITICAL: Include ALL existing facts plus any new information. Copy all
@@ -51,6 +81,10 @@ def build_memory_tools(memory: "Memory", user_id: str, session_id: str) -> List[
       content: Full replacement content (markdown). Not a diff — write the
         complete new state with all sections preserved.
     """
+    content = _strip_text(content)
+    if not content:
+      return "REJECTED: Missing required `content` argument. Pass the full working-memory markdown as `content`."
+
     current_wm = await store.get_working_memory(user_id)
     current_content = current_wm.content if current_wm else ""
     prev_len = len(current_content)
@@ -90,7 +124,11 @@ def build_memory_tools(memory: "Memory", user_id: str, session_id: str) -> List[
     return f"Updated working memory ({len(content)} chars, version {wm.version}). Previous was {prev_len} chars."
 
   async def archive_to_memory(
-    summary: str, content: str, category: str = "conversation", tags: Optional[str] = None, source: str = "user_stated"
+    summary: Optional[str] = None,
+    content: Optional[str] = None,
+    category: Optional[str] = "conversation",
+    tags: Optional[str] = None,
+    source: Optional[str] = "user_stated",
   ) -> str:
     """Store ONE fact in long-term memory with a searchable summary.
 
@@ -110,19 +148,60 @@ def build_memory_tools(memory: "Memory", user_id: str, session_id: str) -> List[
       source: Who asserted this: "user_stated" (user said it directly),
         "user_implied" (inferred from context), "agent_observed" (your conclusion).
     """
+    summary = _strip_text(summary)
+    content = _strip_text(content)
+    category = _strip_text(category) or "conversation"
+    source = _strip_text(source) or "user_stated"
+
+    adjustments: list[str] = []
+
+    if not summary and content:
+      summary = _first_fact_line(content)[:200]
+      if summary:
+        adjustments.append("derived summary from content")
+
+    if not content and summary:
+      content = (
+        f"Fact: {summary}\n"
+        "Why: Preserve this concrete fact for future recall.\n"
+        "How to apply: Use it when answering later questions about the user or conversation."
+      )
+      adjustments.append("filled missing content from summary")
+
+    if not summary:
+      return "REJECTED: Missing required `summary` argument. Provide a concrete searchable fact summary."
+
+    if not content:
+      return "REJECTED: Missing required `content` argument. Include Fact/Why/How to apply details."
+
+    candidate_summary = _first_fact_line(content)
+    if candidate_summary and len(summary.split()) < 4 and len(candidate_summary.split()) >= 4:
+      summary = candidate_summary[:200]
+      adjustments.append("expanded short summary from content")
+
     # Validate summary quality
     summary_lower = summary.lower()
     for pattern in _VAGUE_PATTERNS:
       if pattern in summary_lower:
+        if candidate_summary and candidate_summary.lower() != summary_lower:
+          summary = candidate_summary[:200]
+          summary_lower = summary.lower()
+          adjustments.append("replaced vague summary from content")
+          break
         return (
           f"REJECTED: Summary too vague ('{summary}'). "
           f"Use specific nouns and values. Example: 'Alice graduated from MIT in 2016' not 'Alice's background'."
         )
     if len(summary.split()) < 4:
-      return f"REJECTED: Summary too short ({len(summary.split())} words). Include key terms from the fact."
+      if candidate_summary and candidate_summary != summary and len(candidate_summary.split()) >= len(summary.split()):
+        summary = candidate_summary[:200]
+        adjustments.append("replaced short summary from content")
+      elif summary:
+        summary = f"Conversation fact: {summary}"[:200]
+        adjustments.append("prefixed short summary")
 
     confidence = 1.0 if source == "user_stated" else 0.7 if source == "user_implied" else 0.5
-    tag_list = [t.strip() for t in (tags or "").split(",") if t.strip()]
+    tag_list = _normalize_tags(tags)
     entry = await store.add_entry(
       user_id=user_id,
       summary=summary[:200],
@@ -137,7 +216,8 @@ def build_memory_tools(memory: "Memory", user_id: str, session_id: str) -> List[
     # Enforce entry limit after adding
     await store.enforce_limit(user_id, memory.index_max_entries)
 
-    return f"Archived (id={entry.id}, category={category}, confidence={confidence}). Summary: {entry.summary}"
+    adjustment_note = f" Adjustments: {', '.join(adjustments)}." if adjustments else ""
+    return f"Archived (id={entry.id}, category={category}, confidence={confidence}). Summary: {entry.summary}.{adjustment_note}"
 
   async def recall_memory(query: Optional[str] = None, category: Optional[str] = None, limit: int = 20, timeframe: Optional[str] = None) -> str:
     """Search archived memory. Returns summaries with content previews.

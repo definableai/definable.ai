@@ -39,6 +39,9 @@ def get_function_call(
       function_call.error = f"Error while decoding function arguments: {e}\n\nPlease make sure we can json.loads() the arguments and retry."
       return function_call
 
+    if _arguments is None:
+      _arguments = {}
+
     if not isinstance(_arguments, dict):
       log_error(f"Function arguments are not a valid JSON object: {arguments}")
       function_call.error = "Function arguments are not a valid JSON object.\n\n Please fix and retry."
@@ -47,18 +50,32 @@ def get_function_call(
     try:
       clean_arguments: Dict[str, Any] = {}
       for k, v in _arguments.items():
+        key = str(k).strip()
+        if not key:
+          continue
+        if key.endswith(":"):
+          key = key[:-1].strip()
+        if not key:
+          continue
+
+        value: Any
         if isinstance(v, str):
           _v = v.strip().lower()
           if _v in ("none", "null"):
-            clean_arguments[k] = None
+            value = None
           elif _v == "true":
-            clean_arguments[k] = True
+            value = True
           elif _v == "false":
-            clean_arguments[k] = False
+            value = False
           else:
-            clean_arguments[k] = v.strip()
+            value = v.strip()
         else:
-          clean_arguments[k] = v
+          value = v
+
+        # Keep the first meaningful value if the model emitted duplicate-ish keys.
+        if key in clean_arguments and clean_arguments[key] not in (None, "", [], {}):
+          continue
+        clean_arguments[key] = value
 
       function_call.arguments = clean_arguments
     except Exception as e:

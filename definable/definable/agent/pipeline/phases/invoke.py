@@ -2,10 +2,10 @@
 
 from typing import TYPE_CHECKING, AsyncGenerator, Optional, Tuple
 
-from definable.agent.events import RunCompletedEvent, RunPausedEvent, RunStartedEvent
+from definable.agent.events import RunCompletedEvent, RunStartedEvent
 from definable.agent.loop import AgentLoop
 from definable.agent.pipeline.phase import BasePhase
-from definable.agent.pipeline.state import LoopState, LoopStatus
+from definable.agent.pipeline.state import LoopState
 from definable.agent.run.base import BaseRunOutputEvent
 
 if TYPE_CHECKING:
@@ -90,10 +90,6 @@ class InvokeLoopPhase(BasePhase):
         state.content = event.content
         state.parsed = event.parsed
         state.metrics = event.metrics
-
-      elif isinstance(event, RunPausedEvent):
-        state.status = LoopStatus.paused
-        state.requirements = event.requirements
 
       yield state, event
 
