@@ -27,4 +27,5 @@ jobs:
       - name: Install Mintlify CLI
         run: npm i -g mintlify
       - name: Check broken links
-        run: mintlify broken-links --dir docs
+        working-directory: docs
+        run: mintlify broken-links
