@@ -466,7 +466,8 @@ def test_docs_workflow_matches_current_docs_layout() -> None:
   assert '"docs/**"' in workflow
   assert '"tests/docs/**"' in workflow
   assert "pytest tests/docs/test_documentation_examples.py" in workflow
-  assert "mintlify broken-links --dir docs" in workflow
+  assert "mintlify broken-links" in workflow
+  assert "working-directory: docs" in workflow
 
 
 @pytest.mark.unit
