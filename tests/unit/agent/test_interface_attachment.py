@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import warnings
 from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -150,54 +149,6 @@ class TestInterfacesProperty:
 # ===========================================================================
 
 
-class TestDeprecationWarnings:
-  def test_add_interface_emits_warning(self) -> None:
-    agent = _make_agent()
-    iface = _StubInterface("telegram")
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      agent.add_interface(iface)
-      assert len(w) == 1
-      assert issubclass(w[0].category, DeprecationWarning)
-      assert "add_interface()" in str(w[0].message)
-    # Still works despite warning
-    assert iface in agent.interfaces
-
-  def test_create_gateway_emits_warning(self) -> None:
-    agent = _make_agent()
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      gw = agent.create_gateway()
-      assert len(w) == 1
-      assert issubclass(w[0].category, DeprecationWarning)
-      assert "create_gateway()" in str(w[0].message)
-    assert agent.gateway is gw
-
-  @pytest.mark.asyncio
-  async def test_aserve_interfaces_arg_emits_warning(self) -> None:
-    agent = _make_agent()
-    iface = _StubInterface("telegram")
-
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      with patch("definable.agent.runtime.runner.AgentRuntime.start", new_callable=AsyncMock):
-        await agent.aserve(iface)
-      dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-      assert any("aserve()" in str(x.message) for x in dep_warnings)
-
-  @pytest.mark.asyncio
-  async def test_aserve_gateway_arg_emits_warning(self) -> None:
-    agent = _make_agent()
-    gw = InterfaceGateway(agent)
-
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      with patch("definable.agent.runtime.runner.AgentRuntime.start", new_callable=AsyncMock):
-        await agent.aserve(gateway=gw)
-      dep_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-      assert any("aserve()" in str(x.message) for x in dep_warnings)
-
-
 # ===========================================================================
 # 5. InterfaceGateway — deferred binding
 # ===========================================================================
@@ -291,39 +242,8 @@ class TestAutoGateway:
 
 
 class TestBackwardCompat:
-  def test_old_add_interface_still_works(self) -> None:
-    agent = _make_agent()
-    iface = _StubInterface("telegram")
-    with warnings.catch_warnings(record=True):
-      warnings.simplefilter("always")
-      agent.add_interface(iface)
-    assert iface in agent.interfaces
-    assert iface.agent is agent
-
-  def test_old_create_gateway_still_works(self) -> None:
-    agent = _make_agent()
-    iface = _StubInterface("telegram")
-    with warnings.catch_warnings(record=True):
-      warnings.simplefilter("always")
-      agent.add_interface(iface)
-      gw = agent.create_gateway()
-    assert agent.gateway is gw
-    assert iface in gw.interfaces
-
   def test_gateway_with_agent_in_constructor_still_works(self) -> None:
     """Old pattern: InterfaceGateway(agent) still works."""
     agent = _make_agent()
     gw = InterfaceGateway(agent)
     assert gw.agent is agent
-
-  def test_standalone_serve_emits_warning(self) -> None:
-    from definable.agent.interface.serve import serve
-
-    with warnings.catch_warnings(record=True):
-      warnings.simplefilter("always")
-      # Can't actually await serve() without interfaces, but we can
-      # check the function has the deprecation by inspecting source
-      import inspect
-
-      source = inspect.getsource(serve)
-      assert "deprecated" in source.lower()

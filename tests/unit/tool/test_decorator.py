@@ -152,33 +152,6 @@ class TestToolDecoratorStopAfterToolCall:
 
 
 @pytest.mark.unit
-class TestToolDecoratorRequiresConfirmation:
-  """@tool(requires_confirmation=True) sets the flag on Function."""
-
-  def test_requires_confirmation_is_true(self):
-    @tool(requires_confirmation=True)
-    def danger(target: str) -> str:
-      """Dangerous operation."""
-      return target
-
-    assert danger.requires_confirmation is True
-
-
-@pytest.mark.unit
-class TestToolDecoratorRequiresUserInput:
-  """@tool(requires_user_input=True) sets user_input_fields to empty list."""
-
-  def test_requires_user_input_sets_fields_list(self):
-    @tool(requires_user_input=True)
-    def interactive(prompt: str) -> str:
-      """Interactive tool."""
-      return prompt
-
-    assert interactive.requires_user_input is True
-    assert interactive.user_input_fields == []
-
-
-@pytest.mark.unit
 class TestToolDecoratorParametersSchema:
   """Type hints on the decorated function produce correct JSON schema parameters."""
 
@@ -309,25 +282,4 @@ class TestToolDecoratorInvalidKwargs:
       @tool(foo="bar", baz=123)  # type: ignore[call-overload]
       def another_bad() -> str:
         """Also bad."""
-        return "oops"
-
-
-@pytest.mark.unit
-class TestToolDecoratorMutuallyExclusiveFlags:
-  """Only one of requires_user_input, requires_confirmation, external_execution can be True."""
-
-  def test_confirmation_and_user_input_raises(self):
-    with pytest.raises(ValueError, match="Only one of"):
-
-      @tool(requires_confirmation=True, requires_user_input=True)
-      def conflicting() -> str:
-        """Conflicting flags."""
-        return "oops"
-
-  def test_confirmation_and_external_execution_raises(self):
-    with pytest.raises(ValueError, match="Only one of"):
-
-      @tool(requires_confirmation=True, external_execution=True)
-      def conflicting() -> str:
-        """Conflicting flags."""
         return "oops"

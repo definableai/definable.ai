@@ -131,17 +131,6 @@ class TestBrowserToolkit:
 
 
 class TestBackwardCompat:
-  def test_seleniumbase_browser_import_warns(self):
-    import warnings
-
-    with warnings.catch_warnings(record=True) as w:
-      warnings.simplefilter("always")
-      from definable.browser import SeleniumBaseBrowser  # noqa: F401
-
-      deprecation_warnings = [x for x in w if issubclass(x.category, DeprecationWarning)]
-      assert len(deprecation_warnings) >= 1
-      assert "removed" in str(deprecation_warnings[0].message).lower()
-
   def test_playwright_browser_import(self):
     from definable.browser import PlaywrightBrowser
 

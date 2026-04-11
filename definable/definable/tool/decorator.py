@@ -131,6 +131,9 @@ def tool(*args, **kwargs) -> Union[Function, Callable[[F], Function]]:
     "cache_results",
     "cache_dir",
     "cache_ttl",
+    "requires_confirmation",
+    "external_execution",
+    "requires_user_input",
   })
 
   # Improve error message with more context
