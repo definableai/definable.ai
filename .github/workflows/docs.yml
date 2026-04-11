@@ -17,7 +17,7 @@ jobs:
           python-version: "3.12"
       - name: Install Python dependencies for docs validation
         run: |
-          pip install -e ".[dev,readers,runtime,discord,slack,jwt,anthropic]"
+          pip install -e ".[dev,readers,runtime,discord,slack,jwt,anthropic,google,mistral]"
       - name: Run executable docs suite
         run: |
           pytest tests/docs/test_documentation_examples.py

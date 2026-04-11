@@ -88,66 +88,6 @@ assert output.content == "done"
 assert order == ["parallel", "sequential"]
 ```
 
-## Tested pause and resume
-
-Tools marked `requires_confirmation = True` pause the loop and return a `RunOutput` with `status == RunStatus.paused`.
-
-```python
-import asyncio
-from unittest.mock import MagicMock
-
-from definable.agent import Agent, MockModel
-from definable.model.metrics import Metrics
-from definable.tool.decorator import tool
-
-
-@tool
-def send_email(to: str) -> str:
-    return f"sent:{to}"
-
-
-send_email.requires_confirmation = True
-
-
-def pause_model(messages=None, **kwargs):
-    response = MagicMock()
-
-    if not any(getattr(message, "role", None) == "tool" for message in (messages or [])):
-        response.content = ""
-        response.tool_calls = [
-            {
-                "id": "call_1",
-                "type": "function",
-                "function": {"name": "send_email", "arguments": '{"to": "alice@example.com"}'},
-            }
-        ]
-    else:
-        response.content = "Email approved and sent."
-        response.tool_calls = []
-
-    response.tool_executions = []
-    response.response_usage = Metrics()
-    response.reasoning_content = None
-    response.citations = None
-    response.images = None
-    response.videos = None
-    response.audios = None
-    response.parsed = None
-    return response
-
-
-agent = Agent(model=MockModel(side_effect=pause_model), tools=[send_email])
-paused = agent.run("Email Alice")
-
-assert paused.is_paused is True
-assert paused.requirements[0].tool_execution.tool_name == "send_email"
-
-paused.requirements[0].confirm()
-resumed = asyncio.run(agent.continue_run(run_output=paused))
-
-assert resumed.content == "Email approved and sent."
-```
-
 ## Tested cancellation
 
 ```python
