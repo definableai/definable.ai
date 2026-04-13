@@ -63,7 +63,8 @@ from definable.tool.function import Function
 from definable.model.message import Message
 from definable.agent.events import RunOutput
 from definable.media import Audio, File, Image, Video
-from definable.exceptions import AgentRunException, RetryAgentRun, StopAgentRun
+from definable.exceptions import AgentRunException, ControlFlowException, RetryAgentRun, StopAgentRun, UserError
+from definable.utils.sentinel import UNSET
 
 
 if TYPE_CHECKING:
@@ -168,10 +169,16 @@ __all__ = [
   "File",
   # Run
   "RunOutput",
-  # Exceptions
-  "AgentRunException",
-  "StopAgentRun",
+  # Exceptions — control flow
+  "ControlFlowException",
   "RetryAgentRun",
+  "StopAgentRun",
+  # Exceptions — errors
+  "UserError",
+  # Exceptions — backward compat alias
+  "AgentRunException",
+  # Sentinel
+  "UNSET",
   # Lazy — Models
   "OpenAIChat",
   "OpenAILike",

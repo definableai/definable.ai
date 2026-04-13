@@ -1,11 +1,41 @@
-from dataclasses import dataclass
+"""Definable exception hierarchy.
+
+Two separate trees:
+
+1. **Control flow** — intentional redirection, not errors:
+   - ``RetryAgentRun`` — retry tool call with feedback to the model
+   - ``StopAgentRun``  — terminate execution gracefully
+
+2. **Errors** — something broke:
+   - ``DefinableError`` (base)
+     - ``ModelAuthenticationError`` (401)
+     - ``ModelProviderError`` (502)
+       - ``ModelRateLimitError`` (429)
+     - ``RemoteServerUnavailableError`` (503)
+   - ``InputCheckError`` / ``OutputCheckError`` — guardrail violations
+
+3. **Developer mistakes**:
+   - ``UserError`` — the developer configured something wrong (always actionable)
+"""
+
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from definable.model.message import Message
 
 
-class AgentRunException(Exception):
+# ---------------------------------------------------------------------------
+# Control flow exceptions — intentional redirection, not errors
+# ---------------------------------------------------------------------------
+
+
+class ControlFlowException(Exception):
+  """Base for exceptions that redirect execution flow, not signal errors.
+
+  Catch these when you want to handle *all* intentional redirections
+  (retries, stops) without catching actual errors.
+  """
+
   def __init__(
     self,
     exc,
@@ -19,12 +49,12 @@ class AgentRunException(Exception):
     self.agent_message = agent_message
     self.messages = messages
     self.stop_execution = stop_execution
-    self.type = "agent_run_error"
-    self.error_id = "agent_run_error"
+    self.type = "control_flow"
+    self.error_id = "control_flow"
 
 
-class RetryAgentRun(AgentRunException):
-  """Exception raised when a tool call should be retried."""
+class RetryAgentRun(ControlFlowException):
+  """Signal that a tool call should be retried with feedback to the model."""
 
   def __init__(
     self,
@@ -34,11 +64,11 @@ class RetryAgentRun(AgentRunException):
     messages: Optional[List[Union[dict, Message]]] = None,
   ):
     super().__init__(exc, user_message=user_message, agent_message=agent_message, messages=messages, stop_execution=False)
-    self.error_id = "retry_agent_run_error"
+    self.error_id = "retry_agent_run"
 
 
-class StopAgentRun(AgentRunException):
-  """Exception raised when an agent should stop executing entirely."""
+class StopAgentRun(ControlFlowException):
+  """Signal that the agent should stop executing entirely."""
 
   def __init__(
     self,
@@ -48,11 +78,28 @@ class StopAgentRun(AgentRunException):
     messages: Optional[List[Union[dict, Message]]] = None,
   ):
     super().__init__(exc, user_message=user_message, agent_message=agent_message, messages=messages, stop_execution=True)
-    self.error_id = "stop_agent_run_error"
+    self.error_id = "stop_agent_run"
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility — AgentRunException is now an alias
+# ---------------------------------------------------------------------------
+
+# AgentRunException was the original base for both RetryAgentRun and StopAgentRun.
+# Code that catches AgentRunException will still work because ControlFlowException
+# is now the actual base class. We keep AgentRunException as an alias so that:
+#   - ``except AgentRunException`` still catches RetryAgentRun/StopAgentRun
+#   - ``isinstance(e, AgentRunException)`` still returns True
+AgentRunException = ControlFlowException
+
+
+# ---------------------------------------------------------------------------
+# Error exceptions — something actually broke
+# ---------------------------------------------------------------------------
 
 
 class DefinableError(Exception):
-  """Exception raised when an internal error occurs."""
+  """Base for internal framework errors."""
 
   def __init__(self, message: str, status_code: int = 500):
     super().__init__(message)
@@ -65,13 +112,25 @@ class DefinableError(Exception):
     return str(self.message)
 
 
+class UserError(DefinableError):
+  """Developer mistake — always actionable.
+
+  Raise when the developer configured something incorrectly:
+  bad argument combinations, missing required settings, etc.
+  The message should tell them exactly what to fix.
+  """
+
+  def __init__(self, message: str):
+    super().__init__(message, status_code=400)
+    self.error_id = "user_error"
+
+
 class ModelAuthenticationError(DefinableError):
   """Raised when model authentication fails."""
 
   def __init__(self, message: str, status_code: int = 401, model_name: Optional[str] = None):
     super().__init__(message, status_code)
     self.model_name = model_name
-
     self.type = "model_authentication_error"
     self.error_id = "model_authentication_error"
 
@@ -83,7 +142,6 @@ class ModelProviderError(DefinableError):
     super().__init__(message, status_code)
     self.model_name = model_name
     self.model_id = model_id
-
     self.type = "model_provider_error"
     self.error_id = "model_provider_error"
 
@@ -94,6 +152,11 @@ class ModelRateLimitError(ModelProviderError):
   def __init__(self, message: str, status_code: int = 429, model_name: Optional[str] = None, model_id: Optional[str] = None):
     super().__init__(message, status_code, model_name, model_id)
     self.error_id = "model_rate_limit_error"
+
+
+# ---------------------------------------------------------------------------
+# Guardrail exceptions
+# ---------------------------------------------------------------------------
 
 
 class CheckTrigger(Enum):
@@ -145,11 +208,31 @@ class OutputCheckError(Exception):
     self.additional_data = additional_data
 
 
-@dataclass
+# ---------------------------------------------------------------------------
+# Retryable model errors — guidance-based retry
+# ---------------------------------------------------------------------------
+
+
 class RetryableModelProviderError(Exception):
-  original_error: Optional[str] = None
-  # Guidance message to retry a model invocation after an error
-  retry_guidance_message: Optional[str] = None
+  """Raised when a model invocation can be retried with guidance.
+
+  The retry_guidance_message is appended to the conversation to help the model
+  avoid the same error on the next attempt (e.g., malformed function call).
+  """
+
+  def __init__(
+    self,
+    original_error: Optional[str] = None,
+    retry_guidance_message: Optional[str] = None,
+  ):
+    super().__init__(original_error or "Retryable model provider error")
+    self.original_error = original_error
+    self.retry_guidance_message = retry_guidance_message
+
+
+# ---------------------------------------------------------------------------
+# Remote server errors
+# ---------------------------------------------------------------------------
 
 
 class RemoteServerUnavailableError(DefinableError):

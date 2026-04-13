@@ -481,8 +481,15 @@ def flatten_tools(
     1. Skill tools (lowest priority)
     2. Toolkit tools
     3. Direct tools (highest priority — explicit always wins)
+
+  Warns when two sources at the same priority level provide a tool with the same name,
+  since this usually indicates a configuration mistake.
   """
+  from definable.utils.log import log_warning
+
   result: "Dict[str, Function]" = {}
+  # Track which source provided each tool name for conflict detection
+  sources: "Dict[str, str]" = {}
 
   for skill in skills:
     try:
@@ -493,16 +500,38 @@ def flatten_tools(
       if skill.dependencies:
         existing_deps = getattr(fn, "_dependencies", None) or {}
         fn._dependencies = {**existing_deps, **skill.dependencies}
+      source = f"skill {skill.name!r}"
+      if fn.name in sources and not sources[fn.name].startswith("skill "):
+        pass  # Higher-priority source already registered — skip warning
+      elif fn.name in result:
+        log_warning(
+          f"Tool name conflict: {fn.name!r} provided by both {sources[fn.name]} and {source}. "
+          f"The later definition wins. Rename one of the tools to avoid ambiguity."
+        )
       result[fn.name] = fn
+      sources[fn.name] = source
 
   for toolkit in toolkits:
+    toolkit_label = getattr(toolkit, "name", type(toolkit).__name__)
     for fn in toolkit.tools:
       if toolkit.dependencies:
         existing_deps = getattr(fn, "_dependencies", None) or {}
         fn._dependencies = {**existing_deps, **toolkit.dependencies}
+      source = f"toolkit {toolkit_label!r}"
+      prev = sources.get(fn.name)
+      if prev is not None and prev.startswith("toolkit "):
+        log_warning(
+          f"Tool name conflict: {fn.name!r} provided by both {prev} and {source}. "
+          f"The later definition wins. Rename one of the tools to avoid ambiguity."
+        )
       result[fn.name] = fn
+      sources[fn.name] = source
 
   for fn in tools:
+    prev = sources.get(fn.name)
+    if prev is not None and prev == "direct":
+      log_warning(f"Tool name conflict: {fn.name!r} appears multiple times in the tools list. The later definition wins.")
     result[fn.name] = fn
+    sources[fn.name] = "direct"
 
   return result
