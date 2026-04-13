@@ -62,6 +62,7 @@ from definable.tool.decorator import tool
 from definable.tool.function import Function
 from definable.model.message import Message
 from definable.agent.events import RunOutput
+from definable.agent.run.base import get_current_run_context
 from definable.media import Audio, File, Image, Video
 from definable.exceptions import AgentRunException, ControlFlowException, RetryAgentRun, StopAgentRun, UserError
 from definable.utils.sentinel import UNSET
@@ -169,6 +170,7 @@ __all__ = [
   "File",
   # Run
   "RunOutput",
+  "get_current_run_context",
   # Exceptions — control flow
   "ControlFlowException",
   "RetryAgentRun",

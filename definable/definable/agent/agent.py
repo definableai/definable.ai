@@ -302,6 +302,7 @@ class Agent:
     self._context_manager: Optional["ContextManager"] = resolve_context(context, self.model)
     self._deferred_tool_manager: Optional["DeferredToolManager"] = resolve_deferred_tools(self._context_manager, self._tools_dict)
     self._middleware: List[Middleware] = []
+    self._output_validators: List[Callable[..., Any]] = []
     self._interfaces: List["BaseInterface"] = []
     self._gateway: Optional["InterfaceGateway"] = None
 
@@ -580,6 +581,57 @@ class Agent:
 
     return decorator
 
+  def output_validator(self, fn: Optional[Callable] = None) -> Callable:
+    """Register a validator that runs after the agent produces output.
+
+    The validator receives the output content and the RunContext. It can:
+    - Return the output unchanged (pass validation)
+    - Return a modified output (transform)
+    - Raise ``RetryAgentRun`` to have the model retry with feedback
+
+    Supports both ``@agent.output_validator`` and ``@agent.output_validator()``.
+
+    Example::
+
+      @agent.output_validator
+      async def check_output(output, context):
+          if not output or len(str(output)) < 10:
+              from definable import RetryAgentRun
+              raise RetryAgentRun("Output too short, provide more detail.")
+          return output
+
+    Validators run in registration order after the pipeline completes.
+    Unlike ``after_response`` hooks, validators CAN raise exceptions to
+    signal retry or stop.
+    """
+    if fn is not None:
+      self._output_validators.append(fn)
+      return fn
+
+    def decorator(func: Callable) -> Callable:
+      self._output_validators.append(func)
+      return func
+
+    return decorator
+
+  async def _run_output_validators(self, output: Any, context: RunContext) -> Any:
+    """Run all output validators. Returns final (possibly transformed) output."""
+    import inspect
+
+    for validator in self._output_validators:
+      sig = inspect.signature(validator)
+      params = list(sig.parameters.keys())
+      # Support both (output,) and (output, context) signatures
+      if len(params) >= 2:
+        result = validator(output, context)
+      else:
+        result = validator(output)
+      if inspect.isawaitable(result):
+        result = await result
+      if result is not None:
+        output = result
+    return output
+
   async def _fire_before_hooks(self, context: RunContext) -> None:
     """Call all before_request hooks (non-fatal)."""
     import inspect
@@ -794,34 +846,45 @@ class Agent:
     assert state.context is not None
     context = state.context
 
-    # Fire agent-level before_request hooks (outside pipeline — receives RunContext)
-    await self._fire_before_hooks(context)
+    # Set ambient RunContext so tools can access it via get_current_run_context()
+    from definable.agent.run.base import set_current_run_context
 
-    # Build middleware chain where core handler is the pipeline
-    async def core_handler(ctx: RunContext) -> RunOutput:
-      return await self._execute_via_pipeline(state)
+    set_current_run_context(context)
+    try:
+      # Fire agent-level before_request hooks (outside pipeline — receives RunContext)
+      await self._fire_before_hooks(context)
 
-    # Wrap with middleware (innermost to outermost)
-    handler = core_handler
-    for middleware in reversed(self._middleware):
-      prev_handler = handler
+      # Build middleware chain where core handler is the pipeline
+      async def core_handler(ctx: RunContext) -> RunOutput:
+        return await self._execute_via_pipeline(state)
 
-      async def wrapped_handler(ctx: RunContext, mw=middleware, h=prev_handler) -> RunOutput:
-        return await mw(ctx, h)
+      # Wrap with middleware (innermost to outermost)
+      handler = core_handler
+      for middleware in reversed(self._middleware):
+        prev_handler = handler
 
-      handler = wrapped_handler
+        async def wrapped_handler(ctx: RunContext, mw=middleware, h=prev_handler) -> RunOutput:
+          return await mw(ctx, h)
 
-    # Execute pipeline through middleware chain
-    result = await handler(context)
+        handler = wrapped_handler
 
-    # Record usage metrics
-    if self._usage_tracker is not None and result.metrics is not None:
-      await self._usage_tracker.arecord_run(result.metrics, self.model.id if self.model else None)
+      # Execute pipeline through middleware chain
+      result = await handler(context)
 
-    # Fire agent-level after_response hooks (outside pipeline — receives RunOutput)
-    await self._fire_after_hooks(result)
+      # Run output validators (can raise RetryAgentRun or transform output)
+      if self._output_validators and result.content is not None:
+        result.content = await self._run_output_validators(result.content, context)
 
-    return result
+      # Record usage metrics
+      if self._usage_tracker is not None and result.metrics is not None:
+        await self._usage_tracker.arecord_run(result.metrics, self.model.id if self.model else None)
+
+      # Fire agent-level after_response hooks (outside pipeline — receives RunOutput)
+      await self._fire_after_hooks(result)
+
+      return result
+    finally:
+      set_current_run_context(None)
 
   def run_stream(
     self,
@@ -1035,6 +1098,11 @@ class Agent:
     # Transcribe audio in new messages (before pipeline — enriches text for all models)
     await self._transcribe_audio(state.new_messages)
 
+    # Set ambient RunContext for tools
+    from definable.agent.run.base import set_current_run_context
+
+    assert state.context is not None
+    set_current_run_context(state.context)
     try:
       from definable.agent.harness import execute_run
 
@@ -1073,6 +1141,8 @@ class Agent:
       self._emit(error_event)
       yield error_event
       raise
+    finally:
+      set_current_run_context(None)
 
   # --- Knowledge & Memory Helpers ---
 

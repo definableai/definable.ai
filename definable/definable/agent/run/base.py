@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from contextvars import ContextVar
+from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type, Union
 
@@ -52,122 +53,151 @@ class RunContext:
   active_layers: Set[str] = field(default_factory=set)
 
 
+# ---------------------------------------------------------------------------
+# Ambient RunContext — accessible from any tool without explicit threading
+# ---------------------------------------------------------------------------
+
+_CURRENT_RUN_CONTEXT: ContextVar[Optional[RunContext]] = ContextVar("_CURRENT_RUN_CONTEXT", default=None)
+
+
+def get_current_run_context() -> Optional[RunContext]:
+  """Get the RunContext for the currently executing agent run.
+
+  Returns None if called outside of an agent run. This is the
+  recommended way for tools to access run context without requiring
+  it as an explicit parameter::
+
+      from definable.agent.run.base import get_current_run_context
+
+      @tool
+      def my_tool(query: str) -> str:
+          ctx = get_current_run_context()
+          if ctx:
+              print(f"Running in session {ctx.session_id}")
+          return f"Result for {query}"
+  """
+  return _CURRENT_RUN_CONTEXT.get()
+
+
+def set_current_run_context(ctx: Optional[RunContext]) -> None:
+  """Set the ambient RunContext. Called by the agent loop at run start/end.
+
+  Not intended for direct use by tool authors.
+  """
+  _CURRENT_RUN_CONTEXT.set(ctx)
+
+
 @dataclass
 class BaseRunOutputEvent:
+  # Fields that require custom serialization — excluded from the base asdict() pass,
+  # then serialized individually in to_dict(). Does NOT include 'content' because
+  # content is included by the base pass and only overridden when it's a BaseModel.
+  _COMPLEX_FIELDS: frozenset = field(
+    default=frozenset({
+      "tools",
+      "tool",
+      "metadata",
+      "image",
+      "images",
+      "videos",
+      "audio",
+      "response_audio",
+      "citations",
+      "member_responses",
+      "reasoning_messages",
+      "reasoning_steps",
+      "references",
+      "additional_input",
+      "session_summary",
+      "metrics",
+      "run_input",
+      "requirements",
+    }),
+    init=False,
+    repr=False,
+  )
+
   def to_dict(self) -> Dict[str, Any]:
-    _dict = {
-      k: v
-      for k, v in asdict(self).items()
-      if v is not None
-      and k
-      not in [
-        "tools",
-        "tool",
-        "metadata",
-        "image",
-        "images",
-        "videos",
-        "audio",
-        "response_audio",
-        "citations",
-        "member_responses",
-        "reasoning_messages",
-        "reasoning_steps",
-        "references",
-        "additional_input",
-        "session_summary",
-        "metrics",
-        "run_input",
-        "requirements",
+    # Build base dict from all dataclass fields, excluding None values and complex fields
+    _dict = {k: v for k, v in asdict(self).items() if v is not None and k not in self._COMPLEX_FIELDS}
+
+    # Introspect actual fields on this instance (not hasattr — uses the dataclass definition)
+    own_fields = {f.name for f in fields(self)}
+
+    # --- Passthrough fields (include as-is if present and not None) ---
+    if "metadata" in own_fields:
+      val = self.metadata  # type: ignore[attr-defined]
+      if val is not None:
+        _dict["metadata"] = val
+
+    # --- List-of-serializable fields (each item has .to_dict() or .model_dump()) ---
+    if "additional_input" in own_fields and self.additional_input is not None:  # type: ignore[attr-defined]
+      _dict["additional_input"] = [m.to_dict() for m in self.additional_input]  # type: ignore[attr-defined]
+
+    if "reasoning_messages" in own_fields and self.reasoning_messages is not None:  # type: ignore[attr-defined]
+      _dict["reasoning_messages"] = [m.to_dict() for m in self.reasoning_messages]  # type: ignore[attr-defined]
+
+    if "reasoning_steps" in own_fields and self.reasoning_steps is not None:  # type: ignore[attr-defined]
+      _dict["reasoning_steps"] = [rs.model_dump() for rs in self.reasoning_steps]  # type: ignore[attr-defined]
+
+    if "references" in own_fields and self.references is not None:  # type: ignore[attr-defined]
+      _dict["references"] = [r.model_dump() for r in self.references]  # type: ignore[attr-defined]
+
+    if "member_responses" in own_fields and self.member_responses:  # type: ignore[attr-defined]
+      _dict["member_responses"] = [response.to_dict() for response in self.member_responses]  # type: ignore[attr-defined]
+
+    if "requirements" in own_fields and self.requirements is not None:  # type: ignore[attr-defined]
+      _dict["requirements"] = [  # type: ignore[attr-defined]
+        req.to_dict() if callable(getattr(req, "to_dict", None)) else req
+        for req in self.requirements  # type: ignore[attr-defined]
       ]
-    }
 
-    if hasattr(self, "metadata") and self.metadata is not None:
-      _dict["metadata"] = self.metadata
+    # --- Media list fields (each item may be a media object or a raw dict) ---
+    for media_field, media_type in (("images", Image), ("videos", Video), ("audio", Audio)):
+      if media_field in own_fields:
+        items = getattr(self, media_field)
+        if items is not None:
+          _dict[media_field] = [item.to_dict() if isinstance(item, media_type) else item for item in items]
 
-    if hasattr(self, "additional_input") and self.additional_input is not None:
-      _dict["additional_input"] = [m.to_dict() for m in self.additional_input]
+    # --- Single media field ---
+    if "response_audio" in own_fields:
+      val = self.response_audio  # type: ignore[attr-defined]
+      if val is not None:
+        _dict["response_audio"] = val.to_dict() if isinstance(val, Audio) else val
 
-    if hasattr(self, "reasoning_messages") and self.reasoning_messages is not None:
-      _dict["reasoning_messages"] = [m.to_dict() for m in self.reasoning_messages]
+    # --- Pydantic model fields ---
+    if "citations" in own_fields:
+      val = self.citations  # type: ignore[attr-defined]
+      if val is not None:
+        _dict["citations"] = val.model_dump(exclude_none=True) if isinstance(val, Citations) else val
 
-    if hasattr(self, "reasoning_steps") and self.reasoning_steps is not None:
-      _dict["reasoning_steps"] = [rs.model_dump() for rs in self.reasoning_steps]
+    # content is already in _dict from the base pass; override only if it's a BaseModel
+    if "content" in own_fields:
+      val = self.content  # type: ignore[attr-defined]
+      if val is not None and isinstance(val, BaseModel):
+        _dict["content"] = val.model_dump(exclude_none=True)
 
-    if hasattr(self, "references") and self.references is not None:
-      _dict["references"] = [r.model_dump() for r in self.references]
-
-    if hasattr(self, "member_responses") and self.member_responses:
-      _dict["member_responses"] = [response.to_dict() for response in self.member_responses]
-
-    if hasattr(self, "images") and self.images is not None:
-      _dict["images"] = []
-      for img in self.images:
-        if isinstance(img, Image):
-          _dict["images"].append(img.to_dict())
-        else:
-          _dict["images"].append(img)
-
-    if hasattr(self, "videos") and self.videos is not None:
-      _dict["videos"] = []
-      for vid in self.videos:
-        if isinstance(vid, Video):
-          _dict["videos"].append(vid.to_dict())
-        else:
-          _dict["videos"].append(vid)
-
-    if hasattr(self, "audio") and self.audio is not None:
-      _dict["audio"] = []
-      for aud in self.audio:
-        if isinstance(aud, Audio):
-          _dict["audio"].append(aud.to_dict())
-        else:
-          _dict["audio"].append(aud)
-
-    if hasattr(self, "response_audio") and self.response_audio is not None:
-      if isinstance(self.response_audio, Audio):
-        _dict["response_audio"] = self.response_audio.to_dict()
-      else:
-        _dict["response_audio"] = self.response_audio
-
-    if hasattr(self, "citations") and self.citations is not None:
-      if isinstance(self.citations, Citations):
-        _dict["citations"] = self.citations.model_dump(exclude_none=True)
-      else:
-        _dict["citations"] = self.citations
-
-    if hasattr(self, "content") and self.content and isinstance(self.content, BaseModel):
-      _dict["content"] = self.content.model_dump(exclude_none=True)
-
-    if hasattr(self, "tools") and self.tools is not None:
+    # --- Tool execution fields ---
+    if "tools" in own_fields:
       from definable.model.response import ToolExecution
 
-      _dict["tools"] = []
-      for tool in self.tools:
-        if isinstance(tool, ToolExecution):
-          _dict["tools"].append(tool.to_dict())
-        else:
-          _dict["tools"].append(tool)
+      val = self.tools  # type: ignore[attr-defined]
+      if val is not None:
+        _dict["tools"] = [t.to_dict() if isinstance(t, ToolExecution) else t for t in val]
 
-    if hasattr(self, "tool") and self.tool is not None:
+    if "tool" in own_fields:
       from definable.model.response import ToolExecution
 
-      if isinstance(self.tool, ToolExecution):
-        _dict["tool"] = self.tool.to_dict()
-      else:
-        _dict["tool"] = self.tool
+      val = self.tool  # type: ignore[attr-defined]
+      if val is not None:
+        _dict["tool"] = val.to_dict() if isinstance(val, ToolExecution) else val
 
-    if hasattr(self, "metrics") and self.metrics is not None:
-      _dict["metrics"] = self.metrics.to_dict()
-
-    if hasattr(self, "session_summary") and self.session_summary is not None:
-      _dict["session_summary"] = self.session_summary.to_dict()
-
-    if hasattr(self, "run_input") and self.run_input is not None:
-      _dict["run_input"] = self.run_input.to_dict()
-
-    if hasattr(self, "requirements") and self.requirements is not None:
-      _dict["requirements"] = [req.to_dict() if hasattr(req, "to_dict") else req for req in self.requirements]
+    # --- Objects with .to_dict() ---
+    for obj_field in ("metrics", "session_summary", "run_input"):
+      if obj_field in own_fields:
+        val = getattr(self, obj_field)
+        if val is not None:
+          _dict[obj_field] = val.to_dict()
 
     return _dict
 
