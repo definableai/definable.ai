@@ -1,0 +1,51 @@
+---
+title: Agent Integration
+sidebarTitle: Agent Integration
+description: Attach memory to an agent and let the run loop store and recall prior turns.
+icon: link
+---
+
+When an agent has `memory=...`, Definable writes the new user and assistant messages after each run and injects prior conversation history on later runs for the same session and user.
+
+## What happens during a run
+
+1. The agent loads prior entries for the current `session_id` and `user_id`.
+2. That history is injected as a system message in the next model call.
+3. After the model responds, the new user and assistant messages are stored.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.memory import InMemoryStore, Memory
+
+
+async def main() -> None:
+    memory = Memory(store=InMemoryStore())
+    model = MockModel(responses=["Hello Ada.", "I remember that you like Python."])
+    agent = Agent(model=model, memory=memory)
+
+    await agent.arun("My favorite language is Python.", session_id="docs", user_id="alice")
+    second = await agent.arun("What do I like?", session_id="docs", user_id="alice")
+
+    injected_messages = model.call_history[1]["messages"]
+
+    assert injected_messages[0].role == "system"
+    assert "My favorite language is Python." in injected_messages[0].content
+    assert second.content == "I remember that you like Python."
+    assert len(await memory.get_entries("docs", "alice")) == 4
+
+    await memory.close()
+
+
+asyncio.run(main())
+```
+
+## Guidance
+
+- Keep `session_id` stable. That is the unit memory is keyed on.
+- Use `user_id` when multiple users may share session names.
+- Reach for the memory block directly when you need explicit reads or writes outside an agent run.

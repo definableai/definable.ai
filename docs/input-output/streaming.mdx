@@ -1,0 +1,59 @@
+---
+title: Streaming
+sidebarTitle: Streaming
+description: "Consume agent responses as events instead of waiting for the final output."
+---
+
+import AsyncNote from "../_snippets/async-note.mdx";
+
+Streaming is the event-oriented way to run an agent. It improves perceived latency and gives you visibility into intermediate steps such as tool calls and reasoning.
+
+## Synchronous streaming
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["hello world"]), instructions="Be brief.")
+events = [event.event for event in agent.run_stream("Say hello") if hasattr(event, "event")]
+
+assert "RunStarted" in events
+assert "RunContent" in events
+assert "RunCompleted" in events
+```
+
+## Asynchronous streaming
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+
+async def main() -> None:
+    agent = Agent(model=MockModel(responses=["hello world"]), instructions="Be brief.")
+    events = []
+    async for event in agent.arun_stream("Say hello"):
+        if hasattr(event, "event"):
+            events.append(event.event)
+
+    assert "RunCompleted" in events
+
+
+asyncio.run(main())
+```
+
+<AsyncNote />
+
+## What to expect from the stream
+
+- `RunStarted` when execution begins
+- one or more `RunContent` events for streamed text
+- tool and reasoning events when those layers are active
+- `RunCompleted` when the stream has enough information to reconstruct the final output
+
+## Related pages
+
+- [`Running Agents`](/agents/running-agents)
+- [`Thinking`](/reasoning/thinking)

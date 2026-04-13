@@ -41,8 +41,6 @@ class InMemoryVectorDB(VectorDB):
     doc_id: Optional[str] = None,
     embedder: Optional[Embedder] = None,
     distance: Distance = Distance.cosine,
-    # Backward compat: accept but ignore dimensions kwarg
-    dimensions: Optional[int] = None,
     **kwargs,
   ):
     super().__init__(doc_id=doc_id, name=name, description=description)
@@ -59,9 +57,6 @@ class InMemoryVectorDB(VectorDB):
 
     # Storage: doc_id -> record dict
     self._store: Dict[str, Dict[str, Any]] = {}
-
-    if dimensions is not None:
-      log_warning("InMemoryVectorDB: 'dimensions' kwarg is deprecated and ignored.")
 
   def create(self) -> None:
     """No-op for in-memory store."""
@@ -337,11 +332,3 @@ class InMemoryVectorDB(VectorDB):
 
   def get_supported_search_types(self) -> List[str]:
     return ["vector"]
-
-  # Backward compat alias
-  def add(self, documents: List[Document]) -> None:
-    """Deprecated: use insert() instead."""
-    log_warning("InMemoryVectorDB.add() is deprecated; use insert() instead.")
-    from definable.utils.string import generate_id
-
-    self.insert(generate_id(), documents)

@@ -1,0 +1,30 @@
+---
+title: OpenRouter
+description: Configure OpenRouter models with the `OpenRouter` adapter.
+---
+
+`OpenRouter` is the provider-specific adapter for OpenRouter's routing layer. It keeps the OpenAI-style request surface while adding OpenRouter defaults and optional routing hints.
+
+## Tested construction
+
+```python
+from definable.model import OpenRouter
+
+model = OpenRouter(
+    id="openai/gpt-4o-mini",
+    api_key="test-key",
+    max_tokens=300,
+    models=["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"],
+)
+
+assert model.provider == "OpenRouter"
+assert model.base_url == "https://openrouter.ai/api/v1"
+assert model.id == "openai/gpt-4o-mini"
+assert model.max_tokens == 300
+assert model.models[0] == "openai/gpt-4o-mini"
+```
+
+## Notes
+
+- Use `models` when you want OpenRouter-side routing hints or an ordered fallback list.
+- Reach for this class instead of `OpenAILike` whenever the endpoint is specifically OpenRouter.

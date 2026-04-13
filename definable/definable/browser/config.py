@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass
 from typing import Optional
 
@@ -74,53 +73,3 @@ class BrowserConfig:
   # Advanced
   cdp_port: int = 9222
   slow_mo: float = 0.0
-
-  # Deprecated compat (emit DeprecationWarning in __post_init__)
-  host: Optional[str] = None
-  port: Optional[int] = None
-
-  # Deprecated SeleniumBase compat
-  sandbox: Optional[bool] = None
-  browser_executable_path: Optional[str] = None
-  browser_args: Optional[tuple[str, ...]] = None
-
-  def __post_init__(self) -> None:
-    # host/port -> cdp_url migration
-    if self.host and self.port:
-      warnings.warn(
-        "host/port are deprecated. Use cdp_url='ws://host:port' instead.",
-        DeprecationWarning,
-        stacklevel=3,
-      )
-      if not self.cdp_url:
-        object.__setattr__(self, "cdp_url", f"ws://{self.host}:{self.port}")
-
-    # sandbox -> no_sandbox migration
-    if self.sandbox is not None:
-      warnings.warn(
-        "sandbox is deprecated. Use no_sandbox=True instead of sandbox=False.",
-        DeprecationWarning,
-        stacklevel=3,
-      )
-      if not self.no_sandbox and self.sandbox is False:
-        object.__setattr__(self, "no_sandbox", True)
-
-    # browser_executable_path -> executable_path migration
-    if self.browser_executable_path is not None:
-      warnings.warn(
-        "browser_executable_path is deprecated. Use executable_path instead.",
-        DeprecationWarning,
-        stacklevel=3,
-      )
-      if not self.executable_path:
-        object.__setattr__(self, "executable_path", self.browser_executable_path)
-
-    # browser_args -> extra_args migration
-    if self.browser_args is not None:
-      warnings.warn(
-        "browser_args is deprecated. Use extra_args instead.",
-        DeprecationWarning,
-        stacklevel=3,
-      )
-      if not self.extra_args:
-        object.__setattr__(self, "extra_args", self.browser_args)

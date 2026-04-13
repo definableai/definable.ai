@@ -1,0 +1,59 @@
+---
+title: Models and Auth
+description: Diagnose provider selection problems, missing credentials, and unauthorized runtime requests.
+icon: key
+---
+
+When a run fails before meaningful execution starts, the problem is usually one of three things: wrong model string, missing provider credentials, or auth rejecting the request before the agent runs.
+
+## Fast checks
+
+- Verify the model string resolves locally before you involve a real provider.
+- Verify your runtime auth accepts the request you think it should accept.
+- Keep one mock-backed endpoint around so you can separate framework wiring from provider behavior.
+
+## Tested example
+
+```python
+from fastapi.testclient import TestClient
+
+from definable.agent import Agent
+from definable.agent.auth import APIKeyAuth
+from definable.agent.runtime import AgentServer
+from definable.agent.testing import MockModel
+from definable.model import resolve_model_string
+
+resolved = resolve_model_string("gpt-4o-mini")
+
+assert type(resolved).__name__ == "OpenAIChat"
+
+try:
+    resolve_model_string("unknown/model")
+except ValueError as exc:
+    assert "Unknown model provider" in str(exc)
+else:
+    raise AssertionError("Unknown providers must raise ValueError")
+
+agent = Agent(model=MockModel(responses=["pong"]))
+agent.auth = APIKeyAuth(keys={"secret"})
+client = TestClient(AgentServer(agent).create_app())
+
+assert client.post("/run", json={"input": "ping"}).status_code == 401
+assert client.post(
+    "/run",
+    headers={"X-API-Key": "secret"},
+    json={"input": "ping"},
+).status_code == 200
+```
+
+## If it still fails
+
+- Unknown provider: check the `provider/model-id` prefix or use the provider class directly.
+- Provider client errors: verify the relevant environment variable is set in the same process that launches the agent.
+- `401` on `/run`: inspect the runtime auth layer before you inspect tools, prompts, or model responses.
+
+## Related pages
+
+- [`Models Overview`](/models/overview)
+- [`Auth`](/agents/auth)
+- [`Runtime`](/agents/runtime)

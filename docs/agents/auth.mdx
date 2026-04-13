@@ -1,0 +1,63 @@
+---
+title: Auth
+sidebarTitle: Auth
+description: "Transport-neutral authentication for AgentServer and messaging interfaces."
+icon: key
+---
+
+The `definable.agent.auth` module normalizes authentication across HTTP routes and interface traffic. Providers receive an `AuthRequest`, return an `AuthContext` when a caller is allowed, and the runtime attaches that context to the request.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `AuthProvider` | Protocol for sync or async authenticators |
+| `AuthRequest` | Transport-neutral request metadata |
+| `AuthContext` | Authenticated identity plus provider metadata |
+| `APIKeyAuth` | Header-based API key authentication |
+| `JWTAuth` | Token-based authentication for signed JWTs |
+| `AllowlistAuth` | User or chat allowlisting for interfaces |
+| `CompositeAuth` | Combine multiple auth providers |
+
+## When to use it
+
+- Use `APIKeyAuth` for internal services and CI integrations.
+- Use `JWTAuth` when you already have an identity system issuing tokens.
+- Use `AllowlistAuth` for chat platforms where the transport already knows the sender.
+- Use `CompositeAuth` when one transport needs multiple checks.
+
+## Tested example
+
+```python
+from fastapi.testclient import TestClient
+
+from definable.agent import Agent
+from definable.agent.auth import APIKeyAuth
+from definable.agent.runtime import AgentServer
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["pong"]), instructions="Reply briefly.")
+agent.auth = APIKeyAuth(keys={"secret-key"})
+
+client = TestClient(AgentServer(agent).create_app())
+
+unauthorized = client.post("/run", json={"input": "ping"})
+authorized = client.post(
+    "/run",
+    headers={"X-API-Key": "secret-key"},
+    json={"input": "ping"},
+)
+
+assert unauthorized.status_code == 401
+assert authorized.status_code == 200
+assert authorized.json()["content"] == "pong"
+```
+
+## How it fits the runtime
+
+`AgentServer` converts incoming HTTP requests into `AuthRequest(platform="http", headers=...)`. Interfaces can do the same with platform-specific metadata such as `user_id`, `username`, or `chat_id`. That keeps auth logic reusable across transports.
+
+## Related pages
+
+- [`Runtime`](/agents/runtime)
+- [`Interfaces`](/interfaces/overview)

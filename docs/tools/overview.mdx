@@ -1,0 +1,55 @@
+---
+title: Tools
+sidebarTitle: Overview
+description: "Define callable agent capabilities with the @tool decorator and Function model."
+icon: wrench
+mode: wide
+---
+
+`definable.tool` is the lowest-level capability surface in the framework. A tool is a callable function with a JSON-schema parameter contract, description, and runtime flags such as confirmation requirements or caching.
+
+## When to use a tool
+
+Use a tool when one callable capability should be exposed directly to the model:
+
+- fetch data from an API or service
+- run a deterministic local operation
+- bridge the agent to a library, client, or internal action
+
+If several related tools share the same client or configuration, promote them into a [`Toolkit`](/toolkits/overview). If they also need domain instructions, promote them into a [`Skill`](/skills/overview).
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `tool` | Decorator that wraps a callable as a Definable tool |
+| `Function` | Runtime representation of a tool |
+
+## What the decorator does
+
+- infers a JSON schema from Python type hints,
+- captures the docstring as the tool description,
+- preserves the callable as the tool entrypoint,
+- attaches runtime metadata such as confirmation or caching flags.
+
+## Tested example
+
+```python
+from definable.tool import Function, tool
+
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two integers."""
+    return a + b
+
+
+assert isinstance(add, Function)
+assert add.parameters["properties"]["a"]["type"] == "number"
+assert add.entrypoint(a=3, b=4) == 7
+```
+
+## Read this next
+
+- [`Creating Tools`](/tools/creating-tools/overview)
+- [`Toolkits`](/toolkits/overview)

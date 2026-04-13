@@ -1,0 +1,50 @@
+---
+title: Multi-Interface
+sidebarTitle: Multi-Interface
+description: Run one agent across several transports with shared supervision and optional shared sessions.
+icon: server
+---
+
+When one agent serves several platforms, the current runtime model is `Agent(interfaces=[...], gateway=...)`. `InterfaceGateway` is the coordination layer that keeps status, shared hooks, shared sessions, and optional identity resolution in one place.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.interface import DiscordInterface, SlackInterface, TelegramInterface
+from definable.agent.interface.gateway import InterfaceGateway
+from definable.agent.testing import MockModel
+
+gateway = InterfaceGateway(shared_sessions=True)
+
+agent = Agent(
+    model=MockModel(responses=["ready"]),
+    gateway=gateway,
+    interfaces=[
+        TelegramInterface(bot_token="123:test"),
+        DiscordInterface(bot_token="discord-token"),
+        SlackInterface(bot_token="xoxb-test", app_token="xapp-test"),
+    ],
+)
+
+assert agent.gateway is gateway
+assert [interface.config.platform for interface in agent.interfaces] == ["telegram", "discord", "slack"]
+assert gateway.interfaces[0].session_manager is gateway.interfaces[1].session_manager
+```
+
+## What the gateway adds
+
+- Shared session management across interfaces.
+- Gateway-level hooks that run before per-interface hooks.
+- Status tracking and lifecycle events for each transport.
+- Optional identity linking and canonical user resolution.
+
+## Migration note
+
+The older standalone `serve(*interfaces, ...)` helper still exists, but it is documented as deprecated in favor of attaching interfaces and gateway configuration directly to the agent.
+
+## Related pages
+
+- [`Identity`](/interfaces/identity)
+- [`Sessions`](/interfaces/sessions)
+- [`Runtime`](/agents/runtime)

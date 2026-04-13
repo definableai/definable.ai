@@ -6,7 +6,6 @@ direct WhatsApp Web protocol via Node.js sidecar).
 
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any, List, Literal, Optional
 
 from definable.agent.interface.base import BaseInterface
@@ -98,32 +97,22 @@ class WhatsAppInterface(BaseInterface):
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
     verbose: bool = False,
-    # Deprecated
-    config: Optional[WhatsAppConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to WhatsAppInterface is deprecated. Pass params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = WhatsAppConfig(
-        account_sid=account_sid,
-        auth_token=auth_token,
-        from_number=from_number,
-        webhook_path=webhook_path,
-        status_callback_path=status_callback_path,
-        validate_signatures=validate_signatures,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = WhatsAppConfig(
+      account_sid=account_sid,
+      auth_token=auth_token,
+      from_number=from_number,
+      webhook_path=webhook_path,
+      status_callback_path=status_callback_path,
+      validate_signatures=validate_signatures,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
 
     super().__init__(
       agent=agent,

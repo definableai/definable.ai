@@ -1,0 +1,55 @@
+---
+title: Retrieval and Memory
+description: Diagnose empty retrieval results, missing recall, and session continuity problems.
+icon: database
+---
+
+If the agent forgets something, first decide whether it should have come from knowledge or from memory.
+
+## Fast checks
+
+- Retrieval problems usually mean the right document was never added, never embedded, or was queried poorly.
+- Memory problems usually mean the session ID changed, the store is ephemeral, or nothing was written after the previous turn.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.knowledge import Document, Knowledge
+from definable.memory import InMemoryStore, Memory
+from definable.model.message import Message
+
+from examples.docs.support import MockVectorDB
+
+
+async def main() -> None:
+    knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
+    knowledge.add(Document(content="Refunds close after 30 days."), chunk=False)
+    results = knowledge.search("refund", limit=1)
+
+    async with Memory(store=InMemoryStore()) as memory:
+        await memory.add(Message(role="user", content="My plan is enterprise."), session_id="alice")
+        alice_entries = await memory.get_entries("alice")
+        bob_entries = await memory.get_entries("bob")
+
+    assert results[0].content == "Refunds close after 30 days."
+    assert len(alice_entries) == 1
+    assert bob_entries == []
+
+
+asyncio.run(main())
+```
+
+## If it still fails
+
+- Empty retrieval: verify the document was actually added and inspect the raw search results before prompt formatting.
+- Wrong memory history: verify the exact `session_id` and whether the store survives process restarts.
+- Mixed responsibilities: move shared facts into knowledge and leave user/session continuity in memory.
+
+## Related pages
+
+- [`Knowledge Overview`](/knowledge/overview)
+- [`Memory Overview`](/memory/overview)
+- [`Agent with Knowledge`](/agents/usage/agent-with-knowledge)
+- [`Agent with Memory`](/agents/usage/agent-with-memory)

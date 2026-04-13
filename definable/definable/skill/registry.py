@@ -175,16 +175,6 @@ class SkillRegistry:
     """
     return list(self._skills.values())
 
-  def as_lazy(self) -> Skill:
-    """Return a single wrapper skill with a catalog and ``read_skill`` tool.
-
-    Legacy mode — kept for backward compatibility. Prefer ``as_on_demand()``.
-
-    Returns:
-      A Skill instance with catalog instructions and read_skill tool.
-    """
-    return _build_lazy_skill(self)
-
   def __len__(self) -> int:
     return len(self._skills)
 
@@ -311,56 +301,4 @@ def _build_on_demand_skill(registry: SkillRegistry) -> Skill:
     name="skill_library",
     instructions=instructions,
     tools=[activate_skill, read_skill_file, run_skill_script],
-  )
-
-
-def _build_lazy_skill(registry: SkillRegistry) -> Skill:
-  """Build a wrapper Skill with catalog table + read_skill tool.
-
-  Legacy mode — kept for backward compatibility.
-
-  Args:
-    registry: The SkillRegistry to build the lazy skill from.
-
-  Returns:
-    A Skill with catalog instructions and a read_skill tool.
-  """
-  from definable.tool.decorator import tool
-
-  # Build catalog table
-  lines = [
-    "# Available Skills",
-    "",
-    "You have access to a library of skills. Use the `read_skill` tool to load a skill's full methodology before tackling a task.",
-    "",
-    "| Name | Description | Tags |",
-    "|------|-------------|------|",
-  ]
-  for meta in registry.list_skills():
-    tags = ", ".join(meta.tags) if meta.tags else ""
-    lines.append(f"| {meta.name} | {meta.description} | {tags} |")
-
-  catalog = "\n".join(lines)
-
-  # Create read_skill tool via closure
-  @tool(description="Load a skill's full methodology by name. Returns the skill content or an error if not found.")
-  def read_skill(skill_name: str) -> str:
-    """Load a skill's full methodology by name.
-
-    Args:
-      skill_name: The name of the skill to load (from the catalog table).
-
-    Returns:
-      The skill's full content, or an error message if not found.
-    """
-    skill = registry.get_skill(skill_name)
-    if skill is None:
-      available = ", ".join(s.name for s in registry.list_skills())
-      return f"Skill '{skill_name}' not found. Available skills: {available}"
-    return skill.get_instructions()
-
-  return Skill(
-    name="skill_library",
-    instructions=catalog,
-    tools=[read_skill],
   )

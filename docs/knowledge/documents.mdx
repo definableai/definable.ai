@@ -1,0 +1,48 @@
+---
+title: Documents
+description: The core content record stored in the knowledge layer.
+icon: file-lines
+---
+
+`Document` is the unit that moves through the retrieval pipeline. Readers create documents, chunkers split them, embedders attach vectors, and vector stores index them.
+
+## Important fields
+
+| Field | Purpose |
+| --- | --- |
+| `content` | the text body |
+| `id` | unique document identifier |
+| `name` | human-readable label |
+| `meta_data` | arbitrary metadata for filtering and display |
+| `embedding` | vector produced by an embedder |
+| `source`, `source_type` | where the document came from |
+| `chunk_index`, `chunk_total`, `parent_id` | chunk lineage fields |
+
+## Tested example
+
+```python
+from definable.knowledge import Document
+
+from examples.docs.support import MockEmbedder
+
+document = Document(
+    content="Definable keeps tools, memory, and knowledge composable.",
+    name="overview",
+    meta_data={"topic": "architecture"},
+)
+document.embed(MockEmbedder())
+
+payload = document.to_dict()
+restored = Document.from_dict(payload)
+
+assert len(document.embedding) == 4
+assert payload["content"] == "Definable keeps tools, memory, and knowledge composable."
+assert restored.name == "overview"
+assert restored.meta_data["topic"] == "architecture"
+```
+
+## Guidance
+
+- Use `meta_data` for anything you may want to filter on later.
+- Let `Knowledge.add(...)` handle embedding in normal workflows.
+- Work with raw `Document` objects directly when you are building custom ingestion pipelines.

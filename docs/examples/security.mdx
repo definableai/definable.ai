@@ -1,0 +1,21 @@
+---
+title: Security Examples
+sidebarTitle: Security
+description: Verified examples for tool policies, rate limiting, prompt injection detection, SSRF checks, and audits.
+icon: shield
+---
+
+## Curated script
+
+| Script | Covers |
+| --- | --- |
+| `python examples/docs/agent_security.py` | Tool policies, rate limiting, prompt-injection detection, env sanitization, and SSRF blocking |
+
+## Tested script presence
+
+```python
+from pathlib import Path
+
+
+assert Path("examples/docs/agent_security.py").exists()
+```

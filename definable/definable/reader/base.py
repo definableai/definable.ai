@@ -48,13 +48,6 @@ class BaseReader:
     self.registry.register(parser, priority)
     return self
 
-  def get_reader(self, file: File) -> Optional[Any]:
-    """Return the parser that can handle *file*, or None.
-
-    Backwards-compatible alias for get_parser().
-    """
-    return self.get_parser(file)
-
   def get_parser(self, file: File) -> Optional[Any]:
     """Return the parser that can handle *file*, or None."""
     mime_type, ext = self._detect_format(file)
@@ -213,10 +206,3 @@ class BaseReader:
   @property
   def _timeout(self) -> float | None:
     return self.config.timeout if self.config else 30.0
-
-
-# Backwards-compatible aliases
-FileReader = BaseReader
-FileReaderConfig = ReaderConfig
-ReaderResult = ReaderOutput
-FileReaderRegistry = BaseReader

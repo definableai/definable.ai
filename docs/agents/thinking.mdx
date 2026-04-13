@@ -1,0 +1,107 @@
+---
+title: Thinking
+sidebarTitle: Thinking
+description: Add a reasoning phase before the main answer, or use model-native thinking when the provider supports it.
+icon: lightbulb
+---
+
+`Agent(thinking=...)` enables a reasoning layer before the main answer. The framework supports two paths:
+
+- Native thinking when the selected model advertises `supports_native_thinking`.
+- Definable fallback thinking, which performs a separate structured model call before the main response.
+
+## Tested fallback thinking
+
+```python
+import json
+
+from definable.agent import Agent, MockModel
+
+
+thinking_json = json.dumps(
+    {
+        "analysis": "Compare scalability and operational complexity.",
+        "approach": "Summarize the trade-offs for small and large teams.",
+        "tool_plan": None,
+    }
+)
+
+agent = Agent(
+    model=MockModel(
+        responses=[
+            "fallback",
+            "Use a monolith when your team is small; move to services when independent scaling matters."
+        ],
+        structured_responses=[thinking_json],
+    ),
+    thinking=True,
+)
+
+output = agent.run("Compare microservices and monoliths.")
+
+assert output.content.startswith("Use a monolith")
+assert output.reasoning_steps
+assert output.reasoning_messages
+assert agent.model.call_count == 2
+```
+
+## Tested native-thinking selection
+
+```python
+from definable.agent.reasoning import Thinking
+from definable.model import Claude
+
+
+thinking = Thinking(effort="high")
+model = Claude(id="claude-3-7-sonnet-latest")
+
+assert model.supports_native_thinking is True
+assert thinking.should_use_native(model) is True
+assert thinking.resolve_budget_tokens() == 32000
+```
+
+## Streaming reasoning events
+
+```python
+import asyncio
+import json
+
+from definable.agent import Agent, MockModel
+
+
+thinking_json = json.dumps(
+    {
+        "analysis": "Decide whether the query needs decomposition.",
+        "approach": "Answer directly with a short comparison.",
+        "tool_plan": None,
+    }
+)
+
+
+async def main() -> None:
+    agent = Agent(
+        model=MockModel(
+            responses=["Final answer."],
+            structured_responses=[thinking_json],
+        ),
+        thinking=True,
+    )
+
+    events = []
+    async for event in agent.arun_stream("Compare two options"):
+        events.append(event.event)
+
+    assert events[0] == "ReasoningStarted"
+    assert "ReasoningCompleted" in events
+    assert events[-1] == "RunCompleted"
+
+
+asyncio.run(main())
+```
+
+## Notes
+
+- Fallback thinking adds an extra model call, so it changes latency and cost.
+- Native thinking uses the provider's own reasoning controls, such as token budgets or effort levels.
+- `Thinking(mode="native")` raises if the chosen model does not support native thinking.
+- The fallback path is the one that populates `reasoning_steps` and `reasoning_messages` most explicitly.

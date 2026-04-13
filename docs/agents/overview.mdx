@@ -1,0 +1,81 @@
+---
+title: Agents
+sidebarTitle: Overview
+description: "The agent layer composes models, tools, context, memory, guardrails, runtime, and observability into one execution loop."
+icon: robot
+mode: wide
+---
+
+import AgentsResources from "../_snippets/agents-resources.mdx";
+
+The `definable.agent` package is the control plane for the framework. An `Agent` wraps a model with context building, tool execution, optional knowledge and memory, guardrails, runtime hooks, and observability.
+
+## What an agent is
+
+An agent is the right abstraction when one model-driven worker should decide how to use instructions, context, tools, and retrieved information to finish a task.
+
+Use an agent when:
+
+- one worker can own the task end to end
+- tool calling should stay model-driven
+- memory or retrieval should plug into the same run loop
+- you want one consistent sync, async, and streaming API
+
+Reach for a [`Team`](/teams/overview) when several specialists need a leader. Reach for a [`Workflow`](/workflows/overview) when the execution graph should be explicit and reproducible.
+
+## What belongs in the agent layer
+
+| Module | Role | Kind |
+| --- | --- | --- |
+| [`auth`](/agents/auth) | Authenticate HTTP and interface traffic | Public component |
+| [`context`](/agents/context) | Assemble prompts, trim history, allocate tokens | Public component |
+| [`compression`](/agents/compression) | Compress large tool outputs before they bloat context | Public component |
+| [`evaluation`](/agents/evaluation) | Measure accuracy, reliability, and performance | Public component |
+| [`guardrails`](/guardrails/overview) | Validate input, output, and tool calls | Public component |
+| [`interfaces`](/interfaces/overview) | Expose an agent through CLI, chat, or web transports | Public component |
+| [`observability`](/observability/overview) | Runtime inspection endpoints and dashboard | Public component |
+| [`pipeline`](/agents/pipeline) | Phase-based execution model behind every run | Extension surface |
+| [`plugins`](/agents/plugins) | Package higher-level extensions around hooks and lifecycle | Extension surface |
+| [`reasoning`](/reasoning/thinking) | Structured thinking before answer generation | Public component |
+| [`research`](/reasoning/deep-research) | Multi-wave research pipeline for broader retrieval | Public component |
+| [`replay`](/replay/overview) | Inspect and compare previous runs | Public component |
+| [`run`](/agents/run) | Shared run state, statuses, and events | Support package |
+| [`runtime`](/agents/runtime) | HTTP serving, interface supervision, and triggers | Public component |
+
+## How an agent run works
+
+An `Agent` wraps a model with a repeatable lifecycle:
+
+1. Build the run context.
+2. Recall optional layers such as knowledge, memory, or research.
+3. Apply reasoning and guardrails.
+4. Execute the tool loop until the run completes, pauses, or blocks.
+5. Store artifacts and emit replay, tracing, and observability data.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.run import RunStatus
+from definable.agent.testing import MockModel
+
+agent = Agent(
+    model=MockModel(responses=["12"]),
+    instructions="Reply with the answer only.",
+)
+
+output = agent.run("What is 5 + 7?")
+
+assert output.content == "12"
+assert output.status == RunStatus.completed
+```
+
+## Start from the right surface
+
+- Use [`Agent`](/reference/agents/agent) when you need a production agent with tools, memory, or knowledge.
+- Use [`pipeline`](/agents/pipeline) and [`plugins`](/agents/plugins) when you are extending the execution model itself.
+- Use [`runtime`](/agents/runtime) when you need HTTP endpoints, webhooks, interfaces, or scheduling around an agent.
+
+## Read this next
+
+<AgentsResources />

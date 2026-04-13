@@ -87,7 +87,6 @@ if TYPE_CHECKING:
   from definable.agent.reasoning import Thinking
   from definable.mcp.toolkit import MCPToolkit
   from definable.memory import Memory
-  from definable.reader import BaseReader as FileReaderRegistry
   from definable.agent.replay import Replay, ReplayComparison
 
 
@@ -101,10 +100,6 @@ def __getattr__(name: str):
     from definable.memory import Memory
 
     return Memory
-  if name == "FileReaderRegistry":
-    from definable.reader import BaseReader
-
-    return BaseReader
   if name == "Replay":
     from definable.agent.replay import Replay
 
@@ -202,7 +197,6 @@ __all__ = [
   "ReadersConfig",
   "DeepResearchConfig",
   "ObservabilityConfig",
-  "FileReaderRegistry",
   "Toolkit",
   "KnowledgeToolkit",
   "MCPToolkit",
@@ -281,4 +275,5 @@ __all__ = [
   # Plugins
   "Plugin",  # noqa: F822
   "PluginRegistry",  # noqa: F822
+  # State alias
 ]

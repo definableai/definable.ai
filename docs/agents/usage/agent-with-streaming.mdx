@@ -1,0 +1,30 @@
+---
+title: Agent with Streaming
+description: "Consume run events incrementally instead of waiting for a full RunOutput."
+---
+
+Streaming emits events such as `RunStarted`, `RunContent`, and `RunCompleted` as the run progresses.
+
+```python
+from definable.agent import Agent, MockModel
+
+
+agent = Agent(
+    model=MockModel(responses=["story"]),
+    instructions="Tell vivid stories.",
+)
+
+chunks = []
+events = []
+
+for event in agent.run_stream("Tell me a short story."):
+    events.append(event.event)
+    if event.event == "RunContent" and event.content:
+        chunks.append(event.content)
+
+assert "".join(chunks) == "story"
+assert events[:3] == ["RunStarted", "ModelCallStarted", "RunContent"]
+assert events[-1] == "RunCompleted"
+```
+
+Use `run()` or `arun()` when you need a final `RunOutput` object with message history for the next turn.

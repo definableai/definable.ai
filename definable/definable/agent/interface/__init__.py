@@ -29,7 +29,6 @@ With Hooks:
 """
 
 from definable.agent.interface.base import BaseInterface
-from definable.agent.interface.serve import serve
 from definable.agent.interface.config import InterfaceConfig
 from definable.agent.interface.errors import (
   InterfaceAuthenticationError,
@@ -164,7 +163,6 @@ __all__ = [
   # Core
   "BaseInterface",
   "InterfaceConfig",
-  "serve",
   "InterfaceMessage",
   "InterfaceResponse",
   "InterfaceSession",

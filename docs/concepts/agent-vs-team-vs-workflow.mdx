@@ -1,0 +1,69 @@
+---
+title: Agent vs Team vs Workflow
+description: Choose between a single run loop, model-led delegation, and deterministic orchestration.
+icon: arrows-split-up-and-left
+---
+
+These three primitives solve different orchestration problems.
+
+## Comparison
+
+| Primitive | Best for | Control style |
+| --- | --- | --- |
+| `Agent` | one assistant, one tool loop, one response | model-guided |
+| `Team` | specialist coordination where the leader still decides delegation | model-guided |
+| `Workflow` | reproducible multi-step execution with explicit branches | code-guided |
+
+## Decision rule
+
+- Start with `Agent` when one model can own the whole task.
+- Move to `Team` when different specialists should contribute and the routing decision should stay model-driven.
+- Move to `Workflow` when the sequence, branching, or repetition must be explicit and reviewable in code.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+from definable.agent.workflow import Step, Workflow
+
+
+async def main() -> None:
+    agent = Agent(model=MockModel(responses=["agent answer"]))
+    team = Team(
+        name="analysis-team",
+        model=MockModel(responses=["team answer"]),
+        members=[Agent(model=MockModel(responses=["member answer"]), name="specialist")],
+        mode=TeamMode.collaborate,
+    )
+    workflow = Workflow(
+        name="analysis-workflow",
+        steps=[Step(name="final", executor=lambda step_input: "workflow answer")],
+    )
+
+    agent_output = await agent.arun("Answer the question.")
+    team_output = await team.arun("Answer the question.")
+    workflow_output = await workflow.arun("Answer the question.")
+
+    assert agent_output.content == "agent answer"
+    assert team_output.content == "team answer"
+    assert workflow_output.content == "workflow answer"
+
+
+asyncio.run(main())
+```
+
+## Practical guidance
+
+- Teams can contain agents or nested teams.
+- Workflows can contain agents, teams, or plain Python callables as steps.
+- If you already know the exact sequence of work, a workflow is usually simpler to debug than a team.
+
+## Related pages
+
+- [`Agents Overview`](/agents/overview)
+- [`Teams Overview`](/teams/overview)
+- [`Workflows Overview`](/workflows/overview)

@@ -37,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: pip install -e ".[dev,readers,serve,cron,jwt,discord]"
       - name: Mypy
-        run: mypy definable/definable/ definable/tests/ --strict-equality --pretty --show-error-codes --config-file=mypy.ini
+        run: mypy definable/definable/ tests/ --strict-equality --pretty --show-error-codes --config-file=mypy.ini
 
   test:
     if: github.event_name == 'pull_request'
@@ -49,10 +49,10 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install -e ".[dev,readers,serve,discord,anthropic]"
+          pip install -e ".[dev,readers,serve,discord,anthropic,google,mistral]"
       - name: Run tests
         run: |
-          pytest definable/tests/ \
+          pytest tests/ \
             -m "not openai and not deepseek and not moonshot and not xai and not voyageai and not telegram and not discord and not signal and not postgres and not redis and not qdrant and not chroma and not mongodb and not pinecone and not mistral and not mem0" \
             -v --tb=short
 
@@ -115,6 +115,6 @@ jobs:
           pip install -e ".[dev,mem0-memory,readers,runtime,research,serve,cron,jwt,discord,anthropic]"
       - name: Run integration tests
         run: |
-          pytest definable/tests/ \
+          pytest tests/ \
             -m "not telegram and not discord and not signal and not desktop and not playwright and not mcp" \
             -v --tb=short --timeout=120

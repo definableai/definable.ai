@@ -1,0 +1,87 @@
+---
+title: Running Agents
+sidebarTitle: Running Agents
+description: "Run agents synchronously, asynchronously, or as event streams."
+icon: play
+---
+
+Every execution mode uses the same underlying run loop. The difference is how you consume the result.
+
+## Synchronous run
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["Paris"]), instructions="Answer with the city only.")
+output = agent.run("What is the capital of France?")
+
+assert output.content == "Paris"
+```
+
+## Asynchronous run
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+
+async def main() -> None:
+    agent = Agent(model=MockModel(responses=["Paris"]), instructions="Answer with the city only.")
+    output = await agent.arun("What is the capital of France?")
+
+    assert output.content == "Paris"
+
+
+asyncio.run(main())
+```
+
+## Streaming run
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["hello world"]), instructions="Be brief.")
+events = [event.event for event in agent.run_stream("Say hello") if hasattr(event, "event")]
+
+assert "RunStarted" in events
+assert "RunContent" in events
+assert "RunCompleted" in events
+```
+
+## Async streaming run
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+
+async def main() -> None:
+    agent = Agent(model=MockModel(responses=["hello world"]), instructions="Be brief.")
+    events = []
+    async for event in agent.arun_stream("Say hello"):
+        if hasattr(event, "event"):
+            events.append(event.event)
+
+    assert "RunCompleted" in events
+
+
+asyncio.run(main())
+```
+
+## What you get back
+
+- `run()` and `arun()` return a `RunOutput`.
+- `run_stream()` and `arun_stream()` yield typed run events and still culminate in `RunCompleted`.
+- `session_id`, `user_id`, files, media, and `output_schema` can be passed into any run mode.
+
+## Next steps
+
+- [`Run`](/agents/run)
+- [`Runtime`](/agents/runtime)
+- [`Replay`](/replay/overview)

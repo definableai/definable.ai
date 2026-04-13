@@ -1,0 +1,47 @@
+---
+title: Tool Hooks
+sidebarTitle: Hooks
+description: Attach policy, logging, or wrapping behavior when authoring a tool.
+icon: anchor
+---
+
+Hooks are the cleanest way to add behavior around a tool without mixing runtime concerns into the core function.
+
+## Tested example
+
+```python
+from definable.tool import tool
+from definable.tool.function import FunctionCall
+
+
+events = []
+
+
+def before(fc) -> None:
+    events.append(("before", dict(fc.arguments or {})))
+
+
+def after(fc) -> None:
+    events.append(("after", fc.result))
+
+
+@tool(pre_hook=before, post_hook=after)
+def greet(name: str) -> str:
+    """Return a greeting."""
+    return f"Hello {name}"
+
+
+result = FunctionCall(function=greet, arguments={"name": "Ada"}).execute()
+
+assert result.result == "Hello Ada"
+assert events == [
+    ("before", {"name": "Ada"}),
+    ("after", "Hello Ada"),
+]
+```
+
+## Guidance
+
+- Reach for `pre_hook` and `post_hook` first.
+- Use `tool_hooks` when you need around-call middleware behavior.
+- Accept `fc` if you want access to both the arguments and the result.

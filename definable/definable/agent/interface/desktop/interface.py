@@ -18,7 +18,6 @@ Example::
 
 import contextlib
 import json
-import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set
 
 from definable.agent.interface.base import BaseInterface
@@ -82,32 +81,22 @@ class DesktopInterface(BaseInterface):
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[DesktopConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to DesktopInterface is deprecated. Pass bridge_host, websocket_port, and other params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = DesktopConfig(
-        bridge_host=bridge_host,
-        bridge_port=bridge_port,
-        bridge_token=bridge_token,
-        auto_screenshot=auto_screenshot,
-        screenshot_on_error=screenshot_on_error,
-        websocket_port=websocket_port,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = DesktopConfig(
+      bridge_host=bridge_host,
+      bridge_port=bridge_port,
+      bridge_token=bridge_token,
+      auto_screenshot=auto_screenshot,
+      screenshot_on_error=screenshot_on_error,
+      websocket_port=websocket_port,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
     super().__init__(
       agent=agent,
       config=resolved_config,

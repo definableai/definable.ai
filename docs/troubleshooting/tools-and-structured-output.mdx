@@ -1,0 +1,58 @@
+---
+title: Tools and Structured Output
+description: Diagnose missing tool registration, wrong tool metadata, and schema-shape mismatches.
+icon: wrench
+---
+
+Tool and schema failures usually come from one of two issues: the agent never received the capability, or the output shape is being assumed rather than validated.
+
+## Fast checks
+
+- Inspect `agent.tool_names` before you debug model behavior.
+- Validate structured output against the schema in local tests, not only in production.
+- Keep tool and schema examples minimal until the local version is stable.
+
+## Tested example
+
+```python
+import json
+
+from pydantic import BaseModel
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.tool import tool
+
+
+class Answer(BaseModel):
+    value: int
+
+
+@tool
+def add(a: int, b: int) -> int:
+    """Add two integers."""
+    return a + b
+
+
+tool_agent = Agent(model=MockModel(responses=["7"]), tools=[add])
+schema_agent = Agent(model=MockModel(structured_responses=['{"value": 7}']))
+
+assert tool_agent.tool_names == ["add"]
+
+output = schema_agent.run("Return a number.", output_schema=Answer)
+parsed = Answer.model_validate(json.loads(output.content))
+
+assert parsed.value == 7
+```
+
+## If it still fails
+
+- Tool missing: confirm it is passed through `tools=`, `toolkits=`, or `skills=` and inspect `agent.tool_names`.
+- Wrong schema shape: validate the raw JSON against the schema before you trust downstream code.
+- Confusing parameter names: use `output_schema=` at the agent layer, not `response_model=`.
+
+## Related pages
+
+- [`Tools`](/tools/overview)
+- [`Structured Output`](/input-output/structured-output)
+- [`Tool Reference`](/reference/tools/decorator)

@@ -1,0 +1,123 @@
+---
+title: Quickstart
+description: "Five small patterns that introduce the framework without relying on live providers."
+icon: bolt
+---
+
+This quickstart stays local and deterministic. Each section introduces one capability with a small tested snippet, so you can learn the API shape before you swap in live providers or external services.
+
+## What you will learn
+
+- how a single `Agent` run works
+- how tools attach to that run loop
+- how knowledge and memory fit beside the agent
+- how streaming exposes lifecycle events
+- which pages to read next for production setups
+
+## 1. Run an agent
+
+```python
+from definable.agent import Agent
+from definable.agent.run import RunStatus
+from definable.agent.testing import MockModel
+
+agent = Agent(
+    model=MockModel(responses=["Paris"]),
+    instructions="Answer with the city only.",
+)
+
+output = agent.run("What is the capital of France?")
+
+assert output.content == "Paris"
+assert output.status == RunStatus.completed
+```
+
+## 2. Add a tool
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.tool import tool
+
+
+@tool
+def get_weather(city: str) -> str:
+    """Return a weather summary for a city."""
+    return f"{city}: sunny"
+
+
+agent = Agent(
+    model=MockModel(responses=["Tokyo: sunny"]),
+    tools=[get_weather],
+    instructions="Use tools when they are relevant.",
+)
+
+output = agent.run("What is the weather in Tokyo?")
+
+assert output.content == "Tokyo: sunny"
+assert "get_weather" in agent.tool_names
+```
+
+## 3. Add knowledge
+
+```python
+from definable.knowledge import Document, Knowledge
+
+from examples.docs.support import MockVectorDB
+
+knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
+knowledge.add(Document(content="Definable supports OpenAI and Anthropic."), chunk=False)
+context = knowledge.format_context(knowledge.vector_db.search("providers", limit=1))
+
+assert "OpenAI and Anthropic" in context
+```
+
+## 4. Add memory
+
+```python
+import asyncio
+
+from definable.memory import InMemoryStore, Memory
+from definable.model.message import Message
+
+
+async def main() -> None:
+    async with Memory(store=InMemoryStore()) as memory:
+        await memory.add(Message(role="user", content="My name is Ada."), session_id="demo")
+        entries = await memory.get_entries("demo")
+
+        assert entries[0].content == "My name is Ada."
+
+
+asyncio.run(main())
+```
+
+## 5. Stream events
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["hello world"]), instructions="Be brief.")
+events = [event.event for event in agent.run_stream("Say hello") if hasattr(event, "event")]
+
+assert "RunStarted" in events
+assert "RunCompleted" in events
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Your First Agent" icon="robot" href="/first-agent">
+    Turn the quickstart into a fuller agent with tools, memory, and streaming.
+  </Card>
+  <Card title="Agents" icon="brain" href="/agents/overview">
+    Understand the agent lifecycle, configuration surface, and runtime model.
+  </Card>
+  <Card title="Knowledge" icon="book" href="/knowledge/overview">
+    Add retrieval and grounding with an explicit RAG layer.
+  </Card>
+  <Card title="Memory" icon="brain-circuit" href="/memory/overview">
+    Preserve continuity across runs with persistent session memory.
+  </Card>
+</CardGroup>

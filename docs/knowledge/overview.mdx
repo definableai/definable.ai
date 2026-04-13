@@ -1,0 +1,63 @@
+---
+title: Knowledge
+sidebarTitle: Overview
+description: "Composable RAG layer for documents, retrieval, and prompt-ready context."
+icon: book
+mode: wide
+---
+
+`definable.knowledge` is the framework's retrieval layer. It stores documents, optionally chunks and embeds them, retrieves the most relevant results for a query, and formats those results back into context that an agent can use.
+
+## What knowledge does
+
+Knowledge is the right layer when the agent should answer from external source material instead of relying only on model weights or recent chat history.
+
+The typical flow is:
+
+1. ingest documents through readers or direct `Document(...)` objects
+2. chunk and embed those documents if needed
+3. retrieve the most relevant matches for a query
+4. format the results back into prompt-ready context
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `Knowledge` | Main retrieval orchestrator |
+| `Document` | Unit of content stored in the knowledge base |
+| `Reader`, `ReaderConfig` | Source readers for files, URLs, and custom inputs |
+
+The module also lazily exposes scoring, hybrid search, and backward-compatible re-exports for embedders, chunkers, rerankers, and vector databases.
+
+## Knowledge vs memory
+
+Knowledge is for external facts and source material. [`Memory`](/memory/overview) is for conversation continuity and prior session state. In many production agents, you use both.
+
+## Tested example
+
+```python
+from definable.knowledge import Document, Knowledge
+
+from examples.docs.support import MockVectorDB
+
+knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
+document_ids = knowledge.add(
+    Document(content="Definable uses knowledge to ground answers in retrieved context."),
+    chunk=False,
+)
+context = knowledge.format_context(knowledge.vector_db.search("ground", limit=1))
+
+assert len(document_ids) == 1
+assert "Definable uses knowledge" in context
+```
+
+## Start simple, then specialize
+
+- Start with `Knowledge(...)` when the retrieval surface is small and explicit.
+- Reach for the pipeline pages when you need custom readers, chunkers, embedders, rerankers, or vector stores.
+- Keep the context format aligned with the downstream prompt style you expect the model to consume.
+
+## Related pages
+
+- [`Agent Integration`](/knowledge/agent-integration)
+- [`Toolkits`](/toolkits/knowledge-toolkit)

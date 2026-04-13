@@ -6,7 +6,6 @@ import contextvars
 import hmac
 import re
 import time as _time
-import warnings
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Dict, List, Literal, Optional
 
@@ -250,56 +249,46 @@ class TelegramInterface(BaseInterface):
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[TelegramConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to TelegramInterface is deprecated. Pass bot_token and other params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = TelegramConfig(
-        bot_token=bot_token,
-        mode=mode,
-        webhook_url=webhook_url,
-        webhook_path=webhook_path,
-        webhook_port=webhook_port,
-        webhook_secret=webhook_secret,
-        allowed_user_ids=allowed_user_ids,
-        allowed_chat_ids=allowed_chat_ids,
-        parse_mode=parse_mode,
-        auto_format=auto_format,
-        polling_interval=polling_interval,
-        polling_timeout=polling_timeout,
-        connect_timeout=connect_timeout,
-        request_timeout=request_timeout,
-        streaming=streaming,
-        stream_edit_interval=stream_edit_interval,
-        stream_min_chars=stream_min_chars,
-        stream_tool_indicator=stream_tool_indicator,
-        handle_callback_queries=handle_callback_queries,
-        group_mode=group_mode,
-        enable_forum_topics=enable_forum_topics,
-        outbound_rate_limit=outbound_rate_limit,
-        commands=commands,
-        sync_commands_on_startup=sync_commands_on_startup,
-        dm_policy=dm_policy,
-        group_policy=group_policy,
-        dm_allowlist=dm_allowlist,
-        group_allowlist=group_allowlist,
-        media_group_timeout=media_group_timeout,
-        handle_reactions=handle_reactions,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = TelegramConfig(
+      bot_token=bot_token,
+      mode=mode,
+      webhook_url=webhook_url,
+      webhook_path=webhook_path,
+      webhook_port=webhook_port,
+      webhook_secret=webhook_secret,
+      allowed_user_ids=allowed_user_ids,
+      allowed_chat_ids=allowed_chat_ids,
+      parse_mode=parse_mode,
+      auto_format=auto_format,
+      polling_interval=polling_interval,
+      polling_timeout=polling_timeout,
+      connect_timeout=connect_timeout,
+      request_timeout=request_timeout,
+      streaming=streaming,
+      stream_edit_interval=stream_edit_interval,
+      stream_min_chars=stream_min_chars,
+      stream_tool_indicator=stream_tool_indicator,
+      handle_callback_queries=handle_callback_queries,
+      group_mode=group_mode,
+      enable_forum_topics=enable_forum_topics,
+      outbound_rate_limit=outbound_rate_limit,
+      commands=commands,
+      sync_commands_on_startup=sync_commands_on_startup,
+      dm_policy=dm_policy,
+      group_policy=group_policy,
+      dm_allowlist=dm_allowlist,
+      group_allowlist=group_allowlist,
+      media_group_timeout=media_group_timeout,
+      handle_reactions=handle_reactions,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
     super().__init__(
       agent=agent,
       config=resolved_config,

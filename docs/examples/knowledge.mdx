@@ -1,0 +1,52 @@
+---
+title: Knowledge Examples
+sidebarTitle: Knowledge
+description: Curated, deterministic examples for documents, retrieval, and agent grounding.
+icon: book
+---
+
+These examples stay local. They use the documentation support helpers rather than live embedders or hosted vector stores.
+
+## Basic retrieval
+
+```python
+from definable.knowledge import Document, Knowledge
+
+from examples.docs.support import MockVectorDB
+
+knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
+knowledge.add(
+    Document(content="Definable uses knowledge to ground answers in retrieved context."),
+    chunk=False,
+)
+context = knowledge.format_context(knowledge.vector_db.search("ground", limit=1))
+
+assert "Definable uses knowledge" in context
+```
+
+Script: `examples/docs/knowledge_basics.py`
+
+## Agent grounding
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.knowledge import Document, Knowledge
+
+from examples.docs.support import MockVectorDB
+
+knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
+knowledge.add(Document(content="Escalate billing issues to finance."), chunk=False)
+
+model = MockModel(responses=["Escalate billing issues to finance."])
+agent = Agent(model=model, knowledge=knowledge)
+agent.run("What should I do with billing issues?")
+
+assert "billing issues" in model.call_history[0]["messages"][0].content
+```
+
+## Related pages
+
+- [`Knowledge Overview`](/knowledge/overview)
+- [`Agent Integration`](/knowledge/agent-integration)
+- [`Vector Databases`](/knowledge/vector-databases)

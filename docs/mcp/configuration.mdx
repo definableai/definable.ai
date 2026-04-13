@@ -1,0 +1,53 @@
+---
+title: MCP Configuration
+sidebarTitle: Configuration
+description: Configure servers, transports, timeouts, and tool visibility.
+icon: gear
+---
+
+`MCPServerConfig` describes one server. `MCPConfig` groups those server definitions into one client or toolkit configuration.
+
+## Tested configuration round-trip
+
+```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from definable.mcp import MCPConfig, MCPServerConfig
+
+server = MCPServerConfig(
+    name="mock",
+    command="python",
+    args=["server.py"],
+    allowed_tools=["echo"],
+    blocked_tools=["write"],
+)
+
+config = MCPConfig(servers=[server], auto_connect=False)
+
+assert server.is_tool_allowed("echo") is True
+assert server.is_tool_allowed("write") is False
+
+with TemporaryDirectory() as tmp:
+    path = Path(tmp) / "mcp.json"
+    config.to_file(path)
+    loaded = MCPConfig.from_file(path)
+
+    assert loaded.get_server("mock").command == "python"
+    assert loaded.auto_connect is False
+```
+
+## What to configure on each server
+
+- `name`: unique server identifier
+- `transport`: one of `stdio`, `sse`, or `http`
+- `command` and `args`: used for `stdio`
+- `url` and `headers`: used for `sse` and `http`
+- `connect_timeout` and `request_timeout`: connection and request ceilings
+- `allowed_tools` and `blocked_tools`: MCP tool exposure filters
+
+## Notes
+
+- `MCPServerConfig` validates required transport fields in `__post_init__`.
+- `MCPConfig` rejects duplicate server names.
+- Tool filtering is enforced when the toolkit discovers server tools, not by rewriting the remote server itself.

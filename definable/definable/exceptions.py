@@ -51,15 +51,6 @@ class StopAgentRun(AgentRunException):
     self.error_id = "stop_agent_run_error"
 
 
-class RunCancelledException(Exception):
-  """Exception raised when a run is cancelled."""
-
-  def __init__(self, message: str = "Operation cancelled by user"):
-    super().__init__(message)
-    self.type = "run_cancelled_error"
-    self.error_id = "run_cancelled_error"
-
-
 class DefinableError(Exception):
   """Exception raised when an internal error occurs."""
 
@@ -103,12 +94,6 @@ class ModelRateLimitError(ModelProviderError):
   def __init__(self, message: str, status_code: int = 429, model_name: Optional[str] = None, model_id: Optional[str] = None):
     super().__init__(message, status_code, model_name, model_id)
     self.error_id = "model_rate_limit_error"
-
-
-class EvalError(Exception):
-  """Exception raised when an evaluation fails."""
-
-  pass
 
 
 class CheckTrigger(Enum):

@@ -1,0 +1,39 @@
+---
+title: Conditional Workflow
+sidebarTitle: Conditional
+description: "Choose a branch based on the current StepInput."
+---
+
+`Condition` is the simplest branching primitive. It evaluates a predicate against the current `StepInput` and executes either the true or false branch.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent.workflow import Condition, Step, Workflow
+
+
+async def main() -> None:
+    workflow = Workflow(
+        name="gate",
+        steps=Condition(
+            name="quality_gate",
+            condition=lambda step_input: "pass" in (step_input.input or "").lower(),
+            true_steps=Step(name="publish", executor=lambda step_input: "Published"),
+            false_steps=Step(name="revise", executor=lambda step_input: "Needs revision"),
+        ),
+    )
+    result = await workflow.arun("pass this draft")
+
+    assert result.content == "Published"
+    assert result.step_outputs[0].step_name == "publish"
+
+
+asyncio.run(main())
+```
+
+## Guidance
+
+- Keep predicates cheap and deterministic.
+- Put heavier evaluation logic into a previous step and branch on that output.

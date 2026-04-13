@@ -1,0 +1,47 @@
+---
+title: WhatsApp
+sidebarTitle: WhatsApp
+description: Connect an agent to WhatsApp through Twilio or a self-hosted Baileys bridge.
+icon: comment-dots
+---
+
+`WhatsAppInterface` supports two transport strategies with the same agent-facing API. Twilio gives you managed webhook delivery. Baileys gives you a self-hosted bridge with QR login and direct protocol access.
+
+## Tested example
+
+```python
+from definable.agent.interface import WhatsAppInterface
+
+twilio = WhatsAppInterface(
+    provider="twilio",
+    account_sid="AC123",
+    auth_token="token",
+    from_number="whatsapp:+14155550123",
+)
+baileys = WhatsAppInterface(
+    provider="baileys",
+    auth_dir="./tmp-whatsapp-auth",
+)
+
+assert twilio.config.platform == "whatsapp"
+assert twilio.needs_server() is True
+assert baileys.needs_server() is False
+assert twilio.provider is not None
+assert baileys.provider is not None
+```
+
+## Provider choice
+
+- Use Twilio when you want a managed, webhook-based production setup.
+- Use Baileys when you want a self-hosted bridge and features like QR login.
+
+## What changes by provider
+
+- Twilio requires `account_sid`, `auth_token`, and `from_number`.
+- Baileys requires `auth_dir` and a working Node.js runtime for the sidecar.
+- Only the Twilio mode requires the runtime HTTP server to receive webhook traffic.
+
+## Related pages
+
+- [`Interfaces Overview`](/interfaces/overview)
+- [`Runtime`](/agents/runtime)

@@ -1,0 +1,64 @@
+---
+title: Memory
+description: Full reference for Memory and its store-backed session recall model.
+---
+
+`Memory` manages session-scoped conversational state. It stores `MemoryEntry` records in a backing store, can optimize those records with a strategy, and can later return either raw entries or prompt-ready message objects.
+
+## Composition
+
+| Part | Role |
+| --- | --- |
+| `store` | persistence backend such as `InMemoryStore`, `SQLiteStore`, or `FileStore` |
+| `strategy` | optimization behavior such as summarization or semantic extraction |
+| `embedder` | optional similarity-ranked recall support |
+| `model` | optional model for optimization strategies |
+
+## Important fields
+
+- `enabled` toggles the whole layer.
+- `max_messages`, `pin_count`, and `recent_count` shape optimization behavior.
+- `search_top_k` controls similarity-ranked recall depth when embeddings are enabled.
+- `description` is exposed to the agent layer guide.
+
+## Primary methods
+
+| Method | Purpose |
+| --- | --- |
+| `add(...)` | append a message to session memory |
+| `get_entries(...)` | return raw memory entries |
+| `get_context_messages(...)` | return prompt-ready `Message` objects |
+| `search(...)` | retrieve relevant atom entries by similarity when embeddings are configured |
+| `update(...)`, `delete(...)`, `clear(...)` | modify stored memory |
+| `__aenter__`, `__aexit__`, `close(...)` | manage store lifecycle |
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.memory import InMemoryStore, Memory
+from definable.model.message import Message
+
+
+async def main() -> None:
+    async with Memory(store=InMemoryStore()) as memory:
+        await memory.add(Message(role="user", content="My name is Ada."), session_id="docs")
+        await memory.add(Message(role="assistant", content="Hello Ada."), session_id="docs")
+
+        entries = await memory.get_entries("docs")
+        messages = await memory.get_context_messages("docs")
+
+        assert len(entries) == 2
+        assert entries[0].content == "My name is Ada."
+        assert messages[1].content == "Hello Ada."
+
+
+asyncio.run(main())
+```
+
+## Related pages
+
+- [`Memory Overview`](/memory/overview)
+- [`Stores`](/memory/stores)
+- [`Agent Integration`](/memory/agent-integration)

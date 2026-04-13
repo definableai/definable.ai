@@ -1,0 +1,66 @@
+---
+title: Toolkits
+sidebarTitle: Overview
+description: "Group related tools behind one reusable object with shared dependencies."
+icon: toolbox
+mode: wide
+---
+
+`definable.toolkit` is the composition layer above tools. A toolkit groups related tools and can hold shared dependencies or configuration used by all of them.
+
+## Toolkit vs tool vs skill
+
+| Primitive | Use it for |
+| --- | --- |
+| [`Tool`](/tools/overview) | one callable capability |
+| `Toolkit` | several related tools with shared dependencies |
+| [`Skill`](/skills/overview) | tools plus instructions or domain framing |
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `Toolkit` | Base class for grouped tools |
+| `KnowledgeToolkit`, `MCPToolkit`, `BrowserToolkit` | Important built-in toolkit patterns |
+
+## When to use a toolkit
+
+- multiple tools need the same client or shared config,
+- one capability area should be attached to an agent as a single unit,
+- you want a reusable package that is lighter-weight than a skill.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.tool import tool
+from definable.toolkit import Toolkit
+
+
+class MathToolkit(Toolkit):
+    @property
+    def tools(self):
+        @tool
+        def add(a: int, b: int) -> int:
+            """Add two integers."""
+            return a + b
+
+        return [add]
+
+
+agent = Agent(
+    model=MockModel(responses=["7"]),
+    toolkits=[MathToolkit()],
+)
+
+output = agent.run("What is 3 + 4?")
+
+assert agent.tool_names == ["add"]
+assert output.content == "7"
+```
+
+## Related pages
+
+- [`Knowledge Toolkit`](/toolkits/knowledge-toolkit)
+- [`MCP Toolkit`](/toolkits/mcp-toolkit)

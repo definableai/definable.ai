@@ -1,0 +1,37 @@
+---
+title: Vision & Audio
+description: Use the unified `Image`, `Audio`, `Video`, and `File` types for multimodal input.
+icon: image
+---
+
+Definable normalizes multimodal inputs behind four shared types: `Image`, `Audio`, `Video`, and `File`. The media container API stays consistent even when provider capabilities differ.
+
+## Tested media construction
+
+```python
+from definable.media import Audio, File, Image, Video
+
+image = Image.from_base64("aGVsbG8=", format_="png", mime_type="image/png", detail="low")
+audio = Audio.from_base64("aGVsbG8=", mime_type="audio/wav", transcript="hello")
+video = Video(content=b"123", format="mp4", mime_type="video/mp4")
+document = File.from_base64("aGVsbG8=", mime_type="text/plain", filename="notes.txt", format_="txt")
+
+assert image.to_dict()["detail"] == "low"
+assert audio.to_dict()["transcript"] == "hello"
+assert video.to_dict()["format"] == "mp4"
+assert document.to_dict()["filename"] == "notes.txt"
+```
+
+## What stays consistent
+
+- Each type accepts exactly one primary source: URL, file path, or raw content.
+- Each type can be serialized with `to_dict()`.
+- Agents and model messages both consume the same media objects.
+
+## Important boundaries
+
+- Media container support does not imply provider support. The object can be valid even if the current model cannot consume it.
+- Raw audio input is still provider-specific. For interface voice notes, use agent-level transcription when the target model is text-only.
+- File extraction is a separate concern handled by the readers layer.
+
+See [`/input-output/multimodal`](/input-output/multimodal) for the agent-facing input patterns.

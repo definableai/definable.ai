@@ -256,12 +256,3 @@ class AgentServer:
         methods=[trigger.method],
       )
       log_info(f"Registered webhook: {trigger.name}")
-
-
-async def _resolve_auth(auth_provider: Any, request: Any) -> Optional[Any]:
-  """Call the auth provider's authenticate method.
-
-  .. deprecated::
-    Use :func:`definable.agent.auth.base.resolve_auth` instead.
-  """
-  return await resolve_auth(auth_provider, request)

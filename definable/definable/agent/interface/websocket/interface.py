@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -70,31 +69,21 @@ class WebSocketInterface(BaseInterface):
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[WebSocketConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to WebSocketInterface is deprecated. Pass params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = WebSocketConfig(
-        path=path,
-        heartbeat_interval=heartbeat_interval,
-        max_connections=max_connections,
-        auth_on_connect=auth_on_connect,
-        message_format=message_format,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = WebSocketConfig(
+      path=path,
+      heartbeat_interval=heartbeat_interval,
+      max_connections=max_connections,
+      auth_on_connect=auth_on_connect,
+      message_format=message_format,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
     super().__init__(
       agent=agent,
       config=resolved_config,

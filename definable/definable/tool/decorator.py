@@ -66,16 +66,15 @@ def tool(
   add_instructions: bool = True,
   show_result: Optional[bool] = None,
   stop_after_tool_call: Optional[bool] = None,
-  requires_confirmation: Optional[bool] = None,
-  requires_user_input: Optional[bool] = None,
-  user_input_fields: Optional[List[str]] = None,
-  external_execution: Optional[bool] = None,
   pre_hook: Optional[Callable] = None,
   post_hook: Optional[Callable] = None,
   tool_hooks: Optional[List[Callable]] = None,
   cache_results: bool = False,
   cache_dir: Optional[str] = None,
   cache_ttl: int = 3600,
+  requires_confirmation: bool = False,
+  external_execution: bool = False,
+  requires_user_input: bool = False,
 ) -> Callable[[F], Function]: ...
 
 
@@ -94,10 +93,6 @@ def tool(*args, **kwargs) -> Union[Function, Callable[[F], Function]]:
       add_instructions: bool - If True, add instructions to the system message
       show_result: Optional[bool] - If True, shows the result after function call
       stop_after_tool_call: Optional[bool] - If True, the agent will stop after the function call.
-      requires_confirmation: Optional[bool] - If True, the function will require user confirmation before execution
-      requires_user_input: Optional[bool] - If True, the function will require user input before execution
-      user_input_fields: Optional[List[str]] - List of fields that will be provided to the function as user input
-      external_execution: Optional[bool] - If True, the function will be executed outside of the agent's context
       pre_hook: Optional[Callable] - Hook that runs before the function is executed.
       post_hook: Optional[Callable] - Hook that runs after the function is executed.
       tool_hooks: Optional[List[Callable]] - List of hooks that run before and after the function is executed.
@@ -130,33 +125,21 @@ def tool(*args, **kwargs) -> Union[Function, Callable[[F], Function]]:
     "add_instructions",
     "show_result",
     "stop_after_tool_call",
-    "requires_confirmation",
-    "requires_user_input",
-    "user_input_fields",
-    "external_execution",
     "pre_hook",
     "post_hook",
     "tool_hooks",
     "cache_results",
     "cache_dir",
     "cache_ttl",
+    "requires_confirmation",
+    "external_execution",
+    "requires_user_input",
   })
 
   # Improve error message with more context
   invalid_kwargs = set(kwargs.keys()) - VALID_KWARGS
   if invalid_kwargs:
     raise ValueError(f"Invalid tool configuration arguments: {invalid_kwargs}. Valid arguments are: {sorted(VALID_KWARGS)}")
-
-  # Check that only one of requires_user_input, requires_confirmation, and external_execution is set at the same time
-  exclusive_flags = [
-    kwargs.get("requires_user_input", False),
-    kwargs.get("requires_confirmation", False),
-    kwargs.get("external_execution", False),
-  ]
-  true_flags_count = sum(1 for flag in exclusive_flags if flag)
-
-  if true_flags_count > 1:
-    raise ValueError("Only one of 'requires_user_input', 'requires_confirmation', or 'external_execution' can be set to True at the same time.")
 
   def decorator(func: F) -> Function:
     from inspect import isasyncgenfunction
@@ -204,12 +187,6 @@ def tool(*args, **kwargs) -> Union[Function, Callable[[F], Function]]:
 
     # Preserve the original signature and metadata
     update_wrapper(wrapper, func)
-
-    if kwargs.get("requires_user_input", False):
-      kwargs["user_input_fields"] = kwargs.get("user_input_fields", [])
-
-    if kwargs.get("user_input_fields"):
-      kwargs["requires_user_input"] = True
 
     # Create Function instance with any provided kwargs
     tool_config = {
