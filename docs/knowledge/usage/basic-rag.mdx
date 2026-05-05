@@ -1,0 +1,41 @@
+---
+title: Basic RAG
+description: Build a small knowledge base and format retrieved context for an agent.
+---
+
+This is the smallest reliable RAG shape in the current codebase: a `Knowledge` object, a vector store, an embedder, and a retrieval call that formats the matched documents back into context for the agent layer.
+
+## Tested example
+
+```python
+from examples.docs.support import MockEmbedder, MockVectorDB
+from definable.knowledge import Knowledge
+
+knowledge = Knowledge(
+    vector_db=MockVectorDB(embedder=MockEmbedder(dimensions=4)),
+    embedder=MockEmbedder(dimensions=4),
+    context_format="markdown",
+)
+
+document_ids = knowledge.add(
+    "Definable uses knowledge to ground answers in retrieved context.",
+    chunk=False,
+)
+results = knowledge.search("ground", limit=1)
+context = knowledge.format_context(results)
+
+assert len(document_ids) == 1
+assert results[0].content == "Definable uses knowledge to ground answers in retrieved context."
+assert "Definable uses knowledge" in context
+```
+
+## What to add next
+
+- Add a chunker when sources get longer than a single retrieval unit.
+- Add hybrid search when keyword recall matters.
+- Attach the knowledge object to an agent with `Agent(knowledge=...)` when the retrieval path is stable.
+
+## Related pages
+
+- [`Chunkers`](/knowledge/chunkers)
+- [`Agent Integration`](/knowledge/agent-integration)

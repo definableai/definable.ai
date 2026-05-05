@@ -34,12 +34,6 @@ from definable.reader.base import BaseReader
 from definable.reader.models import ContentBlock, ReaderConfig, ReaderOutput
 from definable.reader.registry import ParserRegistry
 
-# Backwards-compatible aliases
-FileReader = BaseReader
-FileReaderConfig = ReaderConfig
-ReaderResult = ReaderOutput
-FileReaderRegistry = BaseReader
-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -61,17 +55,12 @@ if TYPE_CHECKING:
   from definable.reader.providers.openai import OpenAIReader
 
 __all__ = [
-  # New API
+  # Core API
   "BaseReader",
   "ReaderOutput",
   "ContentBlock",
   "ReaderConfig",
   "ParserRegistry",
-  # Backwards-compat aliases
-  "FileReader",
-  "FileReaderConfig",
-  "ReaderResult",
-  "FileReaderRegistry",
   # Parsers (lazy-loaded)
   "AudioParser",
   "BaseParser",
@@ -112,21 +101,11 @@ _LAZY_IMPORTS = {
   "AudioParser": ("definable.reader.parsers.audio", "AudioParser"),
   # Providers
   "MistralReader": ("definable.reader.providers.mistral", "MistralReader"),
+  "MistralOCRReader": ("definable.reader.providers.mistral", "MistralOCRReader"),
   "OpenAIReader": ("definable.reader.providers.openai", "OpenAIReader"),
   "AnthropicReader": ("definable.reader.providers.anthropic", "AnthropicReader"),
   "GoogleReader": ("definable.reader.providers.google", "GoogleReader"),
-  # Old names → new locations
-  "MistralOCRReader": ("definable.reader.providers.mistral", "MistralOCRReader"),
-  "ImageFormatConverter": ("definable.reader.mistral.preprocessor", "ImageFormatConverter"),
-  "FilePreprocessor": ("definable.reader.mistral.preprocessor", "FilePreprocessor"),
-  # Old reader names → parsers (for import compat)
-  "TextFileReader": ("definable.reader.parsers.text", "TextParser"),
-  "PDFFileReader": ("definable.reader.parsers.pdf", "PDFParser"),
-  "DocxFileReader": ("definable.reader.parsers.docx", "DocxParser"),
-  "XlsxFileReader": ("definable.reader.parsers.xlsx", "XlsxParser"),
-  "OdsFileReader": ("definable.reader.parsers.ods", "OdsParser"),
-  "RtfFileReader": ("definable.reader.parsers.rtf", "RtfParser"),
-  "AudioFileReader": ("definable.reader.parsers.audio", "AudioParser"),
+  # Audio
   "AudioTranscriber": ("definable.reader.audio", "AudioTranscriber"),
   "OpenAITranscriber": ("definable.reader.audio", "OpenAITranscriber"),
   "normalize_audio_format": ("definable.reader.audio", "normalize_audio_format"),

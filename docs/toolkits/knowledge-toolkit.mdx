@@ -1,0 +1,42 @@
+---
+title: KnowledgeToolkit
+description: "Expose a knowledge base as explicit search tools the agent can call on demand."
+icon: book
+---
+
+`KnowledgeToolkit` gives the agent direct search tools over a knowledge base. This is different from automatic knowledge injection: the model decides when to search and can search multiple times during one run.
+
+## Tested example
+
+```python
+from definable.agent.toolkits import KnowledgeToolkit
+from definable.knowledge import Document, Knowledge
+
+from examples.docs.support import MockVectorDB
+
+knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
+knowledge.add(Document(content="Definable supports tools and memory."), chunk=False)
+
+toolkit = KnowledgeToolkit(knowledge=knowledge)
+tool_names = [tool.name for tool in toolkit.tools]
+search = next(tool for tool in toolkit.tools if tool.name == "search_knowledge")
+count = next(tool for tool in toolkit.tools if tool.name == "get_document_count")
+
+result = search.entrypoint(query="tools", top_k=1)
+total = count.entrypoint()
+
+assert tool_names == ["search_knowledge", "get_document_count"]
+assert "Definable supports tools and memory." in result
+assert "1 document" in total
+```
+
+## When to use it
+
+- not every turn needs retrieval,
+- the model should decide when to query the knowledge base,
+- one run may need multiple searches with different queries.
+
+## Related pages
+
+- [`Knowledge`](/knowledge/overview)
+- [`Toolkits`](/toolkits/overview)

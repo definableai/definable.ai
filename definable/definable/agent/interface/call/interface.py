@@ -21,7 +21,6 @@ Example (managed mode with Twilio ConversationRelay)::
       await call.serve_forever()
 """
 
-import warnings
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 from definable.agent.interface.base import BaseInterface
@@ -134,36 +133,26 @@ class CallInterface(BaseInterface):
     hooks: Optional[List[InterfaceHook]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[CallConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to CallInterface is deprecated. Pass provider, phone_number, and other params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = CallConfig(
-        telephony_provider=provider,
-        phone_number=phone_number,
-        pipeline_mode=pipeline,
-        welcome_message=welcome_message,
-        voice=voice,
-        language=language,
-        interruptible=interruptible,
-        interrupt_sensitivity=interrupt_sensitivity,
-        stt_provider=stt_provider,
-        tts_provider=tts_provider,
-        webhook_path=webhook_path,
-        stream_path=stream_path,
-        max_call_duration_seconds=max_call_duration_seconds,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-      )
+    resolved_config = CallConfig(
+      telephony_provider=provider,
+      phone_number=phone_number,
+      pipeline_mode=pipeline,
+      welcome_message=welcome_message,
+      voice=voice,
+      language=language,
+      interruptible=interruptible,
+      interrupt_sensitivity=interrupt_sensitivity,
+      stt_provider=stt_provider,
+      tts_provider=tts_provider,
+      webhook_path=webhook_path,
+      stream_path=stream_path,
+      max_call_duration_seconds=max_call_duration_seconds,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+    )
 
     super().__init__(
       agent=agent,

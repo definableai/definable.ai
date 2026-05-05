@@ -1,0 +1,36 @@
+---
+title: Chunkers
+description: Split source documents into retrieval-friendly fragments before embedding.
+icon: scissors
+---
+
+Chunkers decide how raw knowledge documents are broken into smaller units before they are embedded and stored. The current preferred import path is `definable.chunker`, while `Knowledge` consumes those chunkers directly through its `chunker=` argument.
+
+## Available chunkers
+
+- `TextChunker` for delimiter-based splitting.
+- `RecursiveChunker` for progressively finer splitting when a segment is still too large.
+- `MarkdownChunker` for heading-aware markdown segmentation.
+- `SemanticChunker` when you want embedding-informed breakpoints.
+
+## Tested example
+
+```python
+from examples.docs.knowledge_pipeline import main
+
+summary = main()
+
+assert summary["text_chunk_count"] == 3
+assert summary["recursive_chunk_count"] >= 3
+```
+
+## Guidance
+
+- Start with `RecursiveChunker` unless you have a strong reason to control separators manually.
+- Use `TextChunker` when the source already has reliable boundaries such as paragraph breaks or records.
+- Keep chunk sizes aligned with the embedding model and retrieval strategy rather than the LLM context window.
+
+## Related pages
+
+- [`Embedders`](/knowledge/embedders)
+- [`Basic RAG`](/knowledge/usage/basic-rag)

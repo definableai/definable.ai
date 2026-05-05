@@ -1,0 +1,40 @@
+---
+title: Parallel Workflow
+sidebarTitle: Parallel
+description: "Run independent steps concurrently and merge their outputs."
+---
+
+`Parallel` runs multiple steps with the same input and combines their results into one composite output.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent.workflow import Parallel, Step, Workflow
+
+
+async def main() -> None:
+    workflow = Workflow(
+        name="analysis",
+        steps=Parallel(
+            name="review",
+            steps=[
+                Step(name="product", executor=lambda step_input: "Product analysis"),
+                Step(name="risk", executor=lambda step_input: "Risk analysis"),
+            ],
+        ),
+    )
+    result = await workflow.arun("Review the launch.")
+
+    assert "[product]: Product analysis" in (result.content or "")
+    assert "[risk]: Risk analysis" in (result.content or "")
+
+
+asyncio.run(main())
+```
+
+## Guidance
+
+- Use parallel steps only when they are independent.
+- Set `max_concurrency` when a shared backend or rate limit needs throttling.

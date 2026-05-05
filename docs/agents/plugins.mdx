@@ -1,0 +1,63 @@
+---
+title: Plugins
+sidebarTitle: Plugins
+description: "Lifecycle-based extensions that can register hooks, tools, and runtime behavior."
+icon: plug
+---
+
+`definable.agent.plugin` is the highest-level extension mechanism in the agent layer. A plugin can register hooks, add tools, subscribe to events, or coordinate changes across multiple phases.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `Plugin` | Base class for a loadable extension |
+| `PluginRegistry` | Dependency-aware loader and lifecycle manager |
+
+## Why use a plugin instead of a phase
+
+- Use a phase when you are changing one step in the pipeline.
+- Use a plugin when the change spans multiple steps or needs its own lifecycle.
+- Use a plugin when ordering, dependencies, or conflicts should be explicit.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.plugin import Plugin, PluginRegistry
+from definable.agent.testing import MockModel
+
+
+class TagPlugin(Plugin):
+    @property
+    def name(self) -> str:
+        return "tag"
+
+    async def on_load(self, agent) -> None:
+        agent.plugin_loaded = True
+
+
+async def main() -> None:
+    agent = Agent(model=MockModel(responses=["ok"]))
+    registry = PluginRegistry().add(TagPlugin())
+
+    await registry.load_all(agent)
+    assert agent.plugin_loaded is True
+    await registry.unload_all(agent)
+
+
+asyncio.run(main())
+```
+
+## Operational notes
+
+- `requires` gives you topological loading.
+- `conflicts` gives you explicit incompatibility checks.
+- `modifies` warns when multiple plugins touch the same agent surface.
+
+## Related pages
+
+- [`Pipeline`](/agents/pipeline)
+- [`Observability`](/observability/overview)

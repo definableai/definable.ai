@@ -1,0 +1,62 @@
+---
+title: Multi-Turn Conversations
+sidebarTitle: Multi-Turn
+description: Carry conversation state across runs with message history, session IDs, and memory.
+icon: comments
+---
+
+Multi-turn state comes from one of two places:
+
+- Pass `messages=` from a previous `RunOutput` when you want to keep the exact transcript in memory.
+- Use `session_id` and `memory` when you want the framework to persist conversation state across runs.
+
+`session_id` is a grouping key. By itself, it does not rebuild prior messages for the next run.
+
+## Tested transcript hand-off
+
+```python
+from definable.agent import Agent, MockModel
+
+
+agent = Agent(
+    model=MockModel(responses=["15 * 23 = 345", "345 / 5 = 69"]),
+    instructions="You are a math tutor.",
+)
+
+first = agent.run("What is 15 * 23?")
+second = agent.run(
+    "Now divide that by 5.",
+    messages=first.messages,
+    session_id="demo-session",
+)
+
+assert first.content == "15 * 23 = 345"
+assert second.content == "345 / 5 = 69"
+assert second.session_id == "demo-session"
+assert [message.role for message in second.messages] == [
+    "user",
+    "assistant",
+    "user",
+    "assistant",
+]
+```
+
+## Streaming gives events, not a rebuilt transcript
+
+```python
+from definable.agent import Agent, MockModel
+
+
+agent = Agent(model=MockModel(responses=["hello"]))
+
+events = [event.event for event in agent.run_stream("Hi")]
+
+assert events[:3] == ["RunStarted", "ModelCallStarted", "RunContent"]
+assert events[-1] == "RunCompleted"
+```
+
+## Practical guidance
+
+- Use `messages=previous_output.messages` when you need exact conversational continuity.
+- Use `session_id` consistently when you want traces, memory, and downstream systems to group related runs.
+- For streaming UIs, treat the stream as a live event channel. If you need reusable transcript state for the next turn, keep using `run()` or `arun()`, or persist state through memory.

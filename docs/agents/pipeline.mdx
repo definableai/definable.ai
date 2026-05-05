@@ -1,0 +1,56 @@
+---
+title: Pipeline
+sidebarTitle: Pipeline
+description: "Phase-based execution pipeline behind every agent run."
+icon: shuffle
+---
+
+`definable.agent.pipeline` is the extensibility layer under `Agent`. Every run flows through named phases, and those phases can be reordered, replaced, or wrapped with hooks.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `Pipeline` | Ordered collection of phases and hooks |
+| `Phase` | Protocol every phase must satisfy |
+| `BasePhase` | Convenience base class for custom phases |
+| `LoopState` | Mutable state shared across phases |
+| `LoopStatus` | Pipeline execution status |
+| `ToolRetry` | Signal that a tool should be retried with revised input |
+
+## Default shape
+
+The built-in agent pipeline includes preparation, recall, reasoning, guardrails, model/tool execution, and storage phases. Most users never touch this directly. Reach for it when you need framework-level behavior changes.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.pipeline import BasePhase
+from definable.agent.testing import MockModel
+
+
+class MarkerPhase(BasePhase):
+    _name = "marker"
+
+    async def execute(self, state):
+        state.extra["marker"] = "seen"
+        yield state, None
+
+
+agent = Agent(model=MockModel(responses=["ok"]))
+agent.pipeline.add_phase(MarkerPhase(), before="invoke_loop")
+
+assert "marker" in agent.pipeline.phase_names
+```
+
+## Guidance
+
+- Prefer hooks when you only need to inspect or lightly modify a phase.
+- Add or replace phases only when the existing phase boundaries are the right integration point.
+- Keep custom phases narrow. `LoopState.extra` is the right place for phase-specific scratch data.
+
+## Related pages
+
+- [`Plugins`](/agents/plugins)
+- [`Run`](/agents/run)

@@ -1,0 +1,46 @@
+---
+title: MCP Prompts
+sidebarTitle: Prompts
+description: Read reusable prompt templates from connected MCP servers.
+icon: message
+---
+
+Prompt-capable MCP servers can expose reusable templates that render into message lists. `MCPPromptProvider` is the high-level helper for that surface.
+
+## Tested prompt lookup
+
+```python
+import asyncio
+import sys
+
+from examples.docs.support import mock_mcp_server_path
+from definable.mcp import MCPClient, MCPConfig, MCPPromptProvider, MCPServerConfig
+
+
+config = MCPConfig(
+    servers=[MCPServerConfig(name="mock", command=sys.executable, args=[str(mock_mcp_server_path())])]
+)
+
+
+async def main() -> None:
+    async with MCPClient(config) as client:
+        prompts = MCPPromptProvider(client)
+        listed = await prompts.list_prompts("mock")
+        rendered = await prompts.get_prompt("mock", "summarize", {"topic": "testing"})
+        arguments = await prompts.get_prompt_arguments("mock", "summarize")
+        owner = await prompts.find_prompt("summarize")
+
+        assert listed["mock"][0].name == "summarize"
+        assert rendered.messages[0].content.text == "Summarize testing in three bullets."
+        assert arguments == ["topic"]
+        assert owner == "mock"
+
+
+asyncio.run(main())
+```
+
+## Notes
+
+- Use `get_prompt()` when you want the structured prompt result.
+- Use `get_messages()` or `get_text()` when you want convenience helpers on top of that result.
+- Prompt rendering stays on the MCP server side, which keeps your application logic small and consistent.

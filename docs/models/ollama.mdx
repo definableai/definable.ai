@@ -1,0 +1,40 @@
+---
+title: Ollama
+description: Run local or hosted Ollama models through the `Ollama` adapter.
+---
+
+`Ollama` is the provider adapter for Ollama's native Python client. It is the right surface when you are targeting a local Ollama daemon or Ollama Cloud directly instead of an OpenAI-compatible proxy.
+
+## Tested import and construction
+
+```python
+try:
+    from definable.model import Ollama
+except ImportError as exc:
+    assert "ollama" in str(exc).lower()
+else:
+    model = Ollama(
+        id="llama3.1",
+        host="http://localhost:11434",
+        format="json",
+        keep_alive="5m",
+    )
+    assert model.provider == "Ollama"
+    assert model.host == "http://localhost:11434"
+    assert model.format == "json"
+    assert model.keep_alive == "5m"
+```
+
+## Key options
+
+| Option | Use it for |
+| --- | --- |
+| `host` | Point at a local daemon or hosted Ollama endpoint |
+| `format` | Request structured output or JSON mode |
+| `options` | Pass Ollama-native generation options |
+| `keep_alive` | Keep the model warm between requests |
+
+## Notes
+
+- This adapter depends on the `ollama` Python package.
+- If your deployment exposes an OpenAI-compatible facade instead, [`OpenAILike`](/models/openai-like) may be a better fit.

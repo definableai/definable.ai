@@ -1,0 +1,48 @@
+---
+title: Running Teams
+sidebarTitle: Running Teams
+description: "Execute teams with run() or arun() and inspect the standard RunOutput."
+---
+
+Teams expose `run()` and `arun()`. Both return the normal agent `RunOutput`; there is no separate team-specific output type.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+
+
+events = []
+
+researcher = Agent(
+    model=MockModel(responses=["Use qubits and superposition."]),
+    name="researcher",
+    instructions="Research specialist.",
+)
+writer = Agent(
+    model=MockModel(responses=["Explain the idea in plain language."]),
+    name="writer",
+    instructions="Technical writer.",
+)
+team = Team(
+    name="content-team",
+    model=MockModel(responses=["Combine the research with a plain-language explanation."]),
+    members=[researcher, writer],
+    mode=TeamMode.collaborate,
+)
+
+team.events.on(object, lambda event: events.append(type(event).__name__))
+output = team.run("Explain quantum computing.")
+
+assert output.content == "Combine the research with a plain-language explanation."
+assert "TeamRunStartedEvent" in events
+assert "TeamRunCompletedEvent" in events
+```
+
+## Guidance
+
+- Use `run()` in synchronous apps and scripts.
+- Use `arun()` when the rest of your stack is already async.
+- Subscribe to `team.events` when you need delegation or task-level telemetry.

@@ -26,12 +26,10 @@ from definable.agent.events import (
   RunContext,
   RunErrorEvent,
   RunOutputEvent,
-  RunPausedEvent,
   ToolCallCompletedEvent,
   ToolCallStartedEvent,
   ToolContentEvent,
 )
-from definable.agent.run.requirement import RunRequirement
 from definable.tool.function import Function
 from definable.utils.log import log_debug, log_warning
 from definable.utils.tools import get_function_call_for_tool_call
@@ -59,8 +57,6 @@ class ToolResult:
   result: Optional[str] = None
   error: Optional[str] = None
   should_stop: bool = False
-  is_paused: bool = False
-  requirement: Optional[RunRequirement] = None
   tool_execution: Optional[ToolExecution] = None
   events: list[BaseRunOutputEvent] = field(default_factory=list)
 
@@ -105,6 +101,7 @@ class AgentLoop:
     agent_id: str,
     agent_name: str,
     deferred_tool_manager: Optional[Any] = None,
+    permission_service: Optional[Any] = None,
   ) -> None:
     self._model = model
     self._tools = tools
@@ -121,6 +118,7 @@ class AgentLoop:
     self._agent_id = agent_id
     self._agent_name = agent_name
     self._deferred_tool_manager = deferred_tool_manager
+    self._permission_service = permission_service
 
     # Precompute tool dicts for model API (OpenAI format)
     self._tools_dicts: Optional[list[dict]] = [{"type": "function", "function": t.to_dict()} for t in tools.values()] if tools else None
@@ -140,7 +138,7 @@ class AgentLoop:
 
     When ``streaming=True``, yields ``RunContentEvent`` deltas during
     the model call. When ``streaming=False``, uses non-streaming model calls.
-    Tool dispatch, HITL, and all other logic is shared.
+    Tool dispatch, permissions, and all other logic is shared.
     """
     tool_round = 0
     max_tool_rounds = self._config.max_tool_rounds
@@ -358,22 +356,7 @@ class AgentLoop:
           final_parsed = parsed
           break
 
-        # 8. Check HITL pause
-        paused = [r for r in batch.results if r.is_paused]
-        if paused:
-          requirements = [r.requirement for r in paused if r.requirement is not None]
-          paused_tools = [r.tool_execution for r in paused if r.tool_execution is not None]
-          yield RunPausedEvent(
-            run_id=self._context.run_id,
-            session_id=self._context.session_id,
-            agent_id=self._agent_id,
-            agent_name=self._agent_name,
-            requirements=requirements,
-            tools=paused_tools,
-          )
-          return  # Caller must use continue_run()
-
-        # 9. Deferred tools: if load_tools was called, refresh the tool set
+        # 8. Deferred tools: if load_tools was called, refresh the tool set
         if self._deferred_tool_manager is not None:
           refreshed = self._deferred_tool_manager.get_active_tools()
           if len(refreshed) != len(self._tools):
@@ -646,48 +629,47 @@ class AgentLoop:
     )
     emit(started_event)
 
-    # ---- HITL: requires_confirmation ----
-    if fn and fn.requires_confirmation:
-      tool_execution.requires_confirmation = True
-      requirement = RunRequirement(tool_execution)
-      return ToolResult(
-        tool_call_id=tool_call.get("id"),
-        tool_name=fn_name,
-        is_paused=True,
-        should_stop=bool(fn.stop_after_tool_call),
-        requirement=requirement,
-        tool_execution=tool_execution,
-        events=events,
-      )
+    # ---- Permission check ----
+    if self._permission_service is not None and fn is not None:
+      from definable.agent.hitl.types import PermissionDecision, PermissionRequest
 
-    # ---- HITL: requires_user_input ----
-    if fn and fn.requires_user_input:
-      tool_execution.requires_user_input = True
-      tool_execution.user_input_schema = fn.user_input_schema
-      requirement = RunRequirement(tool_execution)
-      return ToolResult(
-        tool_call_id=tool_call.get("id"),
+      perm_request = PermissionRequest(
         tool_name=fn_name,
-        is_paused=True,
-        should_stop=bool(fn.stop_after_tool_call),
-        requirement=requirement,
-        tool_execution=tool_execution,
-        events=events,
+        tool_args=function_call.arguments if function_call and function_call.arguments else {},
+        tool_call_id=tool_call.get("id"),
       )
+      perm_response = await self._permission_service.check(perm_request)
 
-    # ---- HITL: external_execution ----
-    if fn and fn.external_execution:
-      tool_execution.external_execution_required = True
-      requirement = RunRequirement(tool_execution)
-      return ToolResult(
-        tool_call_id=tool_call.get("id"),
-        tool_name=fn_name,
-        is_paused=True,
-        should_stop=bool(fn.stop_after_tool_call),
-        requirement=requirement,
-        tool_execution=tool_execution,
-        events=events,
-      )
+      if perm_response.decision == PermissionDecision.deny:
+        denial_msg = perm_response.feedback or f"[DENIED] Tool '{fn_name}' was denied by the user."
+        tool_execution.result = denial_msg
+        tool_execution.tool_call_error = True
+        self._all_tool_executions.append(tool_execution)
+
+        completed_event = ToolCallCompletedEvent(
+          run_id=self._context.run_id,
+          session_id=self._context.session_id,
+          agent_id=self._agent_id,
+          agent_name=self._agent_name,
+          tool=_dc_replace(tool_execution),
+        )
+        emit(completed_event)
+
+        self._messages.append(
+          Message(
+            role="tool",
+            content=denial_msg,
+            tool_call_id=tool_call.get("id"),
+            name=fn_name,
+          )
+        )
+        return ToolResult(
+          tool_call_id=tool_call.get("id"),
+          tool_name=fn_name,
+          error=denial_msg,
+          tool_execution=tool_execution,
+          events=events,
+        )
 
     # ---- Tool guardrails ----
     if self._guardrails and hasattr(self._guardrails, "tool") and self._guardrails.tool:

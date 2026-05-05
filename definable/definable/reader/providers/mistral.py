@@ -170,11 +170,6 @@ class MistralReader:
     except Exception as e:
       return self._make_error_output(file, str(e))
 
-  # Keep read_file as alias for backwards compat
-  def read_file(self, file: File) -> ReaderOutput:
-    """Backwards-compatible alias for read()."""
-    return self.read(file)
-
   async def aread(self, file: File) -> ReaderOutput:
     """Asynchronously read a file via Mistral OCR."""
     try:
@@ -184,11 +179,6 @@ class MistralReader:
       return await self._aread_by_classification(file, classification)
     except Exception as e:
       return self._make_error_output(file, str(e))
-
-  # Keep aread_file as alias for backwards compat
-  async def aread_file(self, file: File) -> ReaderOutput:
-    """Backwards-compatible alias for aread()."""
-    return await self.aread(file)
 
   # ── Classification ───────────────────────────────────────────────────
 

@@ -73,12 +73,6 @@ class ThinkingOutput(BaseModel):
     description="Confidence in this plan.",
   )
 
-  # BACKWARD COMPAT: 'analysis' alias for 'chain_of_thought'
-  @property
-  def analysis(self) -> str:
-    """Backward-compatible alias for chain_of_thought."""
-    return self.chain_of_thought
-
   def flat_tool_names(self) -> List[str]:
     """Extract flat list of tool names from tool_plan (handles both str and ToolStep)."""
     if not self.tool_plan:

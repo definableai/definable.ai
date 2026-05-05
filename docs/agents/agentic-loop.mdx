@@ -1,0 +1,145 @@
+---
+title: Agentic Loop
+sidebarTitle: Agentic Loop
+description: Shared execution loop for model calls, tool dispatch, pauses, cancellation, and event emission.
+icon: rotate
+---
+
+The agent loop is the core execution engine behind `run()`, `arun()`, `run_stream()`, and `arun_stream()`. It is responsible for:
+
+- model invocation
+- tool dispatch
+- pause-and-resume requirements
+- cancellation checks
+- event emission
+
+## Tested tool batching
+
+Parallel tools run first, and tools marked `sequential = True` run afterward one at a time.
+
+```python
+import asyncio
+from unittest.mock import MagicMock
+
+from definable.agent import Agent, MockModel
+from definable.model.metrics import Metrics
+from definable.tool.decorator import tool
+
+
+order = []
+
+
+@tool
+async def parallel_lookup(query: str) -> str:
+    await asyncio.sleep(0.01)
+    order.append("parallel")
+    return f"parallel:{query}"
+
+
+@tool
+async def sequential_lookup(query: str) -> str:
+    order.append("sequential")
+    return f"sequential:{query}"
+
+
+sequential_lookup.sequential = True
+
+
+def model_with_two_tool_calls(messages=None, **kwargs):
+    response = MagicMock()
+
+    if not any(getattr(message, "role", None) == "tool" for message in (messages or [])):
+        response.content = ""
+        response.tool_calls = [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "parallel_lookup", "arguments": '{"query": "docs"}'},
+            },
+            {
+                "id": "call_2",
+                "type": "function",
+                "function": {"name": "sequential_lookup", "arguments": '{"query": "docs"}'},
+            },
+        ]
+    else:
+        response.content = "done"
+        response.tool_calls = []
+
+    response.tool_executions = []
+    response.response_usage = Metrics()
+    response.reasoning_content = None
+    response.citations = None
+    response.images = None
+    response.videos = None
+    response.audios = None
+    response.parsed = None
+    return response
+
+
+agent = Agent(
+    model=MockModel(side_effect=model_with_two_tool_calls),
+    tools=[parallel_lookup, sequential_lookup],
+)
+
+output = agent.run("search docs")
+
+assert output.content == "done"
+assert order == ["parallel", "sequential"]
+```
+
+## Tested cancellation
+
+```python
+import asyncio
+
+from definable.agent import Agent, MockModel
+from definable.agent.cancellation import CancellationToken
+from definable.agent.run import RunStatus
+
+
+async def main() -> None:
+    token = CancellationToken()
+    token.cancel()
+
+    agent = Agent(model=MockModel(responses=["unused"]))
+    output = await agent.arun("Hello", cancellation_token=token)
+
+    assert output.status == RunStatus.cancelled
+    assert output.content is None
+
+
+asyncio.run(main())
+```
+
+## Tested event callbacks
+
+```python
+import asyncio
+
+from definable.agent import Agent, MockModel
+from definable.agent.events import RunCompletedEvent
+
+
+async def main() -> None:
+    seen = []
+    agent = Agent(model=MockModel(responses=["hello"]))
+
+    @agent.events.on(RunCompletedEvent)
+    async def on_complete(event):
+        seen.append((event.event, event.content))
+
+    output = await agent.arun("Hi")
+
+    assert output.content == "hello"
+    assert seen == [("RunCompleted", "hello")]
+
+
+asyncio.run(main())
+```
+
+## Notes
+
+- `run()` and `arun()` collect loop events into a final `RunOutput`.
+- `run_stream()` and `arun_stream()` expose the event stream directly.
+- The loop enforces `max_tool_rounds` to avoid infinite tool-call recursion.

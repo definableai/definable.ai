@@ -1,0 +1,28 @@
+---
+title: Skills Examples
+sidebarTitle: Skills
+description: Verified examples for custom skills and the markdown skill registry.
+icon: puzzle-piece
+---
+
+## Curated scripts
+
+| Script | Covers |
+| --- | --- |
+| `python examples/docs/skills_basics.py` | Custom `Skill` objects attached directly to an agent |
+
+## Tested registry surface
+
+```python
+from definable.skill import SkillRegistry
+
+
+registry = SkillRegistry()
+on_demand = registry.as_on_demand()
+
+assert on_demand.name == "skill_library"
+assert "activate_skill" in [tool.name for tool in on_demand.tools]
+assert bool(registry.to_prompt()) is True
+```
+
+See [`Skill Registry`](/skills/registry) for the full module documentation.

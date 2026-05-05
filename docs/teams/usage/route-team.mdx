@@ -1,0 +1,60 @@
+---
+title: Route Team
+description: Dispatch each request to one specialist.
+---
+
+Route mode is the specialist-router pattern. The leader decides which member should handle the request and returns that member’s response directly.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+
+from examples.docs.support import mock_model_response
+
+state = {"calls": 0}
+
+
+def leader_side_effect(messages, tools, **kwargs):
+    state["calls"] += 1
+    if state["calls"] == 1:
+        return mock_model_response(
+            tool_calls=[
+                {
+                    "id": "call-1",
+                    "type": "function",
+                    "function": {
+                        "name": "delegate_to_member",
+                        "arguments": '{"member_name": "specialist", "task_input": "explain gravity"}',
+                    },
+                }
+            ]
+        )
+    return mock_model_response(content="unused")
+
+
+specialist = Agent(
+    model=MockModel(responses=["Gravity is the force that attracts masses."]),
+    name="specialist",
+)
+team = Team(
+    name="support-router",
+    model=MockModel(side_effect=leader_side_effect),
+    members=[specialist],
+    mode=TeamMode.route,
+)
+
+output = asyncio.run(team.arun("Explain gravity."))
+
+assert output.content == "Gravity is the force that attracts masses."
+assert team.mode.value == "route"
+```
+
+## Related pages
+
+- [`Teams Overview`](/teams/overview)
+- [`Delegation`](/teams/delegation)

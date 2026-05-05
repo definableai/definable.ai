@@ -1,0 +1,46 @@
+---
+title: Replay
+sidebarTitle: Overview
+description: "Inspect, replay, and compare completed agent runs."
+icon: history
+---
+
+`definable.agent.replay` gives you a structured view of what happened during a run. It is useful when you need to explain behavior, compare two runs, or inspect what knowledge, memory, or tool activity contributed to an answer.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `Replay` | Materialized replay of a prior run |
+| `compare_runs` | Compare two completed runs |
+| `ReplayComparison` | High-level diff between runs |
+| `ReplayStep`, `ReplayTokens` | Step-level and token-level replay data |
+
+## Common use cases
+
+- investigate regressions between two agent versions,
+- inspect what changed across prompts or tool use,
+- turn live execution into a debuggable artifact.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.replay import compare_runs
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["first", "second"]), instructions="Reply briefly.")
+
+first = agent.run("hello")
+second = agent.run("hello again")
+replay = agent.replay(run_output=first)
+diff = compare_runs(first, second)
+
+assert replay.content == "first"
+assert diff.token_diff == 0
+```
+
+## Related pages
+
+- [`Run`](/agents/run)
+- [`Observability`](/observability/overview)

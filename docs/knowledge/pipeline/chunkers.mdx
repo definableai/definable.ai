@@ -1,0 +1,29 @@
+---
+title: Pipeline Chunkers
+description: The chunking stage used by Knowledge before embedding and storage.
+icon: scissors
+---
+
+The pipeline chunkers are the same public chunker objects documented in the main knowledge section. This page focuses on where they sit in the ingestion flow: after reading and before embedding.
+
+## Tested example
+
+```python
+from examples.docs.knowledge_pipeline import main
+
+summary = main()
+
+assert summary["text_chunk_count"] == 3
+assert summary["recursive_chunk_count"] >= 3
+```
+
+## Where this stage runs
+
+- Source material becomes `Document` objects first.
+- The configured chunker splits those documents into retrieval units.
+- Embeddings are generated for each chunk before insertion into the vector database.
+
+## Related pages
+
+- [`Chunkers`](/knowledge/chunkers)
+- [`Pipeline Embedders`](/knowledge/pipeline/embedders)

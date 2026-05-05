@@ -55,7 +55,6 @@ class MCPToolkit(Toolkit):
     client: Optional[MCPClient] = None,
     tool_name_prefix: str = "",
     include_server_prefix: bool = True,
-    require_confirmation: bool = False,
   ) -> None:
     """Initialize the MCP toolkit.
 
@@ -64,7 +63,6 @@ class MCPToolkit(Toolkit):
         client: Optional pre-configured MCPClient (will create one if not provided).
         tool_name_prefix: Prefix to add to all tool names.
         include_server_prefix: Include server name in tool names.
-        require_confirmation: Mark all MCP tools as requiring confirmation.
     """
     # Dependencies include the MCP client reference for tool execution
     super().__init__(dependencies={"_mcp_toolkit_client": None})
@@ -74,7 +72,6 @@ class MCPToolkit(Toolkit):
     self._client: Optional[MCPClient] = client
     self._tool_name_prefix = tool_name_prefix
     self._include_server_prefix = include_server_prefix
-    self._require_confirmation = require_confirmation
 
     # Cached tools
     self._mcp_tools: Optional[List["Function"]] = None
@@ -286,7 +283,6 @@ class MCPToolkit(Toolkit):
       parameters=parameters,
       entrypoint=mcp_tool_entrypoint,
       skip_entrypoint_processing=True,
-      requires_confirmation=self._require_confirmation,
     )
 
     return function

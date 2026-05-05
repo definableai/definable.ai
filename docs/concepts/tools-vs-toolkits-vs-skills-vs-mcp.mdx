@@ -1,0 +1,63 @@
+---
+title: Tools vs Toolkits vs Skills vs MCP
+description: Choose the right capability packaging layer for local functions, grouped tools, domain packs, and remote servers.
+icon: toolbox
+---
+
+These primitives sit on top of the same tool-calling machinery, but they package capability at different levels.
+
+## Comparison
+
+| Primitive | What it packages | Use it when |
+| --- | --- | --- |
+| `Tool` | one callable function | one action is enough |
+| `Toolkit` | related tools with shared dependencies | several tools share one client or config |
+| `Skill` | tools plus instructions and optional dependencies | the agent also needs domain behavior and guidance |
+| `MCP` | remote tools, resources, and prompts from external servers | capabilities live outside your process |
+
+## Tested example
+
+```python
+from definable.mcp import MCPToolkit
+from definable.skill import Skill
+from definable.tool import Function, tool
+from definable.toolkit import Toolkit
+
+
+@tool
+def lookup_docs(topic: str) -> str:
+    """Return the docs section for a topic."""
+    return f"docs:{topic}"
+
+
+class DocsToolkit(Toolkit):
+    @property
+    def tools(self):
+        return [lookup_docs]
+
+
+support = Skill(
+    name="support_docs",
+    instructions="Check the docs before answering.",
+    tools=[lookup_docs],
+)
+
+assert isinstance(lookup_docs, Function)
+assert DocsToolkit().tools[0].name == "lookup_docs"
+assert support.get_instructions() == "Check the docs before answering."
+assert issubclass(MCPToolkit, Toolkit)
+```
+
+## Decision rule
+
+- Start with a plain tool.
+- Introduce a toolkit when several tools belong together technically.
+- Introduce a skill when the agent needs behavioral framing along with tools.
+- Reach for MCP when the capability belongs to another process, service, or team.
+
+## Related pages
+
+- [`Tools`](/tools/overview)
+- [`Toolkits`](/toolkits/overview)
+- [`Skills`](/skills/overview)
+- [`MCP`](/mcp/overview)

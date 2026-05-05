@@ -287,10 +287,6 @@ class PlaywrightBrowser(BaseBrowser):
     except Exception as exc:
       return f"Error: {to_ai_friendly_error(exc)}"
 
-  async def get_page_snapshot(self) -> str:
-    """Alias for snapshot() — backward compatibility."""
-    return await self.snapshot()
-
   # ---------------------------------------------------------------------------
   # Navigation
   # ---------------------------------------------------------------------------

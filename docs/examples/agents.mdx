@@ -1,0 +1,50 @@
+---
+title: Agent Examples
+sidebarTitle: Agents
+description: Verified examples for the core agent runtime, middleware, tracing, security, scheduling, and reasoning surfaces.
+icon: robot
+---
+
+```python
+from pathlib import Path
+
+
+scripts = [
+    "examples/docs/agent_basics.py",
+    "examples/docs/agent_auth.py",
+    "examples/docs/agent_guardrails.py",
+    "examples/docs/agent_middleware.py",
+    "examples/docs/agent_runtime.py",
+    "examples/docs/agent_reasoning.py",
+    "examples/docs/agent_replay.py",
+    "examples/docs/agent_scheduling.py",
+    "examples/docs/agent_security.py",
+    "examples/docs/agent_tracing.py",
+]
+
+for script in scripts:
+    assert Path(script).exists()
+```
+
+These scripts are exercised by the documentation test suite and are intended to stay small, deterministic, and offline-friendly.
+
+| Script | Covers |
+| --- | --- |
+| `python examples/docs/agent_basics.py` | Basic `Agent` execution and `RunStatus` checks |
+| `python examples/docs/agent_auth.py` | `APIKeyAuth` with `AgentServer` |
+| `python examples/docs/agent_guardrails.py` | Input blocking with `Guardrails` |
+| `python examples/docs/agent_middleware.py` | Custom middleware, metrics, and retry ordering |
+| `python examples/docs/agent_runtime.py` | `/run` endpoint behavior through `AgentServer` |
+| `python examples/docs/agent_reasoning.py` | Thinking-layer streaming events |
+| `python examples/docs/agent_replay.py` | Replay and run comparison |
+| `python examples/docs/agent_scheduling.py` | One-shot scheduling with `Scheduler` and `TriggerExecutor` |
+| `python examples/docs/agent_security.py` | Tool policies, rate limiting, prompt-injection checks, and SSRF blocking |
+| `python examples/docs/agent_tracing.py` | `Tracing` with `JSONLExporter` |
+
+## Related pages
+
+- [`Middleware`](/agents/middleware)
+- [`Thinking`](/agents/thinking)
+- [`Tracing`](/agents/tracing)
+- [`Security`](/agents/security)
+- [`Scheduling`](/agents/scheduling)

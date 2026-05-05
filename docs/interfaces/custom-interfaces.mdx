@@ -1,0 +1,94 @@
+---
+title: Custom Interfaces
+sidebarTitle: Custom Interfaces
+description: Build a transport for any platform by subclassing BaseInterface.
+icon: code
+---
+
+Every built-in transport uses `BaseInterface`. If you need a platform the library does not ship with, you implement the platform-specific edges and let the base class handle the common pipeline: auth, hooks, session lookup, agent execution, response building, and error handling.
+
+## What you implement
+
+- `_start_receiver()` starts polling, webhook listeners, or socket consumers.
+- `_stop_receiver()` shuts the receiver down cleanly.
+- `_convert_inbound(raw_message)` maps platform payloads into `InterfaceMessage`.
+- `_send_response(original_msg, response, raw_message)` translates `InterfaceResponse` back into the platform API.
+
+## Tested example
+
+```python
+import asyncio
+from dataclasses import dataclass
+from typing import Any, Optional
+
+from definable.agent.interface import (
+    BaseInterface,
+    InterfaceConfig,
+    InterfaceMessage,
+    InterfaceResponse,
+)
+
+
+@dataclass(frozen=True)
+class NotesConfig(InterfaceConfig):
+    platform: str = "notes"
+    endpoint: str = "https://example.test"
+
+
+class NotesInterface(BaseInterface):
+    def __init__(self) -> None:
+        super().__init__(config=NotesConfig())
+        self.started = False
+
+    async def _start_receiver(self) -> None:
+        self.started = True
+
+    async def _stop_receiver(self) -> None:
+        self.started = False
+
+    async def _convert_inbound(self, raw_message: Any) -> Optional[InterfaceMessage]:
+        if raw_message.get("kind") != "message":
+            return None
+        return InterfaceMessage(
+            platform=self.config.platform,
+            platform_user_id=raw_message["user_id"],
+            platform_chat_id=raw_message["room_id"],
+            platform_message_id=raw_message["id"],
+            text=raw_message["text"],
+        )
+
+    async def _send_response(
+        self,
+        original_msg: InterfaceMessage,
+        response: InterfaceResponse,
+        raw_message: Any,
+    ) -> None:
+        raw_message["reply"] = response.content
+
+
+interface = NotesInterface()
+message = asyncio.run(interface._convert_inbound({
+    "kind": "message",
+    "user_id": "u-1",
+    "room_id": "room-7",
+    "id": "m-3",
+    "text": "hello",
+}))
+
+assert message is not None
+assert message.platform == "notes"
+assert message.text == "hello"
+```
+
+## Design guidance
+
+- Keep the interface thin. Platform parsing belongs in the transport; agent logic belongs in tools, middleware, or the model.
+- Return `None` from `_convert_inbound()` for events you want to ignore.
+- Treat `_stop_receiver()` as idempotent because runtime shutdown paths may call it more than once.
+- Use the built-in interface error types if you need platform-specific failure semantics.
+
+## Related pages
+
+- [`Hooks`](/interfaces/hooks)
+- [`Sessions`](/interfaces/sessions)
+- [`Identity`](/interfaces/identity)

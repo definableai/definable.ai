@@ -1,0 +1,32 @@
+---
+title: Current Series
+description: The current documentation target derived from the repository's package metadata.
+icon: bookmark
+---
+
+The current docs series should always match the package metadata in the repository. That keeps the docs anchored to the exact codebase they describe.
+
+## Tested example
+
+```python
+import tomllib
+from pathlib import Path
+
+version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+major, minor, patch = version.split(".")
+
+assert int(major) >= 0
+assert int(minor) >= 0
+assert int(patch) >= 0
+```
+
+## Guidance
+
+- Treat the repository version as the authoritative target for this docs tree.
+- If you are deploying a different version, validate that the docs version and package version actually match before following operational guidance verbatim.
+- Pair this page with the migration pages before upgrading an existing deployment.
+
+## Related pages
+
+- [`Releases Overview`](/releases/overview)
+- [`Migrations Overview`](/migrations/overview)

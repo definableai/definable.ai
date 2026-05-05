@@ -1,0 +1,45 @@
+---
+title: Creating Tools
+sidebarTitle: Overview
+description: "Wrap Python callables as agent tools with schema, metadata, and runtime controls."
+---
+
+The `@tool` decorator turns a normal Python function into a first-class Definable tool. It captures the name, description, parameter schema, and runtime flags the agent uses during tool selection and execution.
+
+## Tested example
+
+```python
+from definable.tool import tool
+
+
+@tool(
+    name="weather",
+    description="Get weather",
+    stop_after_tool_call=True,
+    requires_confirmation=True,
+)
+def get_weather(city: str) -> str:
+    """Get current weather for a city."""
+    return f"{city}: sunny"
+
+
+assert get_weather.name == "weather"
+assert get_weather.description == "Get weather"
+assert get_weather.stop_after_tool_call is True
+assert get_weather.show_result is True
+assert get_weather.requires_confirmation is True
+assert get_weather.parameters["properties"]["city"]["type"] == "string"
+```
+
+## What the decorator gives you
+
+- a stable tool name,
+- a description taken from the docstring or explicit override,
+- a JSON-schema parameter object from type hints,
+- execution controls such as confirmation, caching, hooks, or stop-after-call behavior.
+
+## Related pages
+
+- [`Parameters`](/tools/creating-tools/parameters)
+- [`Hooks`](/tools/creating-tools/hooks)
+- [`Dependencies`](/tools/creating-tools/dependencies)

@@ -1,0 +1,42 @@
+---
+title: Run Lifecycle
+description: Understand the ordered phases of one agent run from context assembly to completion events.
+icon: timeline
+---
+
+Every run follows the same broad shape even when optional layers are enabled.
+
+## Phases
+
+1. Resolve the model and assemble the system and user context.
+2. Inject optional capability layers such as knowledge, memory, or reasoning.
+3. Call the model and inspect whether it produced content, tool calls, or structured output.
+4. Execute tool calls and loop until the run completes, pauses, or hits a limit.
+5. Emit final output plus run events, traces, and replay artifacts.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["hello world"]), instructions="Be brief.")
+events = [event.event for event in agent.run_stream("Say hello") if hasattr(event, "event")]
+
+assert events[0] == "RunStarted"
+assert "RunContent" in events
+assert events[-1] == "RunCompleted"
+```
+
+## Why this matters
+
+- Streaming shows the lifecycle directly through events.
+- Middleware and guardrails hook into specific phases, not into a generic black box.
+- Replay and observability are more useful when you already know the lifecycle they are exposing.
+
+## Related pages
+
+- [`Run`](/agents/run)
+- [`Running Agents`](/agents/running-agents)
+- [`Tracing`](/agents/tracing)
+- [`Replay`](/replay/overview)

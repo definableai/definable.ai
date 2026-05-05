@@ -99,7 +99,7 @@ class Knowledge:
 
       self.vector_db = InMemoryVectorDB()
 
-    # Backward compat: pass embedder to vector_db if provided
+    # If an embedder was provided, share it with the vector_db
     if self.embedder is not None and self.vector_db.embedder is None:
       self.vector_db.embedder = self.embedder
 

@@ -1,0 +1,65 @@
+---
+title: Memory Examples
+sidebarTitle: Memory
+description: Curated, deterministic examples for memory storage and recall.
+icon: brain
+---
+
+These examples focus on the local memory APIs and the exact agent integration behavior.
+
+## Basic memory
+
+```python
+import asyncio
+
+from definable.memory import InMemoryStore, Memory
+from definable.model.message import Message
+
+
+async def main() -> None:
+    async with Memory(store=InMemoryStore()) as memory:
+        await memory.add(Message(role="user", content="My name is Ada."), session_id="docs")
+        await memory.add(Message(role="assistant", content="Hello Ada."), session_id="docs")
+
+        entries = await memory.get_entries("docs")
+
+        assert len(entries) == 2
+        assert entries[0].content == "My name is Ada."
+
+
+asyncio.run(main())
+```
+
+Script: `examples/docs/memory_basics.py`
+
+## Agent recall
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+from definable.memory import InMemoryStore, Memory
+
+
+async def main() -> None:
+    memory = Memory(store=InMemoryStore())
+    model = MockModel(responses=["Hello Ada.", "I remember that you like Python."])
+    agent = Agent(model=model, memory=memory)
+
+    await agent.arun("My favorite language is Python.", session_id="docs", user_id="alice")
+    await agent.arun("What do I like?", session_id="docs", user_id="alice")
+
+    assert "My favorite language is Python." in model.call_history[1]["messages"][0].content
+
+    await memory.close()
+
+
+asyncio.run(main())
+```
+
+## Related pages
+
+- [`Memory Overview`](/memory/overview)
+- [`Stores`](/memory/stores)
+- [`Agent Integration`](/memory/agent-integration)

@@ -1,0 +1,34 @@
+---
+title: Rerankers
+description: Re-score retrieved knowledge documents with a second-pass relevance model.
+icon: ranking-star
+---
+
+Rerankers operate after retrieval. They read the query together with the candidate documents and produce a better relevance ordering than raw vector distance alone. The current public import path is `definable.reranker`.
+
+## Current options
+
+- `CohereReranker` for hosted API-based reranking.
+- `SentenceTransformerReranker` for local cross-encoder reranking.
+- Custom `Reranker` subclasses when you want deterministic or domain-specific scoring.
+
+## Tested example
+
+```python
+from examples.docs.knowledge_pipeline import main
+
+summary = main()
+
+assert summary["reranked_top_content"] == "Python powers the runtime."
+```
+
+## Guidance
+
+- Retrieve more candidates than you plan to return if reranking is enabled.
+- Keep reranking optional for tiny corpora where vector search is already precise.
+- Use reranking when query precision matters more than raw retrieval speed.
+
+## Related pages
+
+- [`Hybrid Search`](/knowledge/hybrid-search)
+- [`Basic RAG`](/knowledge/usage/basic-rag)

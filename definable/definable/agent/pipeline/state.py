@@ -1,4 +1,7 @@
-"""Pipeline state — mutable state that flows through all phases."""
+"""Pipeline state — mutable state that flows through all phases.
+
+LoopState is the canonical name. RunState is an alias for forward compatibility.
+"""
 
 from dataclasses import dataclass, field
 from enum import Enum
@@ -122,3 +125,7 @@ class LoopState:
 
   # ── Output messages (post-loop, excludes system) ──────────
   output_messages: Optional[List[Message]] = None
+
+
+# Forward-compatible alias: RunState is the new name, LoopState is kept for backward compat.
+RunState = LoopState

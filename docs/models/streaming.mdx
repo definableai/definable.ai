@@ -1,0 +1,44 @@
+---
+title: Streaming
+description: Consume model output incrementally instead of waiting for a full response.
+icon: bars-staggered
+---
+
+Provider adapters expose `invoke_stream()` and `ainvoke_stream()` for incremental output. The contract is simple: you receive a sequence of `ModelResponse` chunks, and each chunk may carry content, tool calls, or reasoning deltas depending on the provider.
+
+## Tested streaming contract
+
+```python
+import asyncio
+
+from definable.agent.testing import MockModel
+
+
+async def main() -> None:
+    model = MockModel(responses=["stream"])
+    chunks = []
+
+    async for chunk in model.ainvoke_stream(messages=[]):
+        if chunk.content:
+            chunks.append(chunk.content)
+
+    assert "".join(chunks) == "stream"
+    assert model.call_count == 1
+
+
+asyncio.run(main())
+```
+
+## What to expect from real providers
+
+- Text chunks usually arrive as small `content` deltas.
+- Tool-capable models may emit `tool_calls` during the stream instead of text.
+- Some providers emit reasoning deltas before or alongside final answer tokens.
+- Usage metrics typically appear only at the end of the stream.
+
+## Use agent streaming when
+
+- You want tool execution and intermediate events normalized at the agent layer.
+- You want high-level events like `RunContent`, `ToolCallStarted`, and `RunCompleted` instead of raw model chunks.
+
+See [`Run Output`](/advanced/run-output) for the agent-level event stream.

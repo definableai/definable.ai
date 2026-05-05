@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import sys
-import warnings
 from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import uuid4
 
@@ -115,6 +114,7 @@ class CLIInterface(BaseInterface):
     *,
     # Mode selection
     mode: str = "auto",
+    permission_mode: str = "ask",
     # CLI-specific
     prompt: str = ">>> ",
     show_banner: bool = True,
@@ -142,40 +142,31 @@ class CLIInterface(BaseInterface):
     hooks: Optional[List["InterfaceHook"]] = None,
     identity_resolver: Optional["IdentityResolver"] = None,
     auth: Optional[object] = None,
-    # Deprecated
-    config: Optional[CLIConfig] = None,
   ) -> None:
-    if config is not None:
-      warnings.warn(
-        "Passing config= to CLIInterface is deprecated. Pass prompt, show_banner, and other params directly as keyword arguments.",
-        DeprecationWarning,
-        stacklevel=2,
-      )
-      resolved_config = config
-    else:
-      resolved_config = CLIConfig(
-        mode=mode,
-        prompt=prompt,
-        show_banner=show_banner,
-        show_metrics=show_metrics,
-        show_tool_args=show_tool_args,
-        show_tool_results=show_tool_results,
-        show_thinking=show_thinking,
-        show_timestamps=show_timestamps,
-        max_content_display=max_content_display,
-        markdown_output=markdown_output,
-        command_prefix=command_prefix,
-        enable_completions=enable_completions,
-        user_id=user_id,
-        tools_expand=tools_expand,
-        max_session_history=max_session_history,
-        session_ttl_seconds=session_ttl_seconds,
-        max_concurrent_requests=max_concurrent_requests,
-        error_message=error_message,
-        typing_indicator=typing_indicator,
-        max_message_length=max_message_length,
-        rate_limit_messages_per_minute=rate_limit_messages_per_minute,
-      )
+    resolved_config = CLIConfig(
+      mode=mode,
+      prompt=prompt,
+      show_banner=show_banner,
+      show_metrics=show_metrics,
+      show_tool_args=show_tool_args,
+      show_tool_results=show_tool_results,
+      show_thinking=show_thinking,
+      show_timestamps=show_timestamps,
+      max_content_display=max_content_display,
+      markdown_output=markdown_output,
+      command_prefix=command_prefix,
+      enable_completions=enable_completions,
+      user_id=user_id,
+      tools_expand=tools_expand,
+      permission_mode=permission_mode,
+      max_session_history=max_session_history,
+      session_ttl_seconds=session_ttl_seconds,
+      max_concurrent_requests=max_concurrent_requests,
+      error_message=error_message,
+      typing_indicator=typing_indicator,
+      max_message_length=max_message_length,
+      rate_limit_messages_per_minute=rate_limit_messages_per_minute,
+    )
     super().__init__(
       config=resolved_config,
       session_manager=session_manager,
@@ -246,6 +237,33 @@ class CLIInterface(BaseInterface):
       Self for method chaining.
     """
     self._renderer_registry.add(renderer)
+    return self
+
+  # --- HITL integration ---
+
+  def bind(self, agent: Any) -> "CLIInterface":  # type: ignore[override]
+    """Bind the interface to an agent and inject HITL resolvers."""
+    super().bind(agent)
+
+    perm_mode = self._cli_config.permission_mode
+    if perm_mode == "ask" and getattr(agent, "_permission_service", None) is None:
+      from definable.agent.hitl.permissions import PermissionService
+      from definable.agent.interface.cli.resolvers import cli_permission_resolver
+      from definable.agent.hitl.settings import Settings
+
+      from definable.agent.hitl.types import PermissionAction
+
+      agent._permission_service = PermissionService(
+        resolver=cli_permission_resolver,
+        defaults={"ask_user": PermissionAction.allow},
+        settings=Settings.load(),
+      )
+
+    if perm_mode == "ask" and getattr(agent, "_question_resolver", None) is None:
+      from definable.agent.interface.cli.resolvers import cli_question_resolver
+
+      agent._question_resolver = cli_question_resolver
+
     return self
 
   # --- BaseInterface abstract methods ---

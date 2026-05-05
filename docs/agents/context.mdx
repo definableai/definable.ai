@@ -1,0 +1,62 @@
+---
+title: Context
+sidebarTitle: Context
+description: "Prompt assembly, history trimming, token budgets, and deferred tool loading."
+icon: layers
+---
+
+`definable.agent.context` controls how an agent builds the prompt that reaches the model. It is the layer that decides how much history to keep, how tokens are split across sections, and whether tool schemas are sent eagerly or loaded on demand.
+
+## Public API
+
+| Type | Purpose |
+| --- | --- |
+| `Context` | User-facing configuration for history and prompt strategy |
+| `TokenBudget` | Token allocation across system, knowledge, memory, and history |
+
+`ContextManager` exists underneath the public config and is useful when you need to inspect the exact prompt assembly logic.
+
+## What it controls
+
+- History strategy: keep the tail, keep head and tail, summarize, or disable trimming.
+- Token allocation: reserve space for output and cap each prompt section.
+- Cache optimization: split prompt content into more stable and more dynamic layers.
+- Deferred tools: expose a small tool catalog first and load full schemas only when needed.
+
+## Tested example
+
+```python
+from definable.agent.context import Context, TokenBudget
+from definable.agent.context.manager import ContextManager
+from definable.agent.testing import MockModel
+
+config = Context(
+    history_strategy="head_and_tail",
+    max_history_messages=6,
+    keep_first_messages=2,
+    token_budget=TokenBudget(context_window=8192, output_reserve=512),
+)
+
+manager = ContextManager(config, model=MockModel())
+prompt = manager.build_system_prompt(
+    instructions="You are helpful.",
+    knowledge_context="Fact A\nFact B",
+    memory_context="Remembered preference: dark mode.",
+)
+
+assert "You are helpful." in prompt
+assert "Fact A" in prompt
+assert manager.allocation.history == 3072
+```
+
+## Guidance
+
+- Start with `context=True` when you want sensible defaults.
+- Reach for `Context(...)` when prompt size is becoming unpredictable or expensive.
+- Use `TokenBudget` when knowledge, memory, and long chats compete for the same context window.
+
+## Related pages
+
+- [`Compression`](/agents/compression)
+- [`Knowledge`](/knowledge/overview)
+- [`Memory`](/memory/overview)

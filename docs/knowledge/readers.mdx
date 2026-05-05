@@ -1,0 +1,35 @@
+---
+title: Readers
+description: Load files and external sources into the knowledge ingestion pipeline.
+icon: file-import
+---
+
+Knowledge readers are ingestion components, not the same thing as agent file readers. They convert source files or URLs into `Document` objects before chunking and embedding. When `Knowledge.add(...)` receives a raw string that no reader claims, it falls back to treating that input as plain text content directly.
+
+## Built-in readers
+
+- `TextReader` for local text-like files.
+- `PDFReader` for PDF extraction.
+- `URLReader` for fetched web pages.
+
+## Tested example
+
+```python
+from examples.docs.knowledge_pipeline import main
+
+summary = main()
+
+assert summary["reader_name"] == "note.txt"
+assert summary["reader_content"] == "Plain text content for knowledge ingestion."
+```
+
+## Guidance
+
+- Use explicit readers when you know the source type ahead of time.
+- Let `Knowledge` auto-detect readers when you are ingesting mixed file sets.
+- Use [`File Readers`](/readers/overview) instead when the goal is to preprocess attachments for model input rather than build a knowledge base.
+
+## Related pages
+
+- [`Basic RAG`](/knowledge/usage/basic-rag)
+- [`File Readers`](/readers/overview)

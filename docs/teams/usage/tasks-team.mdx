@@ -1,0 +1,35 @@
+---
+title: Tasks Team
+description: Decompose a goal into tracked tasks and delegate iteratively.
+---
+
+Tasks mode is the autonomous team pattern. The leader maintains a task list, delegates work across several rounds, and stops when the work is complete or the iteration budget is exhausted.
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+
+researcher = Agent(model=MockModel(responses=["research"]), name="researcher")
+designer = Agent(model=MockModel(responses=["design"]), name="designer")
+developer = Agent(model=MockModel(responses=["implementation"]), name="developer")
+
+team = Team(
+    name="product-team",
+    model=MockModel(responses=["task synthesis"]),
+    members=[researcher, designer, developer],
+    mode=TeamMode.tasks,
+    max_iterations=6,
+)
+
+assert team.mode.value == "tasks"
+assert team.max_iterations == 6
+assert team.member_names == ["researcher", "designer", "developer"]
+```
+
+## Related pages
+
+- [`Teams Overview`](/teams/overview)
+- [`Delegation`](/teams/delegation)

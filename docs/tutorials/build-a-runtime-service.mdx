@@ -1,0 +1,46 @@
+---
+title: Build a Runtime Service
+description: Turn an agent into a health-checked HTTP service with a stable local verification loop.
+icon: server
+---
+
+Once the agent behavior is stable, the next step is usually to mount it behind an HTTP service. `AgentServer` is the smallest deployable runtime surface.
+
+## Shape of the build
+
+1. Build the agent first.
+2. Wrap it with `AgentServer`.
+3. Verify `/health` and `/run` locally.
+4. Mount interfaces or observability only after the core app shape is correct.
+
+## Tested example
+
+```python
+from fastapi.testclient import TestClient
+
+from definable.agent import Agent
+from definable.agent.runtime import AgentServer
+from definable.agent.testing import MockModel
+
+agent = Agent(model=MockModel(responses=["pong"]), instructions="Reply briefly.")
+client = TestClient(AgentServer(agent).create_app())
+
+health = client.get("/health")
+run = client.post("/run", json={"input": "ping", "session_id": "docs-session"})
+
+assert health.status_code == 200
+assert health.json()["status"] == "ok"
+assert run.status_code == 200
+assert run.json()["content"] == "pong"
+```
+
+## What to add next
+
+- [`Auth`](/agents/auth) when the runtime should reject unauthorized callers.
+- [`Observability`](/observability/overview) when you need `/obs/` and `/obs/api/*`.
+- interfaces such as WebSocket or Call when the deployment must expose transport-specific routes.
+
+## Related pages
+
+- [`Runtime`](/agents/runtime)
+- [`Production Overview`](/production/overview)

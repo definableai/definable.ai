@@ -1,0 +1,57 @@
+---
+title: Concepts
+sidebarTitle: Overview
+description: Mental models for choosing the right Definable primitive before you dive into module details.
+icon: lightbulb
+---
+
+The API surface is broad, but the runtime model is not. Most architectural decisions come down to a few repeated choices: single-agent vs multi-agent orchestration, retrieval vs recall, grouped tools vs instruction-bearing capabilities, and transport vs long-running supervision.
+
+## Core layers
+
+| Question | Choose this |
+| --- | --- |
+| One model-guided run loop | [`Agent`](/concepts/agent-vs-team-vs-workflow) |
+| Model-led collaboration across specialists | [`Team`](/concepts/agent-vs-team-vs-workflow) |
+| Explicit deterministic step graph | [`Workflow`](/concepts/agent-vs-team-vs-workflow) |
+| External facts and documents | [`Knowledge`](/concepts/knowledge-vs-memory) |
+| Session continuity and prior conversation state | [`Memory`](/concepts/knowledge-vs-memory) |
+| One callable capability | [`Tool`](/concepts/tools-vs-toolkits-vs-skills-vs-mcp) |
+| Grouped tools with shared config | [`Toolkit`](/concepts/tools-vs-toolkits-vs-skills-vs-mcp) |
+| Tools plus instructions and domain framing | [`Skill`](/concepts/tools-vs-toolkits-vs-skills-vs-mcp) |
+| Remote tools, resources, or prompts from MCP servers | [`MCP`](/concepts/tools-vs-toolkits-vs-skills-vs-mcp) |
+| HTTP server and long-running supervision | [`Runtime`](/concepts/runtime-vs-interface) |
+| One transport such as Slack, Telegram, or WebSocket | [`Interface`](/concepts/runtime-vs-interface) |
+
+## Tested example
+
+```python
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+from definable.agent.workflow import Step, Workflow
+
+agent = Agent(model=MockModel(responses=["ok"]), name="solo")
+team = Team(
+    name="triage",
+    model=MockModel(responses=["ok"]),
+    members=[agent],
+    mode=TeamMode.route,
+)
+workflow = Workflow(
+    name="publish",
+    steps=[Step(name="single", executor=lambda step_input: "ok")],
+)
+
+assert agent.agent_name == "solo"
+assert team.mode.value == "route"
+assert workflow.name == "publish"
+```
+
+## Concept pages
+
+- [`Agent vs Team vs Workflow`](/concepts/agent-vs-team-vs-workflow)
+- [`Knowledge vs Memory`](/concepts/knowledge-vs-memory)
+- [`Tools vs Toolkits vs Skills vs MCP`](/concepts/tools-vs-toolkits-vs-skills-vs-mcp)
+- [`Runtime vs Interface`](/concepts/runtime-vs-interface)
+- [`Run Lifecycle`](/concepts/run-lifecycle)

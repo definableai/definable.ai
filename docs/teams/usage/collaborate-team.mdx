@@ -1,0 +1,36 @@
+---
+title: Collaborate Team
+description: Send the same task to several members and let the leader synthesize the result.
+---
+
+Collaborate mode is the right choice when every member should look at the same problem from a different angle before the leader writes the final answer.
+
+## Tested example
+
+```python
+import asyncio
+
+from definable.agent import Agent
+from definable.agent.team import Team, TeamMode
+from definable.agent.testing import MockModel
+
+optimist = Agent(model=MockModel(responses=["Focus on the upside."]), name="optimist")
+pessimist = Agent(model=MockModel(responses=["Focus on the risk."]), name="pessimist")
+
+team = Team(
+    name="analysis-team",
+    model=MockModel(responses=["Balanced summary."]),
+    members=[optimist, pessimist],
+    mode=TeamMode.collaborate,
+)
+
+output = asyncio.run(team.arun("Analyze the launch."))
+
+assert output.content == "Balanced summary."
+assert team.mode.value == "collaborate"
+```
+
+## Related pages
+
+- [`Teams Overview`](/teams/overview)
+- [`Delegation`](/teams/delegation)

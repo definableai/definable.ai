@@ -1,0 +1,44 @@
+---
+title: Multimodal Input
+sidebarTitle: Multimodal
+description: "Pass media objects to agents and model messages through one consistent input surface."
+---
+
+Multimodal inputs are passed as `Image`, `Audio`, `Video`, or `File` objects. Agents accept them directly on `run()` and `arun()`, and the same objects can be attached to `Message` instances for direct model calls.
+
+## Tested input construction
+
+```python
+from definable import Agent
+from definable.agent.testing import MockModel
+from definable.media import Audio, File, Image, Video
+
+agent = Agent(model=MockModel(responses=["Processed multimodal input"]))
+
+image = Image.from_base64("aGVsbG8=", format_="png", mime_type="image/png")
+audio = Audio.from_base64("aGVsbG8=", mime_type="audio/wav")
+video = Video(content=b"123", format="mp4", mime_type="video/mp4")
+document = File.from_base64("aGVsbG8=", mime_type="text/plain", filename="notes.txt", format_="txt")
+
+output = agent.run(
+    "Inspect the attached inputs.",
+    images=[image],
+    audio=[audio],
+    videos=[video],
+    files=[document],
+)
+
+assert output.content == "Processed multimodal input"
+assert image.to_dict()["format"] == "png"
+assert audio.to_dict()["mime_type"] == "audio/wav"
+assert video.to_dict()["format"] == "mp4"
+assert document.to_dict()["filename"] == "notes.txt"
+```
+
+## Notes
+
+- Media container validation happens before the model is called.
+- Provider support still varies. A valid `Audio` object does not mean the current model accepts raw audio.
+- For voice notes routed through interfaces, agent-level transcription is usually the right abstraction.
+
+See [`/models/vision-and-audio`](/models/vision-and-audio) for the model-facing media surface.

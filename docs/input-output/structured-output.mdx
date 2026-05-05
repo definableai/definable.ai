@@ -1,0 +1,50 @@
+---
+title: Structured Output
+sidebarTitle: Structured Output
+description: "Use schemas to constrain model or agent responses."
+---
+
+import OutputSchemaWarning from "../_snippets/output-schema-warning.mdx";
+
+Structured output is how you tell the framework what shape a response should have. In production, supported providers can enforce the schema directly. In local tests, you can still validate the returned JSON against the same schema.
+
+<OutputSchemaWarning />
+
+## Agent-level structured output
+
+```python
+import json
+
+from pydantic import BaseModel, Field
+
+from definable.agent import Agent
+from definable.agent.testing import MockModel
+
+
+class MovieReview(BaseModel):
+    title: str = Field(description="Movie title")
+    rating: float = Field(description="Rating out of 10")
+
+
+agent = Agent(
+    model=MockModel(structured_responses=['{"title":"Inception","rating":9.0}']),
+    instructions="Return JSON that matches the schema.",
+)
+
+output = agent.run("Review Inception", output_schema=MovieReview)
+review = MovieReview.model_validate(json.loads(output.content))
+
+assert review.title == "Inception"
+assert review.rating == 9.0
+```
+
+## Practical guidance
+
+- Use `output_schema=` for agent runs.
+- Keep the schema focused on the fields your application actually consumes.
+- Validate the returned content in downstream code even when the provider supports native structured output.
+
+## Related pages
+
+- [`Supported Models`](/models/overview)
+- [`Running Agents`](/agents/running-agents)

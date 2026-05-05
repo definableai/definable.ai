@@ -1,0 +1,60 @@
+---
+title: Agent with Tools
+description: "Attach tools to an agent and validate the tool loop with a deterministic model."
+---
+
+This example keeps the tool loop local and deterministic by using `MockModel.side_effect` to emit a tool call and then a final answer.
+
+```python
+from unittest.mock import MagicMock
+
+from definable.agent import Agent, MockModel
+from definable.model.metrics import Metrics
+from definable.tool.decorator import tool
+
+
+@tool
+def add(a: int, b: int) -> int:
+    return a + b
+
+
+def tool_calling_model(messages=None, **kwargs):
+    response = MagicMock()
+
+    if not any(getattr(message, "role", None) == "tool" for message in (messages or [])):
+        response.content = ""
+        response.tool_calls = [
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "add", "arguments": '{"a": 2, "b": 3}'},
+            }
+        ]
+    else:
+        response.content = "2 + 3 = 5"
+        response.tool_calls = []
+
+    response.tool_executions = []
+    response.response_usage = Metrics()
+    response.reasoning_content = None
+    response.citations = None
+    response.images = None
+    response.videos = None
+    response.audios = None
+    response.parsed = None
+    return response
+
+
+agent = Agent(
+    model=MockModel(side_effect=tool_calling_model),
+    tools=[add],
+    instructions="Use tools when arithmetic is required.",
+)
+
+output = agent.run("What is 2 + 3?")
+
+assert output.content == "2 + 3 = 5"
+assert [(tool.tool_name, tool.result) for tool in output.tools] == [("add", "5")]
+```
+
+To switch from a deterministic docs example to production, replace `MockModel` with a real chat model and keep the same tool definitions.

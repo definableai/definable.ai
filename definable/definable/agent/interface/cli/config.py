@@ -45,3 +45,4 @@ class CLIConfig(InterfaceConfig):
   max_message_length: int = 100_000
   max_concurrent_requests: int = 1
   tools_expand: str = "success"  # "always" | "success" | "fail" | "both" | "never"
+  permission_mode: str = "ask"  # "ask" | "allow" | "deny"

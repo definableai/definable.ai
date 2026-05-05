@@ -3,17 +3,29 @@ name: Docs
 on:
   pull_request:
     paths:
-      - "definable/docs/**"
+      - "docs/**"
+      - "tests/docs/**"
+      - ".github/workflows/docs.yml"
 
 jobs:
   docs-check:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python dependencies for docs validation
+        run: |
+          pip install -e ".[dev,readers,runtime,discord,slack,jwt,anthropic,google,mistral]"
+      - name: Run executable docs suite
+        run: |
+          pytest tests/docs/test_documentation_examples.py
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
       - name: Install Mintlify CLI
         run: npm i -g mintlify
       - name: Check broken links
-        run: mintlify broken-links --dir definable/docs
+        working-directory: docs
+        run: mintlify broken-links

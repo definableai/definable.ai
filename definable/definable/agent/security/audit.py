@@ -362,22 +362,22 @@ def _check_mcp_toolkits(agent: "Agent", findings: list[SecurityFinding]) -> None
 
 
 def _check_tool_confirmation(agent: "Agent", findings: list[SecurityFinding]) -> None:
-  """Check if shell/exec tools require confirmation."""
+  """Check if shell/exec tools are registered without a ToolPolicy."""
   from definable.agent.security.tool_policy import DEFAULT_DANGEROUS_TOOLS
 
   for tool in agent.tools or []:
     name = getattr(tool, "name", "")
-    requires_confirm = getattr(tool, "requires_confirmation", False)
-    if name in DEFAULT_DANGEROUS_TOOLS and not requires_confirm:
+    if name in DEFAULT_DANGEROUS_TOOLS and not _has_tool_policy(agent):
       findings.append(
         SecurityFinding(
           severity=SecuritySeverity.info,
           category="tools",
-          title=f"Dangerous tool '{name}' without confirmation",
-          description=f"Tool '{name}' is classified as dangerous but does not require user confirmation (requires_confirmation=False).",
-          recommendation=f"Set requires_confirmation=True on the '{name}' tool for human-in-the-loop safety.",
+          title=f"Dangerous tool '{name}' without ToolPolicy",
+          description=f"Tool '{name}' is classified as dangerous and no ToolPolicy is configured to restrict it.",
+          recommendation=f"Add SecurityConfig(tool_policy=ToolPolicy(...)) to control access to '{name}'.",
         )
       )
+      break  # One finding per category is enough
 
 
 def _has_tool_policy(agent: "Agent") -> bool:

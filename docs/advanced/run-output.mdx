@@ -1,0 +1,46 @@
+---
+title: Run Output & Events
+sidebarTitle: Run Output
+description: Understand what `run()` returns and what `run_stream()` emits.
+icon: square-poll-vertical
+---
+
+Every agent execution returns a `RunOutput` object. Streaming execution emits a sequence of run events instead, ending with a `RunCompleted` event.
+
+## Tested run and stream behavior
+
+```python
+from definable import Agent
+from definable.agent.testing import MockModel
+
+run_agent = Agent(model=MockModel(responses=["Hello"]))
+output = run_agent.run("Hi")
+
+assert output.content == "Hello"
+assert output.status.value == "COMPLETED"
+assert output.messages[-1].content == "Hello"
+
+stream_agent = Agent(model=MockModel(responses=["Hello"]))
+events = list(stream_agent.run_stream("Hi again"))
+
+assert events[0].event == "RunStarted"
+assert events[-1].event == "RunCompleted"
+assert "".join(event.content for event in events if event.event == "RunContent") == "Hello"
+```
+
+## What `RunOutput` is for
+
+- Final content and parsed output
+- Message history and model identity
+- Aggregated metrics
+- Pause state and outstanding requirements when human input is needed
+
+## What stream events are for
+
+- Rendering output as it arrives
+- Showing tool and reasoning progress in real time
+- Observing the exact lifecycle of one run without waiting for completion
+
+## Important detail
+
+Not every field is populated on every run. For example, metrics, reasoning data, media outputs, and requirements only appear when that part of the pipeline was actually used.

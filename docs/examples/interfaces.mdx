@@ -1,0 +1,39 @@
+---
+title: Interface Examples
+sidebarTitle: Interfaces
+description: Curated, deterministic interface examples for constructors, gateway wiring, and call modes.
+icon: comments
+---
+
+The docs-facing interface examples are intentionally smaller than the legacy provider demos. They focus on stable constructor patterns, gateway wiring, and transport-specific configuration that can be executed in CI without live platform credentials.
+
+## Curated scripts
+
+- `examples/docs/interfaces_basics.py` covers Telegram, Discord, Slack, Email, WebSocket, WhatsApp, sessions, and identity resolution.
+- `examples/docs/interfaces_call_modes.py` covers managed, cascading, and realtime voice pipeline setup.
+
+## Tested example
+
+```python
+from examples.docs.interfaces_basics import main as interfaces_main
+from examples.docs.interfaces_call_modes import main as call_modes_main
+
+interfaces = interfaces_main()
+call_modes = call_modes_main()
+
+assert interfaces["attached_platforms"] == ["telegram", "discord", "slack"]
+assert interfaces["linked_platforms"] == ["slack", "telegram"]
+assert call_modes["managed_mode"] == "managed"
+assert call_modes["realtime_mode"] == "realtime"
+```
+
+## Recommended usage
+
+- Start from the curated scripts when you need the correct constructor shape.
+- Add your production model and platform credentials after the configuration is stable.
+- Move to the runtime pages once you are ready to supervise real transports.
+
+## Related pages
+
+- [`Interfaces Overview`](/interfaces/overview)
+- [`Runtime`](/agents/runtime)
