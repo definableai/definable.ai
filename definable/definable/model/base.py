@@ -160,6 +160,11 @@ class Model(ABC):
   # True if the Model requires a json_schema for structured outputs (e.g. LMStudio)
   supports_json_schema_outputs: bool = False
 
+  # True if the provider returns cumulative token counts in every streaming
+  # chunk (Perplexity does this). When True, we keep only the latest chunk's
+  # usage instead of summing across deltas — otherwise we double-count.
+  collect_metrics_on_completion: bool = False
+
   # Controls which (if any) function is called by the model.
   # "none" means the model will not call a function and instead generates a message.
   # "auto" means the model can pick between generating a message or calling a function.
@@ -1768,9 +1773,13 @@ class Model(ABC):
       stream_data.response_role = model_response_delta.role  # type: ignore
 
     if model_response_delta.response_usage is not None:
-      if stream_data.response_metrics is None:
-        stream_data.response_metrics = Metrics()
-      stream_data.response_metrics += model_response_delta.response_usage
+      if self.collect_metrics_on_completion:
+        # Provider sends cumulative counts each chunk — keep the latest.
+        stream_data.response_metrics = model_response_delta.response_usage
+      else:
+        if stream_data.response_metrics is None:
+          stream_data.response_metrics = Metrics()
+        stream_data.response_metrics += model_response_delta.response_usage
 
     # Update stream_data content
     if model_response_delta.content is not None:
