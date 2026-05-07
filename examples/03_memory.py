@@ -15,7 +15,7 @@ from definable import Agent
 async def main() -> None:
   agent = Agent(
     name="rememberer",
-    model="anthropic/claude-haiku-4-5-20251001",
+    model="openai/gpt-5.4-mini",
     instructions=(
       "You can save and recall facts via the read_memory / write_memory / "
       "list_memories / search_memory tools. When the user shares info worth "

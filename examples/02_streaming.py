@@ -15,7 +15,7 @@ from definable import Agent, RunCompleted, StreamChunkEvent
 async def main() -> None:
   agent = Agent(
     name="streamer",
-    model="anthropic/claude-haiku-4-5-20251001",
+    model="openai/gpt-5.4-mini",
     instructions="You write three short rhyming couplets.",
   )
   async with agent:

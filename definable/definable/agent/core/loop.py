@@ -92,9 +92,12 @@ async def run(
 
     if assistant_message.content is None and response.content is not None:
       assistant_message.content = response.content
+    # Attach raw tool_calls so downstream tool messages reference a valid prior call.
+    if response.tool_calls and not assistant_message.tool_calls:
+      assistant_message.tool_calls = list(response.tool_calls)
     messages.append(assistant_message)
 
-    tool_calls = _extract_tool_calls(response.tool_executions or [])
+    tool_calls = _extract_tool_calls(response.tool_executions or [], response.tool_calls or [])
     events.emit(
       ModelResponded(
         run_id=run_id,
@@ -176,19 +179,51 @@ async def _call_model(
 
 
 def _build_tool_dicts(tools: ToolRegistry) -> list[dict[str, Any]] | None:
+  """Wrap each Function in the provider-required envelope.
+
+  OpenAI / Anthropic / Mistral / etc all expect:
+      {"type": "function", "function": {<JSON schema>}}
+  """
   fns = tools.all()
   if not fns:
     return None
-  return [fn.to_dict() for fn in fns]
+  return [{"type": "function", "function": fn.to_dict()} for fn in fns]
 
 
-def _extract_tool_calls(executions: list[ToolExecution]) -> list[ToolCall]:
-  """Convert provider ToolExecution objects into harness-internal ToolCall."""
+def _extract_tool_calls(executions: list[ToolExecution], raw_tool_calls: list[dict[str, Any]]) -> list[ToolCall]:
+  """Convert provider tool-call data into harness-internal ToolCall.
+
+  Prefers `ModelResponse.tool_executions` (already-parsed structured form);
+  falls back to `ModelResponse.tool_calls` raw dicts (OpenAI/Anthropic
+  wire format) if executions are empty.
+  """
   calls: list[ToolCall] = []
   for te in executions:
     if te.tool_name is None:
       continue
     calls.append(ToolCall(id=te.tool_call_id or "", name=te.tool_name, args=dict(te.tool_args or {})))
+  if calls:
+    return calls
+  # Fallback: parse the raw OpenAI-shaped tool_calls dicts.
+  import json
+
+  for tc in raw_tool_calls:
+    fn = tc.get("function") or {}
+    name = fn.get("name")
+    if not name:
+      continue
+    raw_args = fn.get("arguments")
+    args: dict[str, Any] = {}
+    if isinstance(raw_args, str):
+      try:
+        parsed = json.loads(raw_args)
+        if isinstance(parsed, dict):
+          args = parsed
+      except json.JSONDecodeError:
+        args = {}
+    elif isinstance(raw_args, dict):
+      args = raw_args
+    calls.append(ToolCall(id=tc.get("id", ""), name=name, args=args))
   return calls
 
 

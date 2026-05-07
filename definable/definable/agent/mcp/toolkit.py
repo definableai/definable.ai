@@ -142,6 +142,16 @@ class MCPToolkit(Toolkit):
       await self._client.disconnect()
       self._client = None
 
+  # ---- AsyncToolkit protocol aliases ---------------------------------------
+  # The new harness drives toolkit lifecycle via aopen() / aclose(). MCPToolkit
+  # predates that rename and exposes initialize() / shutdown(); keep both.
+
+  async def aopen(self) -> None:
+    await self.initialize()
+
+  async def aclose(self) -> None:
+    await self.shutdown()
+
     self._mcp_tools = None
     self._tool_server_map.clear()
     self._dependencies["_mcp_toolkit_client"] = None

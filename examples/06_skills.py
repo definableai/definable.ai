@@ -1,8 +1,6 @@
-"""06 — skill loading.
+"""06 — built-in skills.
 
-Skills are filesystem directories: `SKILL.md` (frontmatter +
-instructions) plus optional `tools.py` (decorated tools) plus optional
-`scripts/` (executables). Pass loaded skills via `skills=[...]`.
+Skills are pre-built capability bundles. Pass instances via `skills=[...]`.
 """
 
 from __future__ import annotations
@@ -10,23 +8,18 @@ from __future__ import annotations
 import asyncio
 
 from definable import Agent
-from definable.agent.skill import load_skills
+from definable.agent.skill import Calculator, DateTime
 
 
 async def main() -> None:
-  # Point at any directory containing SKILL.md folders.
-  # The framework's bundled built-in skills live at:
-  #   definable/definable/agent/skill/builtin/
-  skills = load_skills("definable/definable/agent/skill/builtin")
-
   agent = Agent(
     name="skilled",
-    model="anthropic/claude-sonnet-4-6",
+    model="openai/gpt-5.4-mini",
     instructions="Use the loaded skills when relevant.",
-    skills=skills[:2],  # narrow for the demo
+    skills=[Calculator(), DateTime()],
   )
   async with agent:
-    print((await agent.arun("What can you do?")).content)
+    print((await agent.arun("What's 17 * 23?")).content)
 
 
 if __name__ == "__main__":

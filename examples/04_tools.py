@@ -27,7 +27,7 @@ def shout(text: str) -> str:
 async def main() -> None:
   agent = Agent(
     name="calc",
-    model="anthropic/claude-haiku-4-5-20251001",
+    model="openai/gpt-5.4-mini",
     instructions="Use the available tools. Don't compute in your head when a tool exists.",
     tools=[add, shout],
   )
