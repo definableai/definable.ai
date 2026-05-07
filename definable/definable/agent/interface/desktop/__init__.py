@@ -1,20 +1,5 @@
-"""Definable Desktop — bridge client and optional local WebSocket interface.
+"""Desktop interface — localhost WebSocket for development."""
 
-Provides:
-- :class:`BridgeClient`: Low-level HTTP client for the Swift bridge app.
-- :class:`DesktopConfig`: Configuration for the desktop interface and bridge.
-- :class:`DesktopInterface`: Optional local WebSocket chat interface.
-
-Quick Start::
-
-    from definable.agent.interface.desktop import DesktopInterface
-
-    interface = DesktopInterface(agent=agent, websocket_port=8765)
-"""
-
-from definable.agent.interface.desktop.bridge_client import BridgeClient
-from definable.agent.interface.desktop.config import DesktopConfig
-from definable.agent.interface.desktop.events import BridgeCallEvent, DesktopActionEvent
 from definable.agent.interface.desktop.interface import DesktopInterface
 
-__all__ = ["BridgeClient", "BridgeCallEvent", "DesktopActionEvent", "DesktopConfig", "DesktopInterface"]
+__all__ = ["DesktopInterface"]

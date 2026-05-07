@@ -34,38 +34,65 @@ multi-message responses, typing indicators, etc).
 
 ## Status
 
-| Adapter   | Status | Notes |
-|-----------|--------|-------|
-| websocket | ✅ ported | template — ~95 lines, see `websocket/interface.py` |
-| telegram  | ⏳ stub   | platform glue preserved, port to new `Interface` base |
-| whatsapp  | ⏳ stub   | Twilio + Baileys providers, port to new base |
-| discord   | ⏳ stub   |  |
-| slack     | ⏳ stub   |  |
-| email     | ⏳ stub   | IMAP receive + SMTP send |
-| desktop   | ⏳ stub   |  |
-| call      | ⏳ stub   | Twilio + ConversationRelay |
-| cli       | ❌ removed | use TUI library directly if needed |
+| Adapter   | Status     | Lines (was → now) | Notes |
+|-----------|------------|-------------------|-------|
+| websocket | ✅ ported  | 250 → 95          | FastAPI WS server, JSON wire |
+| email     | ✅ ported  | 391 → 211         | IMAP poll + SMTP send |
+| discord   | ✅ ported  | 404 → 130         | discord.py gateway |
+| telegram  | ✅ ported  | 2,333 → 145       | Bot API long-poll (httpx) |
+| slack     | ✅ ported  | 1,902 → 130       | slack-bolt Socket Mode |
+| whatsapp  | ✅ ported  | 2,162 → 130       | Twilio REST + webhook |
+| desktop   | ✅ ported  | 1,276 → 105       | Localhost WebSocket |
+| call      | ❌ removed | 3,965 → 0         | Voice = different shape (audio streaming, STT/TTS). Spin off as `definable.voice` package when needed. |
+| cli       | ❌ removed | 5,707 → 0         | Use TUI library directly |
 
-Stubs keep their platform-specific code (Telegram bot polling, Baileys Node
-sidecar, Discord intents, Slack websockets, IMAP loop, Twilio webhook handler,
-etc) but reference the deleted `BaseInterface` / `InterfaceHook` /
-`SessionManager` / `IdentityResolver` / `auth` modules. Each port replaces:
+All ported adapters import clean and pass mypy. Live smoke requires platform
+credentials per adapter (telegram bot token, slack workspace, twilio account,
+etc).
 
-- `BaseInterface` -> `Interface` (this file's base)
-- `InterfaceHook` system -> subscribe to `agent.events.on(EventType)`
-- `SessionManager` -> per-conversation state lives in `FileMemory` + the
-  platform's own session/thread model
-- `IdentityResolver` -> resolve in `_convert` if you need user id
-- `auth` -> guard inside `aopen` or `_convert`; reject early
-- multi-interface concurrency -> `asyncio.gather(iface1.serve(), iface2.serve())`
-  (the old `utils/supervisor.py` is gone — orchestrate in user code)
+## Features stripped during port
 
-When porting an adapter, mark it ✅ here. mypy.ini excludes the unported
-adapter directories; remove the entry once a directory is clean.
+Each port focuses on the core text-in/text-out flow. Bell-and-whistle features
+present in the original were removed to keep ports honest:
 
-## Why not port them all today
+- **discord** — media attachments
+- **telegram** — typing circuit breaker, sticker cache, sliding-window rate
+  limiter, formatting helpers, agent-controlled inline keyboards, callback
+  handlers, slash commands
+- **slack** — HTTP webhook mode (Socket Mode only), slash commands, Block Kit
+  actions, modal submissions, shortcuts, reaction events
+- **whatsapp** — Baileys self-hosted Node.js sidecar provider (live agents
+  E-Garuda + Clinic wire Baileys directly via repo-root code), pluggable
+  provider abstraction, DM/group policy module, formatting/normalize helpers
+- **desktop** — macOS Vapor 4 sidecar bridge client (camera, screen, OCR,
+  shell). That belongs as a Toolkit, not embedded in the interface.
 
-Each adapter is ~250-3000 lines of platform-specific glue. Wholesale rewrite
-risks shallow ports. Incremental port-on-demand is the right move — most users
-(per CLAUDE.md note on Anandesh's E-Garuda + Clinic projects) wire Baileys
-directly anyway and don't depend on the framework's adapters.
+To bring any of these back: subclass the adapter and override `handle` or
+subscribe to `agent.events.on(EventType)` from the harness's bus.
+
+## Voice / call
+
+Real-time voice doesn't fit the request/reply Interface contract. The
+original `call/` had 24 files and ~4,000 lines of bidirectional audio
+streaming, STT, TTS, telephony providers (Twilio + Plivo), and three
+pipeline modes (Managed / Cascading / Realtime). When voice agents are
+needed, build a separate `definable.voice` package with its own contract
+(audio in / audio out, barge-in, VAD, etc) — same way `definable.flow` was
+spun off for the workflow-manifest use case.
+
+## CLI
+
+5,707 lines of TUI / commands / completer / renderers — too heavy for the
+framework. Use a TUI library (Textual, prompt-toolkit, Rich) directly in user
+code if you want a terminal REPL.
+
+## Multi-interface concurrency
+
+The old `utils/supervisor.py` (with auto-restart + exponential backoff) is
+gone. Run multiple interfaces concurrently with stdlib instead::
+
+    async def run_all():
+      tg = TelegramInterface(agent, bot_token=...)
+      sl = SlackInterface(agent, bot_token=..., app_token=...)
+      async with tg, sl:
+        await asyncio.gather(tg.serve(), sl.serve())
