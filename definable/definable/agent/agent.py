@@ -45,7 +45,6 @@ class Agent:
     mcp: list[MCPToolkit] | None = None,
     skills: list[Skill] | None = None,
     memory: FileMemory | bool = False,
-    interfaces: list[Any] | None = None,
     session_id: str | None = None,
     max_turns: int = 50,
     observability: Any | bool = False,
@@ -55,7 +54,6 @@ class Agent:
     self.instructions = instructions
     self.memory = _resolve_memory(memory, name)
     self.skills = skills or []
-    self.interfaces = interfaces or []
     self.session_id = session_id or str(uuid4())
     self.max_turns = max_turns
     self.events = EventBus()
