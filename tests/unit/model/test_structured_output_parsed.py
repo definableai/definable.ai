@@ -89,7 +89,7 @@ class TestOpenAIParsedPopulation:
     content = json.dumps({"city": "NYC", "temperature": 72.5, "unit": "fahrenheit"})
     response = self._make_openai_response(content)
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.parsed is not None
     assert isinstance(result.parsed, WeatherResponse)
@@ -120,7 +120,7 @@ class TestOpenAIParsedPopulation:
 
     response = self._make_openai_response("This is not JSON")
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.parsed is None
     assert result.content == "This is not JSON"
@@ -150,7 +150,7 @@ class TestOpenAIParsedPopulation:
     response = self._make_openai_response(None)  # type: ignore[arg-type]
     response.choices[0].message.content = None
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.parsed is None
 
@@ -165,7 +165,7 @@ class TestOpenAIParsedPopulation:
     content = json.dumps({"city": "London", "temperature": 15.0})
     response = self._make_openai_response(content)
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.content == content
     assert result.parsed is not None
@@ -200,7 +200,7 @@ class TestOpenAIParsedPopulation:
     content = json.dumps({"temperature": 72.5})
     response = self._make_openai_response(content)
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.parsed is None
 
@@ -236,7 +236,7 @@ class TestMistralParsedPopulation:
     response.choices = [choice]
     response.usage = None
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.parsed is not None
     assert isinstance(result.parsed, WeatherResponse)
@@ -291,7 +291,7 @@ class TestOllamaParsedPopulation:
       "done": True,
     }
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.parsed is not None
     assert isinstance(result.parsed, WeatherResponse)
@@ -311,7 +311,7 @@ class TestOllamaParsedPopulation:
       "done": True,
     }
 
-    result = model._parse_provider_response(response)
+    result = model._parse_provider_response(response)  # type: ignore[arg-type]
 
     assert result.parsed is None
 
@@ -362,7 +362,7 @@ class TestGeminiParsedPopulation:
 
     model.role_map = {"model": "assistant", "user": "user"}
 
-    result = model._parse_provider_response(response, response_format=WeatherResponse)
+    result = model._parse_provider_response(response, response_format=WeatherResponse)  # type: ignore[arg-type]
 
     assert result.parsed is not None
     assert isinstance(result.parsed, WeatherResponse)
