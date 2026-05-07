@@ -78,8 +78,7 @@ class Agent:
     self._async_toolkits: list[Any] = [tk for tk in [*(toolkits or []), *(mcp or [])] if hasattr(tk, "aopen") and hasattr(tk, "aclose")]
     self._opened = False
 
-    # Observability hook lands in Phase 15; pass-through for now.
-    self._obs = observability
+    self._obs: Any = _resolve_observability(observability, name, self.events)
 
   # ---- lifecycle ----------------------------------------------------------
 
@@ -200,3 +199,19 @@ def _resolve_memory(memory: FileMemory | bool, name: str) -> FileMemory | None:
   if memory is True:
     return FileMemory(Path(".definable/memory") / name)
   return memory
+
+
+def _resolve_observability(observability: Any | bool, name: str, events: EventBus) -> Any:
+  """observability=True wires a default JSONL writer; an instance gets attached as-is."""
+  if observability is False or observability is None:
+    return None
+  from definable.observability import Observability
+
+  if observability is True:
+    return Observability(events, jsonl_path=Path(".definable/traces") / f"{name}.jsonl")
+  if isinstance(observability, Observability):
+    if observability.events is not events:
+      # Re-attach to this agent's bus
+      return Observability(events, jsonl_path=None)
+    return observability
+  return None
