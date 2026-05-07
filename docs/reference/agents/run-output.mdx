@@ -3,13 +3,13 @@ title: RunOutput
 description: Final execution object returned by agentic runs.
 ---
 
-`RunOutput` is the common result object for agentic execution. Agent runs, team runs, and several higher-level flows converge on this shape for final content, metadata, metrics, and user-control state.
+`RunOutput` is the common result object for agentic execution. Agent runs and several higher-level flows converge on this shape for final content, metadata, metrics, and user-control state.
 
 ## Key field groups
 
 | Group | Fields |
 | --- | --- |
-| Identity | `run_id`, `agent_id`, `agent_name`, `session_id`, `parent_run_id`, `workflow_id`, `user_id` |
+| Identity | `run_id`, `agent_id`, `agent_name`, `session_id`, `parent_run_id`, `user_id` |
 | Content | `content`, `parsed`, `content_type` |
 | Reasoning | `reasoning_content`, `reasoning_steps`, `reasoning_messages` |
 | Model metadata | `model`, `model_provider`, `model_provider_data`, `metrics` |

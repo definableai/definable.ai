@@ -34,17 +34,6 @@ def _make_mock_agent(content: str = "Hello world", tool_executions: Optional[lis
   return agent
 
 
-def _make_mock_team(content: str = "Team response"):
-  """Create a mock team with a configurable arun() response."""
-  team = MagicMock()
-  output = MagicMock()
-  output.content = content
-  output.tool_executions = []
-  output.messages = []
-  team.arun = AsyncMock(return_value=output)
-  return team
-
-
 def _make_mock_judge_model(response_content: str = '{"score": 8, "reason": "Good"}'):
   """Create a mock model for judge evals."""
   model = MagicMock()
@@ -315,16 +304,6 @@ class TestAccuracyEval:
     assert result.threshold == 9.0  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
-  async def test_team_eval(self):
-    team = _make_mock_team(content="Team result")
-    ev = AccuracyEval(threshold=7.0)
-    ev._judge = _make_mock_judge_model('{"score": 8, "reason": "Good"}')
-
-    result = await ev.evaluate_team(team, EvalCase(input="q", expected="a"))
-    assert result.success is True
-    assert result.actual == "Team result"  # type: ignore[attr-defined]
-
-  @pytest.mark.asyncio
   async def test_batch(self):
     agent = _make_mock_agent(content="answer")
     ev = AccuracyEval(threshold=5.0)
@@ -433,15 +412,6 @@ class TestPerformanceEval:
 
     await ev.arun(agent, EvalCase(input="hello"))
     assert agent.arun.await_count == 3  # 2 warmup + 1 profiling
-
-  @pytest.mark.asyncio
-  async def test_team_eval(self):
-    team = _make_mock_team(content="team fast")
-    ev = PerformanceEval(runs=1)
-
-    result = await ev.evaluate_team(team, EvalCase(input="hello"))
-    assert result.success is True
-    assert result.runs == 1  # type: ignore[attr-defined]
 
   @pytest.mark.asyncio
   async def test_agent_failure_still_records(self):
@@ -553,20 +523,6 @@ class TestReliabilityEval:
     assert "Execution failed" in (result.reason or "")
 
   @pytest.mark.asyncio
-  async def test_team_eval(self):
-    te1 = MagicMock()
-    te1.function_name = "search_web"
-    te1.tool_name = "search_web"
-
-    team = _make_mock_team(content="team result")
-    team_output = team.arun.return_value
-    team_output.tool_executions = [te1]
-
-    ev = ReliabilityEval(expected_tools=["search_web"])
-    result = await ev.evaluate_team(team, EvalCase(input="test"))
-    assert result.success is True
-
-  @pytest.mark.asyncio
   async def test_fallback_message_tool_calls(self):
     """When tool_executions is empty, fall back to scanning messages."""
     msg = MagicMock()
@@ -650,15 +606,6 @@ class TestAgentAsJudgeEval:
     result = await ev.arun(agent, case)
     assert result.success is True
     assert result.criteria == "Custom criteria"  # type: ignore[attr-defined]
-
-  @pytest.mark.asyncio
-  async def test_team_eval(self):
-    team = _make_mock_team(content="Team output")
-    ev = AgentAsJudgeEval(criteria="Must be professional", mode="numeric", threshold=7.0)
-    ev._judge = _make_mock_judge_model('{"score": 8, "reason": "Professional"}')
-
-    result = await ev.evaluate_team(team, EvalCase(input="test"))
-    assert result.success is True
 
   @pytest.mark.asyncio
   async def test_agent_failure(self):
@@ -846,20 +793,6 @@ class TestBaseEval:
   def test_cannot_instantiate_directly(self):
     with pytest.raises(TypeError):
       BaseEval()  # type: ignore[abstract]
-
-  @pytest.mark.asyncio
-  async def test_team_eval_not_implemented_by_default(self):
-    """Custom eval without evaluate_team should raise NotImplementedError."""
-
-    class MinimalEval(BaseEval):
-      name = "minimal"
-
-      async def evaluate(self, agent, case):
-        return EvalResult(eval_name=self.name, success=True)
-
-    ev = MinimalEval()
-    with pytest.raises(NotImplementedError, match="does not support team"):
-      await ev.evaluate_team(MagicMock(), EvalCase(input="test"))
 
   @pytest.mark.asyncio
   async def test_custom_eval(self):

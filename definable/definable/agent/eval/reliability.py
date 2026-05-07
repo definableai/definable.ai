@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 from uuid import uuid4
 
 from definable.agent.eval.base import BaseEval, EvalCase
@@ -12,7 +12,6 @@ from definable.utils.log import log_error
 
 if TYPE_CHECKING:
   from definable.agent.agent import Agent
-  from definable.agent.team.team import Team
 
 
 @dataclass
@@ -41,19 +40,6 @@ class ReliabilityEval(BaseEval):
 
   async def evaluate(self, agent: "Agent", case: EvalCase) -> ReliabilityResult:
     """Run the agent and verify tool calls."""
-    return await self._check(agent, None, case)
-
-  async def evaluate_team(self, team: "Team", case: EvalCase) -> ReliabilityResult:
-    """Run the team and verify tool calls."""
-    return await self._check(None, team, case)
-
-  async def _check(
-    self,
-    agent: Optional["Agent"],
-    team: Optional["Team"],
-    case: EvalCase,
-  ) -> ReliabilityResult:
-    """Core tool-check logic."""
     # Use case-level expected_tools override if provided
     expected = case.metadata.get("expected_tools", self.expected_tools)
     if not expected:
@@ -64,18 +50,9 @@ class ReliabilityEval(BaseEval):
         expected_tools=[],
       )
 
-    # Run agent/team
+    # Run agent
     try:
-      if agent:
-        output = await agent.arun(case.input)
-      elif team:
-        output = await team.arun(case.input)
-      else:
-        return ReliabilityResult(
-          eval_name=self.name,
-          success=False,
-          reason="No agent or team provided.",
-        )
+      output = await agent.arun(case.input)
     except Exception as e:
       log_error(f"ReliabilityEval: execution failed: {e}")
       return ReliabilityResult(

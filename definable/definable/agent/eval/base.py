@@ -12,7 +12,6 @@ from definable.utils.log import log_info
 
 if TYPE_CHECKING:
   from definable.agent.agent import Agent
-  from definable.agent.team.team import Team
 
 
 @dataclass
@@ -119,18 +118,6 @@ class BaseEval(ABC):
     """
     ...
 
-  async def evaluate_team(
-    self,
-    team: "Team",
-    case: EvalCase,
-  ) -> EvalResult:
-    """Run a single evaluation case against a team.
-
-    Default implementation raises NotImplementedError.
-    Override in subclasses that support team evaluation.
-    """
-    raise NotImplementedError(f"{self.__class__.__name__} does not support team evaluation.")
-
   async def arun(
     self,
     agent: "Agent",
@@ -138,14 +125,6 @@ class BaseEval(ABC):
   ) -> EvalResult:
     """Execute a single eval case. Convenience wrapper around evaluate()."""
     return await self.evaluate(agent, case)
-
-  async def arun_team(
-    self,
-    team: "Team",
-    case: EvalCase,
-  ) -> EvalResult:
-    """Execute a single eval case against a team."""
-    return await self.evaluate_team(team, case)
 
   async def arun_batch(
     self,
@@ -167,18 +146,5 @@ class BaseEval(ABC):
     for i, case in enumerate(cases):
       log_info(f"[{self.name}] Running case {i + 1}/{len(cases)}: {case.name or case.input[:50]}")
       result = await self.evaluate(agent, case)
-      suite.results.append(result)
-    return suite
-
-  async def arun_batch_team(
-    self,
-    team: "Team",
-    cases: List[EvalCase],
-  ) -> EvalSuite:
-    """Run multiple eval cases against a team."""
-    suite = EvalSuite(eval_name=self.name)
-    for i, case in enumerate(cases):
-      log_info(f"[{self.name}] Running team case {i + 1}/{len(cases)}: {case.name or case.input[:50]}")
-      result = await self.evaluate_team(team, case)
       suite.results.append(result)
     return suite

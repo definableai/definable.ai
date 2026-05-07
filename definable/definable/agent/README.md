@@ -1,6 +1,6 @@
 # agent
 
-The central module for building LLM-powered agents. Provides the `Agent` class plus 72 exports spanning orchestration, middleware, tracing, security, evaluation, multi-agent coordination, workflow, scheduling, and plugins.
+The central module for building LLM-powered agents. Provides the `Agent` class plus exports spanning orchestration, middleware, tracing, security, evaluation, multi-agent coordination, workflow, and scheduling.
 
 ## Quick Start
 
@@ -49,10 +49,8 @@ agent/
 ├── replay/              # Trace replay + comparison
 ├── security/            # SecurityConfig, ToolPolicy, SSRF, rate limiting
 ├── eval/                # AccuracyEval, PerformanceEval, ReliabilityEval, AgentAsJudgeEval
-├── team/                # Team multi-agent coordination
 ├── workflow/            # Workflow orchestration (Step, Parallel, Loop, …)
 ├── scheduler/           # Scheduler, ScheduledJob, JobStore
-├── plugin/              # Plugin, PluginRegistry
 └── runtime/             # AgentRuntime (HTTP server + lifecycle)
 ```
 
@@ -89,8 +87,6 @@ agent = Agent(
   debug=False,  # color-coded per-turn debug output
   # Audio
   audio_transcriber=True,  # Whisper transcription; or OpenAITranscriber(...)
-  # Plugins
-  plugins=[...],  # list[Plugin]
   # Guardrails & config
   guardrails=Guardrails(...),
   config=AgentConfig(...),
@@ -294,40 +290,6 @@ print(suite.pass_rate)
 
 See [`eval/README.md`](eval/README.md) for full details.
 
-### Team
-
-```python
-from definable.agent import Team, TeamMode
-```
-
-Multi-agent coordination — a leader model delegates to specialist members.
-
-| Mode | Behavior |
-|------|----------|
-| `coordinate` | Leader picks the best member(s) per request |
-| `route` | Leader routes to exactly one specialist |
-| `collaborate` | All members run in parallel; leader synthesizes |
-| `tasks` | Leader decomposes into a dependency-tracked `TaskList` |
-
-```python
-from definable.agent import Agent, Team, TeamMode
-
-researcher = Agent(model="openai/gpt-4o", instructions="Research specialist.")
-writer = Agent(model="openai/gpt-4o", instructions="Technical writer.")
-
-team = Team(
-  name="content-team",
-  model="openai/gpt-4o",
-  members=[researcher, writer],
-  mode=TeamMode.coordinate,
-  instructions="Produce well-researched technical content.",
-)
-result = await team.arun("Write about quantum computing")
-print(result.content)
-```
-
-See [`team/README.md`](team/README.md) for full details.
-
 ### Workflow
 
 ```python
@@ -342,11 +304,11 @@ from definable.agent import (
 )
 ```
 
-Composable multi-step orchestration. Each `Step` wraps an agent, team, or callable.
+Composable multi-step orchestration. Each `Step` wraps an agent or callable.
 
 | Type | Behavior |
 |------|----------|
-| `Step` | Single execution unit wrapping `agent=`, `team=`, or `executor=` |
+| `Step` | Single execution unit wrapping `agent=` or `executor=` |
 | `Steps` | Sequential — each step receives the previous step's output |
 | `Parallel` | Concurrent — all steps run simultaneously |
 | `Loop` | Iterative — runs until `end_condition` returns `True` or `max_iterations` |
@@ -437,31 +399,6 @@ The 8-phase execution backbone that powers every `agent.arun()` call. Most users
 
 See [`pipeline/README.md`](pipeline/README.md) for full details.
 
-### Plugins
-
-```python
-from definable.agent import Plugin, PluginRegistry
-```
-
-The plugin system provides a structured extension point for adding capabilities to agents without modifying the core.
-
-```python
-from definable.agent import Plugin, PluginRegistry, Agent
-
-
-class MyPlugin(Plugin):
-  name = "my-plugin"
-
-  def install(self, agent: Agent) -> None:
-    # Attach tools, middleware, hooks, etc.
-    ...
-
-
-agent = Agent(model="gpt-4o", plugins=[MyPlugin()])
-```
-
-See [`plugin/README.md`](plugin/README.md) for full details.
-
 ### Usage Tracking
 
 ```python
@@ -546,7 +483,6 @@ from definable.agent import MockModel, AgentTestCase, create_test_agent
 | `guardrail/` | [`guardrail/README.md`](guardrail/README.md) — Input / output / tool guardrails |
 | `interface/` | [`interface/README.md`](interface/README.md) — Telegram, Discord, Slack, Call, Desktop, CLI |
 | `pipeline/` | [`pipeline/README.md`](pipeline/README.md) — 8-phase execution pipeline |
-| `plugin/` | [`plugin/README.md`](plugin/README.md) — Plugin system |
 | `reasoning/` | [`reasoning/README.md`](reasoning/README.md) — Thinking / inner monologue |
 | `replay/` | [`replay/README.md`](replay/README.md) — Trace replay and comparison |
 | `research/` | [`research/README.md`](research/README.md) — Deep research pipeline |
@@ -554,7 +490,6 @@ from definable.agent import MockModel, AgentTestCase, create_test_agent
 | `runtime/` | [`runtime/README.md`](runtime/README.md) — HTTP server and AgentRuntime |
 | `scheduler/` | [`scheduler/README.md`](scheduler/README.md) — Scheduler, ScheduledJob, JobStore |
 | `security/` | [`security/README.md`](security/README.md) — SecurityConfig, ToolPolicy, SSRF, rate limiting |
-| `team/` | [`team/README.md`](team/README.md) — Multi-agent coordination |
 | `trigger/` | [`trigger/README.md`](trigger/README.md) — Webhook, Cron, Interval, OneShot |
 | `workflow/` | [`workflow/README.md`](workflow/README.md) — Workflow orchestration |
 | `../model/` | LLM provider implementations (10 providers) |

@@ -12,7 +12,7 @@ The tool signature is the contract the model sees. Definable turns the callable'
 - Primitive hints become JSON Schema scalar types.
 - `Literal[...]` and `Enum` values become `enum` constraints.
 - `pydantic.BaseModel` parameters become nested object schemas.
-- Runtime-only parameters such as `agent`, `team`, `run_context`, `session_state`, and `dependencies` are excluded from the schema.
+- Runtime-only parameters such as `agent`, `run_context`, `session_state`, and `dependencies` are excluded from the schema.
 
 ## Tested example
 

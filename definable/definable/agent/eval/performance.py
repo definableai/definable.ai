@@ -14,7 +14,6 @@ from definable.utils.log import log_error, log_info
 
 if TYPE_CHECKING:
   from definable.agent.agent import Agent
-  from definable.agent.team.team import Team
 
 
 @dataclass
@@ -52,19 +51,6 @@ class PerformanceEval(BaseEval):
 
   async def evaluate(self, agent: "Agent", case: EvalCase) -> PerformanceResult:
     """Run the agent multiple times and profile performance."""
-    return await self._profile(agent, None, case)
-
-  async def evaluate_team(self, team: "Team", case: EvalCase) -> PerformanceResult:
-    """Run the team multiple times and profile performance."""
-    return await self._profile(None, team, case)
-
-  async def _profile(
-    self,
-    agent: Optional["Agent"],
-    team: Optional["Team"],
-    case: EvalCase,
-  ) -> PerformanceResult:
-    """Core profiling logic shared between agent and team."""
     durations: list[float] = []
     peak_memory_mb = 0.0
 
@@ -72,10 +58,7 @@ class PerformanceEval(BaseEval):
     for i in range(self.warmup_runs):
       log_info(f"[{self.name}] Warmup run {i + 1}/{self.warmup_runs}")
       try:
-        if agent:
-          await agent.arun(case.input)
-        elif team:
-          await team.arun(case.input)
+        await agent.arun(case.input)
       except Exception as e:
         log_error(f"PerformanceEval: warmup run failed: {e}")
 
@@ -88,10 +71,7 @@ class PerformanceEval(BaseEval):
 
       start = time()
       try:
-        if agent:
-          await agent.arun(case.input)
-        elif team:
-          await team.arun(case.input)
+        await agent.arun(case.input)
       except Exception as e:
         log_error(f"PerformanceEval: profiling run {i + 1} failed: {e}")
       finally:

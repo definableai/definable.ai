@@ -169,8 +169,6 @@ class Agent:
     security: Union[bool, Any, None] = None,
     # ── Usage Tracking ───────────────────────────────────────
     usage: Union[bool, Any, None] = None,
-    # ── Plugins ──────────────────────────────────────────────
-    plugins: Optional[List[Any]] = None,
     # ── Interfaces ──────────────────────────────────────────
     interfaces: Union["BaseInterface", List["BaseInterface"], None] = None,
     gateway: Optional["InterfaceGateway"] = None,
@@ -257,7 +255,6 @@ class Agent:
       resolve_deferred_tools,
       resolve_knowledge,
       resolve_observability,
-      resolve_plugins,
       resolve_security,
       resolve_sub_agents,
       resolve_thinking,
@@ -277,11 +274,10 @@ class Agent:
     self._deep_research_config, self._prebuilt_researcher = resolve_deep_research(deep_research)
     self._sub_agent_policy = resolve_sub_agents(sub_agents)
 
-    # Audio, security, usage, plugins
+    # Audio, security, usage
     self._audio_transcriber = resolve_audio_transcriber(audio_transcriber)
     self._security, self.guardrails = resolve_security(security, self.guardrails)
     self._usage_tracker = resolve_usage(usage)
-    self._plugin_registry, self._plugins_loaded = resolve_plugins(plugins)
 
     # Convert skill_registry to on-demand skill (model picks skills based on query)
     if skill_registry is not None:
@@ -819,11 +815,6 @@ class Agent:
         raise TypeError(
           f"output_schema must be a Pydantic BaseModel subclass, got {output_schema!r}. Example: output_schema=MyModel where MyModel(BaseModel)."
         )
-
-    # Load plugins on first run (async lifecycle)
-    if not self._plugins_loaded and len(self._plugin_registry) > 0:
-      await self._plugin_registry.load_all(self)
-      self._plugins_loaded = True
 
     # Build initial LoopState from arguments
     state = self._build_initial_state(
@@ -1865,40 +1856,6 @@ class Agent:
     for trigger in schedulable:
       sched.add(trigger)
     return sched
-
-  # --- Plugins ---
-
-  @property
-  def plugin_registry(self) -> Any:
-    """Return the PluginRegistry."""
-    return self._plugin_registry
-
-  def use_plugin(self, plugin: Any) -> "Agent":
-    """Register a plugin (loaded on next arun()).
-
-    Args:
-      plugin: Plugin instance to register.
-
-    Returns:
-      Self for chaining.
-    """
-    self._plugin_registry.add(plugin)
-    self._plugins_loaded = False  # Force reload on next run
-    return self
-
-  async def remove_plugin(self, name: str) -> "Agent":
-    """Unload and remove a plugin by name.
-
-    Args:
-      name: Plugin name to remove.
-
-    Returns:
-      Self for chaining.
-    """
-    if self._plugin_registry.is_loaded(name):
-      await self._plugin_registry.unload_one(name, self)
-    self._plugin_registry.remove(name)
-    return self
 
   # --- Interfaces ---
 

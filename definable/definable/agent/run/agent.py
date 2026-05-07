@@ -223,12 +223,6 @@ class BaseAgentRunEvent(BaseRunOutputEvent):
   parent_run_id: Optional[str] = None
   session_id: Optional[str] = None
 
-  # Step context for workflow execution
-  workflow_id: Optional[str] = None
-  workflow_run_id: Optional[str] = None
-  step_id: Optional[str] = None
-  step_name: Optional[str] = None
-  step_index: Optional[int] = None
   tools: Optional[List[ToolExecution]] = None
 
   # For backwards compatibility
@@ -263,7 +257,6 @@ class RunContentEvent(BaseAgentRunEvent):
 
   event: str = RunEvent.run_content.value
   content: Optional[Any] = None
-  workflow_agent: bool = False  # Used by consumers of the events to distinguish between workflow agent and regular agent
   content_type: str = "str"
   reasoning_content: Optional[str] = None
   model_provider_data: Optional[Dict[str, Any]] = None
@@ -831,14 +824,13 @@ def run_output_event_from_dict(data: dict) -> BaseRunOutputEvent:
 
 @dataclass
 class RunOutput:
-  """Response returned by Agent.run() or Workflow.run() functions"""
+  """Response returned by Agent.run()"""
 
   run_id: Optional[str] = None
   agent_id: Optional[str] = None
   agent_name: Optional[str] = None
   session_id: Optional[str] = None
   parent_run_id: Optional[str] = None
-  workflow_id: Optional[str] = None
   user_id: Optional[str] = None
 
   # Input media and messages from user
@@ -885,11 +877,6 @@ class RunOutput:
 
   # User control flow (HITL) requirements to continue a run when paused, in order of arrival
   requirements: Optional[list[RunRequirement]] = None
-
-  # === FOREIGN KEY RELATIONSHIPS ===
-  # These fields establish relationships to parent workflow/step structures
-  # and should be treated as foreign keys for data integrity
-  workflow_step_id: Optional[str] = None  # FK: Points to StepOutput.step_id
 
   @property
   def active_requirements(self) -> list[RunRequirement]:

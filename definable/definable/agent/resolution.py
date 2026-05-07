@@ -345,17 +345,6 @@ def resolve_usage(usage: "Union[bool, Any, None]") -> Any:
   return None
 
 
-def resolve_plugins(plugins: Optional[List[Any]]) -> "tuple[Any, bool]":
-  """Resolve plugins param. Returns (plugin_registry, plugins_loaded)."""
-  from definable.agent.plugin.registry import PluginRegistry as _PluginRegistry
-
-  registry = _PluginRegistry()
-  if plugins:
-    for p in plugins:
-      registry.add(p)
-  return registry, False
-
-
 # ---------------------------------------------------------------------------
 # Context / compression / deferred tools resolution
 # ---------------------------------------------------------------------------

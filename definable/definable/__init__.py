@@ -87,7 +87,6 @@ if TYPE_CHECKING:
   from definable.model.ollama import Ollama
   from definable.model.openrouter import OpenRouter
   from definable.agent.observability import ObservabilityConfig
-  from definable.claude_code import ClaudeCodeAgent
   from definable.reader.audio import OpenAITranscriber
   from definable.skill.registry import SkillRegistry
 
@@ -122,8 +121,6 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   "Guardrails": ("definable.agent.guardrail", "Guardrails"),
   # Skills
   "SkillRegistry": ("definable.skill.registry", "SkillRegistry"),
-  # Claude Code
-  "ClaudeCodeAgent": ("definable.claude_code", "ClaudeCodeAgent"),
   # New blocks
   "Thinking": ("definable.agent.reasoning", "Thinking"),
   "Tracing": ("definable.agent.tracing", "Tracing"),
@@ -208,8 +205,6 @@ __all__ = [
   "Guardrails",
   # Lazy — Skills
   "SkillRegistry",
-  # Lazy — Claude Code
-  "ClaudeCodeAgent",
   # Lazy — New blocks
   "Thinking",
   "Tracing",

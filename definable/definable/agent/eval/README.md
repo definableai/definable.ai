@@ -28,14 +28,13 @@ BaseEval.arun(agent, case) ──► agent.arun(case.input) ──► EvalResult
   │  (batch)                                                  │
   ▼                                                           ▼
 BaseEval.arun_batch(agent, [cases]) ──────────────────► EvalSuite
-  │                                                      ├── .total
-  │  (team)                                              ├── .passed
-  ▼                                                      ├── .failed
-BaseEval.arun_team(team, case)                           └── .pass_rate
-BaseEval.arun_batch_team(team, [cases])
+                                                         ├── .total
+                                                         ├── .passed
+                                                         ├── .failed
+                                                         └── .pass_rate
 ```
 
-All four eval types (Accuracy, Performance, Reliability, AgentAsJudge) follow the same interface. They accept both individual `Agent` instances and `Team` instances.
+All four eval types (Accuracy, Performance, Reliability, AgentAsJudge) follow the same interface.
 
 ---
 
@@ -89,7 +88,7 @@ case = EvalCase(
 
 ### EvalSuite
 
-Collection of results from running multiple cases. Returned by `arun_batch()` and `arun_batch_team()`.
+Collection of results from running multiple cases. Returned by `arun_batch()`.
 
 ```python
 from definable.agent.eval import EvalSuite
@@ -134,11 +133,8 @@ class MyCustomEval(BaseEval):
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `evaluate` | `(agent, case) -> EvalResult` | Abstract. Single case against an agent. |
-| `evaluate_team` | `(team, case) -> EvalResult` | Single case against a team. Override in subclass. |
 | `arun` | `(agent, case) -> EvalResult` | Convenience wrapper around `evaluate`. |
-| `arun_team` | `(team, case) -> EvalResult` | Convenience wrapper around `evaluate_team`. |
 | `arun_batch` | `(agent, cases) -> EvalSuite` | Run multiple cases sequentially. |
-| `arun_batch_team` | `(team, cases) -> EvalSuite` | Run multiple cases against a team sequentially. |
 
 ---
 
@@ -352,34 +348,6 @@ import json
 print(json.dumps(suite.to_dict(), indent=2))
 ```
 
-### Team Evaluation
-
-All eval types support evaluating `Team` instances:
-
-```python
-from definable.agent.eval import AccuracyEval, EvalCase
-from definable.agent.team import Team, TeamMode
-
-team = Team(
-  name="research-team",
-  model="openai/gpt-4o",
-  members=[researcher, writer],
-  mode=TeamMode.coordinate,
-)
-
-eval = AccuracyEval(threshold=8.0)
-result = await eval.arun_team(
-  team,
-  EvalCase(
-    input="Write about quantum computing",
-    expected="A well-researched article about quantum computing...",
-  ),
-)
-
-# Batch team evaluation
-suite = await eval.arun_batch_team(team, cases)
-```
-
 ### Multi-Dimensional Evaluation
 
 Combine multiple eval types for a comprehensive assessment:
@@ -452,4 +420,3 @@ suite = await eval.arun_batch(agent, [case1, case2, case3])
 | Judge model API errors | All judge-based evals (Accuracy, AgentAsJudge) return `score=0.0, success=False` with an error reason if the judge model call fails. They do not raise exceptions. |
 | `PerformanceEval` and `tracemalloc` | Starts/stops `tracemalloc` on each profiling run. If your code also uses `tracemalloc`, results may conflict. |
 | `arun_batch` runs sequentially | Cases execute one at a time. For parallel execution, use `asyncio.gather` with individual `arun()` calls. |
-| `evaluate_team` not implemented on `BaseEval` | The default raises `NotImplementedError`. All four built-in evals override it, but custom evals must explicitly implement it to support teams. |
