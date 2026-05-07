@@ -141,7 +141,6 @@ DOC_PAGES = [
   "docs/agents/usage/agent-with-streaming.mdx",
   "docs/agents/usage/agent-with-structured-output.mdx",
   "docs/agents/usage/agent-with-tools.mdx",
-  "docs/claude-code/overview.mdx",
   "docs/introduction.mdx",
   "docs/installation.mdx",
   "docs/knowledge/pipeline/chunkers.mdx",

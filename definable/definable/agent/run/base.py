@@ -266,10 +266,12 @@ class BaseRunOutputEvent:
     if metrics:
       data["metrics"] = Metrics(**metrics)
 
-    # Filter data to only include fields that are actually defined in the target class
+    # Filter data to only include fields that are actually defined in the target class.
+    # Skip init=False fields (e.g. _COMPLEX_FIELDS class config) — passing them as kwargs
+    # would fail the constructor.
     from dataclasses import fields
 
-    supported_fields = {f.name for f in fields(cls)}
+    supported_fields = {f.name for f in fields(cls) if f.init}
     filtered_data = {k: v for k, v in data.items() if k in supported_fields}
 
     return cls(**filtered_data)
