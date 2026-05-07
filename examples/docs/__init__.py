@@ -1,1 +1,0 @@
-"""Deterministic documentation examples."""
