@@ -147,7 +147,7 @@ def _format_image_for_message(image: Image) -> Optional[Dict[str, Any]]:
     return None
 
 
-def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
+def _format_file_for_message(file: File, cite_documents: bool = True) -> Optional[Dict[str, Any]]:
   """
   Add a document url or base64 encoded content to a message.
   """
@@ -187,7 +187,7 @@ def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
         "type": "url",
         "url": file.url,
       },
-      "citations": {"enabled": True},
+      **({"citations": {"enabled": True}} if cite_documents else {}),
     }
   # Case 2: Document is a local file path
   elif file.filepath is not None:
@@ -216,7 +216,7 @@ def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
             "media_type": "text/plain",
             "data": raw_bytes.decode("utf-8", errors="replace"),
           },
-          "citations": {"enabled": True},
+          **({"citations": {"enabled": True}} if cite_documents else {}),
         }
       else:
         return {
@@ -226,7 +226,7 @@ def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
             "media_type": media_type,
             "data": base64.standard_b64encode(raw_bytes).decode("utf-8"),
           },
-          "citations": {"enabled": True},
+          **({"citations": {"enabled": True}} if cite_documents else {}),
         }
     else:
       log_error(f"Document file not found: {file}")
@@ -245,7 +245,7 @@ def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
           "media_type": "text/plain",
           "data": file.content.decode("utf-8", errors="replace"),
         },
-        "citations": {"enabled": True},
+        **({"citations": {"enabled": True}} if cite_documents else {}),
       }
     else:
       import base64
@@ -257,18 +257,26 @@ def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
           "media_type": media_type,
           "data": base64.standard_b64encode(file.content).decode("utf-8"),
         },
-        "citations": {"enabled": True},
+        **({"citations": {"enabled": True}} if cite_documents else {}),
       }
   return None
 
 
-def format_messages(messages: List[Message], compress_tool_results: bool = False) -> Tuple[List[Any], str]:
+def format_messages(
+  messages: List[Message],
+  compress_tool_results: bool = False,
+  cite_documents: bool = True,
+) -> Tuple[List[Any], str]:
   """
   Process the list of messages and separate them into API messages and system messages.
 
   Args:
     messages (List[Message]): The list of messages to process.
     compress_tool_results: Whether to compress tool results.
+    cite_documents: When True, attaches ``citations.enabled=True`` to document
+      blocks so Claude returns citation metadata. Set to False when an
+      ``output_format`` is in play — Anthropic rejects requests that combine
+      citations with structured output.
 
   Returns:
     Tuple[List[Dict[str, Union[str, list]]], str]: A tuple containing the list of API messages and the concatenated system messages.
@@ -295,7 +303,7 @@ def format_messages(messages: List[Message], compress_tool_results: bool = False
 
       if message.files is not None:
         for file in message.files:
-          file_content = _format_file_for_message(file)
+          file_content = _format_file_for_message(file, cite_documents=cite_documents)
           if file_content:
             content.append(file_content)
 

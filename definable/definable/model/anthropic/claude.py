@@ -2,13 +2,28 @@ import json
 from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass
 from os import getenv
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Type, Union
+from typing import Any, Dict, Iterator, List, Literal, NoReturn, Optional, Sequence, Type, Union
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
+
+class SystemPromptBlock(BaseModel):
+  """A typed slice of the system prompt with per-block cache control.
+
+  Pass a list of these to ``Claude.system_prompt_blocks`` when you want
+  finer-grained caching than the model-wide ``cache_system_prompt`` flag.
+  ``cache=True`` adds ``cache_control`` to the block; ``ttl`` overrides
+  ``extended_cache_time`` for this block only.
+  """
+
+  text: str
+  cache: bool = True
+  ttl: Optional[Literal["5m", "1h"]] = None
+
+
 from definable.agent.events import RunOutput
-from definable.exceptions import ModelProviderError, ModelRateLimitError
+from definable.exceptions import ContextWindowExceededError, ModelProviderError, ModelRateLimitError
 from definable.model.base import Model
 from definable.model.message import Citations, DocumentCitation, Message, UrlCitation
 from definable.model.metrics import Metrics
@@ -107,6 +122,9 @@ class Claude(Model):
   top_k: Optional[int] = None
   cache_system_prompt: Optional[bool] = False
   extended_cache_time: Optional[bool] = False
+  # Optional per-block system prompt cache control. Takes precedence over
+  # cache_system_prompt + extended_cache_time when set.
+  system_prompt_blocks: Optional[List[SystemPromptBlock]] = None
   request_params: Optional[Dict[str, Any]] = None
 
   # Anthropic beta and experimental features
@@ -377,7 +395,7 @@ class Claude(Model):
     tools: Optional[Sequence[Union[Function, Dict[str, Any]]]] = None,
     output_schema: Optional[Union[Dict, Type[BaseModel]]] = None,
   ) -> int:
-    anthropic_messages, system_prompt = format_messages(messages, compress_tool_results=True)
+    anthropic_messages, system_prompt = format_messages(messages, compress_tool_results=True, cite_documents=output_schema is None)
     anthropic_tools = None
     if tools:
       formatted_tools = self._format_tools(list(tools))
@@ -398,7 +416,7 @@ class Claude(Model):
     tools: Optional[Sequence[Union[Function, Dict[str, Any]]]] = None,
     output_schema: Optional[Union[Dict, Type[BaseModel]]] = None,
   ) -> int:
-    anthropic_messages, system_prompt = format_messages(messages, compress_tool_results=True)
+    anthropic_messages, system_prompt = format_messages(messages, compress_tool_results=True, cite_documents=output_schema is None)
     anthropic_tools = None
     if tools:
       formatted_tools = self._format_tools(list(tools))
@@ -474,7 +492,10 @@ class Claude(Model):
     self._validate_structured_outputs_usage(response_format, tools)
 
     request_kwargs = self.get_request_params(response_format=response_format, tools=tools).copy()
-    if system_message:
+    # Per-block typed cache control takes precedence over the model-wide flag.
+    if self.system_prompt_blocks:
+      request_kwargs["system"] = self._build_system_prompt_blocks(system_message)
+    elif system_message:
       if self.cache_system_prompt:
         cache_control = (
           {"type": "ephemeral", "ttl": "1h"} if self.extended_cache_time is not None and self.extended_cache_time is True else {"type": "ephemeral"}
@@ -506,6 +527,71 @@ class Claude(Model):
     if request_kwargs:
       log_debug(f"Calling {self.provider} with request parameters: {request_kwargs}", log_level=2)
     return request_kwargs
+
+  def _build_system_prompt_blocks(self, system_message: Optional[str]) -> List[Dict[str, Any]]:
+    """Convert ``system_prompt_blocks`` into Anthropic-shaped system blocks.
+
+    The agent-built system message (if present) is appended uncached as a
+    final block, so callers can reserve cache hits for the static prefix
+    blocks they declared explicitly.
+    """
+    blocks = list(self.system_prompt_blocks or [])
+    self._validate_cache_ttl_order(blocks)
+    out: List[Dict[str, Any]] = []
+    for block in blocks:
+      entry: Dict[str, Any] = {"type": "text", "text": block.text}
+      if block.cache:
+        cache_control: Dict[str, Any] = {"type": "ephemeral"}
+        ttl = block.ttl
+        if ttl is None and self.extended_cache_time:
+          ttl = "1h"
+        if ttl is not None:
+          cache_control["ttl"] = ttl
+        entry["cache_control"] = cache_control
+      out.append(entry)
+    if system_message:
+      out.append({"type": "text", "text": system_message})
+    return out
+
+  @staticmethod
+  def _validate_cache_ttl_order(blocks: List[SystemPromptBlock]) -> None:
+    """Anthropic rejects a 5m cache block following a 1h cache block.
+
+    Catch the ordering at submission time so callers get a clear error
+    instead of an opaque API rejection.
+    """
+    seen_one_hour = False
+    for idx, block in enumerate(blocks):
+      if not block.cache:
+        continue
+      if block.ttl == "1h":
+        seen_one_hour = True
+      elif block.ttl == "5m" or block.ttl is None:
+        if seen_one_hour:
+          raise ValueError(
+            f"system_prompt_blocks[{idx}] uses ttl='5m' (or default) after a 1h block. "
+            "Anthropic requires longer-TTL cache blocks to come after shorter-TTL ones — reorder so 5m blocks precede 1h blocks."
+          )
+
+  def _handle_api_error(self, e: APIStatusError) -> NoReturn:
+    """Translate an Anthropic APIStatusError into a Definable exception.
+
+    - 529 / 'overloaded' → ``ModelRateLimitError`` (Anthropic uses 529 as a
+      retry-friendly load-shedding signal).
+    - context-window exhaustion ('prompt is too long') → ``ContextWindowExceededError``.
+    - everything else → ``ModelProviderError``.
+    """
+    status = getattr(e, "status_code", None)
+    msg = getattr(e, "message", None) or str(e)
+    msg_lower = msg.lower()
+    if status == 529 or "overloaded" in msg_lower:
+      log_warning(f"Claude API overloaded: {msg}")
+      raise ModelRateLimitError(message=msg, model_name=self.name, model_id=self.id) from e
+    if "prompt is too long" in msg_lower or "context_length_exceeded" in msg_lower:
+      log_error(f"Claude context exceeded: {msg}")
+      raise ContextWindowExceededError(message=msg, status_code=status or 400, model_name=self.name, model_id=self.id) from e
+    log_error(f"Claude API error (status {status}): {msg}")
+    raise ModelProviderError(message=msg, status_code=status or 502, model_name=self.name, model_id=self.id) from e
 
   @staticmethod
   def _extract_cache_blocks(messages: List[Message]) -> Optional[List[Dict[str, Any]]]:
@@ -539,7 +625,7 @@ class Claude(Model):
       if run_response and run_response.metrics:
         run_response.metrics.set_time_to_first_token()
 
-      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results)
+      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
       _cache_blocks = self._extract_cache_blocks(messages)
       request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format, system_blocks=_cache_blocks)
 
@@ -571,8 +657,7 @@ class Claude(Model):
       log_warning(f"Rate limit exceeded: {str(e)}")
       raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"Claude API error (status {e.status_code}): {str(e)}")
-      raise ModelProviderError(message=e.message, status_code=e.status_code, model_name=self.name, model_id=self.id) from e
+      self._handle_api_error(e)
     except Exception as e:
       log_error(f"Unexpected error calling Claude API: {str(e)}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
@@ -590,7 +675,7 @@ class Claude(Model):
     """
     Stream a response from the Anthropic API.
     """
-    chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results)
+    chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
     _cache_blocks = self._extract_cache_blocks(messages)
     request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format, system_blocks=_cache_blocks)
 
@@ -627,8 +712,7 @@ class Claude(Model):
       log_warning(f"Rate limit exceeded: {str(e)}")
       raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"Claude API error (status {e.status_code}): {str(e)}")
-      raise ModelProviderError(message=e.message, status_code=e.status_code, model_name=self.name, model_id=self.id) from e
+      self._handle_api_error(e)
     except Exception as e:
       log_error(f"Unexpected error calling Claude API: {str(e)}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
@@ -650,7 +734,7 @@ class Claude(Model):
       if run_response and run_response.metrics:
         run_response.metrics.set_time_to_first_token()
 
-      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results)
+      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
       request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format)
 
       if self._has_beta_features(response_format=response_format, tools=tools):
@@ -681,8 +765,7 @@ class Claude(Model):
       log_warning(f"Rate limit exceeded: {str(e)}")
       raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"Claude API error (status {e.status_code}): {str(e)}")
-      raise ModelProviderError(message=e.message, status_code=e.status_code, model_name=self.name, model_id=self.id) from e
+      self._handle_api_error(e)
     except Exception as e:
       log_error(f"Unexpected error calling Claude API: {str(e)}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
@@ -704,7 +787,7 @@ class Claude(Model):
       if run_response and run_response.metrics:
         run_response.metrics.set_time_to_first_token()
 
-      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results)
+      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
       request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format)
 
       if self._has_beta_features(response_format=response_format, tools=tools):
@@ -735,8 +818,7 @@ class Claude(Model):
       log_warning(f"Rate limit exceeded: {str(e)}")
       raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"Claude API error (status {e.status_code}): {str(e)}")
-      raise ModelProviderError(message=e.message, status_code=e.status_code, model_name=self.name, model_id=self.id) from e
+      self._handle_api_error(e)
     except Exception as e:
       log_error(f"Unexpected error calling Claude API: {str(e)}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
