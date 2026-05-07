@@ -154,6 +154,19 @@ class ModelRateLimitError(ModelProviderError):
     self.error_id = "model_rate_limit_error"
 
 
+class ContextWindowExceededError(ModelProviderError):
+  """Raised when a request exceeds the model's context window.
+
+  Distinct from a generic 400 so callers can react specifically — e.g.
+  trim history, summarize, or pick a model with a larger window —
+  instead of treating it as an opaque provider error.
+  """
+
+  def __init__(self, message: str, status_code: int = 400, model_name: Optional[str] = None, model_id: Optional[str] = None):
+    super().__init__(message, status_code, model_name, model_id)
+    self.error_id = "context_window_exceeded"
+
+
 # ---------------------------------------------------------------------------
 # Guardrail exceptions
 # ---------------------------------------------------------------------------
