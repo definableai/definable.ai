@@ -216,7 +216,7 @@ def _estimate_tokens(messages: list[Message]) -> int:
 def _memory_list(memory: Any | None) -> list[str]:
   if memory is None:
     return []
-  fn = getattr(memory, "list", None)
+  fn = getattr(memory, "names", None)
   if callable(fn):
     result = fn()
     if isinstance(result, list):
