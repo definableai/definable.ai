@@ -6,8 +6,8 @@ container protocol methods (__len__, __contains__).
 
 import pytest
 
-from definable.skill.markdown import MarkdownSkill, MarkdownSkillMeta
-from definable.skill.registry import SkillRegistry
+from definable.agent.skill.markdown import MarkdownSkill, MarkdownSkillMeta
+from definable.agent.skill.registry import SkillRegistry
 
 
 def _make_skill(name: str, description: str = "", tags: list | None = None, content: str = "body") -> MarkdownSkill:

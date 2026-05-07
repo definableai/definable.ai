@@ -23,7 +23,7 @@ from __future__ import annotations
 import pytest
 
 from definable.agent.interface.desktop.config import DesktopConfig
-from definable.skill.builtin.macos import MacOS
+from definable.agent.skill.builtin.macos import MacOS
 
 
 # ---------------------------------------------------------------------------

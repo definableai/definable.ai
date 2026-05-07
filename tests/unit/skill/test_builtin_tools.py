@@ -35,21 +35,21 @@ class TestGitHubSkill:
   """GitHub skill configuration and tool generation."""
 
   def test_default_config(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test-token")
     assert gh.name == "github"
     assert gh._token == "test-token"
 
   def test_env_var_fallback(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     with patch.dict("os.environ", {"GITHUB_ACCESS_TOKEN": "env-token"}):
       gh = GitHub()
       assert gh._token == "env-token"
 
   def test_tools_generated_with_defaults(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test")
     tools = gh.tools
@@ -64,7 +64,7 @@ class TestGitHubSkill:
     assert "get_file_content" in names
 
   def test_write_tools_included_by_default(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test")
     names = {t.name for t in gh.tools}
@@ -73,7 +73,7 @@ class TestGitHubSkill:
     assert "close_issue" in names
 
   def test_write_tools_disabled(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test", enable_write=False)
     names = {t.name for t in gh.tools}
@@ -81,14 +81,14 @@ class TestGitHubSkill:
     assert "comment_on_issue" not in names
 
   def test_disable_repos(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test", enable_repos=False)
     names = {t.name for t in gh.tools}
     assert "get_repo" not in names
 
   def test_disable_prs(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test", enable_prs=False)
     names = {t.name for t in gh.tools}
@@ -96,7 +96,7 @@ class TestGitHubSkill:
     assert "get_pull_request" not in names
 
   def test_search_repos_with_mock(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test")
     mock_repo = MagicMock()
@@ -115,7 +115,7 @@ class TestGitHubSkill:
     assert data[0]["full_name"] == "owner/repo"
 
   def test_error_returns_json(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test")
     mock_client = MagicMock()
@@ -128,7 +128,7 @@ class TestGitHubSkill:
     assert "error" in data
 
   def test_import_error_helpful(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub(access_token="test")
     with patch.dict("sys.modules", {"github": None}):
@@ -136,7 +136,7 @@ class TestGitHubSkill:
         gh.client
 
   def test_missing_token_raises(self):
-    from definable.skill.builtin.github import GitHub
+    from definable.agent.skill.builtin.github import GitHub
 
     gh = GitHub()
     gh._token = None
@@ -154,7 +154,7 @@ class TestSQLDatabaseSkill:
   """SQLDatabase skill configuration and tool generation."""
 
   def test_default_config(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     db = SQLDatabase(connection_url="sqlite:///test.db")
     assert db.name == "sql_database"
@@ -162,14 +162,14 @@ class TestSQLDatabaseSkill:
     assert db._max_rows == 100
 
   def test_env_var_fallback(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     with patch.dict("os.environ", {"DATABASE_URL": "sqlite:///env.db"}):
       db = SQLDatabase()
       assert db._url == "sqlite:///env.db"
 
   def test_tools_generated(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     db = SQLDatabase(connection_url="sqlite:///test.db")
     names = {t.name for t in db.tools}
@@ -179,21 +179,21 @@ class TestSQLDatabaseSkill:
     assert "explain_query" in names
 
   def test_write_disabled_by_default(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     db = SQLDatabase(connection_url="sqlite:///test.db")
     names = {t.name for t in db.tools}
     assert "execute_statement" not in names
 
   def test_write_enabled(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     db = SQLDatabase(connection_url="sqlite:///test.db", read_only=False, enable_write=True)
     names = {t.name for t in db.tools}
     assert "execute_statement" in names
 
   def test_read_only_check(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     assert SQLDatabase._is_read_only("SELECT * FROM users") is True
     assert SQLDatabase._is_read_only("SHOW TABLES") is True
@@ -204,7 +204,7 @@ class TestSQLDatabaseSkill:
     assert SQLDatabase._is_read_only("DROP TABLE users") is False
 
   def test_run_query_blocks_writes_in_read_only(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     db = SQLDatabase(connection_url="sqlite:///test.db", read_only=True)
     db._engine = MagicMock()
@@ -215,7 +215,7 @@ class TestSQLDatabaseSkill:
     assert "Read-only" in data["error"]
 
   def test_import_error(self):
-    from definable.skill.builtin.sql_database import SQLDatabase
+    from definable.agent.skill.builtin.sql_database import SQLDatabase
 
     db = SQLDatabase(connection_url="sqlite:///test.db")
     with patch.dict("sys.modules", {"sqlalchemy": None}):
@@ -233,7 +233,7 @@ class TestDuckDBAnalyticsSkill:
   """DuckDBAnalytics skill configuration and tool generation."""
 
   def test_default_config(self):
-    from definable.skill.builtin.duckdb_analytics import DuckDBAnalytics
+    from definable.agent.skill.builtin.duckdb_analytics import DuckDBAnalytics
 
     db = DuckDBAnalytics()
     assert db.name == "duckdb_analytics"
@@ -241,7 +241,7 @@ class TestDuckDBAnalyticsSkill:
     assert db._max_rows == 200
 
   def test_tools_generated(self):
-    from definable.skill.builtin.duckdb_analytics import DuckDBAnalytics
+    from definable.agent.skill.builtin.duckdb_analytics import DuckDBAnalytics
 
     db = DuckDBAnalytics()
     names = {t.name for t in db.tools}
@@ -254,7 +254,7 @@ class TestDuckDBAnalyticsSkill:
     assert "export_to_file" in names
 
   def test_disable_features(self):
-    from definable.skill.builtin.duckdb_analytics import DuckDBAnalytics
+    from definable.agent.skill.builtin.duckdb_analytics import DuckDBAnalytics
 
     db = DuckDBAnalytics(enable_load=False, enable_fts=False, enable_export=False)
     names = {t.name for t in db.tools}
@@ -263,13 +263,13 @@ class TestDuckDBAnalyticsSkill:
     assert "export_to_file" not in names
 
   def test_sanitize_sql(self):
-    from definable.skill.builtin.duckdb_analytics import DuckDBAnalytics
+    from definable.agent.skill.builtin.duckdb_analytics import DuckDBAnalytics
 
     assert DuckDBAnalytics._sanitize_sql("SELECT 1; DROP TABLE x") == "SELECT 1"
     assert DuckDBAnalytics._sanitize_sql("SELECT 1") == "SELECT 1"
 
   def test_teardown_closes_connection(self):
-    from definable.skill.builtin.duckdb_analytics import DuckDBAnalytics
+    from definable.agent.skill.builtin.duckdb_analytics import DuckDBAnalytics
 
     db = DuckDBAnalytics()
     mock_conn = MagicMock()
@@ -279,7 +279,7 @@ class TestDuckDBAnalyticsSkill:
     assert db._conn is None
 
   def test_import_error(self):
-    from definable.skill.builtin.duckdb_analytics import DuckDBAnalytics
+    from definable.agent.skill.builtin.duckdb_analytics import DuckDBAnalytics
 
     db = DuckDBAnalytics()
     with patch.dict("sys.modules", {"duckdb": None}):
@@ -297,21 +297,21 @@ class TestSlackToolsSkill:
   """SlackTools skill configuration and tool generation."""
 
   def test_default_config(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test")
     assert sl.name == "slack_tools"
     assert sl._token == "xoxb-test"
 
   def test_env_var_fallback(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     with patch.dict("os.environ", {"SLACK_TOKEN": "xoxb-env"}):
       sl = SlackTools()
       assert sl._token == "xoxb-env"
 
   def test_default_tools(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test")
     names = {t.name for t in sl.tools}
@@ -321,14 +321,14 @@ class TestSlackToolsSkill:
     assert "reply_in_thread" in names
 
   def test_search_disabled_by_default(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test")
     names = {t.name for t in sl.tools}
     assert "search_messages" not in names
 
   def test_search_enabled(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test", enable_search=True)
     names = {t.name for t in sl.tools}
@@ -336,14 +336,14 @@ class TestSlackToolsSkill:
     assert "get_thread" in names
 
   def test_users_enabled(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test", enable_users=True)
     names = {t.name for t in sl.tools}
     assert "list_users" in names
 
   def test_send_message_with_mock(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test")
     mock_client = MagicMock()
@@ -356,7 +356,7 @@ class TestSlackToolsSkill:
     assert data["ok"] is True
 
   def test_error_returns_json(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test")
     mock_client = MagicMock()
@@ -369,7 +369,7 @@ class TestSlackToolsSkill:
     assert "error" in data
 
   def test_import_error(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools(token="xoxb-test")
     with patch.dict("sys.modules", {"slack_sdk": None}):
@@ -377,7 +377,7 @@ class TestSlackToolsSkill:
         sl.client
 
   def test_missing_token_raises(self):
-    from definable.skill.builtin.slack_tools import SlackTools
+    from definable.agent.skill.builtin.slack_tools import SlackTools
 
     sl = SlackTools()
     sl._token = None
@@ -395,7 +395,7 @@ class TestEmailToolsSkill:
   """EmailTools skill configuration and tool generation."""
 
   def test_default_config(self):
-    from definable.skill.builtin.email_tools import EmailTools
+    from definable.agent.skill.builtin.email_tools import EmailTools
 
     em = EmailTools(sender_email="test@example.com", sender_password="pass")
     assert em.name == "email_tools"
@@ -403,7 +403,7 @@ class TestEmailToolsSkill:
     assert em._smtp_port == 587
 
   def test_tools_generated(self):
-    from definable.skill.builtin.email_tools import EmailTools
+    from definable.agent.skill.builtin.email_tools import EmailTools
 
     em = EmailTools(sender_email="test@example.com", sender_password="pass")
     names = {t.name for t in em.tools}
@@ -411,7 +411,7 @@ class TestEmailToolsSkill:
     assert "send_html_email" in names
 
   def test_missing_credentials_returns_error(self):
-    from definable.skill.builtin.email_tools import EmailTools
+    from definable.agent.skill.builtin.email_tools import EmailTools
 
     em = EmailTools()
     em._sender_email = None
@@ -420,7 +420,7 @@ class TestEmailToolsSkill:
     assert "error" in result
 
   def test_send_with_mock_smtp(self):
-    from definable.skill.builtin.email_tools import EmailTools
+    from definable.agent.skill.builtin.email_tools import EmailTools
 
     em = EmailTools(sender_email="test@example.com", sender_password="pass")
     with patch("definable.skill.builtin.email_tools.smtplib.SMTP") as mock_smtp:
@@ -443,42 +443,42 @@ class TestPythonExecSkill:
   """PythonExec skill configuration and tool generation."""
 
   def test_default_config(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec()
     assert pe.name == "python_exec"
     assert pe._timeout == 30
 
   def test_tools_generated(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec()
     names = {t.name for t in pe.tools}
     assert "run_python" in names
 
   def test_file_ops_enabled(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec(enable_file_ops=True)
     names = {t.name for t in pe.tools}
     assert "save_and_run" in names
 
   def test_pip_disabled_by_default(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec()
     names = {t.name for t in pe.tools}
     assert "pip_install" not in names
 
   def test_pip_enabled(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec(enable_pip=True)
     names = {t.name for t in pe.tools}
     assert "pip_install" in names
 
   def test_run_python_basic(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec()
     run_tool = next(t for t in pe.tools if t.name == "run_python")
@@ -487,7 +487,7 @@ class TestPythonExecSkill:
     assert data["result"] == "4"
 
   def test_run_python_stdout(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec()
     run_tool = next(t for t in pe.tools if t.name == "run_python")
@@ -496,7 +496,7 @@ class TestPythonExecSkill:
     assert "hello world" in data["stdout"]
 
   def test_run_python_error(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec()
     run_tool = next(t for t in pe.tools if t.name == "run_python")
@@ -506,7 +506,7 @@ class TestPythonExecSkill:
     assert "ValueError" in data["error"]
 
   def test_path_restriction(self):
-    from definable.skill.builtin.python_exec import PythonExec
+    from definable.agent.skill.builtin.python_exec import PythonExec
 
     pe = PythonExec(base_dir="/tmp/test_sandbox", restrict_to_base_dir=True)
     with pytest.raises(PermissionError, match="escapes base directory"):
@@ -523,14 +523,14 @@ class TestFirecrawlSkill:
   """Firecrawl skill configuration and tool generation."""
 
   def test_default_config(self):
-    from definable.skill.builtin.firecrawl import Firecrawl
+    from definable.agent.skill.builtin.firecrawl import Firecrawl
 
     fc = Firecrawl(api_key="fc-test")
     assert fc.name == "firecrawl"
     assert fc._formats == ["markdown"]
 
   def test_default_tools(self):
-    from definable.skill.builtin.firecrawl import Firecrawl
+    from definable.agent.skill.builtin.firecrawl import Firecrawl
 
     fc = Firecrawl(api_key="fc-test")
     names = {t.name for t in fc.tools}
@@ -539,7 +539,7 @@ class TestFirecrawlSkill:
     assert "map_site" not in names
 
   def test_all_tools_enabled(self):
-    from definable.skill.builtin.firecrawl import Firecrawl
+    from definable.agent.skill.builtin.firecrawl import Firecrawl
 
     fc = Firecrawl(api_key="fc-test", enable_crawl=True, enable_map=True, enable_search=True)
     names = {t.name for t in fc.tools}
@@ -549,7 +549,7 @@ class TestFirecrawlSkill:
     assert "search_web" in names
 
   def test_scrape_with_mock(self):
-    from definable.skill.builtin.firecrawl import Firecrawl
+    from definable.agent.skill.builtin.firecrawl import Firecrawl
 
     fc = Firecrawl(api_key="fc-test")
     mock_app = MagicMock()
@@ -562,7 +562,7 @@ class TestFirecrawlSkill:
     assert data["content"] == "# Hello World"
 
   def test_import_error(self):
-    from definable.skill.builtin.firecrawl import Firecrawl
+    from definable.agent.skill.builtin.firecrawl import Firecrawl
 
     fc = Firecrawl(api_key="fc-test")
     with patch.dict("sys.modules", {"firecrawl": None}):
@@ -570,7 +570,7 @@ class TestFirecrawlSkill:
         fc.app
 
   def test_missing_key_raises(self):
-    from definable.skill.builtin.firecrawl import Firecrawl
+    from definable.agent.skill.builtin.firecrawl import Firecrawl
 
     fc = Firecrawl()
     fc._api_key = None
@@ -597,14 +597,14 @@ class TestCSVToolsSkill:
     return f.name
 
   def test_default_config(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools()
     assert ct.name == "csv_tools"
     assert ct._row_limit == 50
 
   def test_tools_generated(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools()
     names = {t.name for t in ct.tools}
@@ -613,28 +613,28 @@ class TestCSVToolsSkill:
     assert "get_csv_columns" in names
 
   def test_query_disabled_by_default(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools()
     names = {t.name for t in ct.tools}
     assert "query_csv" not in names
 
   def test_query_enabled(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools(enable_query=True)
     names = {t.name for t in ct.tools}
     assert "query_csv" in names
 
   def test_write_enabled_by_default(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools()
     names = {t.name for t in ct.tools}
     assert "write_csv" in names
 
   def test_read_csv_file(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     path = self._make_csv([{"name": "Alice", "age": "30"}, {"name": "Bob", "age": "25"}])
     ct = CSVTools(csv_files=[path])
@@ -645,7 +645,7 @@ class TestCSVToolsSkill:
     assert data["rows"][0]["name"] == "Alice"
 
   def test_get_csv_columns(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     path = self._make_csv([{"x": "1", "y": "2"}])
     ct = CSVTools(csv_files=[path])
@@ -656,7 +656,7 @@ class TestCSVToolsSkill:
     assert "y" in data["columns"]
 
   def test_csv_not_found(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools()
     read_tool = next(t for t in ct.tools if t.name == "read_csv")
@@ -665,7 +665,7 @@ class TestCSVToolsSkill:
     assert "error" in data
 
   def test_write_csv_file(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools()
     write_tool = next(t for t in ct.tools if t.name == "write_csv")
@@ -677,7 +677,7 @@ class TestCSVToolsSkill:
     assert data["rows_written"] == 2
 
   def test_teardown(self):
-    from definable.skill.builtin.csv_tools import CSVTools
+    from definable.agent.skill.builtin.csv_tools import CSVTools
 
     ct = CSVTools()
     mock_conn = MagicMock()
@@ -693,50 +693,50 @@ class TestCSVToolsSkill:
 
 @pytest.mark.unit
 class TestBuiltinImports:
-  """All new skills are importable from definable.skill.builtin."""
+  """All new skills are importable from definable.agent.skill.builtin."""
 
   def test_github_import(self):
-    from definable.skill.builtin import GitHub
+    from definable.agent.skill.builtin import GitHub
 
     assert GitHub.__name__ == "GitHub"
 
   def test_sql_database_import(self):
-    from definable.skill.builtin import SQLDatabase
+    from definable.agent.skill.builtin import SQLDatabase
 
     assert SQLDatabase.__name__ == "SQLDatabase"
 
   def test_duckdb_import(self):
-    from definable.skill.builtin import DuckDBAnalytics
+    from definable.agent.skill.builtin import DuckDBAnalytics
 
     assert DuckDBAnalytics.__name__ == "DuckDBAnalytics"
 
   def test_slack_import(self):
-    from definable.skill.builtin import SlackTools
+    from definable.agent.skill.builtin import SlackTools
 
     assert SlackTools.__name__ == "SlackTools"
 
   def test_email_import(self):
-    from definable.skill.builtin import EmailTools
+    from definable.agent.skill.builtin import EmailTools
 
     assert EmailTools.__name__ == "EmailTools"
 
   def test_python_exec_import(self):
-    from definable.skill.builtin import PythonExec
+    from definable.agent.skill.builtin import PythonExec
 
     assert PythonExec.__name__ == "PythonExec"
 
   def test_firecrawl_import(self):
-    from definable.skill.builtin import Firecrawl
+    from definable.agent.skill.builtin import Firecrawl
 
     assert Firecrawl.__name__ == "Firecrawl"
 
   def test_csv_tools_import(self):
-    from definable.skill.builtin import CSVTools
+    from definable.agent.skill.builtin import CSVTools
 
     assert CSVTools.__name__ == "CSVTools"
 
   def test_existing_skills_still_work(self):
-    from definable.skill.builtin import Calculator, DateTime, FileOperations, Shell, WebSearch
+    from definable.agent.skill.builtin import Calculator, DateTime, FileOperations, Shell, WebSearch
 
     assert Calculator.__name__ == "Calculator"
     assert WebSearch.__name__ == "WebSearch"

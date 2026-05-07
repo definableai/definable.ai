@@ -12,13 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from definable.skill.markdown import (
+from definable.agent.skill.markdown import (
   MarkdownSkill,
   MarkdownSkillMeta,
   SkillLoader,
   validate_agent_skills_name,
 )
-from definable.skill.registry import SkillRegistry
+from definable.agent.skill.registry import SkillRegistry
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -517,7 +517,7 @@ class TestCodeExecutor:
   """Tests for SkillScriptExecutor."""
 
   def test_run_python_script(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     extras = {"scripts/hello.py": "print('Hello from script')"}
@@ -528,7 +528,7 @@ class TestCodeExecutor:
     assert "Hello from script" in result
 
   def test_run_bash_script(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     extras = {"scripts/greet.sh": "#!/bin/bash\necho 'Hello bash'"}
@@ -539,7 +539,7 @@ class TestCodeExecutor:
     assert "Hello bash" in result
 
   def test_script_with_args(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     extras = {"scripts/echo.py": "import sys; print(' '.join(sys.argv[1:]))"}
@@ -550,7 +550,7 @@ class TestCodeExecutor:
     assert "foo bar" in result
 
   def test_timeout(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     extras = {"scripts/slow.py": "import time; time.sleep(10)"}
@@ -561,7 +561,7 @@ class TestCodeExecutor:
     assert "timed out" in result.lower()
 
   def test_path_escape(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     skill_dir = _make_skill_dir(tmp_path, "s", content)
@@ -571,7 +571,7 @@ class TestCodeExecutor:
     assert "error" in result.lower()
 
   def test_output_truncation(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     extras = {"scripts/big.py": "print('x' * 50000)"}
@@ -583,7 +583,7 @@ class TestCodeExecutor:
     assert len(result) < 200  # truncated + message
 
   def test_nonexistent_script(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     skill_dir = _make_skill_dir(tmp_path, "s", content)
@@ -593,7 +593,7 @@ class TestCodeExecutor:
     assert "not found" in result.lower()
 
   def test_unsupported_extension(self, tmp_path):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     content = "---\nname: s\n---\nBody."
     extras = {"scripts/file.xyz": "data"}
@@ -604,7 +604,7 @@ class TestCodeExecutor:
     assert "unsupported" in result.lower()
 
   def test_not_directory_skill(self):
-    from definable.skill.executor import SkillScriptExecutor
+    from definable.agent.skill.executor import SkillScriptExecutor
 
     skill = _make_skill("flat")
     executor = SkillScriptExecutor()
@@ -716,11 +716,11 @@ class TestImports:
   """Tests for public exports."""
 
   def test_validate_agent_skills_name_importable(self):
-    from definable.skill import validate_agent_skills_name
+    from definable.agent.skill import validate_agent_skills_name
 
     assert callable(validate_agent_skills_name)
 
   def test_skill_script_executor_importable(self):
-    from definable.skill import SkillScriptExecutor
+    from definable.agent.skill import SkillScriptExecutor
 
     assert SkillScriptExecutor is not None

@@ -6,7 +6,7 @@ naming defaults, and lifecycle hooks.
 
 import pytest
 
-from definable.skill.base import Skill
+from definable.agent.skill.base import Skill
 from definable.tool.decorator import tool
 from definable.tool.function import Function
 

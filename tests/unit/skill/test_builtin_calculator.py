@@ -7,7 +7,7 @@ No API calls are made.
 
 import pytest
 
-from definable.skill.builtin.calculator import Calculator, _evaluate_expression
+from definable.agent.skill.builtin.calculator import Calculator, _evaluate_expression
 
 
 @pytest.mark.unit
