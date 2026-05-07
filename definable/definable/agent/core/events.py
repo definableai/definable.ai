@@ -2,18 +2,21 @@
 
 Independent of run lifecycle. Fire-and-forget. Subscribers can be sync
 callbacks (fire on emit) or async consumers (via stream()).
-
-Phase 2 scaffold: type definitions only. EventBus method bodies land in Phase 3.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, TypeVar
 
 if TYPE_CHECKING:
   from definable.agent.core.debug import TurnSnapshot
   from definable.tool.function import FunctionCall
+
+log = logging.getLogger(__name__)
 
 
 # ---- Event hierarchy -----------------------------------------------------
@@ -106,22 +109,65 @@ class EventBus:
   """Pub/sub for harness events.
 
   Sync subscribers fire inline on emit. Async consumers use stream(), which
-  iterates from an internal asyncio.Queue.
-
-  Phase 2: skeleton — bodies land in Phase 3.
+  attaches a per-call asyncio.Queue and yields events as they arrive.
   """
 
   def __init__(self) -> None:
-    raise NotImplementedError("Phase 3")
+    self._subscribers: list[SyncSubscriber] = []
 
   def emit(self, event: Event) -> None:
-    raise NotImplementedError("Phase 3")
+    """Fire to every subscriber. Subscriber exceptions are logged, not raised."""
+    # Iterate over a copy — subscribers may unsubscribe themselves during fire.
+    for sub in list(self._subscribers):
+      try:
+        sub(event)
+      except Exception:
+        log.exception("Event subscriber raised; continuing")
 
   def on(self, event_type: type[E]) -> Callable[[Callable[[E], None]], Callable[[E], None]]:
-    raise NotImplementedError("Phase 3")
+    """Decorator that subscribes a typed handler filtered by event_type.
+
+    Usage::
+
+        @bus.on(RunCompleted)
+        def handle(e: RunCompleted) -> None:
+          print(e.content)
+    """
+
+    def decorator(fn: Callable[[E], None]) -> Callable[[E], None]:
+      def wrapper(e: Event) -> None:
+        if isinstance(e, event_type):
+          fn(e)
+
+      self._subscribers.append(wrapper)
+      return fn
+
+    return decorator
 
   def subscribe(self, callback: SyncSubscriber) -> Unsubscribe:
-    raise NotImplementedError("Phase 3")
+    """Register a generic subscriber. Returns an unsubscribe callable."""
+    self._subscribers.append(callback)
 
-  def stream(self) -> AsyncIterator[Event]:
-    raise NotImplementedError("Phase 3")
+    def unsub() -> None:
+      with contextlib.suppress(ValueError):
+        self._subscribers.remove(callback)
+
+    return unsub
+
+  async def stream(self) -> AsyncIterator[Event]:
+    """Async iterator yielding every emitted event for the lifetime of the iteration.
+
+    Each call attaches its own queue, so multiple concurrent consumers are
+    independent. Cancellation cleanly unsubscribes.
+    """
+    queue: asyncio.Queue[Event] = asyncio.Queue()
+
+    def push(e: Event) -> None:
+      queue.put_nowait(e)
+
+    unsub = self.subscribe(push)
+    try:
+      while True:
+        yield await queue.get()
+    finally:
+      unsub()
