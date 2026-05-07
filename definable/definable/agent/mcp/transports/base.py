@@ -4,7 +4,7 @@ from types import TracebackType
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
-from definable.mcp.types import JSONRPCResponse
+from definable.agent.mcp.types import JSONRPCResponse
 
 
 class BaseTransport(ABC):

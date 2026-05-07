@@ -6,9 +6,9 @@ import json
 import uuid
 from typing import Any, Dict, Optional
 
-from definable.mcp.errors import MCPConnectionError, MCPProtocolError, MCPTimeoutError
-from definable.mcp.transports.base import BaseTransport
-from definable.mcp.types import JSONRPCNotification, JSONRPCRequest, JSONRPCResponse
+from definable.agent.mcp.errors import MCPConnectionError, MCPProtocolError, MCPTimeoutError
+from definable.agent.mcp.transports.base import BaseTransport
+from definable.agent.mcp.types import JSONRPCNotification, JSONRPCRequest, JSONRPCResponse
 from definable.utils.log import log_debug, log_error, log_warning
 
 try:
