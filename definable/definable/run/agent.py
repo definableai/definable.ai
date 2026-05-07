@@ -8,7 +8,7 @@ from definable.types import ToolCallDict
 from definable.model.message import Citations, Message
 from definable.model.metrics import Metrics
 from definable.model.response import ToolExecution
-from definable.agent.reasoning.step import ReasoningStep
+from definable.run.reasoning_step import ReasoningStep
 from definable.run.base import BaseRunOutputEvent, MessageReferences, RunStatus
 from definable.run.requirement import RunRequirement
 from definable.utils.log import logger

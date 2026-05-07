@@ -20,7 +20,7 @@ if sys.version_info < (3, 11):
 
 from pydantic import BaseModel
 
-from definable.agent.events import RunOutput
+from definable.run.agent import RunOutput
 from definable.exceptions import ModelProviderError
 from definable.model.base import Model
 from definable.model.message import Message

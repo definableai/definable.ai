@@ -5,7 +5,7 @@ from typing import Any, AsyncIterator, Dict, Iterator, List, Optional, Type, Uni
 
 from pydantic import BaseModel
 
-from definable.agent.events import RunOutput
+from definable.run.agent import RunOutput
 from definable.model.base import Model
 from definable.model.message import Message
 from definable.model.metrics import Metrics

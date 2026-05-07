@@ -13,7 +13,7 @@ from definable.model.base import Model
 from definable.model.message import Message
 from definable.model.metrics import Metrics
 from definable.model.response import ModelResponse
-from definable.agent.events import RunOutput
+from definable.run.agent import RunOutput
 from definable.utils.http import get_default_async_client, get_default_sync_client
 from definable.utils.log import log_debug, log_error, log_warning
 from definable.utils.openai import _format_file_for_message, audio_to_message, images_to_message

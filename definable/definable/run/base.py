@@ -9,7 +9,7 @@ from definable.filters import FilterExpr
 from definable.media import Audio, Image, Video
 from definable.model.message import Citations, Message, MessageReferences
 from definable.model.metrics import Metrics
-from definable.agent.reasoning.step import ReasoningStep
+from definable.run.reasoning_step import ReasoningStep
 from definable.utils.log import log_error
 from pydantic import BaseModel
 

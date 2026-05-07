@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from definable.agent.agent_minimal import Agent
+from definable.agent.agent import Agent
 from definable.agent.core.events import (
   Event,
   RunCompleted,

@@ -1,100 +1,55 @@
-"""
-Definable — Production-grade agentic framework.
+"""Definable — minimal harness for production agents.
 
-Lego-style DX: composable blocks that snap together.
+Quick start::
 
-Quick Start:
-    from definable import Agent, tool, OpenAIChat
+    from definable import Agent, tool
 
-    agent = Agent(
-        model=OpenAIChat(id="gpt-4o"),
-        tools=[my_tool],
-        instructions="You are a helpful assistant.",
-    )
-    output = agent.run("Hello!")
+    @tool
+    def my_tool(x: int) -> int:
+      return x * 2
 
-    # Or with string model shorthand:
-    agent = Agent(model="gpt-4o-mini", instructions="Hello")
+    agent = Agent(name="t", model="anthropic/claude-sonnet-4-6", tools=[my_tool])
 
-All Models:
-    from definable.model import OpenAIChat, DeepSeekChat, MoonshotChat, xAI
-
-Lego Blocks:
-    from definable.knowledge import Knowledge, Document
-    from definable.embedder import OpenAIEmbedder, VoyageAIEmbedder
-    from definable.chunker import RecursiveChunker
-    from definable.reranker import CohereReranker
-    from definable.vectordb import InMemoryVectorDB, PgVector
-    from definable.memory import Memory, SQLiteStore
-    from definable.tool import tool, Function
-    from definable.toolkit import Toolkit
-
-Agent-scoped:
-    from definable.agent import Agent, AgentConfig
-    from definable.agent.tracing import Tracing, JSONLExporter
-    from definable.agent.guardrail import Guardrails
-    from definable.agent.interface import TelegramInterface
-    from definable.agent.reasoning import Thinking
-    from definable.agent.research import DeepResearch
-
-Events:
-    from definable.agent.events import RunContentEvent, ToolCallStartedEvent, RunCompletedEvent
+    async with agent:
+      result = await agent.arun("hello")
 """
 
 from importlib.metadata import version as _pkg_version
 
 __version__ = _pkg_version("definable")
 
-from typing import TYPE_CHECKING
 
-# --- Eager exports (always loaded — core classes used by every consumer) ---
+# --- Eager exports — the harness public surface ---
 
 from definable.agent.agent import Agent
-from definable.agent.compression import Compression
-from definable.agent.config import (
-  AgentConfig,
-  ReadersConfig,
+from definable.agent.core import (
+  Event,
+  EventBus,
+  MemoryAccessed,
+  ModelResponded,
+  RunCompleted,
+  RunErrored,
+  RunResult,
+  StreamChunkEvent,
+  ToolCall,
+  ToolCallCompleted,
+  ToolCallFailed,
+  ToolCallStarted,
+  ToolRegistry,
+  ToolResult,
+  TurnSnapshot,
+  TurnStarted,
 )
-from definable.agent.research.config import DeepResearchConfig
-from definable.agent.toolkit import Toolkit
-from definable.skill.base import Skill
-from definable.tool.decorator import tool
-from definable.tool.function import Function
-from definable.model.message import Message
-from definable.agent.events import RunOutput
-from definable.run.base import get_current_run_context
-from definable.media import Audio, File, Image, Video
+from definable.agent.memory import FileMemory
+from definable.agent.toolkit import AsyncToolkit, Function, Toolkit, tool
 from definable.exceptions import AgentRunException, ControlFlowException, RetryAgentRun, StopAgentRun, UserError
-from definable.utils.sentinel import UNSET
+from definable.media import Audio, File, Image, Video
+from definable.model.message import Message
 
 
-if TYPE_CHECKING:
-  from definable.agent.guardrail import Guardrails
-  from definable.agent.reasoning import Thinking
-  from definable.agent.tracing import Tracing
-  from definable.knowledge import Document, Knowledge
-  from definable.composio import ComposioToolkit
-  from definable.mcp import MCPConfig, MCPServerConfig, MCPToolkit
-  from definable.memory import Memory
-  from definable.model.deepseek import DeepSeekChat
-  from definable.model.moonshot import MoonshotChat
-  from definable.model.openai import OpenAIChat, OpenAILike
-  from definable.model.xai import xAI
-  from definable.model.anthropic import Claude
-  from definable.model.mistral import MistralChat
-  from definable.model.google import Gemini
-  from definable.model.perplexity import Perplexity
-  from definable.model.ollama import Ollama
-  from definable.model.openrouter import OpenRouter
-  from definable.agent.observability import ObservabilityConfig
-  from definable.reader.audio import OpenAITranscriber
-  from definable.skill.registry import SkillRegistry
-
-
-# --- Lazy exports (loaded on first access via __getattr__) ---
+# --- Lazy exports — model providers loaded on first access ---
 
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
-  # Models
   "OpenAIChat": ("definable.model.openai", "OpenAIChat"),
   "OpenAILike": ("definable.model.openai", "OpenAILike"),
   "DeepSeekChat": ("definable.model.deepseek", "DeepSeekChat"),
@@ -106,33 +61,9 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   "Perplexity": ("definable.model.perplexity", "Perplexity"),
   "Ollama": ("definable.model.ollama", "Ollama"),
   "OpenRouter": ("definable.model.openrouter", "OpenRouter"),
-  # Composio
-  "ComposioToolkit": ("definable.composio", "ComposioToolkit"),
-  # MCP
-  "MCPToolkit": ("definable.mcp", "MCPToolkit"),
-  "MCPConfig": ("definable.mcp", "MCPConfig"),
-  "MCPServerConfig": ("definable.mcp", "MCPServerConfig"),
-  # Memory
-  "Memory": ("definable.memory", "Memory"),
-  # Knowledge
-  "Knowledge": ("definable.knowledge", "Knowledge"),
-  "Document": ("definable.knowledge", "Document"),
-  # Guardrails
-  "Guardrails": ("definable.agent.guardrail", "Guardrails"),
-  # Skills
-  "SkillRegistry": ("definable.skill.registry", "SkillRegistry"),
-  # New blocks
-  "Thinking": ("definable.agent.reasoning", "Thinking"),
-  "Tracing": ("definable.agent.tracing", "Tracing"),
-  # Pipeline
-  "Pipeline": ("definable.agent.pipeline", "Pipeline"),
-  "ToolRetry": ("definable.agent.pipeline", "ToolRetry"),
-  "DebugConfig": ("definable.agent.pipeline", "DebugConfig"),
-  "SubAgentPolicy": ("definable.agent.pipeline", "SubAgentPolicy"),
-  # Audio transcription
-  "OpenAITranscriber": ("definable.reader.audio", "OpenAITranscriber"),
-  # Observability
-  "ObservabilityConfig": ("definable.agent.observability", "ObservabilityConfig"),
+  "MCPToolkit": ("definable.agent.mcp", "MCPToolkit"),
+  "MCPConfig": ("definable.agent.mcp", "MCPConfig"),
+  "MCPServerConfig": ("definable.agent.mcp", "MCPServerConfig"),
 }
 
 
@@ -148,68 +79,55 @@ def __getattr__(name: str):
 
 __all__ = [
   "__version__",
-  # Core
+  # Harness
   "Agent",
-  "AgentConfig",
-  "Compression",
-  "ReadersConfig",
-  "DeepResearchConfig",
-  "Toolkit",
-  "Skill",
-  # Tools
-  "tool",
-  "Function",
-  # Messages & Media
-  "Message",
-  "Image",
+  "AsyncToolkit",
   "Audio",
-  "Video",
+  "Event",
+  "EventBus",
   "File",
-  # Run
-  "RunOutput",
-  "get_current_run_context",
-  # Exceptions — control flow
+  "FileMemory",
+  "Function",
+  "Image",
+  "MemoryAccessed",
+  "Message",
+  "ModelResponded",
+  "RunCompleted",
+  "RunErrored",
+  "RunResult",
+  "StreamChunkEvent",
+  "ToolCall",
+  "ToolCallCompleted",
+  "ToolCallFailed",
+  "ToolCallStarted",
+  "ToolRegistry",
+  "ToolResult",
+  "Toolkit",
+  "TurnSnapshot",
+  "TurnStarted",
+  "Video",
+  # Exceptions
+  "AgentRunException",
   "ControlFlowException",
   "RetryAgentRun",
   "StopAgentRun",
-  # Exceptions — errors
   "UserError",
-  # Exceptions — backward compat alias
-  "AgentRunException",
-  # Sentinel
-  "UNSET",
-  # Lazy — Models
-  "OpenAIChat",
-  "OpenAILike",
-  "DeepSeekChat",
-  "MoonshotChat",
-  "xAI",
-  "Claude",
-  "MistralChat",
-  "Gemini",
-  "Perplexity",
-  "Ollama",
-  "OpenRouter",
-  # Lazy — Composio
-  "ComposioToolkit",
+  # Tools
+  "tool",
+  # Lazy — model providers
+  "OpenAIChat",  # noqa: F822
+  "OpenAILike",  # noqa: F822
+  "DeepSeekChat",  # noqa: F822
+  "MoonshotChat",  # noqa: F822
+  "xAI",  # noqa: F822
+  "Claude",  # noqa: F822
+  "MistralChat",  # noqa: F822
+  "Gemini",  # noqa: F822
+  "Perplexity",  # noqa: F822
+  "Ollama",  # noqa: F822
+  "OpenRouter",  # noqa: F822
   # Lazy — MCP
-  "MCPToolkit",
-  "MCPConfig",
-  "MCPServerConfig",
-  # Lazy — Memory
-  "Memory",
-  # Lazy — Knowledge
-  "Knowledge",
-  "Document",
-  # Lazy — Guardrails
-  "Guardrails",
-  # Lazy — Skills
-  "SkillRegistry",
-  # Lazy — New blocks
-  "Thinking",
-  "Tracing",
-  # Lazy — Audio
-  "OpenAITranscriber",
-  # Lazy — Observability
-  "ObservabilityConfig",
+  "MCPToolkit",  # noqa: F822
+  "MCPConfig",  # noqa: F822
+  "MCPServerConfig",  # noqa: F822
 ]

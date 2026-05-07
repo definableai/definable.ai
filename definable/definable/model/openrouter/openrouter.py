@@ -9,7 +9,7 @@ from definable.exceptions import ModelAuthenticationError
 from definable.model.message import Message
 from definable.model.openai.like import OpenAILike
 from definable.model.response import ModelResponse
-from definable.agent.events import RunOutput
+from definable.run.agent import RunOutput
 
 
 @dataclass
