@@ -14,9 +14,34 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, TypeVar
 
 if TYPE_CHECKING:
   from definable.agent.core.debug import TurnSnapshot
-  from definable.tool.function import FunctionCall
 
 log = logging.getLogger(__name__)
+
+
+# ---- Tool primitives (harness-internal, kept minimal on purpose) ---------
+
+
+@dataclass(frozen=True)
+class ToolCall:
+  """The harness's minimal view of a tool invocation request.
+
+  Decoupled from `definable.tool.function.FunctionCall` so the loop
+  doesn't drag in HITL/pre-hook/post-hook machinery.
+  """
+
+  id: str
+  name: str
+  args: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolResult:
+  """The harness's minimal view of a tool invocation outcome."""
+
+  call: ToolCall
+  success: bool
+  output: Any | None = None
+  error: str | None = None
 
 
 # ---- Event hierarchy -----------------------------------------------------
@@ -53,23 +78,23 @@ class ModelResponded(Event):
   """Fires after a model call completes, before tool dispatch."""
 
   content: str | None
-  tool_calls: list[FunctionCall] = field(default_factory=list)
+  tool_calls: list[ToolCall] = field(default_factory=list)
 
 
 @dataclass(frozen=True, kw_only=True)
 class ToolCallStarted(Event):
-  call: FunctionCall
+  call: ToolCall
 
 
 @dataclass(frozen=True, kw_only=True)
 class ToolCallCompleted(Event):
-  call: FunctionCall
-  result: Any
+  call: ToolCall
+  output: Any
 
 
 @dataclass(frozen=True, kw_only=True)
 class ToolCallFailed(Event):
-  call: FunctionCall
+  call: ToolCall
   error: str
 
 
