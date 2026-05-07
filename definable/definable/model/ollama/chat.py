@@ -372,4 +372,13 @@ class Ollama(Model):
     metrics.output_tokens = output_tokens if output_tokens is not None else 0
     metrics.total_tokens = metrics.input_tokens + metrics.output_tokens
 
+    # Capture Ollama's timing breakdown (nanoseconds) for observability:
+    # total = wall-clock end-to-end; load = model load time; prompt_eval =
+    # tokenize + first-pass; eval = generation time. Useful for diagnosing
+    # cold starts vs slow generation.
+    timing_keys = ("total_duration", "load_duration", "prompt_eval_duration", "eval_duration")
+    timings = {k: response.get(k) for k in timing_keys if response.get(k) is not None}
+    if timings:
+      metrics.provider_metrics = {**(metrics.provider_metrics or {}), **timings}
+
     return metrics

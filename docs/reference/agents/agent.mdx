@@ -16,7 +16,7 @@ The constructor is organized into a few logical groups:
 | Capability layers | `memory`, `knowledge`, `thinking`, `compression`, `context`, `deep_research` |
 | Tooling | `tools`, `toolkits`, `skills`, `skill_registry` |
 | Runtime and visibility | `interfaces`, `gateway`, `tracing`, `debug`, `observability` |
-| Operational add-ons | `security`, `usage`, `plugins`, `readers`, `guardrails` |
+| Operational add-ons | `security`, `usage`, `readers`, `guardrails` |
 
 The critical design rule is that major layers such as `memory`, `knowledge`, `thinking`, and `interfaces` are direct constructor parameters on `Agent`, not nested inside `AgentConfig`.
 
@@ -78,8 +78,6 @@ assert output.content == "Use the billing guide."
 
 ## When to reach for other primitives
 
-- Use [`Team`](/reference/teams/team) when delegation itself should be model-driven.
-- Use [`Workflow`](/reference/workflows/workflow) when the control flow should be explicit in code.
 - Use [`AgentConfig`](/reference/agents/config) when you need to tune loop behavior rather than attach new capability layers.
 
 ## Related pages

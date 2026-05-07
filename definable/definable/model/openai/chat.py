@@ -2,11 +2,11 @@ import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from os import getenv
-from typing import Any, Dict, Iterator, List, Literal, Optional, Type, Union
+from typing import Any, Dict, Iterator, List, Literal, NoReturn, Optional, Type, Union
 from uuid import uuid4
 
 import httpx
-from definable.exceptions import ModelAuthenticationError, ModelProviderError
+from definable.exceptions import ContextWindowExceededError, ModelAuthenticationError, ModelProviderError
 from definable.types import ToolCallDict
 from definable.media import Audio
 from definable.model.base import Model
@@ -39,7 +39,7 @@ class OpenAIChat(Model):
   For more information, see: https://platform.openai.com/docs/api-reference/chat/create
   """
 
-  id: str = "gpt-4o"
+  id: str = "gpt-5.4-mini"
   name: str = "OpenAIChat"
   provider: str = "OpenAI"
   supports_native_structured_outputs: bool = True
@@ -450,8 +450,11 @@ class OpenAIChat(Model):
 
     except RateLimitError as e:
       log_error(f"Rate limit error from OpenAI API: {e}")
-      error_message = e.response.json().get("error", {})
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
+      try:
+        error_body = e.response.json().get("error", {})
+      except Exception:
+        error_body = e.response.text
+      error_message = error_body.get("message", "Unknown model error") if isinstance(error_body, dict) else str(error_body) or "Unknown model error"
       raise ModelProviderError(
         message=error_message,
         status_code=e.response.status_code,
@@ -462,18 +465,7 @@ class OpenAIChat(Model):
       log_error(f"API connection error from OpenAI API: {e}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"API status error from OpenAI API: {e}")
-      try:
-        error_message = e.response.json().get("error", {})
-      except Exception:
-        error_message = e.response.text
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
-      raise ModelProviderError(
-        message=error_message,
-        status_code=e.response.status_code,
-        model_name=self.name,
-        model_id=self.id,
-      ) from e
+      self._raise_for_api_status(e)
     except ModelAuthenticationError as e:
       log_error(f"Model authentication error from OpenAI API: {e}")
       raise e
@@ -526,8 +518,11 @@ class OpenAIChat(Model):
 
     except RateLimitError as e:
       log_error(f"Rate limit error from OpenAI API: {e}")
-      error_message = e.response.json().get("error", {})
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
+      try:
+        error_body = e.response.json().get("error", {})
+      except Exception:
+        error_body = e.response.text
+      error_message = error_body.get("message", "Unknown model error") if isinstance(error_body, dict) else str(error_body) or "Unknown model error"
       raise ModelProviderError(
         message=error_message,
         status_code=e.response.status_code,
@@ -538,18 +533,7 @@ class OpenAIChat(Model):
       log_error(f"API connection error from OpenAI API: {e}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"API status error from OpenAI API: {e}")
-      try:
-        error_message = e.response.json().get("error", {})
-      except Exception:
-        error_message = e.response.text
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
-      raise ModelProviderError(
-        message=error_message,
-        status_code=e.response.status_code,
-        model_name=self.name,
-        model_id=self.id,
-      ) from e
+      self._raise_for_api_status(e)
     except ModelAuthenticationError as e:
       log_error(f"Model authentication error from OpenAI API: {e}")
       raise e
@@ -599,8 +583,11 @@ class OpenAIChat(Model):
 
     except RateLimitError as e:
       log_error(f"Rate limit error from OpenAI API: {e}")
-      error_message = e.response.json().get("error", {})
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
+      try:
+        error_body = e.response.json().get("error", {})
+      except Exception:
+        error_body = e.response.text
+      error_message = error_body.get("message", "Unknown model error") if isinstance(error_body, dict) else str(error_body) or "Unknown model error"
       raise ModelProviderError(
         message=error_message,
         status_code=e.response.status_code,
@@ -611,18 +598,7 @@ class OpenAIChat(Model):
       log_error(f"API connection error from OpenAI API: {e}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"API status error from OpenAI API: {e}")
-      try:
-        error_message = e.response.json().get("error", {})
-      except Exception:
-        error_message = e.response.text
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
-      raise ModelProviderError(
-        message=error_message,
-        status_code=e.response.status_code,
-        model_name=self.name,
-        model_id=self.id,
-      ) from e
+      self._raise_for_api_status(e)
     except ModelAuthenticationError as e:
       log_error(f"Model authentication error from OpenAI API: {e}")
       raise e
@@ -674,8 +650,11 @@ class OpenAIChat(Model):
 
     except RateLimitError as e:
       log_error(f"Rate limit error from OpenAI API: {e}")
-      error_message = e.response.json().get("error", {})
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
+      try:
+        error_body = e.response.json().get("error", {})
+      except Exception:
+        error_body = e.response.text
+      error_message = error_body.get("message", "Unknown model error") if isinstance(error_body, dict) else str(error_body) or "Unknown model error"
       raise ModelProviderError(
         message=error_message,
         status_code=e.response.status_code,
@@ -686,18 +665,7 @@ class OpenAIChat(Model):
       log_error(f"API connection error from OpenAI API: {e}")
       raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
     except APIStatusError as e:
-      log_error(f"API status error from OpenAI API: {e}")
-      try:
-        error_message = e.response.json().get("error", {})
-      except Exception:
-        error_message = e.response.text
-      error_message = error_message.get("message", "Unknown model error") if isinstance(error_message, dict) else error_message
-      raise ModelProviderError(
-        message=error_message,
-        status_code=e.response.status_code,
-        model_name=self.name,
-        model_id=self.id,
-      ) from e
+      self._raise_for_api_status(e)
     except ModelAuthenticationError as e:
       log_error(f"Model authentication error from OpenAI API: {e}")
       raise e
@@ -961,3 +929,34 @@ class OpenAIChat(Model):
     metrics.cost = getattr(response_usage, "cost", None)
 
     return metrics
+
+  def _raise_for_api_status(self, e: APIStatusError) -> NoReturn:
+    """Translate an OpenAI APIStatusError into a Definable exception.
+
+    Falls back to e.response.text when the body isn't JSON. Recognises
+    OpenAI's "context_length_exceeded" error code and raises
+    ContextWindowExceededError so callers can react to context exhaustion
+    without parsing the raw provider message.
+    """
+    log_error(f"API status error from {self.provider} API: {e}")
+    error_body: Any
+    try:
+      error_body = e.response.json().get("error", {})
+    except Exception:
+      error_body = e.response.text
+
+    error_message = error_body.get("message", "Unknown model error") if isinstance(error_body, dict) else str(error_body) or "Unknown model error"
+    error_code = error_body.get("code") if isinstance(error_body, dict) else None
+    if error_code == "context_length_exceeded":
+      raise ContextWindowExceededError(
+        message=error_message,
+        status_code=e.response.status_code,
+        model_name=self.name,
+        model_id=self.id,
+      ) from e
+    raise ModelProviderError(
+      message=error_message,
+      status_code=e.response.status_code,
+      model_name=self.name,
+      model_id=self.id,
+    ) from e

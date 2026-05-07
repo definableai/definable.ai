@@ -128,14 +128,6 @@ def __getattr__(name: str):
     from definable.agent import pipeline as _pipeline
 
     return getattr(_pipeline, name)
-  if name in ("Team", "TeamMode"):
-    from definable.agent import team as _team
-
-    return getattr(_team, name)
-  if name in ("Workflow", "Step", "Steps", "Parallel", "Loop", "Condition", "Router"):
-    from definable.agent import workflow as _workflow
-
-    return getattr(_workflow, name)
   _eval_names = (
     "BaseEval",
     "EvalCase",
@@ -175,11 +167,6 @@ def __getattr__(name: str):
     from definable.agent import trigger as _trigger
 
     return getattr(_trigger, name)
-  # --- Plugins ---
-  if name in ("Plugin", "PluginRegistry"):
-    from definable.agent import plugin as _plugin
-
-    return getattr(_plugin, name)
   raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -232,17 +219,6 @@ __all__ = [
   "ToolRetry",
   "DebugConfig",
   "SubAgentPolicy",
-  # Team
-  "Team",  # noqa: F822
-  "TeamMode",  # noqa: F822
-  # Workflow
-  "Workflow",  # noqa: F822
-  "Step",  # noqa: F822
-  "Steps",  # noqa: F822
-  "Parallel",  # noqa: F822
-  "Loop",  # noqa: F822
-  "Condition",  # noqa: F822
-  "Router",  # noqa: F822
   # Eval
   "BaseEval",  # noqa: F822
   "EvalCase",  # noqa: F822
@@ -272,8 +248,5 @@ __all__ = [
   # Triggers
   "Interval",  # noqa: F822
   "OneShot",  # noqa: F822
-  # Plugins
-  "Plugin",  # noqa: F822
-  "PluginRegistry",  # noqa: F822
   # State alias
 ]

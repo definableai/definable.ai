@@ -28,7 +28,7 @@ def _ddg_search(query: str, max_results: int = 5) -> str:
     from ddgs import DDGS
   except ImportError:
     try:
-      from duckduckgo_search import DDGS  # type: ignore[assignment]
+      from duckduckgo_search import DDGS  # type: ignore[assignment, no-redef]
     except ImportError:
       raise ImportError("WebSearch skill requires 'ddgs'. Install it with: pip install ddgs")
 

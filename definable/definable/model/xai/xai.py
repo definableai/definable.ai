@@ -30,7 +30,7 @@ class xAI(OpenAILike):
       search_parameters (Optional[Dict[str, Any]]): Search parameters for enabling live search.
   """
 
-  id: str = "grok-3"
+  id: str = "grok-4.3-latest"
   name: str = "xAI"
   provider: str = "xAI"
   supports_native_structured_outputs: bool = False

@@ -140,6 +140,10 @@ class Message(BaseModel):
 
   @classmethod
   def from_dict(cls, data: Dict[str, Any]) -> "Message":
+    # Reconstruct metrics from dict if needed (round-trip safety after to_dict / cache rehydration).
+    if "metrics" in data and isinstance(data["metrics"], dict):
+      data["metrics"] = Metrics.from_dict(data["metrics"])
+
     # Handle image reconstruction properly
     if "images" in data and data["images"]:
       reconstructed_images = []

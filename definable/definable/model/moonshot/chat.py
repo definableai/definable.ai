@@ -16,7 +16,7 @@ class MoonshotChat(OpenAILike):
   """
 
   provider: str = "Moonshot"
-  id: str = "kimi-k2-turbo-preview"
+  id: str = "kimi-k2.5"
   supports_native_structured_outputs: bool = False
   api_key: Optional[str] = field(default_factory=lambda: getenv("MOONSHOT_API_KEY"))
   base_url: Optional[str] = "https://api.moonshot.ai/v1"

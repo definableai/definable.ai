@@ -58,6 +58,23 @@ browser = ["playwright>=1.49.0", "aiohttp>=3.9.0"]
 desktop = ["websockets>=12.0"]
 cli = ["textual>=1.0.0"]
 dev = ["mypy==1.19.1", "ruff==0.15.5", "pytest>=9.0.0", "pytest-asyncio>=1.3.0", "pytest-timeout>=2.3.0"]
+# Meta-extra for CI — bundles every extra the unit + integration test
+# matrix needs so workflows install with `pip install -e .[tests]`
+# instead of repeating the comma-separated list across jobs.
+tests = [
+    "definable[dev]",
+    "definable[readers]",
+    "definable[serve]",
+    "definable[cron]",
+    "definable[jwt]",
+    "definable[runtime]",
+    "definable[research]",
+    "definable[discord]",
+    "definable[anthropic]",
+    "definable[google]",
+    "definable[mistral]",
+    "definable[ollama]",
+]
 
 [tool.setuptools.package-data]
 definable = ["skills/library/*.md"]

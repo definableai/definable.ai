@@ -21,8 +21,6 @@ Use an agent when:
 - memory or retrieval should plug into the same run loop
 - you want one consistent sync, async, and streaming API
 
-Reach for a [`Team`](/teams/overview) when several specialists need a leader. Reach for a [`Workflow`](/workflows/overview) when the execution graph should be explicit and reproducible.
-
 ## What belongs in the agent layer
 
 | Module | Role | Kind |
@@ -35,7 +33,6 @@ Reach for a [`Team`](/teams/overview) when several specialists need a leader. Re
 | [`interfaces`](/interfaces/overview) | Expose an agent through CLI, chat, or web transports | Public component |
 | [`observability`](/observability/overview) | Runtime inspection endpoints and dashboard | Public component |
 | [`pipeline`](/agents/pipeline) | Phase-based execution model behind every run | Extension surface |
-| [`plugins`](/agents/plugins) | Package higher-level extensions around hooks and lifecycle | Extension surface |
 | [`reasoning`](/reasoning/thinking) | Structured thinking before answer generation | Public component |
 | [`research`](/reasoning/deep-research) | Multi-wave research pipeline for broader retrieval | Public component |
 | [`replay`](/replay/overview) | Inspect and compare previous runs | Public component |
@@ -73,7 +70,7 @@ assert output.status == RunStatus.completed
 ## Start from the right surface
 
 - Use [`Agent`](/reference/agents/agent) when you need a production agent with tools, memory, or knowledge.
-- Use [`pipeline`](/agents/pipeline) and [`plugins`](/agents/plugins) when you are extending the execution model itself.
+- Use [`pipeline`](/agents/pipeline) when you are extending the execution model itself.
 - Use [`runtime`](/agents/runtime) when you need HTTP endpoints, webhooks, interfaces, or scheduling around an agent.
 
 ## Read this next

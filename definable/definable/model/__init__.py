@@ -85,6 +85,11 @@ def __getattr__(name: str):
     from definable.model.utils import resolve_model_string
 
     return resolve_model_string
+  # --- Test guard ---
+  if name == "override_allow_model_requests":
+    from definable.model.base import override_allow_model_requests
+
+    return override_allow_model_requests
   # --- Resilience ---
   if name == "ResilientModel":
     from definable.model.resilience.resilient import ResilientModel
@@ -130,6 +135,8 @@ __all__ = [
   "ClaudeCode",
   # Lazy — Utilities
   "resolve_model_string",
+  # Lazy — Test guard
+  "override_allow_model_requests",  # noqa: F822
   # Lazy — Resilience
   "ResilientModel",  # noqa: F822
   "KeyPool",  # noqa: F822

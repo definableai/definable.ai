@@ -15,7 +15,6 @@ from definable.utils.log import log_error, log_warning
 
 if TYPE_CHECKING:
   from definable.agent.agent import Agent
-  from definable.agent.team.team import Team
   from definable.model.base import Model
 
 ACCURACY_JUDGE_PROMPT = """\
@@ -93,40 +92,6 @@ class AccuracyEval(BaseEval):
       )
 
     # Judge
-    score, reason = await self._judge_output(case.input, case.expected, actual)
-
-    return AccuracyResult(
-      eval_name=self.name,
-      score=score,
-      success=score >= self.threshold,
-      reason=reason,
-      threshold=self.threshold,
-      expected=case.expected,
-      actual=actual,
-    )
-
-  async def evaluate_team(self, team: "Team", case: EvalCase) -> AccuracyResult:
-    """Run the team, then judge the output."""
-    if case.expected is None:
-      return AccuracyResult(
-        eval_name=self.name,
-        success=False,
-        reason="No expected output provided.",
-        threshold=self.threshold,
-      )
-
-    try:
-      output = await team.arun(case.input)
-      actual = output.content or ""
-    except Exception as e:
-      log_error(f"AccuracyEval: team.arun() failed: {e}")
-      return AccuracyResult(
-        eval_name=self.name,
-        success=False,
-        reason=f"Team execution failed: {e}",
-        threshold=self.threshold,
-      )
-
     score, reason = await self._judge_output(case.input, case.expected, actual)
 
     return AccuracyResult(

@@ -15,7 +15,6 @@ from definable.utils.log import log_error, log_warning
 
 if TYPE_CHECKING:
   from definable.agent.agent import Agent
-  from definable.agent.team.team import Team
   from definable.model.base import Model
 
 NUMERIC_JUDGE_PROMPT = """\
@@ -97,16 +96,11 @@ class AgentAsJudgeEval(BaseEval):
 
   async def evaluate(self, agent: "Agent", case: EvalCase) -> JudgeResult:
     """Run the agent, then judge the output against criteria."""
-    return await self._judge_run(agent, None, case)
-
-  async def evaluate_team(self, team: "Team", case: EvalCase) -> JudgeResult:
-    """Run the team, then judge the output."""
-    return await self._judge_run(None, team, case)
+    return await self._judge_run(agent, case)
 
   async def _judge_run(
     self,
-    agent: Optional["Agent"],
-    team: Optional["Team"],
+    agent: "Agent",
     case: EvalCase,
   ) -> JudgeResult:
     """Core judge logic."""
@@ -121,20 +115,9 @@ class AgentAsJudgeEval(BaseEval):
         threshold=self.threshold,
       )
 
-    # Run agent/team
+    # Run agent
     try:
-      if agent:
-        output = await agent.arun(case.input)
-      elif team:
-        output = await team.arun(case.input)
-      else:
-        return JudgeResult(
-          eval_name=self.name,
-          success=False,
-          reason="No agent or team provided.",
-          criteria=criteria,
-          mode=self.mode,
-        )
+      output = await agent.arun(case.input)
       actual = output.content or ""
     except Exception as e:
       log_error(f"AgentAsJudgeEval: execution failed: {e}")

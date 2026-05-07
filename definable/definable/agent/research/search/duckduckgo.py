@@ -23,7 +23,7 @@ class DuckDuckGoSearchProvider:
       from ddgs import DDGS
     except ImportError:
       try:
-        from duckduckgo_search import DDGS  # type: ignore[assignment]
+        from duckduckgo_search import DDGS  # type: ignore[assignment, no-redef]
       except ImportError:
         raise ImportError("DuckDuckGo search requires 'ddgs'. Install it with: pip install ddgs")
 

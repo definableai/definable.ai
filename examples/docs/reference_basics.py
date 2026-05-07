@@ -10,9 +10,7 @@ except ImportError:
 from definable.agent import Agent, AgentConfig
 from definable.agent.run import RunStatus
 from definable.agent.run.agent import RunOutput
-from definable.agent.team import Team, TeamMode
 from definable.agent.testing import MockModel
-from definable.agent.workflow import Step, Workflow
 from definable.knowledge import Knowledge
 from definable.memory import InMemoryStore, Memory
 from definable.model import OpenAIChat, resolve_model_string
@@ -31,38 +29,6 @@ async def _memory_summary() -> int:
     await memory.add(Message(role="user", content="Ada"), session_id="docs")
     entries = await memory.get_entries("docs")
   return len(entries)
-
-
-async def _team_summary() -> dict[str, object]:
-  researcher = Agent(model=MockModel(responses=["research notes"]), name="researcher")
-  writer = Agent(model=MockModel(responses=["writer draft"]), name="writer")
-  team = Team(
-    name="docs-team",
-    model=MockModel(responses=["team synthesis"]),
-    members=[researcher, writer],
-    mode=TeamMode.collaborate,
-  )
-  output = await team.arun("Create a summary.")
-  return {
-    "team_output": output.content,
-    "team_mode": team.mode.value,
-    "member_names": team.member_names,
-  }
-
-
-async def _workflow_summary() -> dict[str, object]:
-  workflow = Workflow(
-    name="docs-workflow",
-    steps=[
-      Step(name="research", executor=lambda step_input: "notes"),
-      Step(name="draft", executor=lambda step_input: f"draft from {step_input.get_last_step_content()}"),
-    ],
-  )
-  output = await workflow.arun("Write docs.")
-  return {
-    "workflow_content": output.content,
-    "workflow_success": output.success,
-  }
 
 
 def main() -> dict[str, object]:
@@ -103,8 +69,6 @@ def main() -> dict[str, object]:
     "memory_entries": asyncio.run(_memory_summary()),
     "openai_model_id": openai.id,
     "resolved_model_type": type(resolved).__name__,
-    **asyncio.run(_team_summary()),
-    **asyncio.run(_workflow_summary()),
   }
 
   assert summary["agent_output"] == "12"
@@ -117,10 +81,6 @@ def main() -> dict[str, object]:
   assert summary["memory_entries"] == 1
   assert summary["openai_model_id"] == "gpt-4o-mini"
   assert summary["resolved_model_type"] == "OpenAIChat"
-  assert summary["team_output"] == "team synthesis"
-  assert summary["team_mode"] == "collaborate"
-  assert summary["workflow_content"] == "draft from notes"
-  assert summary["workflow_success"] is True
 
   return summary
 

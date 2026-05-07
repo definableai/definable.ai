@@ -516,7 +516,6 @@ definable/definable/
 │   ├── tracing/        # JSONL trace export, DebugExporter
 │   └── trigger/        # Webhook, Cron, EventTrigger
 ├── browser/            # BrowserToolkit — 55 tools via Playwright CDP
-├── claude_code/        # ClaudeCodeAgent — subprocess wrapper for Claude Code CLI
 ├── knowledge/          # RAG: embedders, vector DBs, rerankers, chunkers
 ├── mcp/                # Model Context Protocol client
 ├── media.py            # Image, Audio, Video, File types

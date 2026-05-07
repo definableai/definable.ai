@@ -45,15 +45,13 @@
               "tutorials/build-a-support-agent",
               "tutorials/build-a-rag-assistant",
               "tutorials/build-a-multi-interface-agent",
-              "tutorials/build-a-runtime-service",
-              "tutorials/build-a-review-workflow"
+              "tutorials/build-a-runtime-service"
             ]
           },
           {
             "group": "Concepts",
             "pages": [
               "concepts/overview",
-              "concepts/agent-vs-team-vs-workflow",
               "concepts/knowledge-vs-memory",
               "concepts/tools-vs-toolkits-vs-skills-vs-mcp",
               "concepts/runtime-vs-interface",
@@ -77,8 +75,6 @@
                   "agents/deep-research",
                   "agents/evaluation",
                   "agents/runtime",
-                  "agents/teams",
-                  "agents/workflows",
                   {
                     "group": "Usage",
                     "pages": [
@@ -87,49 +83,6 @@
                       "agents/usage/agent-with-memory",
                       "agents/usage/agent-with-structured-output",
                       "agents/usage/agent-with-streaming"
-                    ]
-                  }
-                ]
-              },
-              {
-                "group": "Teams",
-                "pages": [
-                  "teams/overview",
-                  "teams/building-teams",
-                  "teams/running-teams",
-                  "teams/delegation",
-                  {
-                    "group": "Usage",
-                    "pages": [
-                      "teams/usage/coordinate-team",
-                      "teams/usage/route-team",
-                      "teams/usage/collaborate-team",
-                      "teams/usage/tasks-team"
-                    ]
-                  }
-                ]
-              },
-              {
-                "group": "Workflows",
-                "pages": [
-                  "workflows/overview",
-                  "workflows/building-workflows",
-                  "workflows/running-workflows",
-                  {
-                    "group": "Patterns",
-                    "pages": [
-                      "workflows/patterns/sequential",
-                      "workflows/patterns/parallel",
-                      "workflows/patterns/conditional",
-                      "workflows/patterns/loop",
-                      "workflows/patterns/router"
-                    ]
-                  },
-                  {
-                    "group": "Usage",
-                    "pages": [
-                      "workflows/usage/basic-workflow",
-                      "workflows/usage/nested-workflows"
                     ]
                   }
                 ]
@@ -353,12 +306,6 @@
                 ]
               },
               {
-                "group": "Plugins",
-                "pages": [
-                  "agents/plugins"
-                ]
-              },
-              {
                 "group": "Scheduling",
                 "pages": [
                   "agents/scheduling"
@@ -373,8 +320,7 @@
               "advanced/run-output",
               "advanced/media-types",
               "replay/overview",
-              "observability/overview",
-              "claude-code/overview"
+              "observability/overview"
             ]
           },
           {
@@ -430,9 +376,7 @@
               "examples/replay",
               "examples/security",
               "examples/skills",
-              "examples/teams",
-              "examples/tools",
-              "examples/workflows"
+              "examples/tools"
             ]
           }
         ]
@@ -446,18 +390,6 @@
               "reference/agents/agent",
               "reference/agents/config",
               "reference/agents/run-output"
-            ]
-          },
-          {
-            "group": "Teams",
-            "pages": [
-              "reference/teams/team"
-            ]
-          },
-          {
-            "group": "Workflows",
-            "pages": [
-              "reference/workflows/workflow"
             ]
           },
           {

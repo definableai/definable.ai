@@ -1,4 +1,4 @@
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any, Dict, Optional, Union
 
 from definable.utils.timer import Timer
@@ -130,3 +130,41 @@ class Metrics:
   def set_time_to_first_token(self):
     if self.timer is not None:
       self.time_to_first_token = self.timer.elapsed
+
+  @classmethod
+  def from_dict(cls, data: Dict[str, Any]) -> "Metrics":
+    """Defensive deserialization. Drops unknown keys, ignores the live timer."""
+    valid = {f.name for f in fields(cls) if f.name != "timer"}
+    return cls(**{k: v for k, v in data.items() if k in valid})
+
+
+# Semantic alias — per-message token/timing metrics. Same shape as Metrics today
+# but lets call sites name what they hold (a message's metrics vs. a tool call's).
+MessageMetrics = Metrics
+
+
+@dataclass
+class ToolCallMetrics:
+  """Wall-clock metrics for a single tool execution.
+
+  Captured around tool invocation to surface tool latency separately
+  from model timing. ``start_time``/``end_time`` are unix timestamps;
+  ``duration`` is seconds.
+  """
+
+  tool_name: Optional[str] = None
+  tool_call_id: Optional[str] = None
+  start_time: Optional[float] = None
+  end_time: Optional[float] = None
+  duration: Optional[float] = None
+  error: Optional[str] = None
+  additional_metrics: Optional[Dict[str, Any]] = field(default=None)
+
+  def to_dict(self) -> Dict[str, Any]:
+    d = asdict(self)
+    return {k: v for k, v in d.items() if v is not None}
+
+  @classmethod
+  def from_dict(cls, data: Dict[str, Any]) -> "ToolCallMetrics":
+    valid = {f.name for f in fields(cls)}
+    return cls(**{k: v for k, v in data.items() if k in valid})

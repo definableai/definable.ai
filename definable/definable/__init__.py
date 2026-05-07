@@ -62,8 +62,10 @@ from definable.tool.decorator import tool
 from definable.tool.function import Function
 from definable.model.message import Message
 from definable.agent.events import RunOutput
+from definable.agent.run.base import get_current_run_context
 from definable.media import Audio, File, Image, Video
-from definable.exceptions import AgentRunException, RetryAgentRun, StopAgentRun
+from definable.exceptions import AgentRunException, ControlFlowException, RetryAgentRun, StopAgentRun, UserError
+from definable.utils.sentinel import UNSET
 
 
 if TYPE_CHECKING:
@@ -85,7 +87,6 @@ if TYPE_CHECKING:
   from definable.model.ollama import Ollama
   from definable.model.openrouter import OpenRouter
   from definable.agent.observability import ObservabilityConfig
-  from definable.claude_code import ClaudeCodeAgent
   from definable.reader.audio import OpenAITranscriber
   from definable.skill.registry import SkillRegistry
 
@@ -120,8 +121,6 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
   "Guardrails": ("definable.agent.guardrail", "Guardrails"),
   # Skills
   "SkillRegistry": ("definable.skill.registry", "SkillRegistry"),
-  # Claude Code
-  "ClaudeCodeAgent": ("definable.claude_code", "ClaudeCodeAgent"),
   # New blocks
   "Thinking": ("definable.agent.reasoning", "Thinking"),
   "Tracing": ("definable.agent.tracing", "Tracing"),
@@ -168,10 +167,17 @@ __all__ = [
   "File",
   # Run
   "RunOutput",
-  # Exceptions
-  "AgentRunException",
-  "StopAgentRun",
+  "get_current_run_context",
+  # Exceptions — control flow
+  "ControlFlowException",
   "RetryAgentRun",
+  "StopAgentRun",
+  # Exceptions — errors
+  "UserError",
+  # Exceptions — backward compat alias
+  "AgentRunException",
+  # Sentinel
+  "UNSET",
   # Lazy — Models
   "OpenAIChat",
   "OpenAILike",
@@ -199,8 +205,6 @@ __all__ = [
   "Guardrails",
   # Lazy — Skills
   "SkillRegistry",
-  # Lazy — Claude Code
-  "ClaudeCodeAgent",
   # Lazy — New blocks
   "Thinking",
   "Tracing",

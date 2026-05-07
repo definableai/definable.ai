@@ -41,6 +41,42 @@ from definable.utils.timer import Timer
 from definable.utils.tools import get_function_call_for_tool_call, get_function_call_for_tool_execution
 from pydantic import BaseModel
 
+import os
+
+_ALLOW_MODEL_REQUESTS: bool | None = None
+
+
+def _check_model_requests_allowed() -> None:
+  """Raise if model requests are blocked via ALLOW_MODEL_REQUESTS=0.
+
+  Set ALLOW_MODEL_REQUESTS=0 in your test environment to catch accidental
+  real API calls. The check is cached after the first call for performance.
+  """
+  global _ALLOW_MODEL_REQUESTS
+  if _ALLOW_MODEL_REQUESTS is None:
+    _ALLOW_MODEL_REQUESTS = os.environ.get("ALLOW_MODEL_REQUESTS", "1") != "0"
+  if not _ALLOW_MODEL_REQUESTS:
+    raise RuntimeError(
+      "Model requests are blocked (ALLOW_MODEL_REQUESTS=0). "
+      "If this is an integration test that needs real API calls, "
+      "set ALLOW_MODEL_REQUESTS=1 or use the allow_model_requests fixture."
+    )
+
+
+def override_allow_model_requests(allowed: bool) -> None:
+  """Override the ALLOW_MODEL_REQUESTS guard at runtime.
+
+  Use in test fixtures to selectively enable real API calls:
+
+      @pytest.fixture
+      def allow_model_requests():
+          override_allow_model_requests(True)
+          yield
+          override_allow_model_requests(False)
+  """
+  global _ALLOW_MODEL_REQUESTS
+  _ALLOW_MODEL_REQUESTS = allowed
+
 
 @dataclass
 class MessageData:
@@ -123,6 +159,11 @@ class Model(ABC):
   supports_native_thinking: bool = False
   # True if the Model requires a json_schema for structured outputs (e.g. LMStudio)
   supports_json_schema_outputs: bool = False
+
+  # True if the provider returns cumulative token counts in every streaming
+  # chunk (Perplexity does this). When True, we keep only the latest chunk's
+  # usage instead of summing across deltas — otherwise we double-count.
+  collect_metrics_on_completion: bool = False
 
   # Controls which (if any) function is called by the model.
   # "none" means the model will not call a function and instead generates a message.
@@ -220,6 +261,7 @@ class Model(ABC):
     This method wraps the invoke() call and retries on ModelProviderError
     with optional exponential backoff.
     """
+    _check_model_requests_allowed()
     last_exception: Optional[ModelProviderError] = None
 
     for attempt in range(self.retries + 1):
@@ -265,6 +307,7 @@ class Model(ABC):
     This method wraps the ainvoke() call and retries on ModelProviderError
     with optional exponential backoff.
     """
+    _check_model_requests_allowed()
     last_exception: Optional[ModelProviderError] = None
 
     for attempt in range(self.retries + 1):
@@ -311,6 +354,7 @@ class Model(ABC):
     This method wraps the invoke_stream() call and retries on ModelProviderError
     with optional exponential backoff. Note that retries restart the entire stream.
     """
+    _check_model_requests_allowed()
     last_exception: Optional[ModelProviderError] = None
 
     for attempt in range(self.retries + 1):
@@ -359,6 +403,7 @@ class Model(ABC):
     This method wraps the ainvoke_stream() call and retries on ModelProviderError
     with optional exponential backoff. Note that retries restart the entire stream.
     """
+    _check_model_requests_allowed()
     last_exception: Optional[ModelProviderError] = None
 
     for attempt in range(self.retries + 1):
@@ -1728,9 +1773,13 @@ class Model(ABC):
       stream_data.response_role = model_response_delta.role  # type: ignore
 
     if model_response_delta.response_usage is not None:
-      if stream_data.response_metrics is None:
-        stream_data.response_metrics = Metrics()
-      stream_data.response_metrics += model_response_delta.response_usage
+      if self.collect_metrics_on_completion:
+        # Provider sends cumulative counts each chunk — keep the latest.
+        stream_data.response_metrics = model_response_delta.response_usage
+      else:
+        if stream_data.response_metrics is None:
+          stream_data.response_metrics = Metrics()
+        stream_data.response_metrics += model_response_delta.response_usage
 
     # Update stream_data content
     if model_response_delta.content is not None:

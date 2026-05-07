@@ -7,22 +7,12 @@ from rich.logging import RichHandler
 from rich.text import Text
 
 LOGGER_NAME = "definable"
-TEAM_LOGGER_NAME = f"{LOGGER_NAME}-team"
-WORKFLOW_LOGGER_NAME = f"{LOGGER_NAME}-workflow"
 
 # Define custom styles for different log sources
 LOG_STYLES = {
   "agent": {
     "debug": "green",
     "info": "blue",
-  },
-  "team": {
-    "debug": "magenta",
-    "info": "steel_blue1",
-  },
-  "workflow": {
-    "debug": "sandy_brown",
-    "info": "orange3",
   },
 }
 
@@ -102,8 +92,6 @@ def build_logger(logger_name: str, source_type: Optional[str] = None) -> logging
 
 
 agent_logger: logging.Logger = build_logger(LOGGER_NAME, source_type="agent")
-team_logger: logging.Logger = build_logger(TEAM_LOGGER_NAME, source_type="team")
-workflow_logger: logging.Logger = build_logger(WORKFLOW_LOGGER_NAME, source_type="workflow")
 
 # Set the default logger to the agent logger
 logger: logging.Logger = agent_logger
@@ -163,22 +151,10 @@ def center_header(message: str, symbol: str = "*") -> str:
   return f"{header.center(terminal_width - 20, symbol)}"
 
 
-def use_team_logger():
-  """Switch the default logger to use team_logger"""
-  global logger
-  logger = team_logger
-
-
 def use_agent_logger():
   """Switch the default logger to use the default agent logger"""
   global logger
   logger = agent_logger
-
-
-def use_workflow_logger():
-  """Switch the default logger to use workflow_logger"""
-  global logger
-  logger = workflow_logger
 
 
 @lru_cache(maxsize=128)
@@ -226,8 +202,6 @@ def log_exception(msg, *args, **kwargs):
 def configure_definable_logging(
   custom_default_logger: Optional[logging.Logger] = None,
   custom_agent_logger: Optional[logging.Logger] = None,
-  custom_team_logger: Optional[logging.Logger] = None,
-  custom_workflow_logger: Optional[logging.Logger] = None,
 ) -> None:
   """
   Util to set custom loggers. These will be used everywhere across the Definable library.
@@ -235,8 +209,6 @@ def configure_definable_logging(
   Args:
       custom_default_logger: Default logger to use (overrides agent_logger for default)
       custom_agent_logger: Custom logger for agent operations
-      custom_team_logger: Custom logger for team operations
-      custom_workflow_logger: Custom logger for workflow operations
   """
   if custom_default_logger is not None:
     global logger
@@ -245,11 +217,3 @@ def configure_definable_logging(
   if custom_agent_logger is not None:
     global agent_logger
     agent_logger = custom_agent_logger
-
-  if custom_team_logger is not None:
-    global team_logger
-    team_logger = custom_team_logger
-
-  if custom_workflow_logger is not None:
-    global workflow_logger
-    workflow_logger = custom_workflow_logger
