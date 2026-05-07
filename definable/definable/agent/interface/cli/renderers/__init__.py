@@ -8,7 +8,7 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.interface.cli.config import CLIConfig
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 @runtime_checkable

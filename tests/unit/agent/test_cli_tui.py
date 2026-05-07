@@ -455,7 +455,7 @@ class TestEventRouter:
 
   def test_unknown_event_ignored(self):
     """Events the router doesn't recognize are silently ignored."""
-    from definable.agent.run.base import BaseRunOutputEvent
+    from definable.run.base import BaseRunOutputEvent
 
     router, app = self._make_router()
     event = BaseRunOutputEvent()  # base event — no specific handler

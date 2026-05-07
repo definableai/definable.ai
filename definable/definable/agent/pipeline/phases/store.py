@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, AsyncGenerator, Optional, Tuple
 
 from definable.agent.pipeline.phase import BasePhase
 from definable.agent.pipeline.state import LoopState
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 from definable.model.message import Message
 
 if TYPE_CHECKING:

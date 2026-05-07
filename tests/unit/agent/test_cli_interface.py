@@ -40,7 +40,7 @@ from definable.agent.interface.cli.renderers.sub_agent import SubAgentRenderer
 from definable.agent.interface.cli.renderers.tool import ToolCallRenderer
 from definable.agent.interface.message import InterfaceMessage
 from definable.agent.interface.session import InterfaceSession, SessionManager
-from definable.agent.run.agent import (
+from definable.run.agent import (
   KnowledgeRetrievalCompletedEvent,
   KnowledgeRetrievalStartedEvent,
   MemoryRecallCompletedEvent,

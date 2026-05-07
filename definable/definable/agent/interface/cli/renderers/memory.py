@@ -8,14 +8,14 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.interface.cli.config import CLIConfig
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 class MemoryRenderer:
   """Renders memory recall and update lifecycle events."""
 
   def handles(self, event: "BaseRunOutputEvent") -> bool:
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       MemoryRecallCompletedEvent,
       MemoryRecallStartedEvent,
       MemoryUpdateCompletedEvent,
@@ -33,7 +33,7 @@ class MemoryRenderer:
     )
 
   def render(self, event: "BaseRunOutputEvent", console: "Console", config: "CLIConfig") -> None:
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       MemoryRecallCompletedEvent,
       MemoryRecallStartedEvent,
       MemoryUpdateCompletedEvent,

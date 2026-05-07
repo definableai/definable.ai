@@ -8,7 +8,7 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.interface.cli.config import CLIConfig
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 def _truncate(text: str, max_len: int) -> str:
@@ -21,7 +21,7 @@ class ReasoningRenderer:
   """Renders ReasoningStarted, ReasoningStep, ReasoningCompleted events."""
 
   def handles(self, event: "BaseRunOutputEvent") -> bool:
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       ReasoningCompletedEvent,
       ReasoningStartedEvent,
       ReasoningStepEvent,
@@ -33,7 +33,7 @@ class ReasoningRenderer:
     if not config.show_thinking:
       return
 
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       ReasoningCompletedEvent,
       ReasoningStartedEvent,
       ReasoningStepEvent,

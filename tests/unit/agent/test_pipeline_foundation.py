@@ -11,7 +11,7 @@ from definable.agent.pipeline.pipeline import Pipeline
 from definable.agent.pipeline.state import LoopState, LoopStatus
 from definable.agent.pipeline.sub_agent import SubAgentConfig, SubAgentPolicy, ThreadControlBlock
 from definable.agent.pipeline.tool_retry import ToolRetry
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 
 
 # ── Helpers ────────────────────────────────────────────────────────────

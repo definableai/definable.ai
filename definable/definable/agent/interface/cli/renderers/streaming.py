@@ -8,7 +8,7 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.interface.cli.config import CLIConfig
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 class StreamingRenderer:
@@ -39,12 +39,12 @@ class StreamingRenderer:
     self._streamed_run_id = None
 
   def handles(self, event: "BaseRunOutputEvent") -> bool:
-    from definable.agent.run.agent import RunContentEvent, RunStartedEvent
+    from definable.run.agent import RunContentEvent, RunStartedEvent
 
     return isinstance(event, (RunContentEvent, RunStartedEvent))
 
   def render(self, event: "BaseRunOutputEvent", console: "Console", config: "CLIConfig") -> None:
-    from definable.agent.run.agent import RunContentEvent, RunStartedEvent
+    from definable.run.agent import RunContentEvent, RunStartedEvent
 
     if isinstance(event, RunStartedEvent):
       self.reset()

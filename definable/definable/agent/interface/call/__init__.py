@@ -21,7 +21,7 @@ Quick Start (Twilio ConversationRelay)::
     )
 
     # Run with AgentRuntime (recommended — shared HTTP server):
-    from definable.agent.runtime import AgentRuntime
+    from definable.runtime import AgentRuntime
     runtime = AgentRuntime(agent, interfaces=[call])
     await runtime.start()
 """

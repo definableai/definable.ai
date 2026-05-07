@@ -48,7 +48,7 @@ def _mock_response(content="done"):
 
 def _make_ctx(run_id="test"):
   """Build a minimal RunContext for _prepare_tools_for_run tests."""
-  from definable.agent.run.base import RunContext
+  from definable.run.base import RunContext
 
   return RunContext(run_id=run_id, session_id="s1", session_state={})
 

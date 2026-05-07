@@ -693,13 +693,13 @@ class TestCompressionEvents:
     assert evt.duration_ms == 150.0
 
   def test_compression_events_in_run_event_enum(self):
-    from definable.agent.run.agent import RunEvent
+    from definable.run.agent import RunEvent
 
     assert RunEvent.compression_started.value == "CompressionStarted"
     assert RunEvent.compression_completed.value == "CompressionCompleted"
 
   def test_compression_events_in_registry(self):
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       CompressionCompletedEvent,
       CompressionStartedEvent,
       RUN_EVENT_TYPE_REGISTRY,

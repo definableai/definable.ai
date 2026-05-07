@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
   from definable.agent.events import BaseRunOutputEvent
   from definable.agent.interface.desktop.events import BridgeCallEvent, DesktopActionEvent
-  from definable.agent.run.agent import (
+  from definable.run.agent import (
     ModelCallCompletedEvent,
     ModelCallStartedEvent,
     RunCompletedEvent,
@@ -69,7 +69,7 @@ class DebugExporter:
 
   def export(self, event: "BaseRunOutputEvent") -> None:
     from definable.agent.interface.desktop.events import BridgeCallEvent, DesktopActionEvent
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       ModelCallCompletedEvent,
       ModelCallStartedEvent,
       RunCompletedEvent,

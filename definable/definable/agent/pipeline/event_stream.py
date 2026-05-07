@@ -3,7 +3,7 @@
 import asyncio
 from typing import Callable, List
 
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 from definable.utils.log import log_warning
 
 

@@ -34,7 +34,7 @@ from definable.model.message import Citations, Message
 from definable.model.metrics import Metrics
 from definable.model.response import ModelResponse, ModelResponseEvent, ToolExecution, UserInputField
 from definable.agent.events import CustomEvent, RunContentEvent, RunOutput, RunOutputEvent
-from definable.agent.run.requirement import RunRequirement
+from definable.run.requirement import RunRequirement
 from definable.tool.function import Function, FunctionCall, FunctionExecutionResult
 from definable.utils.log import log_debug, log_error, log_info, log_warning
 from definable.utils.timer import Timer

@@ -148,7 +148,7 @@ class AgentRuntime:
     except ImportError as e:
       raise ImportError("uvicorn is required for the agent server. Install it with: pip install 'definable[serve]'") from e
 
-    from definable.agent.runtime.server import AgentServer
+    from definable.runtime.server import AgentServer
 
     all_ifaces = list(self.gateway.interfaces) if self.gateway else list(self.interfaces)
     server = AgentServer(self.agent, self.host, self.port, dev=self.dev, interfaces=all_ifaces)

@@ -360,7 +360,7 @@ def _load_replay(
 ) -> Any:
   """Load a Replay from live buffer or trace files."""
   from definable.agent.replay.replay import Replay
-  from definable.agent.run.agent import run_output_event_from_dict
+  from definable.run.agent import run_output_event_from_dict
 
   # Try live buffer first
   live_events = collector.get_events_for_run(run_id)
@@ -391,7 +391,7 @@ def _load_replay(
 def _replay_dict_from_events(events: List[Dict[str, Any]], run_id: str) -> Dict[str, Any]:
   """Build a replay-like dict from raw event dicts (for live buffer data)."""
   from definable.agent.replay.replay import Replay
-  from definable.agent.run.agent import run_output_event_from_dict
+  from definable.run.agent import run_output_event_from_dict
 
   typed = []
   for data in events:

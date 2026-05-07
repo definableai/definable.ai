@@ -6,9 +6,9 @@ Usage:
     from definable.agent.events import BrowserActionEvent
 """
 
-from definable.agent.run.base import BaseRunOutputEvent, RunContext, RunStatus
+from definable.run.base import BaseRunOutputEvent, RunContext, RunStatus
 from definable.browser.events import BrowserActionEvent
-from definable.agent.run.agent import (
+from definable.run.agent import (
   BaseAgentRunEvent,
   CompressionCompletedEvent,
   CompressionStartedEvent,

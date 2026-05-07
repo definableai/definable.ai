@@ -17,8 +17,8 @@ from definable.agent.pipeline.debug import DebugConfig
 from definable.agent.pipeline.phase import BasePhase
 from definable.agent.pipeline.pipeline import Pipeline
 from definable.agent.pipeline.state import LoopState, LoopStatus, PhaseMetric
-from definable.agent.run.agent import PhaseCompletedEvent, PhaseStartedEvent, RunOutput
-from definable.agent.run.base import RunContext
+from definable.run.agent import PhaseCompletedEvent, PhaseStartedEvent, RunOutput
+from definable.run.base import RunContext
 
 
 # ═══════════════════════════════════════════════════════════════════════

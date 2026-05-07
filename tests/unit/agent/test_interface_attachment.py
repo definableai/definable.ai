@@ -205,7 +205,7 @@ class TestAutoGateway:
     assert agent.gateway is None
 
     # aserve should auto-create a gateway
-    with patch("definable.agent.runtime.runner.AgentRuntime.start", new_callable=AsyncMock) as mock_start:
+    with patch("definable.runtime.runner.AgentRuntime.start", new_callable=AsyncMock) as mock_start:
       await agent.aserve()
 
     # Verify runtime was created (gateway is internal to aserve)
@@ -216,7 +216,7 @@ class TestAutoGateway:
     tg = _StubInterface("telegram")
     agent = _make_agent(interfaces=tg)
 
-    with patch("definable.agent.runtime.runner.AgentRuntime.start", new_callable=AsyncMock) as mock_start:
+    with patch("definable.runtime.runner.AgentRuntime.start", new_callable=AsyncMock) as mock_start:
       await agent.aserve()
 
     mock_start.assert_called_once()
@@ -230,7 +230,7 @@ class TestAutoGateway:
     gw = InterfaceGateway(shared_sessions=True)
     agent = _make_agent(interfaces=[tg, dc], gateway=gw)
 
-    with patch("definable.agent.runtime.runner.AgentRuntime.start", new_callable=AsyncMock):
+    with patch("definable.runtime.runner.AgentRuntime.start", new_callable=AsyncMock):
       await agent.aserve()
 
     assert agent.gateway is gw

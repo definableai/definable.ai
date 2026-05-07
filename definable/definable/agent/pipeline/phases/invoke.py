@@ -6,7 +6,7 @@ from definable.agent.events import RunCompletedEvent, RunStartedEvent
 from definable.agent.loop import AgentLoop
 from definable.agent.pipeline.phase import BasePhase
 from definable.agent.pipeline.state import LoopState
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 
 if TYPE_CHECKING:
   from definable.agent.agent import Agent

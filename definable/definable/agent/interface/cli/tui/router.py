@@ -25,7 +25,7 @@ from definable.agent.interface.cli.tui.messages import (
 if TYPE_CHECKING:
   from textual.app import App
 
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 class EventRouter:

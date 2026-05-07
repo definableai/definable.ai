@@ -26,7 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from time import time
 
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 
 
 @dataclass

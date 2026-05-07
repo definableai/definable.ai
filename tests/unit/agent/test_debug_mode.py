@@ -9,7 +9,7 @@ import asyncio
 import pytest
 
 from definable.agent.agent import Agent
-from definable.agent.run.agent import (
+from definable.run.agent import (
   ModelCallCompletedEvent,
   ModelCallStartedEvent,
   RunCompletedEvent,
@@ -120,7 +120,7 @@ class TestDebugExporter:
 
   def test_handles_unknown_event_gracefully(self):
     """DebugExporter silently ignores unrecognized event types."""
-    from definable.agent.run.agent import CustomEvent
+    from definable.run.agent import CustomEvent
 
     exporter = DebugExporter()
     event = CustomEvent(event="CustomEvent")

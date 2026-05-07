@@ -21,8 +21,8 @@ import pytest
 
 from definable.agent.events import ToolCallCompletedEvent, ToolCallStartedEvent, ToolContentEvent
 from definable.agent.loop import AgentLoop, ToolBatchResult
-from definable.agent.run.agent import BaseRunOutputEvent, RunEvent
-from definable.agent.run.base import RunContext
+from definable.run.agent import BaseRunOutputEvent, RunEvent
+from definable.run.base import RunContext
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -341,12 +341,12 @@ class TestImports:
     assert TCE is not None
 
   def test_import_from_run_agent(self):
-    from definable.agent.run.agent import ToolContentEvent as TCE
+    from definable.run.agent import ToolContentEvent as TCE
 
     assert TCE is not None
 
   def test_in_run_event_registry(self):
-    from definable.agent.run.agent import RUN_EVENT_TYPE_REGISTRY
+    from definable.run.agent import RUN_EVENT_TYPE_REGISTRY
 
     assert "ToolContent" in RUN_EVENT_TYPE_REGISTRY
 

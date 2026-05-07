@@ -40,8 +40,8 @@ if TYPE_CHECKING:
   from definable.agent.interface.hooks import InterfaceHook
   from definable.agent.interface.identity import IdentityResolver
   from definable.agent.interface.session import InterfaceSession, SessionManager
-  from definable.agent.run.agent import RunOutput
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.agent import RunOutput
+  from definable.run.base import BaseRunOutputEvent
 
 
 def _textual_available() -> bool:
@@ -337,7 +337,7 @@ class CLIInterface(BaseInterface):
 
   async def _run_agent(self, message: InterfaceMessage, session: InterfaceSession) -> RunOutput:
     """Run the agent, using streaming in TUI mode for real-time display."""
-    from definable.agent.run.agent import RunOutput
+    from definable.run.agent import RunOutput
 
     if self.active_mode != "tui":
       return await super()._run_agent(message, session)

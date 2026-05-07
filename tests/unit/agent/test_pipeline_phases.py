@@ -14,7 +14,7 @@ from definable.agent.pipeline.phases import (
   ThinkPhase,
 )
 from definable.agent.pipeline.state import LoopState, LoopStatus
-from definable.agent.run.base import RunContext
+from definable.run.base import RunContext
 
 
 def _make_state(**overrides) -> LoopState:

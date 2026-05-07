@@ -8,14 +8,14 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.interface.cli.config import CLIConfig
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 class DeepResearchRenderer:
   """Renders DeepResearchStarted, Progress, and Completed events."""
 
   def handles(self, event: "BaseRunOutputEvent") -> bool:
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       DeepResearchCompletedEvent,
       DeepResearchProgressEvent,
       DeepResearchStartedEvent,
@@ -24,7 +24,7 @@ class DeepResearchRenderer:
     return isinstance(event, (DeepResearchStartedEvent, DeepResearchProgressEvent, DeepResearchCompletedEvent))
 
   def render(self, event: "BaseRunOutputEvent", console: "Console", config: "CLIConfig") -> None:
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       DeepResearchCompletedEvent,
       DeepResearchProgressEvent,
       DeepResearchStartedEvent,

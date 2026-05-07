@@ -96,7 +96,7 @@ class TestReadTraceEvents:
   """Tests for read_trace_events()."""
 
   def test_deserializes_run_started_event(self, tmp_path):
-    from definable.agent.run.agent import RunStartedEvent
+    from definable.run.agent import RunStartedEvent
 
     p = tmp_path / "session.jsonl"
     event_data = {
@@ -117,7 +117,7 @@ class TestReadTraceEvents:
     assert events[0].run_id == "r1"
 
   def test_deserializes_run_completed_event(self, tmp_path):
-    from definable.agent.run.agent import RunCompletedEvent
+    from definable.run.agent import RunCompletedEvent
 
     p = tmp_path / "session.jsonl"
     event_data = {
@@ -171,7 +171,7 @@ class TestReadTraceEvents:
 
   def test_roundtrip_with_jsonl_exporter(self, tmp_path):
     """Write events via JSONLExporter, then read them back via read_trace_events."""
-    from definable.agent.run.agent import RunCompletedEvent, RunStartedEvent
+    from definable.run.agent import RunCompletedEvent, RunStartedEvent
     from definable.agent.tracing.jsonl import JSONLExporter
 
     exporter = JSONLExporter(trace_dir=str(tmp_path), mirror_stdout=False)

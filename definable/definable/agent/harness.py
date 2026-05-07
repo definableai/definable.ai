@@ -21,7 +21,7 @@ from definable.agent.events import (
 )
 from definable.agent.loop import AgentLoop
 from definable.agent.pipeline.state import LoopState, LoopStatus
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 from definable.model.message import Message
 
 if TYPE_CHECKING:

@@ -7,7 +7,7 @@ from definable.agent.events import (
   SubAgentSpawnedEvent,
 )
 from definable.agent.pipeline.sub_agent import SubAgentConfig, SubAgentPolicy, ThreadControlBlock
-from definable.agent.run.agent import RUN_EVENT_TYPE_REGISTRY, RunEvent
+from definable.run.agent import RUN_EVENT_TYPE_REGISTRY, RunEvent
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
-from definable.agent.run.base import RunContext
+from definable.run.base import RunContext
 from definable.model.message import Message
 from definable.model.response import ToolExecution
 from definable.tool.function import Function
@@ -17,8 +17,8 @@ if TYPE_CHECKING:
   from definable.agent.loop import CancellationToken
   from definable.agent.pipeline.sub_agent import ThreadControlBlock
   from definable.agent.reasoning.step import ReasoningStep, ThinkingOutput
-  from definable.agent.run.agent import RunInput
-  from definable.agent.run.requirement import RunRequirement
+  from definable.run.agent import RunInput
+  from definable.run.requirement import RunRequirement
   from definable.model.base import Model
   from definable.model.metrics import Metrics
 

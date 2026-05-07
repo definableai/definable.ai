@@ -67,7 +67,7 @@ def get_current_run_context() -> Optional[RunContext]:
   recommended way for tools to access run context without requiring
   it as an explicit parameter::
 
-      from definable.agent.run.base import get_current_run_context
+      from definable.run.base import get_current_run_context
 
       @tool
       def my_tool(query: str) -> str:
@@ -221,7 +221,7 @@ class BaseRunOutputEvent:
   def from_dict(cls, data: Dict[str, Any]):
     run_input = data.pop("run_input", None)
     if run_input:
-      from definable.agent.run.agent import RunInput
+      from definable.run.agent import RunInput
 
       data["run_input"] = RunInput.from_dict(run_input)
     tool = data.pop("tool", None)

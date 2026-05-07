@@ -146,7 +146,7 @@ class TestReplayFromEvents:
     assert r.source == "trace_file"
 
   def test_from_run_started_event(self):
-    from definable.agent.run.agent import RunStartedEvent
+    from definable.run.agent import RunStartedEvent
 
     evt = RunStartedEvent(
       run_id="r1",
@@ -164,7 +164,7 @@ class TestReplayFromEvents:
     assert r.model == "gpt-4o"
 
   def test_from_run_completed_event(self):
-    from definable.agent.run.agent import RunCompletedEvent, RunStartedEvent
+    from definable.run.agent import RunCompletedEvent, RunStartedEvent
 
     start = RunStartedEvent(
       run_id="r1",
@@ -185,7 +185,7 @@ class TestReplayFromEvents:
     assert r.status == "completed"
 
   def test_from_error_event(self):
-    from definable.agent.run.agent import RunErrorEvent, RunStartedEvent
+    from definable.run.agent import RunErrorEvent, RunStartedEvent
 
     start = RunStartedEvent(
       run_id="r1",
@@ -202,7 +202,7 @@ class TestReplayFromEvents:
     assert r.error == "boom"
 
   def test_from_cancelled_event(self):
-    from definable.agent.run.agent import RunCancelledEvent, RunStartedEvent
+    from definable.run.agent import RunCancelledEvent, RunStartedEvent
 
     start = RunStartedEvent(
       run_id="r1",
@@ -218,7 +218,7 @@ class TestReplayFromEvents:
     assert r.status == "cancelled"
 
   def test_filter_by_run_id(self):
-    from definable.agent.run.agent import RunStartedEvent
+    from definable.run.agent import RunStartedEvent
 
     evt1 = RunStartedEvent(
       run_id="r1",
@@ -243,7 +243,7 @@ class TestReplayFromEvents:
     assert r.agent_id == "a2"
 
   def test_duration_computed_from_events(self):
-    from definable.agent.run.agent import RunStartedEvent, RunCompletedEvent
+    from definable.run.agent import RunStartedEvent, RunCompletedEvent
 
     start = RunStartedEvent(
       run_id="r1",
@@ -259,7 +259,7 @@ class TestReplayFromEvents:
     assert r.duration == 2000.0
 
   def test_tool_calls_recorded(self):
-    from definable.agent.run.agent import (
+    from definable.run.agent import (
       RunStartedEvent,
       ToolCallCompletedEvent,
       ToolCallStartedEvent,

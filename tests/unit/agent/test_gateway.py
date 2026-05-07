@@ -21,7 +21,7 @@ from definable.agent.interface.gateway import (
 )
 from definable.agent.interface.message import InterfaceMessage, InterfaceResponse
 from definable.agent.interface.session import InterfaceSession
-from definable.agent.run.agent import RunEvent
+from definable.run.agent import RunEvent
 
 
 # ---------------------------------------------------------------------------
@@ -703,7 +703,7 @@ class TestExports:
 
   def test_run_event_registry(self) -> None:
     """Interface events should be resolvable from the registry."""
-    from definable.agent.run.agent import _ensure_interface_events_registered, RUN_EVENT_TYPE_REGISTRY
+    from definable.run.agent import _ensure_interface_events_registered, RUN_EVENT_TYPE_REGISTRY
 
     _ensure_interface_events_registered()
     assert "InterfaceStarted" in RUN_EVENT_TYPE_REGISTRY

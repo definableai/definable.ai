@@ -55,7 +55,7 @@ class TestBrowserActionEvent:
     assert d["result"] == "OK"
 
   def test_inherits_base(self):
-    from definable.agent.run.base import BaseRunOutputEvent
+    from definable.run.base import BaseRunOutputEvent
 
     assert issubclass(BrowserActionEvent, BaseRunOutputEvent)
 

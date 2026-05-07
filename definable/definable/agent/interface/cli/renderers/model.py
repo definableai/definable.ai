@@ -8,20 +8,20 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.interface.cli.config import CLIConfig
-  from definable.agent.run.agent import ModelCallCompletedEvent, ModelCallStartedEvent
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.agent import ModelCallCompletedEvent, ModelCallStartedEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 class ModelCallRenderer:
   """Renders ModelCallStarted and ModelCallCompleted events."""
 
   def handles(self, event: "BaseRunOutputEvent") -> bool:
-    from definable.agent.run.agent import ModelCallCompletedEvent, ModelCallStartedEvent
+    from definable.run.agent import ModelCallCompletedEvent, ModelCallStartedEvent
 
     return isinstance(event, (ModelCallStartedEvent, ModelCallCompletedEvent))
 
   def render(self, event: "BaseRunOutputEvent", console: "Console", config: "CLIConfig") -> None:
-    from definable.agent.run.agent import ModelCallCompletedEvent, ModelCallStartedEvent
+    from definable.run.agent import ModelCallCompletedEvent, ModelCallStartedEvent
 
     if isinstance(event, ModelCallStartedEvent):
       self._render_started(event, console, config)

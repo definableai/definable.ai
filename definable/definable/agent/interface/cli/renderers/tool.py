@@ -8,8 +8,8 @@ if TYPE_CHECKING:
   from rich.console import Console
 
   from definable.agent.interface.cli.config import CLIConfig
-  from definable.agent.run.agent import ToolCallCompletedEvent, ToolCallStartedEvent
-  from definable.agent.run.base import BaseRunOutputEvent
+  from definable.run.agent import ToolCallCompletedEvent, ToolCallStartedEvent
+  from definable.run.base import BaseRunOutputEvent
 
 
 def _truncate(text: str, max_len: int) -> str:
@@ -22,12 +22,12 @@ class ToolCallRenderer:
   """Renders ToolCallStarted and ToolCallCompleted events."""
 
   def handles(self, event: "BaseRunOutputEvent") -> bool:
-    from definable.agent.run.agent import ToolCallCompletedEvent, ToolCallStartedEvent
+    from definable.run.agent import ToolCallCompletedEvent, ToolCallStartedEvent
 
     return isinstance(event, (ToolCallStartedEvent, ToolCallCompletedEvent))
 
   def render(self, event: "BaseRunOutputEvent", console: "Console", config: "CLIConfig") -> None:
-    from definable.agent.run.agent import ToolCallCompletedEvent, ToolCallStartedEvent
+    from definable.run.agent import ToolCallCompletedEvent, ToolCallStartedEvent
 
     if isinstance(event, ToolCallStartedEvent):
       self._render_started(event, console, config)

@@ -25,7 +25,7 @@ from definable.agent.guardrail.events import GuardrailBlockedEvent, GuardrailChe
 from definable.agent.guardrail.builtin.input import block_topics, max_tokens, regex_filter
 from definable.agent.guardrail.builtin.output import pii_filter, max_output_tokens
 from definable.agent.guardrail.builtin.tool import tool_allowlist, tool_blocklist
-from definable.agent.run.base import RunContext
+from definable.run.base import RunContext
 
 
 def _ctx() -> RunContext:

@@ -17,12 +17,12 @@ from typing import (
 if TYPE_CHECKING:
   from definable.agent.loop import CancellationToken
   from definable.agent.pipeline.debug import DebugConfig
-  from definable.agent.run.agent import PhaseCompletedEvent, PhaseStartedEvent
+  from definable.run.agent import PhaseCompletedEvent, PhaseStartedEvent
 
 from definable.agent.pipeline.event_stream import EventStream
 from definable.agent.pipeline.phase import Phase
 from definable.agent.pipeline.state import LoopState, LoopStatus, PhaseMetric
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 from definable.utils.log import log_debug, log_warning
 
 
@@ -411,7 +411,7 @@ class Pipeline:
 
 def _make_phase_started(state: LoopState) -> "PhaseStartedEvent":
   """Create a PhaseStartedEvent from current state."""
-  from definable.agent.run.agent import PhaseStartedEvent
+  from definable.run.agent import PhaseStartedEvent
 
   return PhaseStartedEvent(
     run_id=state.run_id,
@@ -424,7 +424,7 @@ def _make_phase_started(state: LoopState) -> "PhaseStartedEvent":
 
 def _make_phase_completed(state: LoopState, phase_name: str, duration_ms: float, *, skipped: bool) -> "PhaseCompletedEvent":
   """Create a PhaseCompletedEvent from current state."""
-  from definable.agent.run.agent import PhaseCompletedEvent
+  from definable.run.agent import PhaseCompletedEvent
 
   return PhaseCompletedEvent(
     run_id=state.run_id,

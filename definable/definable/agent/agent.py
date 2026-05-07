@@ -838,7 +838,7 @@ class Agent:
     context = state.context
 
     # Set ambient RunContext so tools can access it via get_current_run_context()
-    from definable.agent.run.base import set_current_run_context
+    from definable.run.base import set_current_run_context
 
     set_current_run_context(context)
     try:
@@ -1090,7 +1090,7 @@ class Agent:
     await self._transcribe_audio(state.new_messages)
 
     # Set ambient RunContext for tools
-    from definable.agent.run.base import set_current_run_context
+    from definable.run.base import set_current_run_context
 
     assert state.context is not None
     set_current_run_context(state.context)
@@ -1892,7 +1892,7 @@ class Agent:
         (default), the server starts if any Webhook triggers exist.
       dev: Enable development mode with Swagger docs and info-level logging.
     """
-    from definable.agent.runtime.runner import AgentRuntime
+    from definable.runtime.runner import AgentRuntime
 
     resolved_gateway = self._gateway
 
@@ -1946,7 +1946,7 @@ class Agent:
       dev: Enable development mode with hot reload and Swagger docs.
     """
     if dev:
-      from definable.agent.runtime._dev import is_dev_child, run_dev_mode
+      from definable.runtime._dev import is_dev_child, run_dev_mode
 
       if not is_dev_child():
         run_dev_mode()

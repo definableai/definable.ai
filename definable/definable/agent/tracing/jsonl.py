@@ -177,7 +177,7 @@ def read_trace_events(path: Path) -> list:
   """
   import json
 
-  from definable.agent.run.agent import run_output_event_from_dict
+  from definable.run.agent import run_output_event_from_dict
 
   events = []
   with open(path, encoding="utf-8") as f:

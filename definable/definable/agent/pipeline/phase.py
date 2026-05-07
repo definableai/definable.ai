@@ -3,7 +3,7 @@
 from typing import AsyncGenerator, Optional, Protocol, Set, Tuple, runtime_checkable
 
 from definable.agent.pipeline.state import LoopState
-from definable.agent.run.base import BaseRunOutputEvent
+from definable.run.base import BaseRunOutputEvent
 
 
 @runtime_checkable

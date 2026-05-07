@@ -177,7 +177,7 @@ class TraceBrowser:
       ValueError: If no events found for the run_id.
     """
     from definable.agent.replay.replay import Replay
-    from definable.agent.run.agent import run_output_event_from_dict
+    from definable.run.agent import run_output_event_from_dict
 
     raw_events = self.load_run_events(session_id, run_id)
     if not raw_events:

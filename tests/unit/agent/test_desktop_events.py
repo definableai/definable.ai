@@ -293,7 +293,7 @@ class TestMacOSSkillEventWiring:
 class TestEventRegistration:
   def test_run_event_enum_has_desktop_entries(self):
     """RunEvent enum includes bridge_call and desktop_action."""
-    from definable.agent.run.agent import RunEvent
+    from definable.run.agent import RunEvent
 
     assert hasattr(RunEvent, "bridge_call")
     assert hasattr(RunEvent, "desktop_action")

@@ -1378,7 +1378,7 @@ class TelegramInterface(BaseInterface):
   async def _run_agent_streaming(self, message: InterfaceMessage, session: InterfaceSession) -> "RunOutput":
     """Run the agent with streaming, editing the message in real-time."""
     from definable.agent.events import RunOutput
-    from definable.agent.run.agent import RunCompletedEvent, RunContentEvent, ToolCallStartedEvent
+    from definable.run.agent import RunCompletedEvent, RunContentEvent, ToolCallStartedEvent
 
     user_id = message.platform_user_id
     if self._identity_resolver is not None:

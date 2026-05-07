@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from definable.agent.interface.hooks import InterfaceHook
 from definable.agent.interface.session import SessionManager
-from definable.agent.run.agent import BaseAgentRunEvent, RunEvent
+from definable.run.agent import BaseAgentRunEvent, RunEvent
 from definable.utils.log import log_error, log_info, log_warning
 
 if TYPE_CHECKING:
