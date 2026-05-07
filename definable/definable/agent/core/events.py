@@ -184,6 +184,11 @@ class EventBus:
 
     Each call attaches its own queue, so multiple concurrent consumers are
     independent. Cancellation cleanly unsubscribes.
+
+    Note: the per-consumer queue is unbounded — a slow consumer will grow
+    memory until it catches up. For most agents the event rate is bounded
+    by model latency, but high-throughput producers should consume
+    promptly or attach a sync subscriber instead.
     """
     queue: asyncio.Queue[Event] = asyncio.Queue()
 

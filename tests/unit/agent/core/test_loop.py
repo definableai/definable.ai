@@ -188,6 +188,9 @@ async def test_streaming_emits_chunk_events() -> None:
   chunks: list[StreamChunkEvent] = []
   bus.subscribe(lambda e: chunks.append(e) if isinstance(e, StreamChunkEvent) else None)
 
+  fired: list[Event] = []
+  bus.subscribe(fired.append)
+
   result = await run(
     llm=llm,
     messages=_make_messages(),
@@ -200,6 +203,10 @@ async def test_streaming_emits_chunk_events() -> None:
   assert result.content == "hello world"
   assert [c.data for c in chunks] == ["hello ", "world"]
   assert all(c.kind == "content" for c in chunks)
+  # Full event sequence: TurnStarted, chunks..., ModelResponded, RunCompleted
+  assert any(isinstance(e, TurnStarted) for e in fired)
+  assert any(isinstance(e, ModelResponded) for e in fired)
+  assert any(isinstance(e, RunCompleted) for e in fired)
 
 
 @pytest.mark.unit
