@@ -41,7 +41,7 @@ multi-message responses, typing indicators, etc).
 | discord   | ✅ ported  | 404 → 130         | discord.py gateway |
 | telegram  | ✅ ported  | 2,333 → 145       | Bot API long-poll (httpx) |
 | slack     | ✅ ported  | 1,902 → 130       | slack-bolt Socket Mode |
-| whatsapp  | ✅ ported  | 2,162 → 130       | Twilio REST + webhook |
+| whatsapp  | ✅ ported  | 2,162 → 2,162     | Pluggable: **Baileys** (personal, QR-scan) + **Twilio** |
 | desktop   | ✅ ported  | 1,276 → 105       | Localhost WebSocket |
 | call      | ❌ removed | 3,965 → 0         | Voice = different shape (audio streaming, STT/TTS). Spin off as `definable.voice` package when needed. |
 | cli       | ❌ removed | 5,707 → 0         | Use TUI library directly |
@@ -61,9 +61,9 @@ present in the original were removed to keep ports honest:
   handlers, slash commands
 - **slack** — HTTP webhook mode (Socket Mode only), slash commands, Block Kit
   actions, modal submissions, shortcuts, reaction events
-- **whatsapp** — Baileys self-hosted Node.js sidecar provider (live agents
-  E-Garuda + Clinic wire Baileys directly via repo-root code), pluggable
-  provider abstraction, DM/group policy module, formatting/normalize helpers
+- **whatsapp** — *retained* the Baileys sidecar, pluggable provider abstraction,
+  policy module, formatting + normalize helpers. Personal-WhatsApp-via-QR-scan
+  is the headline use case
 - **desktop** — macOS Vapor 4 sidecar bridge client (camera, screen, OCR,
   shell). That belongs as a Toolkit, not embedded in the interface.
 
