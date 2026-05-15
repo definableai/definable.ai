@@ -104,6 +104,7 @@ async def run(
         timestamp=time.time(),
         content=_content_str(response.content),
         tool_calls=tool_calls,
+        usage=_extract_usage(response),
       )
     )
 
@@ -257,3 +258,20 @@ def _memory_list(memory: Any | None) -> list[str]:
     if isinstance(result, list):
       return [str(x) for x in result]
   return []
+
+
+def _extract_usage(response: ModelResponse) -> dict[str, int] | None:
+  """Project provider-reported usage into a flat dict for events.
+
+  Returns None when the provider did not surface usage on this response so
+  consumers can distinguish "zero tokens" from "unknown".
+  """
+  m = response.response_usage
+  if m is None:
+    return None
+  out: dict[str, int] = {}
+  for key in ("input_tokens", "output_tokens", "total_tokens", "cache_read_tokens", "cache_write_tokens", "reasoning_tokens"):
+    value = getattr(m, key, 0)
+    if value:
+      out[key] = int(value)
+  return out or None

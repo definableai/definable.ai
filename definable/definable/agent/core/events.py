@@ -75,10 +75,17 @@ class StreamChunkEvent(Event):
 
 @dataclass(frozen=True, kw_only=True)
 class ModelResponded(Event):
-  """Fires after a model call completes, before tool dispatch."""
+  """Fires after a model call completes, before tool dispatch.
+
+  `usage` is a flat dict of provider-reported token counts when available.
+  Kept as a plain dict (not the `model.metrics.Metrics` dataclass) so this
+  layer stays free of `definable.model` imports — observability serialization
+  is trivial.
+  """
 
   content: str | None
   tool_calls: list[ToolCall] = field(default_factory=list)
+  usage: dict[str, int] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

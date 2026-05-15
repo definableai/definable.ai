@@ -14,9 +14,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncIterator
 from uuid import uuid4
 
-from definable.agent.core import EventBus, Event, RunCompleted, RunResult, ToolRegistry, run
+from definable.agent.core import Event, EventBus, RunCompleted, RunResult, ToolRegistry, run
 from definable.agent.core.messages import build_messages
 from definable.agent.memory import FileMemory, memory_tools
+from definable.agent.toolkit.function import Function
 
 if TYPE_CHECKING:
   from definable.agent.mcp.toolkit import MCPToolkit
@@ -59,7 +60,7 @@ class Agent:
     self.events = EventBus()
 
     # Memory exposes itself as four tools the agent can call.
-    extra: list[Function] = list(memory_tools(self.memory)) if self.memory is not None else []
+    extra: list[Function] = list[Function](memory_tools(self.memory)) if self.memory is not None else []
 
     # Skills contribute their own tools.
     skill_tools: list[Function] = []
@@ -78,7 +79,11 @@ class Agent:
     self._async_toolkits: list[Any] = [tk for tk in [*(toolkits or []), *(mcp or [])] if hasattr(tk, "aopen") and hasattr(tk, "aclose")]
     self._opened = False
 
+    # JSONL writer wires sync — sees every event from agent construction onward.
     self._obs: Any = _resolve_observability(observability, name, self.events)
+    # Dashboard server boot is async — deferred to first aopen().
+    self._obs_dashboard: bool = bool(observability)
+    self._obs_attached: bool = False
 
   # ---- lifecycle ----------------------------------------------------------
 
@@ -87,6 +92,21 @@ class Agent:
       return
     for tk in self._async_toolkits:
       await tk.aopen()
+    # Toolkits whose tools only become known post-aopen (MCP, browser,
+    # anything that introspects a remote service) get re-extracted into
+    # the registry now. Idempotent — already-registered names skip.
+    for tk in self._async_toolkits:
+      self.tools.add_from(tk)
+    if self._obs_dashboard and not self._obs_attached:
+      # Best-effort: dashboard requires fastapi+uvicorn (optional). If the
+      # extras aren't installed the JSONL writer keeps working alone.
+      try:
+        from definable.observability.server import ObservabilityServer
+
+        await ObservabilityServer.singleton().attach(self)
+        self._obs_attached = True
+      except ImportError:
+        pass
     self._opened = True
 
   async def aclose(self) -> None:
@@ -127,7 +147,7 @@ class Agent:
     messages = build_messages(
       instructions=self.instructions,
       memory_index=self.memory.index() if self.memory is not None else None,
-      skill_descriptions=[getattr(s, "description", "") for s in self.skills],
+      skill_descriptions=[_skill_description(s) for s in self.skills],
       user_input=input,
     )
     run_id = str(uuid4())
@@ -183,6 +203,18 @@ class Agent:
 
 
 # ---- helpers -------------------------------------------------------------
+
+
+def _skill_description(skill: Any) -> str:
+  """Pull the system-prompt text from a Skill.
+
+  Prefer get_instructions() when available; fall back to .instructions or
+  .description (legacy attribute name some external code may use).
+  """
+  fn = getattr(skill, "get_instructions", None)
+  if callable(fn):
+    return fn() or ""
+  return getattr(skill, "instructions", "") or getattr(skill, "description", "") or ""
 
 
 def _resolve_model(model: Model | str) -> Model:

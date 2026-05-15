@@ -20,7 +20,7 @@ from definable.agent.core.events import (
 )
 
 if TYPE_CHECKING:
-  from definable.tool.function import Function
+  from definable.agent.toolkit.function import Function
 
 
 class ToolRegistry:
@@ -63,6 +63,24 @@ class ToolRegistry:
       raise ValueError(f"Duplicate tool name in registry: {fn.name!r}")
     self._by_name[fn.name] = fn
 
+  def add_from(self, source: Any) -> int:
+    """Re-extract tools from a source and add them to the registry.
+
+    Used by Agent.aopen() to register tools that only become available
+    after a toolkit's async lifecycle has run (e.g. MCPToolkit, which
+    only knows its tools after connecting to its servers). Idempotent:
+    tools already registered under the same name are skipped silently.
+
+    Returns the number of tools newly added.
+    """
+    added = 0
+    for fn in self._extract(source):
+      if fn.name in self._by_name:
+        continue
+      self._by_name[fn.name] = fn
+      added += 1
+    return added
+
   def all(self) -> list[Function]:
     """Return every registered tool, flattened across sources."""
     return list(self._by_name.values())
@@ -103,7 +121,7 @@ class ToolRegistry:
 
     try:
       # Late import keeps the harness loadable without pulling Function machinery.
-      from definable.tool.function import FunctionCall
+      from definable.agent.toolkit.function import FunctionCall
 
       fc = FunctionCall(function=fn, arguments=dict(call.args), call_id=call.id)
       exec_result = await fc.aexecute()
