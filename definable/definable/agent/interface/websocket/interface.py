@@ -56,28 +56,38 @@ class WebSocketInterface(Interface):
     # Lazy imports — fastapi/uvicorn are optional extras.
     try:
       import uvicorn
-      from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+      from fastapi import FastAPI
+      from starlette.websockets import WebSocket, WebSocketDisconnect
     except ImportError as e:
       raise ImportError("WebSocketInterface requires fastapi + uvicorn — `pip install definable[serve]`") from e
 
     app = FastAPI()
 
-    @app.websocket(self.path)
+    iface_self = self
+
     async def _ws_endpoint(ws: WebSocket) -> None:
       await ws.accept()
       try:
         while True:
           raw = await ws.receive_json()
-          await self.handle((ws, raw))
+          await iface_self.handle((ws, raw))
       except WebSocketDisconnect:
         return
+
+    # Register via the raw Starlette router to bypass FastAPI's
+    # dependency-injection scan, which rejects the upgrade with a 403 on
+    # certain version combinations (fastapi 0.128 + uvicorn 0.40).
+    app.router.add_websocket_route(self.path, _ws_endpoint)
 
     config = uvicorn.Config(app, host=self.host, port=self.port, log_level="warning")
     self._app = app
     self._server = uvicorn.Server(config)
     self._serve_task = asyncio.create_task(self._server.serve())
-    # Brief settle so clients can connect immediately after aopen returns.
-    await asyncio.sleep(0.05)
+    # Wait until uvicorn's "started" flag flips so callers don't race the bind.
+    for _ in range(100):
+      if getattr(self._server, "started", False):
+        break
+      await asyncio.sleep(0.05)
 
   async def aclose(self) -> None:
     if self._server is not None:

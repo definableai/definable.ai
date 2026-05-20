@@ -40,7 +40,16 @@ class Toolkit:
 
   @property
   def tools(self) -> List["Function"]:
-    """Auto-discovered Function-typed attributes. Override to define explicitly."""
+    """Auto-discovered Function-typed attributes. Override to define explicitly.
+
+    `@tool` on a Toolkit method produces a Function whose entrypoint is the
+    unbound class function. Bind `self` here via partial so dispatch can
+    invoke it with the toolkit instance — without this, the first call
+    crashes with `TypeError: got multiple values for argument 'self'`.
+    """
+    from functools import partial
+    from inspect import signature
+
     from definable.agent.toolkit.function import Function
 
     discovered: List[Function] = []
@@ -49,7 +58,16 @@ class Toolkit:
         continue
       try:
         attr = getattr(self, name)
-        if isinstance(attr, Function):
+        if not isinstance(attr, Function):
+          continue
+        if attr.entrypoint is None:
+          continue
+        sig = signature(attr.entrypoint)
+        if "self" in sig.parameters:
+          bound = attr.model_copy()
+          bound.entrypoint = partial(attr.entrypoint, self)
+          discovered.append(bound)
+        else:
           discovered.append(attr)
       except Exception:
         # Skip attributes that raise on access
