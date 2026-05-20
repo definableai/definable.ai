@@ -6,7 +6,7 @@ tool filtering, and error paths. No network calls.
 
 import pytest
 
-from definable.mcp.config import MCPConfig, MCPServerConfig
+from definable.agent.mcp.config import MCPConfig, MCPServerConfig
 
 
 @pytest.mark.unit

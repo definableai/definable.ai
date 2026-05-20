@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from definable.mcp.errors import (
+from definable.agent.mcp.errors import (
   MCPConnectionError,
   MCPError,
   MCPPromptNotFoundError,
@@ -18,7 +18,7 @@ from definable.mcp.errors import (
   MCPTimeoutError,
   MCPToolNotFoundError,
 )
-from definable.mcp.protocol import (
+from definable.agent.mcp.protocol import (
   create_error_response,
   decode_message,
   decode_response,
@@ -32,7 +32,7 @@ from definable.mcp.protocol import (
   parse_error,
   validate_response,
 )
-from definable.mcp.types import (
+from definable.agent.mcp.types import (
   JSONRPCErrorCode,
   JSONRPCErrorData,
   JSONRPCNotification,

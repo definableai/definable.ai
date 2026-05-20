@@ -10,7 +10,7 @@ Provides:
 import pytest
 
 from definable.agent import Agent
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 # ---------------------------------------------------------------------------

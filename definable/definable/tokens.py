@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Type, Union
 
 from definable.media import Audio, File, Image, Video
 from definable.model.message import Message
-from definable.tool.function import Function
+from definable.agent.toolkit.function import Function
 from definable.utils.log import log_warning
 from pydantic import BaseModel
 

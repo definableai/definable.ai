@@ -19,7 +19,7 @@ Example:
 from typing import Callable, Optional
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 def _ddg_search(query: str, max_results: int = 5) -> str:

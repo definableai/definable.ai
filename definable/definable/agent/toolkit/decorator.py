@@ -1,7 +1,7 @@
 from functools import update_wrapper, wraps
 from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, overload
 
-from definable.tool.function import Function, get_entrypoint_docstring
+from definable.agent.toolkit.function import Function, get_entrypoint_docstring
 from definable.utils.log import logger
 
 # Type variable for better type hints

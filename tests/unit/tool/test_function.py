@@ -23,7 +23,7 @@ from typing import List, Optional
 
 import pytest
 
-from definable.tool.function import Function, FunctionCall
+from definable.agent.toolkit.function import Function, FunctionCall
 
 
 @pytest.mark.unit

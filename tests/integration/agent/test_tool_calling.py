@@ -21,7 +21,7 @@ import pytest
 
 from definable.agent import Agent
 from definable.agent.events import RunStatus
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 # ---------------------------------------------------------------------------

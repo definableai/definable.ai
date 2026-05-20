@@ -21,7 +21,7 @@ import subprocess
 from typing import Optional, Set
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 class Shell(Skill):

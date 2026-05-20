@@ -20,7 +20,7 @@ from typing import Dict, List, Union
 JsonValue = Union[str, int, float, bool, None, List["JsonValue"], Dict[str, "JsonValue"]]
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 def _query_path(data: object, path: str) -> object:

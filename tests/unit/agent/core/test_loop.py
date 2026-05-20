@@ -22,7 +22,7 @@ from definable.agent.core.loop import run
 from definable.agent.core.tools import ToolRegistry
 from definable.model.base import Model
 from definable.model.response import ModelResponse, ToolExecution
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 # ---- test tools ----------------------------------------------------------

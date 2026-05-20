@@ -22,7 +22,7 @@ from definable.agent.tracing import Tracing
 from definable.model.metrics import Metrics
 from definable.model.response import ToolExecution
 from definable.agent.events import RunOutput, RunStatus
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 # ---------------------------------------------------------------------------

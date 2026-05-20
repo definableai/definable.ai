@@ -35,7 +35,7 @@ import pytest
 
 from definable.agent.testing import MockModel
 from definable.model.metrics import Metrics
-from definable.skill.builtin.macos import MacOS
+from definable.agent.skill.builtin.macos import MacOS
 
 
 # ---------------------------------------------------------------------------

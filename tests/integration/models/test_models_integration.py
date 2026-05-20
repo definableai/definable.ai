@@ -114,7 +114,7 @@ class TestOpenAIModel:
   @pytest.mark.asyncio
   async def test_tool_calling_invokes_correct_tool(self, openai_model):
     """Model should return a tool_execution when a relevant tool is available."""
-    from definable.tool.decorator import tool
+    from definable.agent.toolkit.decorator import tool
 
     @tool
     def get_weather(city: str) -> str:

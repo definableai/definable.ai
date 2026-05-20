@@ -7,7 +7,7 @@ import os
 from typing import Any, Optional
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 class SlackTools(Skill):

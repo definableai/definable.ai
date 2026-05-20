@@ -15,7 +15,7 @@ from definable.agent.mcp.types import MCPToolDefinition
 from definable.utils.log import log_debug, log_error, log_info
 
 if TYPE_CHECKING:
-  from definable.tool.function import Function
+  from definable.agent.toolkit.function import Function
 
 
 class MCPToolkit(Toolkit):
@@ -216,7 +216,7 @@ class MCPToolkit(Toolkit):
     Returns:
         Function object with async entrypoint.
     """
-    from definable.tool.function import Function
+    from definable.agent.toolkit.function import Function
 
     # Build parameters from MCP tool input schema
     parameters: Dict[str, Any] = {
@@ -231,24 +231,25 @@ class MCPToolkit(Toolkit):
     else:
       parameters["additionalProperties"] = False
 
-    # Create the entrypoint function
-    # We need to capture server_name and original tool name in closure
+    # Capture server_name, original tool name, and self in the closure.
+    # We reference `self._client` at call time instead of pulling it from
+    # `dependencies` — the new harness does not inject toolkit dependencies
+    # into tool kwargs, so the dependency-bag pattern silently fails.
     original_tool_name = mcp_tool.name
+    toolkit_self = self
 
     async def mcp_tool_entrypoint(
-      dependencies: Optional[Dict[str, Any]] = None,
       **kwargs: Any,
     ) -> str:
       """Execute the MCP tool.
 
       Args:
-          dependencies: Injected dependencies containing MCP client.
           **kwargs: Tool arguments.
 
       Returns:
           Tool result as string.
       """
-      client = (dependencies or {}).get("_mcp_toolkit_client")
+      client = toolkit_self._client
       if client is None:
         return f"Error: MCP client not available for tool '{tool_name}'"
 
@@ -274,7 +275,8 @@ class MCPToolkit(Toolkit):
             output_parts.append(content.text)
           elif hasattr(content, "data"):
             # Image or binary content
-            output_parts.append(f"[{content.type}: {content.mimeType}]")
+            mime = getattr(content, "mimeType", "unknown")
+            output_parts.append(f"[{content.type}: {mime}]")
           elif hasattr(content, "resource"):
             # Embedded resource
             output_parts.append(f"[resource: {content.resource.uri}]")

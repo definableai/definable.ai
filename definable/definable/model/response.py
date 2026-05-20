@@ -8,7 +8,7 @@ from definable.types import ToolCallDict
 from definable.media import Audio, File, Image, Video
 from definable.model.message import Citations
 from definable.model.metrics import Metrics
-from definable.tool.function import UserInputField
+from definable.agent.toolkit.function import UserInputField
 
 
 class ModelResponseEvent(str, Enum):

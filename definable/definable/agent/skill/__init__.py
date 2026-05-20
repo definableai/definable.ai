@@ -21,7 +21,7 @@ Quick Start:
 
 Custom Skills:
     from definable.agent.skill import Skill
-    from definable.tool import tool
+    from definable.agent.toolkit import tool
 
     class CustomerSupport(Skill):
         name = "customer_support"
@@ -34,7 +34,7 @@ Custom Skills:
 
 Inline Skills:
     from definable.agent.skill import Skill
-    from definable.tool import tool
+    from definable.agent.toolkit import tool
 
     @tool
     def search_docs(query: str) -> str:

@@ -24,9 +24,9 @@ import inspect
 
 import pytest
 
-from definable.skill.base import Skill
-from definable.skill.builtin.macos import MacOS
-from definable.tool.function import Function
+from definable.agent.skill.base import Skill
+from definable.agent.skill.builtin.macos import MacOS
+from definable.agent.toolkit.function import Function
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ class TestMacOSIsSkill:
     assert callable(MacOS().teardown)
 
   def test_macos_importable_from_skills_package(self):
-    from definable.skill import MacOS as MacOSFromPackage
+    from definable.agent.skill import MacOS as MacOSFromPackage
 
     assert MacOSFromPackage is MacOS
 

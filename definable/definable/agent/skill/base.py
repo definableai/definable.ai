@@ -11,7 +11,7 @@ Two usage patterns
 **Instance-based** (quick, inline):
 
     from definable.agent.skill import Skill
-    from definable.tool import tool
+    from definable.agent.toolkit import tool
 
     @tool
     def search_docs(query: str) -> str:
@@ -29,7 +29,7 @@ Two usage patterns
 **Class-based** (reusable, configurable):
 
     from definable.agent.skill import Skill
-    from definable.tool import tool
+    from definable.agent.toolkit import tool
 
     class CustomerSupport(Skill):
         name = "customer_support"
@@ -53,7 +53,7 @@ Two usage patterns
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:
-  from definable.tool.function import Function
+  from definable.agent.toolkit.function import Function
 
 
 class Skill:
@@ -151,7 +151,7 @@ class Skill:
     from functools import partial
     from inspect import signature
 
-    from definable.tool.function import Function
+    from definable.agent.toolkit.function import Function
 
     discovered: List[Function] = []
     for attr_name in dir(self):

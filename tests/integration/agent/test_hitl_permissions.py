@@ -19,7 +19,7 @@ from definable.agent.hitl.types import (
 from definable.agent.testing import MockModel
 from definable.agent.tracing import Tracing
 from definable.model.metrics import Metrics
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 class FileOperations(Skill):

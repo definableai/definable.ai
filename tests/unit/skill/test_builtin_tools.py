@@ -423,7 +423,7 @@ class TestEmailToolsSkill:
     from definable.agent.skill.builtin.email_tools import EmailTools
 
     em = EmailTools(sender_email="test@example.com", sender_password="pass")
-    with patch("definable.skill.builtin.email_tools.smtplib.SMTP") as mock_smtp:
+    with patch("definable.agent.skill.builtin.email_tools.smtplib.SMTP") as mock_smtp:
       mock_server = MagicMock()
       mock_smtp.return_value.__enter__ = MagicMock(return_value=mock_server)
       mock_smtp.return_value.__exit__ = MagicMock(return_value=False)

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, List, Optional
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 class DuckDBAnalytics(Skill):

@@ -17,7 +17,7 @@ from definable.agent.core.events import (
   ToolCallStarted,
 )
 from definable.agent.core.tools import ToolRegistry
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 @tool

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 @tool

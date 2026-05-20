@@ -199,7 +199,7 @@ def _build_on_demand_skill(registry: SkillRegistry) -> Skill:
   Returns:
     A Skill with catalog instructions and 3 tools.
   """
-  from definable.tool.decorator import tool
+  from definable.agent.toolkit.decorator import tool
 
   catalog_xml = registry.to_prompt()
   instructions = (

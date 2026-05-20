@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional
 
 from definable.model.response import ToolExecution
-from definable.tool.function import Function, FunctionCall
+from definable.agent.toolkit.function import Function, FunctionCall
 from definable.utils.functions import get_function_call
 
 

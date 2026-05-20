@@ -20,7 +20,7 @@ from collections.abc import Callable
 from typing import Dict
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
+from definable.agent.toolkit.decorator import tool
 
 
 # Safe math operators and functions

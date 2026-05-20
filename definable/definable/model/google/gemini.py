@@ -20,7 +20,7 @@ from definable.model.message import Citations, Message, UrlCitation
 from definable.model.metrics import Metrics
 from definable.model.response import ModelResponse
 from definable.run.agent import RunOutput
-from definable.tool.function import Function
+from definable.agent.toolkit.function import Function
 from definable.utils.gemini import format_function_definitions, format_image_for_message, prepare_response_schema
 from definable.utils.log import log_debug, log_error, log_info, log_warning
 from definable.tokens import count_schema_tokens, count_text_tokens, count_tool_tokens

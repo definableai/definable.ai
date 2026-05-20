@@ -7,8 +7,8 @@ naming defaults, and lifecycle hooks.
 import pytest
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
-from definable.tool.function import Function
+from definable.agent.toolkit.decorator import tool
+from definable.agent.toolkit.function import Function
 
 
 @pytest.mark.unit

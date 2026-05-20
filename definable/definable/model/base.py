@@ -35,7 +35,7 @@ from definable.model.metrics import Metrics
 from definable.model.response import ModelResponse, ModelResponseEvent, ToolExecution, UserInputField
 from definable.run.agent import CustomEvent, RunContentEvent, RunOutput, RunOutputEvent
 from definable.run.requirement import RunRequirement
-from definable.tool.function import Function, FunctionCall, FunctionExecutionResult
+from definable.agent.toolkit.function import Function, FunctionCall, FunctionExecutionResult
 from definable.utils.log import log_debug, log_error, log_info, log_warning
 from definable.utils.timer import Timer
 from definable.utils.tools import get_function_call_for_tool_call, get_function_call_for_tool_execution
@@ -2039,7 +2039,7 @@ class Model(ABC):
         if function_call.function._run_context is not None and function_call.function._run_context.session_state is not None:
           function_execution_result.updated_session_state = function_call.function._run_context.session_state
     else:
-      from definable.tool.function import ToolResult
+      from definable.agent.toolkit.function import ToolResult
 
       if isinstance(function_execution_result.result, ToolResult):
         # Extract content and media from ToolResult
@@ -2580,7 +2580,7 @@ class Model(ABC):
           (GeneratorType, collections.abc.Iterator, AsyncGeneratorType, collections.abc.AsyncIterator),
         )
       ):
-        from definable.tool.function import ToolResult
+        from definable.agent.toolkit.function import ToolResult
 
         if isinstance(function_execution_result.result, ToolResult):
           tool_result = function_execution_result.result

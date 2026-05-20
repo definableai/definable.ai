@@ -22,8 +22,8 @@ import base64
 from typing import TYPE_CHECKING, Callable, List, Optional, Set
 
 from definable.agent.skill.base import Skill
-from definable.tool.decorator import tool
-from definable.tool.function import Function
+from definable.agent.toolkit.decorator import tool
+from definable.agent.toolkit.function import Function
 
 if TYPE_CHECKING:
   from definable.agent.interface.desktop.bridge_client import BridgeClient

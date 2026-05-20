@@ -29,7 +29,7 @@ from definable.model.message import Citations, DocumentCitation, Message, UrlCit
 from definable.model.metrics import Metrics
 from definable.model.response import ModelResponse
 from definable.tokens import count_schema_tokens
-from definable.tool.function import Function
+from definable.agent.toolkit.function import Function
 from definable.utils.claude import MCPServerConfiguration, format_messages, format_tools_for_model
 from definable.utils.http import get_default_async_client, get_default_sync_client
 from definable.utils.log import log_debug, log_error, log_warning
