@@ -1,1 +1,0 @@
-"""Cortex ingestion pipeline."""

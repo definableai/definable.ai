@@ -203,3 +203,5 @@ outreach/
 .agents/queue/plan-status.txt
 .agents/handoffs/
 .agents/archive/
+
+smoke

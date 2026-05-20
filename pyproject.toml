@@ -41,20 +41,11 @@ jwt = ["pyjwt>=2.8.0"]
 mistral-ocr = ["mistralai>=1.0.0,<2.0.0"]
 mistral-ocr-images = ["mistralai>=1.0.0,<2.0.0", "Pillow>=10.0.0"]
 research = ["ddgs>=9.0.0", "curl-cffi>=0.7.0"]
-# Vector DB backends
-qdrant = ["qdrant-client>=1.9.0"]
-chroma = ["chromadb>=0.5.0"]
-pinecone = ["pinecone>=5.0.0"]
-pgvector = ["psycopg[binary]>=3.1.0", "pgvector>=0.3.0"]
-mongodb = ["pymongo>=4.0.0"]
-redis = ["redis>=5.0.0", "redisvl>=0.3.0"]
 anthropic = ["anthropic>=0.40.0"]
 google = ["google-genai>=1.0.0"]
 ollama = ["ollama>=0.4.0"]
 mistral = ["mistralai>=1.0.0,<2.0.0"]
-composio = ["composio>=1.0.0"]
 claude-code = ["claude-agent-sdk>=0.1.40"]
-browser = ["playwright>=1.49.0", "aiohttp>=3.9.0"]
 desktop = ["websockets>=12.0"]
 cli = ["textual>=1.0.0"]
 dev = ["mypy==1.19.1", "ruff==0.15.5", "pytest>=9.0.0", "pytest-asyncio>=1.3.0", "pytest-timeout>=2.3.0"]
@@ -120,6 +111,5 @@ markers = [
   "ollama: Tests requiring a local Ollama server",
   "perplexity: Tests requiring PERPLEXITY_API_KEY",
   "openrouter: Tests requiring OPENROUTER_API_KEY",
-  "playwright: Tests requiring a real browser via Playwright",
   "desktop: Tests requiring the macOS Desktop Bridge app running",
 ]

@@ -152,9 +152,6 @@ class RunEvent(str, Enum):
   reasoning_content_delta = "ReasoningContentDelta"
   reasoning_completed = "ReasoningCompleted"
 
-  knowledge_retrieval_started = "KnowledgeRetrievalStarted"
-  knowledge_retrieval_completed = "KnowledgeRetrievalCompleted"
-
   memory_recall_started = "MemoryRecallStarted"
   memory_recall_completed = "MemoryRecallCompleted"
 
@@ -425,21 +422,6 @@ class ReasoningCompletedEvent(BaseAgentRunEvent):
 
 
 @dataclass
-class KnowledgeRetrievalStartedEvent(BaseAgentRunEvent):
-  event: str = RunEvent.knowledge_retrieval_started.value
-  query: Optional[str] = None
-
-
-@dataclass
-class KnowledgeRetrievalCompletedEvent(BaseAgentRunEvent):
-  event: str = RunEvent.knowledge_retrieval_completed.value
-  query: Optional[str] = None
-  documents_found: int = 0
-  documents_used: int = 0
-  duration_ms: Optional[float] = None
-
-
-@dataclass
 class MemoryRecallStartedEvent(BaseAgentRunEvent):
   event: str = RunEvent.memory_recall_started.value
   query: Optional[str] = None
@@ -682,8 +664,6 @@ RunOutputEvent = Union[
   ReasoningStepEvent,
   ReasoningContentDeltaEvent,
   ReasoningCompletedEvent,
-  KnowledgeRetrievalStartedEvent,
-  KnowledgeRetrievalCompletedEvent,
   MemoryRecallStartedEvent,
   MemoryRecallCompletedEvent,
   MemoryUpdateStartedEvent,
@@ -743,8 +723,6 @@ RUN_EVENT_TYPE_REGISTRY = {
   RunEvent.reasoning_step.value: ReasoningStepEvent,
   RunEvent.reasoning_content_delta.value: ReasoningContentDeltaEvent,
   RunEvent.reasoning_completed.value: ReasoningCompletedEvent,
-  RunEvent.knowledge_retrieval_started.value: KnowledgeRetrievalStartedEvent,
-  RunEvent.knowledge_retrieval_completed.value: KnowledgeRetrievalCompletedEvent,
   RunEvent.memory_recall_started.value: MemoryRecallStartedEvent,
   RunEvent.memory_recall_completed.value: MemoryRecallCompletedEvent,
   RunEvent.memory_update_started.value: MemoryUpdateStartedEvent,

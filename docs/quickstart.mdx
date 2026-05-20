@@ -10,7 +10,7 @@ This quickstart stays local and deterministic. Each section introduces one capab
 
 - how a single `Agent` run works
 - how tools attach to that run loop
-- how knowledge and memory fit beside the agent
+- how memory fits beside the agent
 - how streaming exposes lifecycle events
 - which pages to read next for production setups
 
@@ -58,21 +58,7 @@ assert output.content == "Tokyo: sunny"
 assert "get_weather" in agent.tool_names
 ```
 
-## 3. Add knowledge
-
-```python
-from definable.knowledge import Document, Knowledge
-
-from examples.docs.support import MockVectorDB
-
-knowledge = Knowledge(vector_db=MockVectorDB(), context_format="markdown")
-knowledge.add(Document(content="Definable supports OpenAI and Anthropic."), chunk=False)
-context = knowledge.format_context(knowledge.vector_db.search("providers", limit=1))
-
-assert "OpenAI and Anthropic" in context
-```
-
-## 4. Add memory
+## 3. Add memory
 
 ```python
 import asyncio
@@ -92,7 +78,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## 5. Stream events
+## 4. Stream events
 
 ```python
 from definable.agent import Agent
@@ -113,9 +99,6 @@ assert "RunCompleted" in events
   </Card>
   <Card title="Agents" icon="brain" href="/agents/overview">
     Understand the agent lifecycle, configuration surface, and runtime model.
-  </Card>
-  <Card title="Knowledge" icon="book" href="/knowledge/overview">
-    Add retrieval and grounding with an explicit RAG layer.
   </Card>
   <Card title="Memory" icon="brain-circuit" href="/memory/overview">
     Preserve continuity across runs with persistent session memory.

@@ -197,45 +197,6 @@ def xai_model():
 
 
 # ---------------------------------------------------------------------------
-# Real embedder fixtures (session-scoped)
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def openai_embedder():
-  """Real OpenAI embedder (text-embedding-3-small). FAILS if OPENAI_API_KEY not set."""
-  from definable.knowledge.embedder.openai import OpenAIEmbedder
-
-  api_key = os.getenv("OPENAI_API_KEY")
-  if not api_key:
-    pytest.fail("OPENAI_API_KEY not set — set it in .env.test or CI secrets")
-  return OpenAIEmbedder(api_key=api_key, id="text-embedding-3-small", dimensions=1536)
-
-
-@pytest.fixture(scope="session")
-def voyage_embedder():
-  """Real VoyageAI embedder. FAILS if VOYAGEAI_API_KEY not set."""
-  from definable.knowledge.embedder.voyageai import VoyageAIEmbedder
-
-  api_key = os.getenv("VOYAGEAI_API_KEY")
-  if not api_key:
-    pytest.fail("VOYAGEAI_API_KEY not set — set it in .env.test or CI secrets")
-  return VoyageAIEmbedder(api_key=api_key)
-
-
-# ---------------------------------------------------------------------------
-# VectorDB fixtures (function-scoped — each test gets a clean store)
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def in_memory_vectordb(openai_embedder):
-  """Fresh InMemoryVectorDB per test with a real embedder."""
-  from definable.vectordb import InMemoryVectorDB
-
-  db = InMemoryVectorDB(embedder=openai_embedder)
-  yield db
-  db.drop()
 
 
 # ---------------------------------------------------------------------------

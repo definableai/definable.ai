@@ -3,9 +3,8 @@ from __future__ import annotations
 from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field, fields
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type, Union
+from typing import Any, Dict, Optional, Set, Type, Union
 
-from definable.filters import FilterExpr
 from definable.media import Audio, Image, Video
 from definable.model.message import Citations, Message, MessageReferences
 from definable.model.metrics import Metrics
@@ -13,43 +12,31 @@ from definable.run.reasoning_step import ReasoningStep
 from definable.utils.log import log_error
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-  from definable.knowledge.document import Document
-
 
 @dataclass
 class RunContext:
-  """
-  Context passed through the agent execution pipeline.
-
-  Carries run identifiers, dependencies, state, and knowledge retrieval results.
-  """
+  """Context passed through the agent execution pipeline."""
 
   run_id: str
   session_id: str
   user_id: Optional[str] = None
 
   dependencies: Optional[Dict[str, Any]] = None
-  knowledge_filters: Optional[Union[Dict[str, Any], List[FilterExpr]]] = None
   metadata: Optional[Dict[str, Any]] = None
   session_state: Optional[Dict[str, Any]] = None
   output_schema: Optional[Union[Type[BaseModel], Dict[str, Any]]] = None
 
-  # Knowledge retrieval results (populated by KnowledgeMiddleware)
-  knowledge_context: Optional[str] = None  # Formatted context string for injection
-  knowledge_documents: Optional[List[Document]] = None  # Retrieved Document objects
-
   # Memory retrieval results (populated by Memory)
-  memory_context: Optional[str] = None  # Formatted memory payload for injection
+  memory_context: Optional[str] = None
 
   # Deep research results (populated by research pipeline)
-  research_context: Optional[str] = None  # Formatted research for system prompt injection
-  research_result: Optional[object] = None  # Full ResearchResult (for inspection)
+  research_context: Optional[str] = None
+  research_result: Optional[object] = None
 
   # File reader results (populated by readers module)
-  readers_context: Optional[str] = None  # Extracted file content for injection
+  readers_context: Optional[str] = None
 
-  # Tracks which layers were actually fetched this turn (e.g. {"knowledge", "memory"})
+  # Tracks which layers were actually fetched this turn (e.g. {"memory"})
   active_layers: Set[str] = field(default_factory=set)
 
 

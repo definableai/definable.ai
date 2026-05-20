@@ -515,7 +515,6 @@ definable/definable/
 │   ├── runtime/        # AgentRuntime, AgentServer, dev mode
 │   ├── tracing/        # JSONL trace export, DebugExporter
 │   └── trigger/        # Webhook, Cron, EventTrigger
-├── browser/            # BrowserToolkit — 55 tools via Playwright CDP
 ├── knowledge/          # RAG: embedders, vector DBs, rerankers, chunkers
 ├── mcp/                # Model Context Protocol client
 ├── media.py            # Image, Audio, Video, File types
