@@ -27,7 +27,12 @@ if TYPE_CHECKING:
   from definable.agent.compression.manager import CompressionManager
 from uuid import uuid4
 
-from definable.exceptions import AgentRunException, ModelProviderError, RetryableModelProviderError
+from definable.exceptions import (
+  AgentRunException,
+  ModelProviderError,
+  RetryableModelProviderError,
+  is_retryable_model_error,
+)
 from definable.types import ToolCallDict
 from definable.media import Audio, File, Image, Video
 from definable.model.message import Citations, Message
@@ -212,47 +217,12 @@ class Model(ABC):
     return self.delay_between_retries
 
   def _is_retryable_error(self, error: ModelProviderError) -> bool:
-    """Determine if an error is worth retrying.
+    """Delegate to centralized classifier (see ``definable.exceptions``).
 
-    Non-retryable errors include:
-    - Client errors (400, 401, 403, 413, 422) that won't change on retry
-    - Context window/token limit exceeded errors
-    - Payload too large errors
-
-    Retryable errors include:
-    - Rate limit errors (429)
-    - Server errors (500, 502, 503, 504)
-
-    Args:
-        error: The ModelProviderError to evaluate.
-
-    Returns:
-        True if the error is transient and worth retrying, False otherwise.
+    Kept as an instance method so subclasses can extend with provider-specific
+    rules (e.g. quota errors that look like 400 but are actually transient).
     """
-    # Non-retryable status codes (client errors that won't change)
-    non_retryable_codes = {400, 401, 403, 404, 413, 422}
-    if error.status_code in non_retryable_codes:
-      return False
-
-    # Non-retryable error message patterns (context/token limits)
-    non_retryable_patterns = [
-      "context_length_exceeded",
-      "context window",
-      "maximum context length",
-      "token limit",
-      "max_tokens",
-      "too many tokens",
-      "payload too large",
-      "content_too_large",
-      "request too large",
-      "input too long",
-      "exceeds the model",
-    ]
-    error_msg = str(error.message).lower()
-    if any(pattern in error_msg for pattern in non_retryable_patterns):
-      return False
-
-    return True
+    return is_retryable_model_error(error)
 
   def _invoke_with_retry(self, **kwargs) -> ModelResponse:
     """

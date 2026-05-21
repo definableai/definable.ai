@@ -150,9 +150,13 @@ class Function(BaseModel):
   _files: Optional[Sequence[File]] = None
 
   def to_dict(self) -> Dict[str, Any]:
+    # Provider-facing schema only. HITL orchestration fields
+    # (requires_confirmation, external_execution) live on the Function instance
+    # and on ToolExecution — not on the tool definition sent to the model.
+    # OpenAI-compatible proxies (Fireworks, AIMLAPI, Nvidia VLLM) 400 on unknown fields.
     return self.model_dump(
       exclude_none=True,
-      include={"name", "description", "parameters", "strict", "requires_confirmation", "external_execution"},
+      include={"name", "description", "parameters", "strict"},
     )
 
   def model_copy(self, *, update: Optional[Mapping[str, Any]] = None, deep: bool = False) -> "Function":

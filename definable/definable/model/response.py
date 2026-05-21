@@ -18,6 +18,13 @@ class ModelResponseEvent(str, Enum):
   tool_call_started = "ToolCallStarted"
   tool_call_completed = "ToolCallCompleted"
   assistant_response = "AssistantResponse"
+  # Pipeline / provider lifecycle — emitted by base.py and resilience wrappers.
+  # Consumers should treat unknown event strings as no-ops.
+  model_request_started = "ModelRequestStarted"
+  model_request_completed = "ModelRequestCompleted"
+  compression_started = "CompressionStarted"
+  compression_completed = "CompressionCompleted"
+  fallback_model_activated = "FallbackModelActivated"
 
 
 @dataclass

@@ -167,6 +167,64 @@ class ContextWindowExceededError(ModelProviderError):
     self.error_id = "context_window_exceeded"
 
 
+# Substrings that indicate a context-window / token-limit problem.
+# Centralized so providers don't ship divergent pattern lists.
+CONTEXT_WINDOW_PATTERNS: frozenset[str] = frozenset({
+  "context_length_exceeded",
+  "context window",
+  "maximum context length",
+  "token limit",
+  "max_tokens",
+  "too many tokens",
+  "payload too large",
+  "content_too_large",
+  "request too large",
+  "input too long",
+  "exceeds the model",
+})
+
+# HTTP status codes that providers return for non-retryable client errors.
+NON_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({400, 401, 403, 404, 413, 422})
+
+
+def classify_model_error(
+  message: str,
+  status_code: int = 502,
+  model_name: Optional[str] = None,
+  model_id: Optional[str] = None,
+) -> ModelProviderError:
+  """Map a raw provider error into the most specific ``ModelProviderError`` subclass.
+
+  Returns a ``ContextWindowExceededError`` when the message matches any
+  ``CONTEXT_WINDOW_PATTERNS`` substring, a ``ModelRateLimitError`` for 429,
+  or a plain ``ModelProviderError`` otherwise. Providers should funnel raised
+  errors through this helper so retry/failover logic sees stable subclasses.
+  """
+  lowered = message.lower()
+  if any(pattern in lowered for pattern in CONTEXT_WINDOW_PATTERNS):
+    return ContextWindowExceededError(message, status_code=status_code or 400, model_name=model_name, model_id=model_id)
+  if status_code == 429:
+    return ModelRateLimitError(message, status_code=status_code, model_name=model_name, model_id=model_id)
+  return ModelProviderError(message, status_code=status_code, model_name=model_name, model_id=model_id)
+
+
+def is_retryable_model_error(error: ModelProviderError) -> bool:
+  """Return ``True`` when ``error`` is a transient provider error worth retrying.
+
+  Centralized classification — fast-path on subclass identity
+  (``ContextWindowExceededError`` is non-retryable by construction), then
+  fall back to status code and pattern matching for raw provider errors.
+  """
+  if isinstance(error, ContextWindowExceededError):
+    return False
+  if error.status_code in NON_RETRYABLE_STATUS_CODES:
+    return False
+  lowered = str(error.message).lower()
+  if any(pattern in lowered for pattern in CONTEXT_WINDOW_PATTERNS):
+    return False
+  return True
+
+
 # ---------------------------------------------------------------------------
 # Guardrail exceptions
 # ---------------------------------------------------------------------------

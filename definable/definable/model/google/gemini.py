@@ -116,10 +116,15 @@ class Gemini(Model):
   vertexai: bool = False
   project_id: Optional[str] = None
   location: Optional[str] = None
+  # Request timeout in seconds; wired into google-genai http_options (ms).
+  timeout: Optional[float] = None
   client_params: Optional[Dict[str, Any]] = None
 
   # Gemini client
   client: Optional[GeminiClient] = None
+
+  # Gemini streams cumulative usage_metadata per chunk; keep the latest, don't accumulate.
+  collect_metrics_on_completion: bool = True
 
   # The role to map the Gemini response
   role_map = {
@@ -159,6 +164,12 @@ class Gemini(Model):
         client_params["credentials"] = self.credentials
 
     client_params = {k: v for k, v in client_params.items() if v is not None}
+
+    if self.timeout is not None:
+      # google-genai expects timeout in milliseconds inside http_options.
+      http_options = dict(client_params.get("http_options") or {})
+      http_options.setdefault("timeout", int(self.timeout * 1000))
+      client_params["http_options"] = http_options
 
     if self.client_params:
       client_params.update(self.client_params)

@@ -135,6 +135,9 @@ class Claude(Model):
 
   # Client parameters
   api_key: Optional[str] = None
+  # Alternative to api_key for Anthropic workspace/bearer-token auth.
+  # Reads ANTHROPIC_AUTH_TOKEN env if not set. Mutually exclusive with api_key.
+  auth_token: Optional[str] = None
   default_headers: Optional[Dict[str, Any]] = None
   timeout: Optional[float] = None
   http_client: Optional[Union[httpx.Client, httpx.AsyncClient]] = None
@@ -161,12 +164,15 @@ class Claude(Model):
   def _get_client_params(self) -> Dict[str, Any]:
     client_params: Dict[str, Any] = {}
 
-    self.api_key = self.api_key or getenv("ANTHROPIC_API_KEY")
-    if not self.api_key:
-      log_error("ANTHROPIC_API_KEY not set. Please set the ANTHROPIC_API_KEY environment variable.")
+    self.auth_token = self.auth_token or getenv("ANTHROPIC_AUTH_TOKEN")
+    if self.auth_token:
+      client_params["auth_token"] = self.auth_token
+    else:
+      self.api_key = self.api_key or getenv("ANTHROPIC_API_KEY")
+      if not self.api_key:
+        log_error("ANTHROPIC_API_KEY not set. Please set the ANTHROPIC_API_KEY environment variable.")
+      client_params["api_key"] = self.api_key
 
-    # Add API key to client parameters
-    client_params["api_key"] = self.api_key
     if self.timeout is not None:
       client_params["timeout"] = self.timeout
 
