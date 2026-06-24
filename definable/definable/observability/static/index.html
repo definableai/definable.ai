@@ -1,24 +1,54 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="paper">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Definable · Console</title>
+  <title>definable — agent workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
   <link rel="stylesheet" href="/static/console/styles.css" />
-  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script>
+    // Theme bootstrap — read persisted choice before React mounts to avoid flash.
+    (function () {
+      try {
+        var t = localStorage.getItem('definable_theme');
+        if (t === 'paper' || t === 'ink') {
+          document.documentElement.setAttribute('data-theme', t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
 </head>
 <body>
   <div id="root"></div>
+
+  <!-- 1. Foundation: API client + atoms + icons -->
   <script src="/static/console/api.js"></script>
-  <script type="text/babel" src="/static/console/components.jsx"></script>
-  <script type="text/babel" src="/static/console/views_playground.jsx"></script>
-  <script type="text/babel" src="/static/console/views_traces.jsx"></script>
-  <script type="text/babel" src="/static/console/views_metrics.jsx"></script>
-  <script type="text/babel" src="/static/console/app.jsx"></script>
+  <script type="text/babel" src="/static/console/icons.jsx"></script>
+  <script type="text/babel" src="/static/console/ui.jsx"></script>
+
+  <!-- 2. Shell pieces -->
+  <script type="text/babel" src="/static/console/shell/sidebar.jsx"></script>
+  <script type="text/babel" src="/static/console/shell/topbar.jsx"></script>
+  <script type="text/babel" src="/static/console/shell/config_panel.jsx"></script>
+
+  <!-- 3. Views -->
+  <script type="text/babel" src="/static/console/views/agent.jsx"></script>
+  <script type="text/babel" src="/static/console/views/runs.jsx"></script>
+  <script type="text/babel" src="/static/console/views/details.jsx"></script>
+  <script type="text/babel" src="/static/console/views/definition.jsx"></script>
+  <script type="text/babel" src="/static/console/views/memory.jsx"></script>
+  <script type="text/babel" src="/static/console/views/evals.jsx"></script>
+  <script type="text/babel" src="/static/console/views/settings.jsx"></script>
+
+  <!-- 4. Root mount (depends on everything above) -->
+  <script type="text/babel" src="/static/console/shell/app.jsx"></script>
 </body>
 </html>

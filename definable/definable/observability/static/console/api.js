@@ -1,5 +1,5 @@
-// Real REST + SSE client. Exposes window.DEFINABLE_API.
-// All endpoints live under /api/ and are served by definable/observability/server.py.
+// Endpoints + React hooks. window.API and window.{useAgents, useRuns, ...}.
+// All routes live under /api/ and are served by definable/observability/server.py.
 (function () {
   'use strict';
 
@@ -35,6 +35,7 @@
   }
 
   async function getRun(runId) {
+    if (!runId) return null;
     const r = await fetch('/api/runs/' + encodeURIComponent(runId));
     _check(r);
     return r.json();
@@ -91,7 +92,6 @@
       const { value, done } = await reader.read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
-      // SSE messages end with "\n\n". Split, keep tail.
       let idx;
       while ((idx = buf.indexOf('\n\n')) !== -1) {
         const block = buf.slice(0, idx);
@@ -115,7 +115,7 @@
     }
   }
 
-  window.DEFINABLE_API = {
+  window.API = {
     listAgents,
     listRuns,
     getRun,
@@ -124,4 +124,105 @@
     stream,
     playgroundRun,
   };
+
+  // Hooks — built on top of one generic useApi(loader, deps). Views never call
+  // fetch directly. When mutation endpoints land, each hook returns
+  // { data, refresh, mutate } — view code unchanged.
+  //
+  // React is loaded by index.html before this file runs, so we can attach
+  // hook helpers to window once everything else is in place.
+  function defineHooks() {
+    if (!window.React) {
+      // Defer until React is parsed.
+      setTimeout(defineHooks, 0);
+      return;
+    }
+    const { useState, useEffect, useCallback, useRef } = window.React;
+
+    function useApi(loader, deps) {
+      const [data, setData] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const aliveRef = useRef(true);
+      const refresh = useCallback(async () => {
+        setLoading(true);
+        try {
+          const v = await loader();
+          if (aliveRef.current) { setData(v); setError(null); }
+        } catch (e) {
+          if (aliveRef.current) setError(e);
+        } finally {
+          if (aliveRef.current) setLoading(false);
+        }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, deps || []);
+      useEffect(() => {
+        aliveRef.current = true;
+        refresh();
+        return () => { aliveRef.current = false; };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, deps || []);
+      return { data, loading, error, refresh };
+    }
+
+    function useAgents(pollMs) {
+      const h = useApi(() => API.listAgents(), []);
+      useEffect(() => {
+        if (!pollMs) return;
+        const id = setInterval(h.refresh, pollMs);
+        return () => clearInterval(id);
+      }, [pollMs, h.refresh]);
+      return h;
+    }
+
+    function useRuns(agentId, opts) {
+      return useApi(() => API.listRuns({ agent: agentId, limit: (opts && opts.limit) || 200 }), [agentId, (opts && opts.limit) || 200]);
+    }
+
+    function useRun(runId) {
+      return useApi(() => runId ? API.getRun(runId) : Promise.resolve(null), [runId]);
+    }
+
+    function useMetrics(range) {
+      const h = useApi(() => API.metrics(range || '1h'), [range]);
+      useEffect(() => {
+        const id = setInterval(h.refresh, 10_000);
+        return () => clearInterval(id);
+      }, [h.refresh]);
+      return h;
+    }
+
+    function useStream(handler, agentId) {
+      useEffect(() => {
+        if (!handler) return;
+        const unsub = API.stream(handler, agentId);
+        return unsub;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [agentId]);
+    }
+
+    function useLocalStorage(key, initial) {
+      const [v, setV] = useState(() => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw == null) return initial;
+          return JSON.parse(raw);
+        } catch { return initial; }
+      });
+      const set = useCallback((next) => {
+        setV(next);
+        try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+      }, [key]);
+      return [v, set];
+    }
+
+    window.useApi = useApi;
+    window.useAgents = useAgents;
+    window.useRuns = useRuns;
+    window.useRun = useRun;
+    window.useMetrics = useMetrics;
+    window.useStream = useStream;
+    window.useLocalStorage = useLocalStorage;
+  }
+  defineHooks();
 })();

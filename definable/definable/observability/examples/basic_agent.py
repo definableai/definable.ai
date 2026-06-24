@@ -14,12 +14,15 @@ from __future__ import annotations
 import asyncio
 
 from definable import Agent
+from definable.model import Claude
+
+model = Claude(id="claude-sonnet-4-6")  # reads ANTHROPIC_API_KEY from the environment
 
 
 async def main() -> None:
   agent = Agent(
     name="demo",
-    model="claude-haiku-4-5",
+    model=model,
     instructions="You are a concise demo agent. Answer in one short sentence.",
     observability=True,
   )
