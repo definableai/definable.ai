@@ -84,7 +84,6 @@ class Message(BaseModel):
   audio_output: Optional[Audio] = None
   image_output: Optional[Image] = None
   video_output: Optional[Video] = None
-  file_output: Optional[File] = None
 
   # The thinking content from the model
   redacted_reasoning_content: Optional[str] = None
@@ -106,10 +105,6 @@ class Message(BaseModel):
   tool_call_error: Optional[bool] = None
   # If True, the agent will stop executing after this tool call.
   stop_after_tool_call: bool = False
-  # When True, the message will be added to the agent's memory.
-  add_to_agent_memory: bool = True
-  # This flag is enabled when a message is fetched from the agent's memory.
-  from_history: bool = False
   # Metrics for the message.
   metrics: Metrics = Field(default_factory=Metrics)
   # The references added to the message for RAG
@@ -284,7 +279,6 @@ class Message(BaseModel):
       "id": self.id,
       "content": self.content,
       "reasoning_content": self.reasoning_content,
-      "from_history": self.from_history,
       "compressed_content": self.compressed_content,
       "stop_after_tool_call": self.stop_after_tool_call,
       "role": self.role,

@@ -1,110 +1,57 @@
-import json
-from collections.abc import AsyncIterator
 from dataclasses import asdict, dataclass
 from os import getenv
-from typing import Any, Dict, Iterator, List, Literal, NoReturn, Optional, Sequence, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Sequence, Type, Union
 
 import httpx
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 
 class SystemPromptBlock(BaseModel):
-  """A typed slice of the system prompt with per-block cache control.
-
-  Pass a list of these to ``Claude.system_prompt_blocks`` when you want
-  finer-grained caching than the model-wide ``cache_system_prompt`` flag.
-  ``cache=True`` adds ``cache_control`` to the block; ``ttl`` overrides
-  ``extended_cache_time`` for this block only.
-  """
+  """A typed slice of the system prompt with per-block cache control."""
 
   text: str
   cache: bool = True
   ttl: Optional[Literal["5m", "1h"]] = None
 
 
-from definable.run.agent import RunOutput
-from definable.exceptions import ContextWindowExceededError, ModelProviderError, ModelRateLimitError
+from definable.exceptions import ModelAuthenticationError
+from definable.model.anthropic.transform import ANTHROPIC_TRANSFORM
 from definable.model.base import Model
-from definable.model.message import Citations, DocumentCitation, Message, UrlCitation
-from definable.model.metrics import Metrics
-from definable.model.response import ModelResponse
+from definable.model.http import apost_json, post_json
+from definable.model.message import Message
 from definable.tokens import count_schema_tokens
 from definable.agent.toolkit.function import Function
 from definable.utils.claude import MCPServerConfiguration, format_messages, format_tools_for_model
-from definable.utils.http import get_default_async_client, get_default_sync_client
-from definable.utils.log import log_debug, log_error, log_warning
+from definable.utils.log import log_debug, log_warning
 
-try:
-  from anthropic import Anthropic as AnthropicClient
-  from anthropic import (
-    APIConnectionError,
-    APIStatusError,
-    RateLimitError,
-  )
-  from anthropic import (
-    AsyncAnthropic as AsyncAnthropicClient,
-  )
-  from anthropic.lib.streaming._beta_types import (
-    BetaRawContentBlockStartEvent,
-    ParsedBetaContentBlockStopEvent,
-    ParsedBetaMessageStopEvent,
-  )
-  from anthropic.types import (
-    CitationPageLocation,
-    CitationsWebSearchResultLocation,
-    ContentBlockDeltaEvent,
-    ContentBlockStartEvent,
-    ContentBlockStopEvent,
-    # MessageDeltaEvent,  # Currently broken
-    MessageStopEvent,
-    Usage,
-  )
-except ImportError as e:
-  raise ImportError("`anthropic` not installed. Please install it with `pip install anthropic`") from e
-
-# Import Beta types
-try:
-  from anthropic.types.beta import BetaRawContentBlockDeltaEvent, BetaTextDelta
-except ImportError as e:
-  raise ImportError("`anthropic` not installed or missing beta components. Please install with `pip install anthropic`") from e
+DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com"
+ANTHROPIC_VERSION = "2023-06-01"
 
 
 @dataclass
 class Claude(Model):
-  """
-  A class representing Anthropic Claude model.
+  """Anthropic Claude over raw HTTP. The dialect (build/parse/stream) lives in
+  `transform.py`; this class is config + the hooks the transform calls."""
 
-  For more information, see: https://docs.anthropic.com/en/api/messages
-  """
-
-  # Models that DO NOT support extended thinking
-  # All future models are assumed to support thinking
   NON_THINKING_MODELS = {
-    # Claude Haiku 3 family (does not support thinking)
     "claude-3-haiku-20240307",
-    # Claude Haiku 3.5 family (does not support thinking)
     "claude-3-5-haiku-20241022",
     "claude-3-5-haiku-latest",
   }
 
-  # Models that DO NOT support native structured outputs
-  # All future models are assumed to support structured outputs
   NON_STRUCTURED_OUTPUT_MODELS = {
-    # Claude 3.x family (all versions)
     "claude-3-opus-20240229",
     "claude-3-sonnet-20240229",
     "claude-3-haiku-20240307",
     "claude-3-opus",
     "claude-3-sonnet",
     "claude-3-haiku",
-    # Claude 3.5 family (all versions except Sonnet 4.5)
     "claude-3-5-sonnet-20240620",
     "claude-3-5-sonnet-20241022",
     "claude-3-5-sonnet",
     "claude-3-5-haiku-20241022",
     "claude-3-5-haiku-latest",
     "claude-3-5-haiku",
-    # Claude Sonnet 4.x family (versions before 4.5)
     "claude-sonnet-4-20250514",
     "claude-sonnet-4",
   }
@@ -113,6 +60,8 @@ class Claude(Model):
   name: str = "Claude"
   provider: str = "Anthropic"
 
+  transform = ANTHROPIC_TRANSFORM
+
   # Request parameters
   max_tokens: Optional[int] = 8192
   thinking: Optional[Dict[str, Any]] = None
@@ -120,88 +69,87 @@ class Claude(Model):
   stop_sequences: Optional[List[str]] = None
   top_p: Optional[float] = None
   top_k: Optional[int] = None
-  cache_system_prompt: Optional[bool] = False
+  # Master prompt-caching switch (default on). Caches the system prompt, tool
+  # schemas, and the rolling conversation prefix so each agentic turn re-reads
+  # them at ~10% input cost instead of re-billing the full prefix. Set False to
+  # disable caching entirely.
+  cache_system_prompt: Optional[bool] = True
   extended_cache_time: Optional[bool] = False
-  # Optional per-block system prompt cache control. Takes precedence over
-  # cache_system_prompt + extended_cache_time when set.
   system_prompt_blocks: Optional[List[SystemPromptBlock]] = None
   request_params: Optional[Dict[str, Any]] = None
 
-  # Anthropic beta and experimental features
+  # Anthropic beta + experimental features
   betas: Optional[List[str]] = None
   context_management: Optional[Dict[str, Any]] = None
   mcp_servers: Optional[List[MCPServerConfiguration]] = None
   skills: Optional[List[Dict[str, str]]] = None
 
   # Client parameters
-  api_key: Optional[str] = None
-  # Alternative to api_key for Anthropic workspace/bearer-token auth.
-  # Reads ANTHROPIC_AUTH_TOKEN env if not set. Mutually exclusive with api_key.
   auth_token: Optional[str] = None
-  default_headers: Optional[Dict[str, Any]] = None
-  timeout: Optional[float] = None
+  default_headers: Optional[Dict[str, str]] = None
   http_client: Optional[Union[httpx.Client, httpx.AsyncClient]] = None
   client_params: Optional[Dict[str, Any]] = None
+  async_client: Optional[Any] = None
 
-  client: Optional[AnthropicClient] = None  # type: ignore[assignment]
-  async_client: Optional[AsyncAnthropicClient] = None
-
-  def __post_init__(self):
-    """Validate model configuration after initialization"""
-    # Validate thinking support immediately at model creation
+  def __post_init__(self) -> None:
+    super().__post_init__()
     if self.thinking:
       self._validate_thinking_support()
-    # Set structured outputs capability flag for supported models
     if self._supports_structured_outputs():
       self.supports_native_structured_outputs = True
-    # Set native thinking capability flag
     if self.id not in self.NON_THINKING_MODELS:
       self.supports_native_thinking = True
-    # Set up skills configuration if skills are enabled
     if self.skills:
       self._setup_skills_configuration()
 
-  def _get_client_params(self) -> Dict[str, Any]:
-    client_params: Dict[str, Any] = {}
+  # --- auth + endpoint ------------------------------------------------------
 
+  def _resolve_auth(self) -> None:
+    self._get_client_params()
+
+  def _get_client_params(self) -> Dict[str, Any]:
+    """Resolve + validate credentials. Bearer auth-token takes precedence over the API key."""
     self.auth_token = self.auth_token or getenv("ANTHROPIC_AUTH_TOKEN")
-    if self.auth_token:
-      client_params["auth_token"] = self.auth_token
-    else:
+    if not self.auth_token:
       self.api_key = self.api_key or getenv("ANTHROPIC_API_KEY")
       if not self.api_key:
-        log_error("ANTHROPIC_API_KEY not set. Please set the ANTHROPIC_API_KEY environment variable.")
-      client_params["api_key"] = self.api_key
+        raise ModelAuthenticationError(
+          message="ANTHROPIC_API_KEY not set. Please set the ANTHROPIC_API_KEY (or ANTHROPIC_AUTH_TOKEN) environment variable.",
+          model_name=self.name,
+        )
+    return {}
 
-    if self.timeout is not None:
-      client_params["timeout"] = self.timeout
+  def _chat_endpoint(self, count_tokens: bool = False) -> str:
+    base = str(self.base_url or getenv("ANTHROPIC_BASE_URL") or DEFAULT_ANTHROPIC_BASE_URL).rstrip("/")
+    return f"{base}/v1/messages/count_tokens" if count_tokens else f"{base}/v1/messages"
 
-    # Add additional client parameters
-    if self.client_params is not None:
-      client_params.update(self.client_params)
-    if self.default_headers is not None:
-      client_params["default_headers"] = self.default_headers
-    return client_params
+  def _build_headers(self, betas: Optional[List[str]] = None) -> Dict[str, str]:
+    """`x-api-key` and bearer `Authorization` are mutually exclusive; bearer needs the oauth beta."""
+    headers: Dict[str, str] = {"content-type": "application/json", "anthropic-version": ANTHROPIC_VERSION}
+    beta_flags = list(betas or [])
+    if self.auth_token:
+      headers["authorization"] = f"Bearer {self.auth_token}"
+      if "oauth-2025-04-20" not in beta_flags:
+        beta_flags.append("oauth-2025-04-20")
+    else:
+      headers["x-api-key"] = self.api_key or ""
+    if beta_flags:
+      headers["anthropic-beta"] = ",".join(beta_flags)
+    if self.default_headers:
+      headers.update(self.default_headers)
+    return headers
+
+  # --- structured output ----------------------------------------------------
 
   def _supports_structured_outputs(self) -> bool:
-    """
-    Check if the current model supports native structured outputs.
-
-    Returns:
-      bool: True if model supports structured outputs
-    """
-    # If model is in blacklist, it doesn't support structured outputs
     if self.id in self.NON_STRUCTURED_OUTPUT_MODELS:
       return False
-
-    # Check for legacy model patterns which don't support structured outputs
     if self.id.startswith("claude-3-"):
       return False
     if self.id.startswith("claude-sonnet-4-") and not self.id.startswith("claude-sonnet-4-5"):
       return False
     if self.id.startswith("claude-opus-4-") and not (self.id.startswith("claude-opus-4-1") or self.id.startswith("claude-opus-4-5")):
       return False
-
     return True
 
   def _using_structured_outputs(
@@ -209,65 +157,33 @@ class Claude(Model):
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
   ) -> bool:
-    """
-    Check if structured outputs are being used in this request.
-    """
-    # Check for output_format usage
     if response_format is not None:
       if self._supports_structured_outputs():
         return True
-      else:
-        log_warning(f"Model '{self.id}' does not support structured outputs. Structured output features will not be available for this model.")
-
-    # Check for strict tools
-    if tools:
-      for tool in tools:
-        if tool.get("type") == "function":
-          func_def = tool.get("function", {})
-          if func_def.get("strict") is True:
-            return True
-
+      log_warning(f"Model '{self.id}' does not support structured outputs. Structured output features will not be available for this model.")
+    for tool in tools or []:
+      if tool.get("type") == "function" and (tool.get("function", {}) or {}).get("strict") is True:
+        return True
     return False
 
   def _validate_thinking_support(self) -> None:
-    """
-    Validate that the current model supports extended thinking.
-    """
     if self.thinking and self.id in self.NON_THINKING_MODELS:
-      non_thinking_models = "\n  - ".join(sorted(self.NON_THINKING_MODELS))
-      raise ValueError(
-        f"Model '{self.id}' does not support extended thinking.\n\n"
-        f"The following models do NOT support thinking:\n  - {non_thinking_models}\n\n"
-        f"All other Claude models support extended thinking by default.\n"
-        f"For more information, see: https://docs.anthropic.com/en/docs/about-claude/models/overview"
-      )
+      models = "\n  - ".join(sorted(self.NON_THINKING_MODELS))
+      raise ValueError(f"Model '{self.id}' does not support extended thinking.\n\nModels without thinking:\n  - {models}")
 
   def _setup_skills_configuration(self) -> None:
-    """
-    Set up configuration for Claude Agent Skills.
-    Automatically configures betas array with required values.
-    """
-    # Required betas for skills
-    required_betas = ["code-execution-2025-08-25", "skills-2025-10-02"]
-
-    # Initialize or merge betas
+    required = ["code-execution-2025-08-25", "skills-2025-10-02"]
     if self.betas is None:
-      self.betas = required_betas
+      self.betas = required
     else:
-      # Add required betas if not present
-      for beta in required_betas:
+      for beta in required:
         if beta not in self.betas:
           self.betas.append(beta)
 
   def _ensure_additional_properties_false(self, schema: Dict[str, Any]) -> None:
-    """
-    Recursively ensure all object types have additionalProperties: false.
-    """
     if isinstance(schema, dict):
       if schema.get("type") == "object":
         schema["additionalProperties"] = False
-
-      # Recursively process nested schemas
       for key, value in schema.items():
         if key in ["properties", "items", "allOf", "anyOf", "oneOf"]:
           if isinstance(value, dict):
@@ -278,212 +194,67 @@ class Claude(Model):
                 self._ensure_additional_properties_false(item)
 
   def _build_output_format(self, response_format: Optional[Union[Dict, Type[BaseModel]]]) -> Optional[Dict[str, Any]]:
-    """
-    Build Anthropic output_format parameter from response_format.
-    """
-    if response_format is None:
+    if response_format is None or not self._supports_structured_outputs():
       return None
-
-    if not self._supports_structured_outputs():
-      return None
-
-    # Handle Pydantic BaseModel
     if isinstance(response_format, type) and issubclass(response_format, BaseModel):
-      try:
-        # Try to use Anthropic SDK's transform_schema helper if available
-        from anthropic import transform_schema
-
-        schema = transform_schema(response_format.model_json_schema())
-      except (ImportError, AttributeError):
-        # Fallback to direct schema conversion
-        schema = response_format.model_json_schema()
-        # Ensure additionalProperties is False
-        if isinstance(schema, dict):
-          if "additionalProperties" not in schema:
-            schema["additionalProperties"] = False
-          # Recursively ensure all object types have additionalProperties: false
-          self._ensure_additional_properties_false(schema)
-
+      schema = response_format.model_json_schema()
+      if isinstance(schema, dict):
+        if "additionalProperties" not in schema:
+          schema["additionalProperties"] = False
+        self._ensure_additional_properties_false(schema)
       return {"type": "json_schema", "schema": schema}
-
-    # Handle dict format
-    else:
-      # Claude only supports json_schema, not json_object
-      if response_format.get("type") == "json_object":
-        return None
-      return response_format
+    if response_format.get("type") == "json_object":
+      return None
+    return response_format
 
   def _validate_structured_outputs_usage(
     self,
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
   ) -> None:
-    """
-    Validate that structured outputs are only used with supported models.
-    """
-    if not self._using_structured_outputs(response_format, tools):
-      return
-
-    if not self._supports_structured_outputs():
+    if self._using_structured_outputs(response_format, tools) and not self._supports_structured_outputs():
       raise ValueError(f"Model '{self.id}' does not support structured outputs.\n\n")
 
-  def _has_beta_features(
-    self,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-  ) -> bool:
-    """Check if the model has any Anthropic beta features enabled."""
-    return (
-      self.mcp_servers is not None
-      or self.context_management is not None
-      or self.skills is not None
-      or self.betas is not None
-      or self._using_structured_outputs(response_format, tools)
-    )
-
-  def get_client(self) -> AnthropicClient:
-    """
-    Returns an instance of the Anthropic client.
-    """
-    if self.client and not self.client.is_closed():
-      return self.client
-
-    _client_params = self._get_client_params()
-    if self.http_client:
-      if isinstance(self.http_client, httpx.Client):
-        _client_params["http_client"] = self.http_client
-      else:
-        log_warning("http_client is not an instance of httpx.Client. Using default global httpx.Client.")
-        _client_params["http_client"] = get_default_sync_client()
-    else:
-      _client_params["http_client"] = get_default_sync_client()
-    self.client = AnthropicClient(**_client_params)
-    return self.client
-
-  def get_async_client(self) -> AsyncAnthropicClient:
-    """
-    Returns an instance of the async Anthropic client.
-    """
-    if self.async_client and not self.async_client.is_closed():
-      return self.async_client
-
-    _client_params = self._get_client_params()
-    if self.http_client:
-      if isinstance(self.http_client, httpx.AsyncClient):
-        _client_params["http_client"] = self.http_client
-      else:
-        log_warning("http_client is not an instance of httpx.AsyncClient. Using default global httpx.AsyncClient.")
-        _client_params["http_client"] = get_default_async_client()
-    else:
-      _client_params["http_client"] = get_default_async_client()
-    self.async_client = AsyncAnthropicClient(**_client_params)
-    return self.async_client
-
-  def to_dict(self) -> Dict[str, Any]:
-    model_dict = super().to_dict()
-    model_dict.update({
-      "max_tokens": self.max_tokens,
-      "thinking": self.thinking,
-      "temperature": self.temperature,
-      "stop_sequences": self.stop_sequences,
-      "top_p": self.top_p,
-      "top_k": self.top_k,
-      "cache_system_prompt": self.cache_system_prompt,
-      "extended_cache_time": self.extended_cache_time,
-      "betas": self.betas,
-    })
-    cleaned_dict = {k: v for k, v in model_dict.items() if v is not None}
-    return cleaned_dict
-
-  def count_tokens(
-    self,
-    messages: List[Message],
-    tools: Optional[Sequence[Union[Function, Dict[str, Any]]]] = None,
-    output_schema: Optional[Union[Dict, Type[BaseModel]]] = None,
-  ) -> int:
-    anthropic_messages, system_prompt = format_messages(messages, compress_tool_results=True, cite_documents=output_schema is None)
-    anthropic_tools = None
-    if tools:
-      formatted_tools = self._format_tools(list(tools))
-      anthropic_tools = format_tools_for_model(formatted_tools)
-
-    kwargs: Dict[str, Any] = {"messages": anthropic_messages, "model": self.id}
-    if system_prompt:
-      kwargs["system"] = system_prompt
-    if anthropic_tools:
-      kwargs["tools"] = anthropic_tools
-
-    response = self.get_client().messages.count_tokens(**kwargs)
-    return response.input_tokens + count_schema_tokens(output_schema, self.id)
-
-  async def acount_tokens(
-    self,
-    messages: List[Message],
-    tools: Optional[Sequence[Union[Function, Dict[str, Any]]]] = None,
-    output_schema: Optional[Union[Dict, Type[BaseModel]]] = None,
-  ) -> int:
-    anthropic_messages, system_prompt = format_messages(messages, compress_tool_results=True, cite_documents=output_schema is None)
-    anthropic_tools = None
-    if tools:
-      formatted_tools = self._format_tools(list(tools))
-      anthropic_tools = format_tools_for_model(formatted_tools)
-
-    kwargs: Dict[str, Any] = {"messages": anthropic_messages, "model": self.id}
-    if system_prompt:
-      kwargs["system"] = system_prompt
-    if anthropic_tools:
-      kwargs["tools"] = anthropic_tools
-
-    response = await self.get_async_client().messages.count_tokens(**kwargs)
-    return response.input_tokens + count_schema_tokens(output_schema, self.id)
+  # --- request body (called by the transform) -------------------------------
 
   def get_request_params(
     self,
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
   ) -> Dict[str, Any]:
-    """
-    Generate keyword arguments for API requests.
-    """
     if self.thinking:
       self._validate_thinking_support()
 
-    _request_params: Dict[str, Any] = {}
+    params: Dict[str, Any] = {}
     if self.max_tokens:
-      _request_params["max_tokens"] = self.max_tokens
+      params["max_tokens"] = self.max_tokens
     if self.thinking:
-      _request_params["thinking"] = self.thinking
-    if self.temperature:
-      _request_params["temperature"] = self.temperature
+      params["thinking"] = self.thinking
+    # `is not None` (not truthiness) so 0.0 isn't dropped → Anthropic default 1.0.
+    if self.temperature is not None:
+      params["temperature"] = self.temperature
     if self.stop_sequences:
-      _request_params["stop_sequences"] = self.stop_sequences
-    if self.top_p:
-      _request_params["top_p"] = self.top_p
-    if self.top_k:
-      _request_params["top_k"] = self.top_k
+      params["stop_sequences"] = self.stop_sequences
+    if self.top_p is not None:
+      params["top_p"] = self.top_p
+    if self.top_k is not None:
+      params["top_k"] = self.top_k
 
-    # Build betas list
-    betas_list = list(self.betas) if self.betas else []
-
-    # Add structured outputs beta header if using structured outputs
-    if self._using_structured_outputs(response_format, tools):
-      beta_header = "structured-outputs-2025-11-13"
-      if beta_header not in betas_list:
-        betas_list.append(beta_header)
-
-    if betas_list:
-      _request_params["betas"] = betas_list
+    betas = list(self.betas) if self.betas else []
+    if self._using_structured_outputs(response_format, tools) and "structured-outputs-2025-11-13" not in betas:
+      betas.append("structured-outputs-2025-11-13")
+    if betas:
+      params["betas"] = betas  # routed to the anthropic-beta header by the transform
 
     if self.context_management:
-      _request_params["context_management"] = self.context_management
+      params["context_management"] = self.context_management
     if self.mcp_servers:
-      _request_params["mcp_servers"] = [{k: v for k, v in asdict(server).items() if v is not None} for server in self.mcp_servers]
+      params["mcp_servers"] = [{k: v for k, v in asdict(s).items() if v is not None} for s in self.mcp_servers]
     if self.skills:
-      _request_params["container"] = {"skills": self.skills}
+      params["container"] = {"skills": self.skills}
     if self.request_params:
-      _request_params.update(self.request_params)
-
-    return _request_params
+      params.update(self.request_params)
+    return params
 
   def _prepare_request_kwargs(
     self,
@@ -492,55 +263,44 @@ class Claude(Model):
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     system_blocks: Optional[List[Dict[str, Any]]] = None,
   ) -> Dict[str, Any]:
-    """
-    Prepare the request keyword arguments for the API call.
-    """
     self._validate_structured_outputs_usage(response_format, tools)
+    body = self.get_request_params(response_format=response_format, tools=tools).copy()
 
-    request_kwargs = self.get_request_params(response_format=response_format, tools=tools).copy()
-    # Per-block typed cache control takes precedence over the model-wide flag.
     if self.system_prompt_blocks:
-      request_kwargs["system"] = self._build_system_prompt_blocks(system_message)
+      body["system"] = self._build_system_prompt_blocks(system_message)
     elif system_message:
+      block: Dict[str, Any] = {"text": system_message, "type": "text"}
       if self.cache_system_prompt:
-        cache_control = (
-          {"type": "ephemeral", "ttl": "1h"} if self.extended_cache_time is not None and self.extended_cache_time is True else {"type": "ephemeral"}
-        )
-        request_kwargs["system"] = [{"text": system_message, "type": "text", "cache_control": cache_control}]
-      else:
-        request_kwargs["system"] = [{"text": system_message, "type": "text"}]
-    # Context engine cache optimization: pre-split static/dynamic blocks
+        block["cache_control"] = self._cache_control()
+      body["system"] = [block]
     if system_blocks:
-      request_kwargs["system"] = system_blocks
+      body["system"] = system_blocks
 
-    # Add code execution tool if skills are enabled
     if self.skills:
       code_execution_tool = {"type": "code_execution_20250825", "name": "code_execution"}
-      if tools:
-        tools = tools + [code_execution_tool]
-      else:
-        tools = [code_execution_tool]
+      tools = (tools + [code_execution_tool]) if tools else [code_execution_tool]
 
-    # Format tools (this will handle strict mode)
     if tools:
-      request_kwargs["tools"] = format_tools_for_model(tools)
+      formatted_tools = format_tools_for_model(tools)
+      # Cache the tool schemas (static across turns) on the last tool — Anthropic
+      # caches the whole tools+system prefix up to the last breakpoint.
+      if formatted_tools and self.cache_system_prompt:
+        formatted_tools[-1] = {**formatted_tools[-1], "cache_control": self._cache_control()}
+      body["tools"] = formatted_tools
 
-    # Build output_format if response_format is provided
     output_format = self._build_output_format(response_format)
     if output_format:
-      request_kwargs["output_format"] = output_format
+      body["output_format"] = output_format
 
-    if request_kwargs:
-      log_debug(f"Calling {self.provider} with request parameters: {request_kwargs}", log_level=2)
-    return request_kwargs
+    if body:
+      log_debug(f"Calling {self.provider} with request parameters: {body}", log_level=2)
+    return body
+
+  def _cache_control(self) -> Dict[str, Any]:
+    """Ephemeral cache breakpoint — 1h TTL when extended_cache_time is set, else Anthropic's 5m default."""
+    return {"type": "ephemeral", "ttl": "1h"} if self.extended_cache_time else {"type": "ephemeral"}
 
   def _build_system_prompt_blocks(self, system_message: Optional[str]) -> List[Dict[str, Any]]:
-    """Convert ``system_prompt_blocks`` into Anthropic-shaped system blocks.
-
-    The agent-built system message (if present) is appended uncached as a
-    final block, so callers can reserve cache hits for the static prefix
-    blocks they declared explicitly.
-    """
     blocks = list(self.system_prompt_blocks or [])
     self._validate_cache_ttl_order(blocks)
     out: List[Dict[str, Any]] = []
@@ -561,52 +321,20 @@ class Claude(Model):
 
   @staticmethod
   def _validate_cache_ttl_order(blocks: List[SystemPromptBlock]) -> None:
-    """Anthropic rejects a 5m cache block following a 1h cache block.
-
-    Catch the ordering at submission time so callers get a clear error
-    instead of an opaque API rejection.
-    """
     seen_one_hour = False
     for idx, block in enumerate(blocks):
       if not block.cache:
         continue
       if block.ttl == "1h":
         seen_one_hour = True
-      elif block.ttl == "5m" or block.ttl is None:
-        if seen_one_hour:
-          raise ValueError(
-            f"system_prompt_blocks[{idx}] uses ttl='5m' (or default) after a 1h block. "
-            "Anthropic requires longer-TTL cache blocks to come after shorter-TTL ones — reorder so 5m blocks precede 1h blocks."
-          )
-
-  def _handle_api_error(self, e: APIStatusError) -> NoReturn:
-    """Translate an Anthropic APIStatusError into a Definable exception.
-
-    - 529 / 'overloaded' → ``ModelRateLimitError`` (Anthropic uses 529 as a
-      retry-friendly load-shedding signal).
-    - context-window exhaustion ('prompt is too long') → ``ContextWindowExceededError``.
-    - everything else → ``ModelProviderError``.
-    """
-    status = getattr(e, "status_code", None)
-    msg = getattr(e, "message", None) or str(e)
-    msg_lower = msg.lower()
-    if status == 529 or "overloaded" in msg_lower:
-      log_warning(f"Claude API overloaded: {msg}")
-      raise ModelRateLimitError(message=msg, model_name=self.name, model_id=self.id) from e
-    if "prompt is too long" in msg_lower or "context_length_exceeded" in msg_lower:
-      log_error(f"Claude context exceeded: {msg}")
-      raise ContextWindowExceededError(message=msg, status_code=status or 400, model_name=self.name, model_id=self.id) from e
-    log_error(f"Claude API error (status {status}): {msg}")
-    raise ModelProviderError(message=msg, status_code=status or 502, model_name=self.name, model_id=self.id) from e
+      elif (block.ttl == "5m" or block.ttl is None) and seen_one_hour:
+        raise ValueError(
+          f"system_prompt_blocks[{idx}] uses ttl='5m' (or default) after a 1h block. "
+          "Anthropic requires longer-TTL cache blocks to come after shorter-TTL ones — reorder so 5m blocks precede 1h blocks."
+        )
 
   @staticmethod
   def _extract_cache_blocks(messages: List[Message]) -> Optional[List[Dict[str, Any]]]:
-    """Extract pre-structured cache blocks from system messages.
-
-    If any system message carries ``_cache_blocks`` (set by the context
-    engine's cache optimization), return those blocks for direct use in
-    the API request.
-    """
     for msg in messages:
       if msg.role == "system" and hasattr(msg, "_cache_blocks"):
         blocks = getattr(msg, "_cache_blocks", None)
@@ -614,466 +342,62 @@ class Claude(Model):
           return blocks  # type: ignore[return-value]
     return None
 
-  def invoke(
+  # --- token counting -------------------------------------------------------
+
+  def _count_tokens_body(
     self,
     messages: List[Message],
-    assistant_message: Message,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-    run_response: Optional[RunOutput] = None,
-    compress_tool_results: bool = False,
-  ) -> ModelResponse:
-    """
-    Send a request to the Anthropic API to generate a response.
-    """
-    try:
-      if run_response and run_response.metrics:
-        run_response.metrics.set_time_to_first_token()
+    tools: Optional[Sequence[Union[Function, Dict[str, Any]]]],
+    output_schema: Optional[Union[Dict, Type[BaseModel]]],
+  ) -> Dict[str, Any]:
+    anthropic_messages, system_prompt = format_messages(messages, compress_tool_results=True, cite_documents=output_schema is None)
+    body: Dict[str, Any] = {"model": self.id, "messages": anthropic_messages}
+    if system_prompt:
+      body["system"] = system_prompt
+    if tools:
+      anthropic_tools = format_tools_for_model(self._format_tools(list(tools)))
+      if anthropic_tools:
+        body["tools"] = anthropic_tools
+    return body
 
-      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
-      _cache_blocks = self._extract_cache_blocks(messages)
-      request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format, system_blocks=_cache_blocks)
-
-      if self._has_beta_features(response_format=response_format, tools=tools):
-        assistant_message.metrics.start_timer()
-        provider_response = self.get_client().beta.messages.create(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        )
-      else:
-        assistant_message.metrics.start_timer()
-        provider_response = self.get_client().messages.create(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        )
-
-      assistant_message.metrics.stop_timer()
-
-      model_response = self._parse_provider_response(provider_response, response_format=response_format)
-
-      return model_response
-
-    except APIConnectionError as e:
-      log_error(f"Connection error while calling Claude API: {str(e)}")
-      raise ModelProviderError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except RateLimitError as e:
-      log_warning(f"Rate limit exceeded: {str(e)}")
-      raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except APIStatusError as e:
-      self._handle_api_error(e)
-    except Exception as e:
-      log_error(f"Unexpected error calling Claude API: {str(e)}")
-      raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
-
-  def invoke_stream(
+  def count_tokens(
     self,
     messages: List[Message],
-    assistant_message: Message,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-    run_response: Optional[RunOutput] = None,
-    compress_tool_results: bool = False,
-  ) -> Iterator[ModelResponse]:
-    """
-    Stream a response from the Anthropic API.
-    """
-    chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
-    _cache_blocks = self._extract_cache_blocks(messages)
-    request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format, system_blocks=_cache_blocks)
+    tools: Optional[Sequence[Any]] = None,
+    output_schema: Optional[Union[Dict, Type[BaseModel]]] = None,
+  ) -> int:
+    self._get_client_params()
+    body = self._count_tokens_body(messages, tools, output_schema)
+    raw = post_json(self._chat_endpoint(count_tokens=True), self._build_headers(self.betas), body, self.timeout, self.name, self.id)
+    return int(raw.get("input_tokens", 0)) + count_schema_tokens(output_schema, self.id)
 
-    try:
-      if run_response and run_response.metrics:
-        run_response.metrics.set_time_to_first_token()
-
-      # Beta features
-      if self._has_beta_features(response_format=response_format, tools=tools):
-        assistant_message.metrics.start_timer()
-        with self.get_client().beta.messages.stream(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        ) as stream:
-          for chunk in stream:
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)
-      else:
-        assistant_message.metrics.start_timer()
-        with self.get_client().messages.stream(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        ) as stream:
-          for chunk in stream:  # type: ignore[assignment]
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)
-
-      assistant_message.metrics.stop_timer()
-
-    except APIConnectionError as e:
-      log_error(f"Connection error while calling Claude API: {str(e)}")
-      raise ModelProviderError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except RateLimitError as e:
-      log_warning(f"Rate limit exceeded: {str(e)}")
-      raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except APIStatusError as e:
-      self._handle_api_error(e)
-    except Exception as e:
-      log_error(f"Unexpected error calling Claude API: {str(e)}")
-      raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
-
-  async def ainvoke(
+  async def acount_tokens(
     self,
     messages: List[Message],
-    assistant_message: Message,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-    run_response: Optional[RunOutput] = None,
-    compress_tool_results: bool = False,
-  ) -> ModelResponse:
-    """
-    Send an asynchronous request to the Anthropic API to generate a response.
-    """
-    try:
-      if run_response and run_response.metrics:
-        run_response.metrics.set_time_to_first_token()
-
-      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
-      request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format)
-
-      if self._has_beta_features(response_format=response_format, tools=tools):
-        assistant_message.metrics.start_timer()
-        provider_response = await self.get_async_client().beta.messages.create(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        )
-      else:
-        assistant_message.metrics.start_timer()
-        provider_response = await self.get_async_client().messages.create(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        )
-
-      assistant_message.metrics.stop_timer()
-
-      model_response = self._parse_provider_response(provider_response, response_format=response_format)
-
-      return model_response
-
-    except APIConnectionError as e:
-      log_error(f"Connection error while calling Claude API: {str(e)}")
-      raise ModelProviderError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except RateLimitError as e:
-      log_warning(f"Rate limit exceeded: {str(e)}")
-      raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except APIStatusError as e:
-      self._handle_api_error(e)
-    except Exception as e:
-      log_error(f"Unexpected error calling Claude API: {str(e)}")
-      raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
-
-  async def ainvoke_stream(
-    self,
-    messages: List[Message],
-    assistant_message: Message,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-    tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-    run_response: Optional[RunOutput] = None,
-    compress_tool_results: bool = False,
-  ) -> AsyncIterator[ModelResponse]:
-    """
-    Stream an asynchronous response from the Anthropic API.
-    """
-    try:
-      if run_response and run_response.metrics:
-        run_response.metrics.set_time_to_first_token()
-
-      chat_messages, system_message = format_messages(messages, compress_tool_results=compress_tool_results, cite_documents=response_format is None)
-      request_kwargs = self._prepare_request_kwargs(system_message, tools=tools, response_format=response_format)
-
-      if self._has_beta_features(response_format=response_format, tools=tools):
-        assistant_message.metrics.start_timer()
-        async with self.get_async_client().beta.messages.stream(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        ) as stream:
-          async for chunk in stream:
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)
-      else:
-        assistant_message.metrics.start_timer()
-        async with self.get_async_client().messages.stream(
-          model=self.id,
-          messages=chat_messages,
-          **request_kwargs,
-        ) as stream:
-          async for chunk in stream:  # type: ignore[assignment]
-            yield self._parse_provider_response_delta(chunk, response_format=response_format)
-
-      assistant_message.metrics.stop_timer()
-
-    except APIConnectionError as e:
-      log_error(f"Connection error while calling Claude API: {str(e)}")
-      raise ModelProviderError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except RateLimitError as e:
-      log_warning(f"Rate limit exceeded: {str(e)}")
-      raise ModelRateLimitError(message=e.message, model_name=self.name, model_id=self.id) from e
-    except APIStatusError as e:
-      self._handle_api_error(e)
-    except Exception as e:
-      log_error(f"Unexpected error calling Claude API: {str(e)}")
-      raise ModelProviderError(message=str(e), model_name=self.name, model_id=self.id) from e
+    tools: Optional[Sequence[Any]] = None,
+    output_schema: Optional[Union[Dict, Type[BaseModel]]] = None,
+  ) -> int:
+    self._get_client_params()
+    body = self._count_tokens_body(messages, tools, output_schema)
+    raw = await apost_json(self._chat_endpoint(count_tokens=True), self._build_headers(self.betas), body, self.timeout, self.name, self.id)
+    return int(raw.get("input_tokens", 0)) + count_schema_tokens(output_schema, self.id)
 
   def get_system_message_for_model(self, tools: Optional[List[Any]] = None) -> Optional[str]:
     if tools is not None and len(tools) > 0:
-      tool_call_prompt = "Do not reflect on the quality of the returned search results in your response\n\n"
-      return tool_call_prompt
+      return "Do not reflect on the quality of the returned search results in your response\n\n"
     return None
 
-  def _parse_provider_response(
-    self,
-    response: Any,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    **kwargs,
-  ) -> ModelResponse:
-    """
-    Parse the Claude response into a ModelResponse.
-    """
-    model_response = ModelResponse()
-
-    model_response.role = response.role or "assistant"
-
-    if response.content:
-      for block in response.content:
-        if block.type == "text":
-          text_content = block.text
-
-          if model_response.content is None:
-            model_response.content = text_content
-          else:
-            model_response.content += text_content
-
-          # Handle structured outputs (JSON outputs)
-          if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
-            if text_content:
-              try:
-                parsed_data = json.loads(text_content)
-                model_response.parsed = response_format.model_validate(parsed_data)
-                log_debug(f"Successfully parsed structured output: {model_response.parsed}")
-              except json.JSONDecodeError as e:
-                log_warning(f"Failed to parse JSON from structured output: {e}")
-              except ValidationError as e:
-                log_warning(f"Failed to validate structured output against schema: {e}")
-              except Exception as e:
-                log_warning(f"Unexpected error parsing structured output: {e}")
-
-          # Capture citations from the response
-          if block.citations is not None:
-            if model_response.citations is None:
-              model_response.citations = Citations(raw=[], urls=[], documents=[])
-            for citation in block.citations:
-              model_response.citations.raw.append(citation.model_dump())  # type: ignore
-              if isinstance(citation, CitationsWebSearchResultLocation):
-                model_response.citations.urls.append(  # type: ignore
-                  UrlCitation(url=citation.url, title=citation.cited_text)
-                )
-              elif isinstance(citation, CitationPageLocation):
-                model_response.citations.documents.append(  # type: ignore
-                  DocumentCitation(
-                    document_title=citation.document_title,
-                    cited_text=citation.cited_text,
-                  )
-                )
-        elif block.type == "thinking":
-          model_response.reasoning_content = block.thinking
-          model_response.provider_data = {
-            "signature": block.signature,
-          }
-        elif block.type == "redacted_thinking":
-          model_response.redacted_reasoning_content = block.data
-
-    # Extract tool calls from the response
-    if response.stop_reason == "tool_use":
-      for block in response.content:
-        if block.type == "tool_use":
-          tool_name = block.name
-          tool_input = block.input
-
-          function_def = {"name": tool_name}
-          if tool_input:
-            function_def["arguments"] = json.dumps(tool_input)
-
-          model_response.extra = model_response.extra or {}
-
-          model_response.tool_calls.append({
-            "id": block.id,
-            "type": "function",
-            "function": function_def,
-          })
-
-    # Add usage metrics
-    if response.usage is not None:
-      model_response.response_usage = self._get_metrics(response.usage)
-
-    # Capture context management information if present
-    if self.context_management is not None and hasattr(response, "context_management"):
-      if response.context_management is not None:
-        model_response.provider_data = model_response.provider_data or {}
-        if hasattr(response.context_management, "model_dump"):
-          model_response.provider_data["context_management"] = response.context_management.model_dump()
-        else:
-          model_response.provider_data["context_management"] = response.context_management
-    # Extract file IDs if skills are enabled
-    if self.skills and response.content:
-      file_ids: List[str] = []
-      for block in response.content:
-        if block.type == "bash_code_execution_tool_result":
-          if hasattr(block, "content") and hasattr(block.content, "content"):
-            if isinstance(block.content.content, list):
-              for output_block in block.content.content:
-                if hasattr(output_block, "file_id"):
-                  file_ids.append(output_block.file_id)
-
-      if file_ids:
-        if model_response.provider_data is None:
-          model_response.provider_data = {}
-        model_response.provider_data["file_ids"] = file_ids
-
-    return model_response
-
-  def _parse_provider_response_delta(  # type: ignore[override]
-    self,
-    response: Any,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-  ) -> ModelResponse:
-    """
-    Parse the Claude streaming response into ModelProviderResponse objects.
-    """
-    model_response = ModelResponse()
-    # Untyped alias: isinstance narrows `response` but `_evt` stays Any,
-    # avoiding union-attr errors from Anthropic SDK's complex event types.
-    _evt: Any = response
-
-    if isinstance(response, (ContentBlockStartEvent, BetaRawContentBlockStartEvent)):
-      if _evt.content_block.type == "redacted_reasoning_content":
-        model_response.redacted_reasoning_content = _evt.content_block.data
-
-    if isinstance(response, (ContentBlockDeltaEvent, BetaRawContentBlockDeltaEvent)):
-      if _evt.delta.type == "text_delta":
-        model_response.content = _evt.delta.text
-      elif _evt.delta.type == "thinking_delta":
-        model_response.reasoning_content = _evt.delta.thinking
-      elif _evt.delta.type == "signature_delta":
-        model_response.provider_data = {
-          "signature": _evt.delta.signature,
-        }
-
-    elif isinstance(response, (ContentBlockStopEvent, ParsedBetaContentBlockStopEvent)):
-      if _evt.content_block.type == "tool_use":
-        tool_use = _evt.content_block
-        tool_name = tool_use.name
-        tool_input = tool_use.input
-
-        function_def = {"name": tool_name}
-        if tool_input:
-          function_def["arguments"] = json.dumps(tool_input)
-
-        model_response.extra = model_response.extra or {}
-
-        model_response.tool_calls = [
-          {
-            "id": tool_use.id,
-            "type": "function",
-            "function": function_def,
-          }
-        ]
-
-    # Capture citations from the final response and handle structured outputs
-    elif isinstance(response, (MessageStopEvent, ParsedBetaMessageStopEvent)):
-      model_response.content = ""
-      model_response.citations = Citations(raw=[], urls=[], documents=[])
-
-      accumulated_text = ""
-
-      for block in _evt.message.content:
-        if block.type == "text":
-          accumulated_text += block.text
-
-        citations = getattr(block, "citations", None)
-        if not citations:
-          continue
-        for citation in citations:
-          model_response.citations.raw.append(citation.model_dump())  # type: ignore
-          if isinstance(citation, CitationsWebSearchResultLocation):
-            model_response.citations.urls.append(UrlCitation(url=citation.url, title=citation.cited_text))  # type: ignore
-          elif isinstance(citation, CitationPageLocation):
-            model_response.citations.documents.append(  # type: ignore
-              DocumentCitation(document_title=citation.document_title, cited_text=citation.cited_text)
-            )
-
-      # Handle structured outputs from accumulated text
-      if response_format is not None and isinstance(response_format, type) and issubclass(response_format, BaseModel):
-        if accumulated_text:
-          try:
-            parsed_data = json.loads(accumulated_text)
-            model_response.parsed = response_format.model_validate(parsed_data)
-            log_debug(f"Successfully parsed structured output from stream: {model_response.parsed}")
-          except json.JSONDecodeError as e:
-            log_warning(f"Failed to parse JSON from structured output in stream: {e}")
-          except ValidationError as e:
-            log_warning(f"Failed to validate structured output against schema in stream: {e}")
-          except Exception as e:
-            log_warning(f"Unexpected error parsing structured output in stream: {e}")
-
-      # Capture context management information if present
-      if self.context_management is not None and hasattr(_evt.message, "context_management"):
-        context_mgmt = _evt.message.context_management
-        if context_mgmt is not None:
-          model_response.provider_data = model_response.provider_data or {}
-          if hasattr(context_mgmt, "model_dump"):
-            model_response.provider_data["context_management"] = context_mgmt.model_dump()
-          else:
-            model_response.provider_data["context_management"] = context_mgmt
-
-    if (
-      isinstance(response, (MessageStopEvent, ParsedBetaMessageStopEvent))
-      and hasattr(_evt, "message")
-      and hasattr(_evt.message, "usage")
-      and _evt.message.usage is not None
-    ):
-      model_response.response_usage = self._get_metrics(_evt.message.usage)
-
-    # Capture the Beta response
-    try:
-      if isinstance(response, BetaRawContentBlockDeltaEvent) and isinstance(_evt.delta, BetaTextDelta) and _evt.delta.text is not None:
-        model_response.content = _evt.delta.text
-    except Exception as e:
-      log_error(f"Error parsing Beta response: {e}")
-
-    return model_response
-
-  def _get_metrics(self, response_usage: Any) -> Metrics:
-    """
-    Parse the given Anthropic-specific usage into a Metrics object.
-    """
-    metrics = Metrics()
-
-    metrics.input_tokens = response_usage.input_tokens or 0
-    metrics.output_tokens = response_usage.output_tokens or 0
-    metrics.total_tokens = metrics.input_tokens + metrics.output_tokens
-    metrics.cache_read_tokens = response_usage.cache_read_input_tokens or 0
-    metrics.cache_write_tokens = response_usage.cache_creation_input_tokens or 0
-
-    if response_usage.server_tool_use:
-      metrics.provider_metrics = {"server_tool_use": response_usage.server_tool_use.model_dump()}
-    if isinstance(response_usage, Usage):
-      if response_usage.service_tier:
-        metrics.provider_metrics = metrics.provider_metrics or {}
-        metrics.provider_metrics["service_tier"] = response_usage.service_tier
-
-    return metrics
+  def to_dict(self) -> Dict[str, Any]:
+    model_dict = super().to_dict()
+    model_dict.update({
+      "max_tokens": self.max_tokens,
+      "thinking": self.thinking,
+      "temperature": self.temperature,
+      "stop_sequences": self.stop_sequences,
+      "top_p": self.top_p,
+      "top_k": self.top_k,
+      "cache_system_prompt": self.cache_system_prompt,
+      "extended_cache_time": self.extended_cache_time,
+      "betas": self.betas,
+    })
+    return {k: v for k, v in model_dict.items() if v is not None}

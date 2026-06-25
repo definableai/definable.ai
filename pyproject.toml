@@ -68,7 +68,7 @@ tests = [
 ]
 
 [tool.setuptools.package-data]
-definable = ["skills/library/*.md"]
+definable = ["skills/library/*.md", "model/pricing/*.json"]
 
 [tool.setuptools.packages.find]
 where = ["definable"]

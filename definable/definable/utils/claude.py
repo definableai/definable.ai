@@ -6,14 +6,6 @@ from definable.media import File, Image
 from definable.model.message import Message
 from definable.utils.log import log_error, log_warning
 
-try:
-  from anthropic.types import (
-    TextBlock,
-    ToolUseBlock,
-  )
-except ImportError:
-  raise ImportError("`anthropic` not installed. Please install using `pip install anthropic`")
-
 
 @dataclass
 class MCPToolConfiguration:
@@ -40,6 +32,18 @@ ROLE_MAP = {
 
 
 def _format_image_for_message(image: Image) -> Optional[Dict[str, Any]]:
+  """Anthropic image block — memoized so the base64 encode / disk read happens once,
+  not on every agentic turn."""
+  cached = image._block_cache.get("anthropic")
+  if cached is not None:
+    return cached
+  block = _format_image_uncached(image)
+  if block is not None:
+    image._block_cache["anthropic"] = block
+  return block
+
+
+def _format_image_uncached(image: Image) -> Optional[Dict[str, Any]]:
   """
   Add an image to a message by converting it to base64 encoded format.
   """
@@ -148,6 +152,19 @@ def _format_image_for_message(image: Image) -> Optional[Dict[str, Any]]:
 
 
 def _format_file_for_message(file: File, cite_documents: bool = True) -> Optional[Dict[str, Any]]:
+  """Anthropic document block — memoized per cite_documents so the base64 encode /
+  disk read / URL fetch happens once, not on every agentic turn."""
+  key = f"anthropic:{cite_documents}"
+  cached = file._block_cache.get(key)
+  if cached is not None:
+    return cached
+  block = _format_file_uncached(file, cite_documents)
+  if block is not None:
+    file._block_cache[key] = block
+  return block
+
+
+def _format_file_uncached(file: File, cite_documents: bool = True) -> Optional[Dict[str, Any]]:
   """
   Add a document url or base64 encoded content to a message.
   """
@@ -316,35 +333,28 @@ def format_messages(
     elif message.role == "assistant":
       content = []
 
+      # Thinking blocks must be echoed back verbatim (signature verifies integrity) or Anthropic 400s.
       if message.reasoning_content is not None and message.provider_data is not None:
-        from anthropic.types import RedactedThinkingBlock, ThinkingBlock
-
-        content.append(
-          ThinkingBlock(
-            thinking=message.reasoning_content,
-            signature=str(message.provider_data.get("signature", "")),
-            type="thinking",
-          )
-        )
+        content.append({
+          "type": "thinking",
+          "thinking": message.reasoning_content,
+          "signature": str(message.provider_data.get("signature", "")),
+        })
 
       if message.redacted_reasoning_content is not None:
-        from anthropic.types import RedactedThinkingBlock
-
-        content.append(RedactedThinkingBlock(data=message.redacted_reasoning_content, type="redacted_thinking"))
+        content.append({"type": "redacted_thinking", "data": message.redacted_reasoning_content})
 
       if isinstance(message.content, str) and message.content and len(message.content.strip()) > 0:
-        content.append(TextBlock(text=message.content, type="text"))
+        content.append({"type": "text", "text": message.content})
 
       if message.tool_calls:
         for tool_call in message.tool_calls:
-          content.append(
-            ToolUseBlock(
-              id=tool_call["id"],
-              input=json.loads(tool_call["function"]["arguments"]) if tool_call["function"].get("arguments", "").strip() else {},
-              name=tool_call["function"]["name"],
-              type="tool_use",
-            )
-          )
+          content.append({
+            "type": "tool_use",
+            "id": tool_call["id"],
+            "name": tool_call["function"]["name"],
+            "input": json.loads(tool_call["function"]["arguments"]) if tool_call["function"].get("arguments", "").strip() else {},
+          })
     elif message.role == "tool":
       content = []
 

@@ -1,7 +1,8 @@
 """USD cost calculation from a flat usage dict.
 
 Thin adapter on top of :class:`definable.model.pricing.PricingRegistry`
-(which loads ``model_pricing.json``). Observability stores token counts
+(which loads the per-provider spec sheets in ``model/pricing/*.json``).
+Observability stores token counts
 in a plain ``dict[str, int]`` on each :class:`ModelResponded` event;
 this module turns that dict into a number for the UI.
 

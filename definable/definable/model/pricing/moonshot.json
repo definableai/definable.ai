@@ -1,0 +1,54 @@
+{
+  "provider": "Moonshot",
+  "_source": "pricepertoken MCP for kimi-* (third-party hosts: phala/parasail/atlascloud/vercel — verify against platform.moonshot.ai for exact direct rates). moonshot-v1-* carried from prior data, UNVERIFIED. structured_output OMITTED: not confirmable on Moonshot/Kimi official docs at backfill time (do not assume).",
+  "models": {
+    "kimi-k2.6": {
+      "pricing": { "input_per_million": 0.75, "output_per_million": 3.5, "cached_input_per_million": 0.16 },
+      "capabilities": { "tool_use": true, "vision": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image"], "output": ["text"] },
+      "limits": { "context_window": 256000 }
+    },
+    "kimi-k2.5": {
+      "pricing": { "input_per_million": 0.6, "output_per_million": 3.0, "cached_input_per_million": 0.22 },
+      "capabilities": { "tool_use": true, "vision": true, "reasoning": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image"], "output": ["text"] },
+      "limits": { "context_window": 262144 }
+    },
+    "kimi-k2-thinking": {
+      "pricing": { "input_per_million": 0.6, "output_per_million": 2.5, "cached_input_per_million": 0.6 },
+      "capabilities": { "tool_use": true, "vision": false, "reasoning": true, "prompt_caching": true },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 131072 }
+    },
+    "kimi-k2-0905": {
+      "pricing": { "input_per_million": 0.6, "output_per_million": 2.5, "cached_input_per_million": 0.6 },
+      "capabilities": { "tool_use": true, "vision": false, "reasoning": false },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 262144 }
+    },
+    "kimi-k2": {
+      "pricing": { "input_per_million": 0.55, "output_per_million": 2.2 },
+      "capabilities": { "tool_use": true, "vision": false, "reasoning": false },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 131000 }
+    },
+    "moonshot-v1-8k": {
+      "pricing": { "input_per_million": 1.0, "output_per_million": 1.0 },
+      "capabilities": { "tool_use": true, "vision": false },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 8192 }
+    },
+    "moonshot-v1-32k": {
+      "pricing": { "input_per_million": 2.0, "output_per_million": 2.0 },
+      "capabilities": { "tool_use": true, "vision": false },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 32768 }
+    },
+    "moonshot-v1-128k": {
+      "pricing": { "input_per_million": 6.0, "output_per_million": 6.0 },
+      "capabilities": { "tool_use": true, "vision": false },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 131072 }
+    }
+  }
+}

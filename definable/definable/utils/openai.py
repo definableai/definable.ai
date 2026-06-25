@@ -31,6 +31,11 @@ def audio_to_message(audio: Sequence[Audio]) -> List[Dict[str, Any]]:
 
   audio_messages = []
   for audio_snippet in audio:
+    # Memoized: normalize (ffmpeg) + base64 is the most expensive per-turn media op.
+    cached = audio_snippet._block_cache.get("openai_audio")
+    if cached is not None:
+      audio_messages.append(cached)
+      continue
     audio_bytes: Optional[bytes] = None
     audio_format: Optional[str] = audio_snippet.format
 
@@ -80,15 +85,15 @@ def audio_to_message(audio: Sequence[Audio]) -> List[Dict[str, Any]]:
         continue
 
       encoded_string = base64.b64encode(audio_bytes).decode("utf-8")
-      audio_messages.append(
-        {
-          "type": "input_audio",
-          "input_audio": {
-            "data": encoded_string,
-            "format": audio_format,
-          },
+      block = {
+        "type": "input_audio",
+        "input_audio": {
+          "data": encoded_string,
+          "format": audio_format,
         },
-      )
+      }
+      audio_snippet._block_cache["openai_audio"] = block
+      audio_messages.append(block)
     else:
       log_error(f"Could not process audio snippet: {audio_snippet}")
 
@@ -146,7 +151,11 @@ def _process_image_url(image_url: str) -> Dict[str, Any]:
 
 
 def process_image(image: Image) -> Optional[Dict[str, Any]]:
-  """Process an image based on the format."""
+  """Process an image based on the format. Memoized so the base64 encode / disk read
+  happens once, not on every agentic turn."""
+  cached = image._block_cache.get("openai")
+  if cached is not None:
+    return cached
   image_payload: Optional[Dict[str, Any]] = None  # Initialize
   try:
     if image.url is not None:
@@ -170,6 +179,8 @@ def process_image(image: Image) -> Optional[Dict[str, Any]]:
         image_payload["image_url"] = {}
       image_payload["image_url"]["detail"] = image.detail
 
+    if image_payload is not None:
+      image._block_cache["openai"] = image_payload
     return image_payload
 
   except (FileNotFoundError, IsADirectoryError, ValueError) as e:
@@ -213,6 +224,18 @@ def images_to_message(images: Sequence[Image]) -> List[Dict[str, Any]]:
 
 
 def _format_file_for_message(file: File) -> Optional[Dict[str, Any]]:
+  """OpenAI file block — memoized so the base64 encode / disk read / URL fetch happens
+  once, not on every agentic turn."""
+  cached = file._block_cache.get("openai")
+  if cached is not None:
+    return cached
+  block = _format_file_uncached(file)
+  if block is not None:
+    file._block_cache["openai"] = block
+  return block
+
+
+def _format_file_uncached(file: File) -> Optional[Dict[str, Any]]:
   """
   Add a document url, base64 encoded content or OpenAI file to a message.
   """

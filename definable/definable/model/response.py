@@ -11,22 +11,6 @@ from definable.model.metrics import Metrics
 from definable.agent.toolkit.function import UserInputField
 
 
-class ModelResponseEvent(str, Enum):
-  """Events that can be sent by the model provider"""
-
-  tool_call_paused = "ToolCallPaused"
-  tool_call_started = "ToolCallStarted"
-  tool_call_completed = "ToolCallCompleted"
-  assistant_response = "AssistantResponse"
-  # Pipeline / provider lifecycle — emitted by base.py and resilience wrappers.
-  # Consumers should treat unknown event strings as no-ops.
-  model_request_started = "ModelRequestStarted"
-  model_request_completed = "ModelRequestCompleted"
-  compression_started = "CompressionStarted"
-  compression_completed = "CompressionCompleted"
-  fallback_model_activated = "FallbackModelActivated"
-
-
 @dataclass
 class ToolExecution:
   """Execution of a tool"""
@@ -114,8 +98,6 @@ class ModelResponse:
   # Actual tool executions
   tool_executions: Optional[List[ToolExecution]] = field(default_factory=list)
 
-  event: str = ModelResponseEvent.assistant_response.value
-
   provider_data: Optional[Dict[str, Any]] = None
 
   redacted_reasoning_content: Optional[str] = None
@@ -125,11 +107,7 @@ class ModelResponse:
 
   response_usage: Optional[Metrics] = None
 
-  created_at: int = int(time())
-
   extra: Optional[Dict[str, Any]] = None
-
-  updated_session_state: Optional[Dict[str, Any]] = None
 
   def to_dict(self) -> Dict[str, Any]:
     """Serialize ModelResponse to dictionary for caching."""

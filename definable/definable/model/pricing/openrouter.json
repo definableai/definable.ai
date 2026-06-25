@@ -1,0 +1,5 @@
+{
+  "provider": "OpenRouter",
+  "_note": "OpenRouter is an aggregator that proxies models from many authors under namespaced slugs (e.g. 'anthropic/claude-sonnet-4.5', 'openai/gpt-4o'). Pricing varies by upstream and changes often; OpenRouter also returns usage/cost in its API response. Intentionally left unseeded — add specific slugs here only if a model is used heavily enough to warrant a pinned local rate. Use the pricepertoken MCP get_model(provider='openrouter') for on-demand lookups.",
+  "models": {}
+}

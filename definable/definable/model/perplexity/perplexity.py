@@ -4,25 +4,11 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 from pydantic import BaseModel
 
-from definable.exceptions import ModelAuthenticationError, ModelProviderError
+from definable.exceptions import ModelAuthenticationError
 from definable.model.message import Citations, UrlCitation
-from definable.model.metrics import Metrics
-from definable.model.response import ModelResponse
-from definable.run.agent import RunOutput
-from definable.utils.log import log_debug, log_warning
-
-try:
-  from openai.types.chat.chat_completion import ChatCompletion
-  from openai.types.chat.chat_completion_chunk import (
-    ChatCompletionChunk,
-    ChoiceDelta,
-  )
-  from openai.types.chat.parsed_chat_completion import ParsedChatCompletion
-  from openai.types.completion_usage import CompletionUsage
-except ModuleNotFoundError:
-  raise ImportError("`openai` not installed. Please install using `pip install openai`")
-
 from definable.model.openai.like import OpenAILike
+from definable.model.response import ModelResponse
+from definable.utils.log import log_debug
 
 
 @dataclass
@@ -68,7 +54,7 @@ class Perplexity(OpenAILike):
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-    run_response: Optional[RunOutput] = None,
+    **kwargs: Any,
   ) -> Dict[str, Any]:
     base_params: Dict[str, Any] = {
       "max_tokens": self.max_tokens,
@@ -91,75 +77,12 @@ class Perplexity(OpenAILike):
       log_debug(f"Calling {self.provider} with request parameters: {request_params}", log_level=2)
     return request_params
 
-  def parse_provider_response(self, response: Union[ChatCompletion, ParsedChatCompletion], **kwargs) -> ModelResponse:
-    model_response = ModelResponse()
+  def _augment_response(self, raw: Dict[str, Any], model_response: ModelResponse) -> None:
+    """Attach Perplexity search citations to a parsed response."""
+    if raw.get("citations"):
+      model_response.citations = Citations(urls=[UrlCitation(url=c) for c in raw["citations"]])
 
-    if hasattr(response, "error") and response.error:
-      raise ModelProviderError(
-        message=response.error.get("message", "Unknown model error"),
-        model_name=self.name,
-        model_id=self.id,
-      )
-
-    response_message = response.choices[0].message
-
-    if response_message.role is not None:
-      model_response.role = response_message.role
-
-    if response_message.content is not None:
-      model_response.content = response_message.content
-
-    if response_message.tool_calls is not None and len(response_message.tool_calls) > 0:
-      try:
-        model_response.tool_calls = [t.model_dump() for t in response_message.tool_calls]
-      except Exception as e:
-        log_warning(f"Error processing tool calls: {e}")
-
-    if hasattr(response, "citations") and response.citations is not None:
-      model_response.citations = Citations(
-        urls=[UrlCitation(url=c) for c in response.citations],
-      )
-
-    if response.usage is not None:
-      model_response.response_usage = self._get_metrics(response.usage)
-
-    return model_response
-
-  def parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:
-    model_response = ModelResponse()
-    if response_delta.choices and len(response_delta.choices) > 0:
-      choice_delta: ChoiceDelta = response_delta.choices[0].delta
-
-      if choice_delta:
-        if choice_delta.content is not None:
-          model_response.content = choice_delta.content
-
-        if choice_delta.tool_calls is not None:
-          model_response.tool_calls = choice_delta.tool_calls  # type: ignore
-
-    if hasattr(response_delta, "citations") and response_delta.citations is not None:
-      model_response.citations = Citations(
-        urls=[UrlCitation(url=c) for c in response_delta.citations],
-      )
-
-    if response_delta.usage is not None:
-      model_response.response_usage = self._get_metrics(response_delta.usage)
-
-    return model_response
-
-  def _get_metrics(self, response_usage: CompletionUsage) -> Metrics:
-    metrics = Metrics()
-
-    metrics.input_tokens = response_usage.prompt_tokens or 0
-    metrics.output_tokens = response_usage.completion_tokens or 0
-    metrics.total_tokens = response_usage.total_tokens or 0
-
-    if prompt_token_details := response_usage.prompt_tokens_details:
-      metrics.audio_input_tokens = prompt_token_details.audio_tokens or 0
-      metrics.cache_read_tokens = prompt_token_details.cached_tokens or 0
-
-    if completion_tokens_details := response_usage.completion_tokens_details:
-      metrics.audio_output_tokens = completion_tokens_details.audio_tokens or 0
-      metrics.reasoning_tokens = completion_tokens_details.reasoning_tokens or 0
-
-    return metrics
+  def _augment_delta(self, raw_delta: Dict[str, Any], model_response: ModelResponse) -> None:
+    """Attach Perplexity search citations to a streaming delta."""
+    if raw_delta.get("citations"):
+      model_response.citations = Citations(urls=[UrlCitation(url=c) for c in raw_delta["citations"]])

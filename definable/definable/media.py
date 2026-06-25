@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import uuid4
 
 from definable.utils.log import log_error
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, PrivateAttr, field_validator, model_validator
 
 
 class Image(BaseModel):
@@ -28,6 +28,11 @@ class Image(BaseModel):
   original_prompt: Optional[str] = None  # Original generation prompt
   revised_prompt: Optional[str] = None  # Revised generation prompt
   alt_text: Optional[str] = None  # Alt text description
+
+  # Memoized provider wire blocks keyed by provider — the same media object is
+  # re-formatted every agentic turn; encode/read-from-disk once.
+  # ponytail: assumes content is set once at construction (true today).
+  _block_cache: Dict[str, Any] = PrivateAttr(default_factory=dict)
 
   @model_validator(mode="before")
   def validate_and_normalize_content(cls, data: Any):
@@ -132,6 +137,10 @@ class Audio(BaseModel):
   # Output-specific fields (from LLMs)
   transcript: Optional[str] = None  # Text transcript of audio
   expires_at: Optional[int] = None  # Expiration timestamp for temporary URLs
+
+  # Memoized provider wire blocks (normalize + base64 is the worst per-turn cost).
+  # ponytail: assumes content is set once at construction (true today).
+  _block_cache: Dict[str, Any] = PrivateAttr(default_factory=dict)
 
   @model_validator(mode="before")
   def validate_and_normalize_content(cls, data: Any):
@@ -349,6 +358,11 @@ class File(BaseModel):
   external: Optional[Any] = None
   format: Optional[str] = None  # E.g. `pdf`, `txt`, `csv`, `xml`, etc.
   name: Optional[str] = None  # Name of the file, mandatory for AWS Bedrock document input
+
+  # Memoized provider wire blocks keyed by provider+options — base64 of a large
+  # PDF re-runs every agentic turn otherwise.
+  # ponytail: assumes content is set once at construction (true today).
+  _block_cache: Dict[str, Any] = PrivateAttr(default_factory=dict)
 
   @model_validator(mode="before")
   @classmethod

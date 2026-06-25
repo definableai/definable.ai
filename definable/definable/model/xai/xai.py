@@ -9,12 +9,6 @@ from definable.model.response import ModelResponse
 from definable.utils.log import log_debug
 from pydantic import BaseModel
 
-try:
-  from openai.types.chat.chat_completion import ChatCompletion
-  from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
-except (ImportError, ModuleNotFoundError):
-  raise ImportError("`openai` not installed. Please install using `pip install openai`")
-
 
 @dataclass
 class xAI(OpenAILike):
@@ -81,48 +75,18 @@ class xAI(OpenAILike):
 
     return request_params
 
-  def _parse_provider_response(  # type: ignore[override]
-    self,
-    response: ChatCompletion,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-  ) -> ModelResponse:
-    """
-    Parse the xAI response into a ModelResponse.
-    """
-    model_response = super()._parse_provider_response(response, response_format)
+  def _augment_response(self, raw: Dict[str, Any], model_response: ModelResponse) -> None:
+    """Attach xAI live-search citations to a parsed response."""
+    self._attach_citations(raw, model_response)
 
-    if hasattr(response, "citations") and response.citations:
+  def _augment_delta(self, raw_delta: Dict[str, Any], model_response: ModelResponse) -> None:
+    """Attach xAI live-search citations to a streaming delta."""
+    self._attach_citations(raw_delta, model_response)
+
+  @staticmethod
+  def _attach_citations(raw: Dict[str, Any], model_response: ModelResponse) -> None:
+    if raw.get("citations"):
       citations = Citations()
-      url_citations = []
-      for citation_url in response.citations:
-        url_citations.append(UrlCitation(url=str(citation_url)))
-
-      citations.urls = url_citations
-      citations.raw = response.citations
+      citations.urls = [UrlCitation(url=str(c)) for c in raw["citations"]]
+      citations.raw = raw["citations"]
       model_response.citations = citations
-
-    return model_response
-
-  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:  # type: ignore[override]
-    """
-    Parse the xAI streaming response.
-
-    Args:
-        response_delta: Raw response chunk
-
-    Returns:
-        ModelResponse: Parsed response data
-    """
-    model_response = super()._parse_provider_response_delta(response_delta)
-
-    if hasattr(response_delta, "citations") and response_delta.citations:
-      citations = Citations()
-      url_citations = []
-      for citation_url in response_delta.citations:
-        url_citations.append(UrlCitation(url=str(citation_url)))
-
-      citations.urls = url_citations
-      citations.raw = response_delta.citations
-      model_response.citations = citations
-
-    return model_response

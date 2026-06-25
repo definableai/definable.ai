@@ -1,0 +1,102 @@
+{
+  "provider": "OpenAI",
+  "_source": "pricepertoken MCP (pricing_source: openai). structured_output per OpenAI Structured Outputs docs (json_schema strict): gpt-4o and o-series/4.1/5 yes; gpt-4/gpt-4-turbo/gpt-3.5/o1-mini are JSON-mode only.",
+  "models": {
+    "gpt-4o": {
+      "pricing": { "input_per_million": 2.5, "output_per_million": 10.0, "cached_input_per_million": 1.25 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": false, "pdf_input": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 128000 }
+    },
+    "gpt-4o-mini": {
+      "pricing": { "input_per_million": 0.15, "output_per_million": 0.6, "cached_input_per_million": 0.075 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": false, "pdf_input": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 128000 }
+    },
+    "gpt-4.1": {
+      "pricing": { "input_per_million": 2.0, "output_per_million": 8.0, "cached_input_per_million": 0.5 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": false, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 1047576 }
+    },
+    "gpt-4.1-mini": {
+      "pricing": { "input_per_million": 0.4, "output_per_million": 1.6, "cached_input_per_million": 0.1 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": false, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 1047576 }
+    },
+    "gpt-4.1-nano": {
+      "pricing": { "input_per_million": 0.1, "output_per_million": 0.4, "cached_input_per_million": 0.025 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": false, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 1047576 }
+    },
+    "gpt-4-turbo": {
+      "pricing": { "input_per_million": 10.0, "output_per_million": 30.0 },
+      "capabilities": { "tool_use": true, "structured_output": false, "vision": true, "reasoning": false },
+      "modalities": { "input": ["text", "image"], "output": ["text"] },
+      "limits": { "context_window": 128000 }
+    },
+    "gpt-4": {
+      "pricing": { "input_per_million": 30.0, "output_per_million": 60.0 },
+      "capabilities": { "tool_use": true, "structured_output": false, "vision": false, "reasoning": false },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 8191 }
+    },
+    "gpt-3.5-turbo": {
+      "pricing": { "input_per_million": 0.5, "output_per_million": 1.5 },
+      "capabilities": { "tool_use": true, "structured_output": false, "vision": false, "reasoning": false },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 16385 }
+    },
+    "o1": {
+      "pricing": { "input_per_million": 15.0, "output_per_million": 60.0, "cached_input_per_million": 7.5 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": true, "pdf_input": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 200000 }
+    },
+    "o1-mini": {
+      "pricing": { "input_per_million": 0.55, "output_per_million": 2.2 },
+      "capabilities": { "tool_use": true, "structured_output": false, "vision": false, "reasoning": true },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 128000 }
+    },
+    "o3": {
+      "pricing": { "input_per_million": 2.0, "output_per_million": 8.0, "cached_input_per_million": 0.5 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": true, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 200000 }
+    },
+    "o3-mini": {
+      "pricing": { "input_per_million": 1.1, "output_per_million": 4.4, "cached_input_per_million": 0.55 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": false, "reasoning": true, "pdf_input": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 200000 }
+    },
+    "o4-mini": {
+      "pricing": { "input_per_million": 1.1, "output_per_million": 4.4, "cached_input_per_million": 0.275 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": true, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 200000 }
+    },
+    "gpt-5": {
+      "pricing": { "input_per_million": 1.25, "output_per_million": 10.0, "cached_input_per_million": 0.125 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": true, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 400000 }
+    },
+    "gpt-5-mini": {
+      "pricing": { "input_per_million": 0.25, "output_per_million": 2.0, "cached_input_per_million": 0.025 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": true, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 400000 }
+    },
+    "gpt-5-nano": {
+      "pricing": { "input_per_million": 0.05, "output_per_million": 0.4, "cached_input_per_million": 0.005 },
+      "capabilities": { "tool_use": true, "structured_output": true, "vision": true, "reasoning": true, "pdf_input": true, "web_search": true, "prompt_caching": true },
+      "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+      "limits": { "context_window": 400000 }
+    }
+  }
+}

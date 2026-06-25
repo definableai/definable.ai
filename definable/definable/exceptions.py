@@ -180,6 +180,7 @@ CONTEXT_WINDOW_PATTERNS: frozenset[str] = frozenset({
   "content_too_large",
   "request too large",
   "input too long",
+  "prompt is too long",  # Anthropic context-window message
   "exceeds the model",
 })
 
@@ -203,7 +204,8 @@ def classify_model_error(
   lowered = message.lower()
   if any(pattern in lowered for pattern in CONTEXT_WINDOW_PATTERNS):
     return ContextWindowExceededError(message, status_code=status_code or 400, model_name=model_name, model_id=model_id)
-  if status_code == 429:
+  # 429 is the standard rate limit; Anthropic uses 529 / "overloaded" as a retry-friendly load-shed signal.
+  if status_code in (429, 529) or "overloaded" in lowered:
     return ModelRateLimitError(message, status_code=status_code, model_name=model_name, model_id=model_id)
   return ModelProviderError(message, status_code=status_code, model_name=model_name, model_id=model_id)
 

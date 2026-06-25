@@ -1,0 +1,30 @@
+{
+  "provider": "DeepSeek",
+  "_source": "DeepSeek official pricing (api-docs.deepseek.com). deepseek-chat/deepseek-reasoner alias deepseek-v4-flash (non-thinking / thinking). MCP roster mixed third-party sources, not used for pricing. structured_output=false: DeepSeek docs document json_object mode only (json_mode), not strict json_schema.",
+  "models": {
+    "deepseek-chat": {
+      "pricing": { "input_per_million": 0.14, "output_per_million": 0.28, "cached_input_per_million": 0.0028 },
+      "capabilities": { "tool_use": true, "structured_output": false, "json_mode": true, "vision": false, "reasoning": false, "prompt_caching": true },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 1000000 }
+    },
+    "deepseek-reasoner": {
+      "pricing": { "input_per_million": 0.14, "output_per_million": 0.28, "cached_input_per_million": 0.0028, "reasoning_per_million": 0.28 },
+      "capabilities": { "tool_use": true, "structured_output": false, "json_mode": true, "vision": false, "reasoning": true, "prompt_caching": true },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 1000000 }
+    },
+    "deepseek-v4-flash": {
+      "pricing": { "input_per_million": 0.14, "output_per_million": 0.28, "cached_input_per_million": 0.0028 },
+      "capabilities": { "tool_use": true, "structured_output": false, "json_mode": true, "vision": false, "reasoning": true, "prompt_caching": true },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 1000000 }
+    },
+    "deepseek-v4-pro": {
+      "pricing": { "input_per_million": 0.435, "output_per_million": 0.87 },
+      "capabilities": { "tool_use": true, "structured_output": false, "json_mode": true, "vision": false, "reasoning": true },
+      "modalities": { "input": ["text"], "output": ["text"] },
+      "limits": { "context_window": 1048576 }
+    }
+  }
+}

@@ -2,14 +2,11 @@ from dataclasses import dataclass
 from os import getenv
 from typing import Any, Dict, List, Optional, Type, Union
 
-from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from pydantic import BaseModel
 
 from definable.exceptions import ModelAuthenticationError
-from definable.model.message import Message
 from definable.model.openai.like import OpenAILike
 from definable.model.response import ModelResponse
-from definable.run.agent import RunOutput
 
 
 @dataclass
@@ -52,9 +49,9 @@ class OpenRouter(OpenAILike):
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     tools: Optional[List[Dict[str, Any]]] = None,
     tool_choice: Optional[Union[str, Dict[str, Any]]] = None,
-    run_response: Optional[RunOutput] = None,
+    **kwargs: Any,
   ) -> Dict[str, Any]:
-    request_params = super().get_request_params(response_format=response_format, tools=tools, tool_choice=tool_choice, run_response=run_response)
+    request_params = super().get_request_params(response_format=response_format, tools=tools, tool_choice=tool_choice)
 
     # Add fallback models to extra_body if specified
     if self.models:
@@ -64,46 +61,16 @@ class OpenRouter(OpenAILike):
 
     return request_params
 
-  def _format_message(self, message: Message, compress_tool_results: bool = False) -> Dict[str, Any]:
-    message_dict = super()._format_message(message, compress_tool_results)
+  def _augment_response(self, raw: Dict[str, Any], model_response: ModelResponse) -> None:
+    choices = raw.get("choices") or []
+    if choices and (choices[0].get("message") or {}).get("reasoning_details"):
+      if model_response.provider_data is None:
+        model_response.provider_data = {}
+      model_response.provider_data["reasoning_details"] = choices[0]["message"]["reasoning_details"]
 
-    if message.role == "assistant" and message.provider_data:
-      if message.provider_data.get("reasoning_details"):
-        message_dict["reasoning_details"] = message.provider_data["reasoning_details"]
-
-    return message_dict
-
-  def _parse_provider_response(
-    self,
-    response: ChatCompletion,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    **kwargs: Any,
-  ) -> ModelResponse:
-    model_response = super()._parse_provider_response(response, response_format)
-
-    if response.choices and len(response.choices) > 0:
-      response_message = response.choices[0].message
-      if hasattr(response_message, "reasoning_details") and response_message.reasoning_details:
-        if model_response.provider_data is None:
-          model_response.provider_data = {}
-        model_response.provider_data["reasoning_details"] = response_message.reasoning_details
-      elif hasattr(response_message, "model_extra"):
-        extra = getattr(response_message, "model_extra", None)
-        if extra and isinstance(extra, dict) and extra.get("reasoning_details"):
-          if model_response.provider_data is None:
-            model_response.provider_data = {}
-          model_response.provider_data["reasoning_details"] = extra["reasoning_details"]
-
-    return model_response
-
-  def _parse_provider_response_delta(self, response_delta: ChatCompletionChunk) -> ModelResponse:  # type: ignore[override]
-    model_response = super()._parse_provider_response_delta(response_delta)
-
-    if response_delta.choices and len(response_delta.choices) > 0:
-      choice_delta = response_delta.choices[0].delta
-      if hasattr(choice_delta, "reasoning_details") and choice_delta.reasoning_details:
-        if model_response.provider_data is None:
-          model_response.provider_data = {}
-        model_response.provider_data["reasoning_details"] = choice_delta.reasoning_details
-
-    return model_response
+  def _augment_delta(self, raw_delta: Dict[str, Any], model_response: ModelResponse) -> None:
+    choices = raw_delta.get("choices") or []
+    if choices and (choices[0].get("delta") or {}).get("reasoning_details"):
+      if model_response.provider_data is None:
+        model_response.provider_data = {}
+      model_response.provider_data["reasoning_details"] = choices[0]["delta"]["reasoning_details"]

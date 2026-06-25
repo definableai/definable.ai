@@ -36,10 +36,7 @@ model/
 from definable.model import OpenAIChat, Message
 
 model = OpenAIChat(id="gpt-4o")
-response = model.invoke(
-  messages=[Message(role="user", content="Hello")],
-  assistant_message=Message(role="assistant", content=""),
-)
+response = model.invoke(messages=[Message(role="user", content="Hello")])
 print(response.content)
 ```
 
@@ -111,20 +108,18 @@ Abstract base class for all providers. Subclasses must implement four methods:
 
 | Method | Description |
 |--------|-------------|
-| `invoke(messages, assistant_message, ...)` | Synchronous single invocation |
-| `ainvoke(messages, assistant_message, ...)` | Async single invocation |
-| `invoke_stream(messages, assistant_message, ...)` | Sync streaming — yields `ModelResponse` |
-| `ainvoke_stream(messages, assistant_message, ...)` | Async streaming — yields `ModelResponse` |
+| `invoke(messages, ...)` | Synchronous single invocation |
+| `ainvoke(messages, ...)` | Async single invocation |
+| `invoke_stream(messages, ...)` | Sync streaming — yields `ModelResponse` |
+| `ainvoke_stream(messages, ...)` | Async streaming — yields `ModelResponse` |
 
-**Important:** `assistant_message` is a required second positional argument on all four methods. Pass an empty assistant `Message` as a container for the response:
+**Metrics:** each call owns one `Metrics` object, returned on `ModelResponse.response_usage`. The provider fills its token counts; the invoke method stamps `duration` and `time_to_first_token` onto the same object automatically — no caller-supplied container.
 
 ```python
 from definable.model import Message
 
-response = model.invoke(
-  messages=[Message(role="user", content="Hello")],
-  assistant_message=Message(role="assistant", content=""),
-)
+response = model.invoke(messages=[Message(role="user", content="Hello")])
+print(response.response_usage.total_tokens, response.response_usage.duration)
 ```
 
 Built-in features (configured on the Model subclass):
@@ -349,7 +344,7 @@ p = get_pricing("openai", "gpt-4o")
 cost = calculate_cost("openai", "gpt-4o", metrics)
 ```
 
-Pricing data is loaded from `model_pricing.json` via `PricingRegistry` (singleton). Returns `None` for unknown models rather than raising.
+Pricing and capability data live in per-provider **spec sheets** at `model/pricing/<provider>.json`, loaded by `PricingRegistry` (singleton). Each model entry has `pricing`, `capabilities`, `modalities` and `limits`; `get_pricing()` returns a `ModelPricing` and `get_spec()` returns the full `ModelSpec`. Returns `None` for unknown models rather than raising.
 
 ## Resilience
 
@@ -484,7 +479,7 @@ from definable.model.resilience.events import KeyRotatedEvent, ProviderFailoverE
 | Mistake | Correct approach |
 |---------|-----------------|
 | `images=["url"]` — plain strings in images field | Use `Image` objects from `definable.media` |
-| Forgetting `assistant_message` parameter | All four invoke methods require it as a positional arg |
+| Reading metrics off the input `Message` | Token + timing metrics live on `ModelResponse.response_usage`, not on any passed-in message |
 | `resolve_model_string("unknown/model")` | Raises `ValueError` — check `get_supported_providers()` first |
 | `KeyPool(keys=[])` | Raises `ValueError` — at least one key required |
 | `KeyPool(keys=["k", "k"])` | Raises `ValueError` — keys must be unique |

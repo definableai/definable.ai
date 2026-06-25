@@ -79,7 +79,6 @@ async def run(
       response = await _call_model(
         llm=llm,
         messages=messages,
-        assistant_message=assistant_message,
         tool_dicts=tool_dicts,
         output_schema=output_schema,
         stream=stream,
@@ -135,7 +134,6 @@ async def _call_model(
   *,
   llm: Model,
   messages: list[Message],
-  assistant_message: Message,
   tool_dicts: list[dict[str, Any]] | None,
   output_schema: Any | None,
   stream: bool,
@@ -146,18 +144,18 @@ async def _call_model(
   if not stream:
     return await llm.ainvoke(
       messages=messages,
-      assistant_message=assistant_message,
       tools=tool_dicts,
       response_format=output_schema,
     )
 
   content_parts: list[str] = []
   tool_executions: list[ToolExecution] = []
+  raw_tool_calls: list[dict[str, Any]] = []
+  usage: Any | None = None
   parsed: Any | None = None
 
   async for chunk in llm.ainvoke_stream(
     messages=messages,
-    assistant_message=assistant_message,
     tools=tool_dicts,
     response_format=output_schema,
   ):
@@ -167,14 +165,24 @@ async def _call_model(
     reasoning = getattr(chunk, "reasoning_content", None)
     if reasoning:
       events.emit(StreamChunkEvent(run_id=run_id, timestamp=time.time(), kind="reasoning", data=reasoning))
+    # Streamed deltas carry tool calls as raw provider fragments (OpenAI: keyed by index;
+    # Anthropic: one complete call per content_block). Collect and assemble via the
+    # provider's parse_tool_calls below — they're not dispatched as `tool_executions` here.
+    if chunk.tool_calls:
+      raw_tool_calls.extend(chunk.tool_calls)
     if chunk.tool_executions:
       tool_executions.extend(chunk.tool_executions)
+    # Usage arrives on a late chunk (final SSE chunk / message_delta); keep the latest.
+    if chunk.response_usage is not None:
+      usage = chunk.response_usage
     if chunk.parsed is not None:
       parsed = chunk.parsed
 
   return ModelResponse(
     content="".join(content_parts) or None,
+    tool_calls=llm.parse_tool_calls(raw_tool_calls) if raw_tool_calls else [],
     tool_executions=tool_executions,
+    response_usage=usage,
     parsed=parsed,
   )
 
