@@ -1,8 +1,9 @@
 """08 — subscribe to events live.
 
-`agent.events.on(EventType)` registers a typed handler. Use this to
-build dashboards, telemetry pipelines, or custom UIs without touching
-the harness.
+`agent.events.on(EventType)` registers a typed handler. Everything the
+agent does is a step: StepBegin/StepEnd carry a `type` of "content",
+"reasoning", or "tool". Use this to build dashboards, telemetry pipelines,
+or custom UIs without touching the harness.
 """
 
 from __future__ import annotations
@@ -11,10 +12,9 @@ import asyncio
 
 from definable import (
   Agent,
-  ModelResponded,
-  ToolCallCompleted,
-  ToolCallStarted,
-  TurnStarted,
+  AgentEnd,
+  StepBegin,
+  StepEnd,
   tool,
 )
 
@@ -33,25 +33,22 @@ async def main() -> None:
     tools=[lookup],
   )
 
-  @agent.events.on(TurnStarted)
-  def _on_turn(e: TurnStarted) -> None:
-    s = e.snapshot
-    print(f"  ▸ turn {s.turn}: {s.context_tokens} tokens, {len(s.available_tools)} tools")
+  @agent.events.on(StepBegin)
+  def _on_begin(e: StepBegin) -> None:
+    if e.type == "tool":
+      print(f"  → calling {e.name}({e.args})")
 
-  @agent.events.on(ToolCallStarted)
-  def _on_call(e: ToolCallStarted) -> None:
-    print(f"  → calling {e.call.name}({e.call.args})")
+  @agent.events.on(StepEnd)
+  def _on_end(e: StepEnd) -> None:
+    if e.type == "tool":
+      print(f"  ← tool {'ok' if e.success else 'failed'}: {e.data or e.error}")
+    elif e.type == "content":
+      tokens = (e.usage or {}).get("total_tokens")
+      print(f"  · model answered (turn done){f', {tokens} tokens' if tokens else ''}")
 
-  @agent.events.on(ToolCallCompleted)
-  def _on_done(e: ToolCallCompleted) -> None:
-    print(f"  ← {e.call.name} = {e.output}")
-
-  @agent.events.on(ModelResponded)
-  def _on_resp(e: ModelResponded) -> None:
-    if e.tool_calls:
-      print(f"  · model wants {len(e.tool_calls)} tool call(s)")
-    else:
-      print("  · model gave final answer")
+  @agent.events.on(AgentEnd)
+  def _on_run_end(e: AgentEnd) -> None:
+    print(f"  ✓ run done in {e.turns} turn(s), usage={e.usage}")
 
   async with agent:
     print((await agent.arun("What's the price of AAPL?")).content)

@@ -1,15 +1,15 @@
 """02 — streaming output.
 
 Calling `arun(stream=True)` returns an async iterator of Events. Token
-deltas arrive as `StreamChunkEvent`; the final answer wraps as
-`RunCompleted`.
+deltas arrive as `StepDelta` (type="content"); the run closes with
+`AgentEnd`.
 """
 
 from __future__ import annotations
 
 import asyncio
 
-from definable import Agent, RunCompleted, StreamChunkEvent
+from definable import Agent, AgentEnd, StepDelta
 
 
 async def main() -> None:
@@ -20,9 +20,9 @@ async def main() -> None:
   )
   async with agent:
     async for event in await agent.arun("about a cat", stream=True):
-      if isinstance(event, StreamChunkEvent):
+      if isinstance(event, StepDelta) and event.type == "content":
         print(event.data, end="", flush=True)
-      elif isinstance(event, RunCompleted):
+      elif isinstance(event, AgentEnd):
         print(f"\n\n[done in {event.turns} turn(s)]")
 
 

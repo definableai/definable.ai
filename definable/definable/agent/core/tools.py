@@ -1,7 +1,7 @@
 """ToolRegistry — flat name-keyed registry across Tool/Toolkit/MCP/Skill sources.
 
-Owns parallel dispatch, per-call error capture, and event emission for tool
-execution.
+Owns parallel dispatch, per-call error capture, before/after-tool hooks, and
+tool step events.
 """
 
 from __future__ import annotations
@@ -12,12 +12,12 @@ from typing import TYPE_CHECKING, Any, Iterable, Sequence
 
 from definable.agent.core.events import (
   EventBus,
+  StepBegin,
+  StepEnd,
   ToolCall,
-  ToolCallCompleted,
-  ToolCallFailed,
-  ToolCallStarted,
   ToolResult,
 )
+from definable.agent.core.hooks import AbortRun, Hook, SkipTool, ToolHookContext
 
 if TYPE_CHECKING:
   from definable.agent.toolkit.function import Function
@@ -93,47 +93,80 @@ class ToolRegistry:
     """Look up a tool by name. Returns None if unknown."""
     return self._by_name.get(name)
 
-  async def dispatch_parallel(
+  async def dispatch(
     self,
     calls: Sequence[ToolCall],
     *,
     events: EventBus,
     run_id: str,
+    turn: int,
+    hooks: Sequence[Hook] = (),
   ) -> list[ToolResult]:
-    """Execute calls concurrently. Capture per-call errors, emit lifecycle events.
+    """Execute calls concurrently with before/after-tool hooks.
 
-    Each call fires `ToolCallStarted`, then either `ToolCallCompleted` or
-    `ToolCallFailed`. Returns a list of `ToolResult` in the same order as
-    the input calls.
-
-    Unknown tool names produce a failed `ToolResult`; they do not raise.
+    Per call the order is: before_tool → StepBegin(tool) → execute →
+    StepEnd(tool) → after_tool (the step is nested inside the hooks).
+    Returns `ToolResult`s in input order. Unknown tools and tool exceptions
+    become failed results, never raised. A before_tool hook raising
+    `SkipTool` vetoes the call (no step events emitted); raising `AbortRun`
+    marks the result aborted (the loop stops after the batch).
     """
-    return await asyncio.gather(*(self._run_one(c, events=events, run_id=run_id) for c in calls))
+    return list(await asyncio.gather(*(self._run_one(c, events=events, run_id=run_id, turn=turn, hooks=hooks) for c in calls)))
 
-  async def _run_one(self, call: ToolCall, *, events: EventBus, run_id: str) -> ToolResult:
-    events.emit(ToolCallStarted(run_id=run_id, timestamp=time.time(), call=call))
+  async def _run_one(self, call: ToolCall, *, events: EventBus, run_id: str, turn: int, hooks: Sequence[Hook]) -> ToolResult:
+    sid = call.id or f"{run_id}:{turn}:tool:{call.name}"
+    hctx = ToolHookContext(run_id=run_id, turn=turn, call=call, args=dict(call.args))
 
+    # before_tool runs BEFORE the step opens — may edit args, or veto (no step emitted).
+    try:
+      for h in hooks:
+        await h.before_tool(hctx)
+    except SkipTool as e:
+      return ToolResult(call=call, success=False, error=str(e) or "skipped", skipped=True)
+    except AbortRun as e:
+      return ToolResult(call=call, success=False, error=str(e) or "aborted", aborted=True)
+
+    # The tool step is nested INSIDE the hooks: StepBegin … execute … StepEnd.
+    start = time.time()
+    events.emit(StepBegin(run_id=run_id, timestamp=start, id=sid, type="tool", turn=turn, name=call.name, args=hctx.args))
+    result = await self._execute(call, hctx.args)
+    end = time.time()
+    events.emit(
+      StepEnd(
+        run_id=run_id,
+        timestamp=end,
+        id=sid,
+        type="tool",
+        data=str(result.output) if result.success else None,
+        success=result.success,
+        error=result.error,
+        duration_ms=max(0.0, (end - start) * 1000.0),
+      )
+    )
+
+    # after_tool runs AFTER the step closed — may post-process the result the loop records.
+    hctx.result = result
+    try:
+      for h in hooks:
+        await h.after_tool(hctx)
+    except AbortRun as e:
+      return ToolResult(call=call, success=False, error=str(e) or "aborted", aborted=True)
+    return hctx.result or result
+
+  async def _execute(self, call: ToolCall, args: dict[str, Any]) -> ToolResult:
+    """Run one tool by name. Unknown names and exceptions become failed results."""
     fn = self._by_name.get(call.name)
     if fn is None:
-      err = f"Unknown tool: {call.name!r}"
-      events.emit(ToolCallFailed(run_id=run_id, timestamp=time.time(), call=call, error=err))
-      return ToolResult(call=call, success=False, error=err)
-
+      return ToolResult(call=call, success=False, error=f"Unknown tool: {call.name!r}")
     try:
       # Late import keeps the harness loadable without pulling Function machinery.
       from definable.agent.toolkit.function import FunctionCall
 
-      fc = FunctionCall(function=fn, arguments=dict(call.args), call_id=call.id)
+      fc = FunctionCall(function=fn, arguments=dict(args), call_id=call.id)
       exec_result = await fc.aexecute()
     except Exception as e:
-      msg = str(e) or e.__class__.__name__
-      events.emit(ToolCallFailed(run_id=run_id, timestamp=time.time(), call=call, error=msg))
-      return ToolResult(call=call, success=False, error=msg)
+      return ToolResult(call=call, success=False, error=str(e) or e.__class__.__name__)
 
     if exec_result.status == "success":
-      events.emit(ToolCallCompleted(run_id=run_id, timestamp=time.time(), call=call, output=exec_result.result))
       return ToolResult(call=call, success=True, output=exec_result.result)
-
-    err = exec_result.error or "tool returned failure status"
-    events.emit(ToolCallFailed(run_id=run_id, timestamp=time.time(), call=call, error=err))
-    return ToolResult(call=call, success=False, error=err)
+    return ToolResult(call=call, success=False, error=exec_result.error or "tool returned failure status")

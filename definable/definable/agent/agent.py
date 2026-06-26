@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, AsyncIterator
 from uuid import uuid4
 
-from definable.agent.core import Event, EventBus, RunCompleted, RunResult, ToolRegistry, run
+from definable.agent.core import AgentEnd, AgentError, Event, EventBus, Hook, RunResult, ToolRegistry, run
 from definable.agent.core.messages import build_messages
 from definable.agent.memory import FileMemory, memory_tools
 from definable.agent.toolkit.function import Function
@@ -48,6 +48,7 @@ class Agent:
     memory: FileMemory | bool = False,
     session_id: str | None = None,
     max_turns: int = 50,
+    hooks: list[Hook] | None = None,
     observability: Any | bool = False,
   ) -> None:
     self.name = name
@@ -57,6 +58,7 @@ class Agent:
     self.skills = skills or []
     self.session_id = session_id or str(uuid4())
     self.max_turns = max_turns
+    self.hooks = hooks or []
     self.events = EventBus()
 
     # Memory exposes itself as four tools the agent can call.
@@ -139,7 +141,7 @@ class Agent:
 
     `stream=False` returns a `RunResult`. `stream=True` returns an async
     iterator yielding `Event` objects in real time; the run completes
-    after `RunCompleted` is yielded.
+    after `AgentEnd` is yielded.
     """
     if not self._opened:
       await self.aopen()
@@ -160,6 +162,7 @@ class Agent:
       messages=messages,
       tools=self.tools,
       events=self.events,
+      hooks=self.hooks,
       memory=self.memory,
       stream=False,
       max_turns=self.max_turns,
@@ -174,13 +177,14 @@ class Agent:
     run_id: str,
     output_schema: Any | None,
   ) -> AsyncIterator[Event]:
-    """Spawn the loop in a background task, yield events from the bus until RunCompleted."""
+    """Spawn the loop in a background task, yield events from the bus until AgentEnd."""
     task = asyncio.create_task(
       run(
         llm=self.model,
         messages=messages,
         tools=self.tools,
         events=self.events,
+        hooks=self.hooks,
         memory=self.memory,
         stream=True,
         max_turns=self.max_turns,
@@ -193,7 +197,7 @@ class Agent:
         if event.run_id != run_id:
           continue
         yield event
-        if isinstance(event, RunCompleted):
+        if isinstance(event, (AgentEnd, AgentError)):
           break
     finally:
       if not task.done():

@@ -24,4 +24,4 @@ class RunResult:
   parsed: Any | None = None
   messages: list[Message] = field(default_factory=list)
   turns: int = 0
-  exit_reason: Literal["natural", "max_turns", "error"] = "natural"
+  exit_reason: Literal["natural", "max_turns", "error", "aborted"] = "natural"

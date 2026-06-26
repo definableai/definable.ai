@@ -7,7 +7,7 @@ from definable.types import JsonSchema
 
 from definable.exceptions import AgentRunException
 from definable.media import Audio, File, Image, Video
-from definable.run import RunContext
+from definable.agent.toolkit.run_context import RunContext
 from definable.utils.log import log_debug, log_error, log_exception, log_warning
 from docstring_parser import parse
 from packaging.version import Version

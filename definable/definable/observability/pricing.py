@@ -3,7 +3,7 @@
 Thin adapter on top of :class:`definable.model.pricing.PricingRegistry`
 (which loads the per-provider spec sheets in ``model/pricing/*.json``).
 Observability stores token counts
-in a plain ``dict[str, int]`` on each :class:`ModelResponded` event;
+in a plain ``dict[str, int]`` on each content :class:`StepEnd` event;
 this module turns that dict into a number for the UI.
 
 Unknown ``(provider, model)`` pairs return ``0.0`` and emit a one-time

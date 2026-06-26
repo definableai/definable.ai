@@ -4,8 +4,16 @@ Pure function design — no I/O, no async, no DB. The store layer feeds
 events into ``project()`` and persists whatever patches come back.
 
 A :class:`RunState` lives per ``run_id`` in the caller's memory:
-trackers for the open turn's LLM span, currently-open tool spans, and
-running token + cost totals. Closing the run drops the state.
+trackers for the open model span, currently-open tool spans, and running
+token + cost totals. Closing the run drops the state.
+
+Step-event mapping:
+  StepBegin(content)  -> open  model span
+  StepEnd(content)    -> close model span + accumulate usage/cost
+  StepBegin(tool)     -> open  tool span
+  StepEnd(tool)       -> close tool span
+  AgentEnd / AgentError -> close run
+  reasoning steps + StepDelta -> no projection change.
 """
 
 from __future__ import annotations
@@ -14,15 +22,11 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from definable.agent.core.events import (
+  AgentEnd,
+  AgentError,
   Event,
-  MemoryAccessed,
-  ModelResponded,
-  RunCompleted,
-  RunErrored,
-  ToolCallCompleted,
-  ToolCallFailed,
-  ToolCallStarted,
-  TurnStarted,
+  StepBegin,
+  StepEnd,
 )
 from definable.observability.pricing import cost as compute_cost
 from definable.observability.schema import RunRow, SpanRow
@@ -62,27 +66,28 @@ def project(event: Event, state: RunState) -> ProjectionResult:
   """
   ts = event.timestamp
 
-  if isinstance(event, TurnStarted):
+  if isinstance(event, StepBegin) and event.type == "content":
     span = SpanRow(run_id=state.run.id, kind="llm", name=state.model or "model", start_ts=ts)
     state.open_llm_span = span
-    state.run = replace(state.run, turns=event.snapshot.turn)
+    state.run = replace(state.run, turns=event.turn)
     return ProjectionResult(run=state.run, new_spans=[span])
 
-  if isinstance(event, ModelResponded):
+  if isinstance(event, StepEnd) and event.type == "content":
     closed: list[SpanRow] = []
     if state.open_llm_span is not None:
       dur_ms = max(0.0, (ts - state.open_llm_span.start_ts) * 1000.0)
-      closed_span = SpanRow(
-        run_id=state.run.id,
-        kind="llm",
-        name=state.open_llm_span.name,
-        start_ts=state.open_llm_span.start_ts,
-        end_ts=ts,
-        duration_ms=dur_ms,
-        status="ok",
-        metadata={"usage": event.usage or {}},
+      closed.append(
+        SpanRow(
+          run_id=state.run.id,
+          kind="llm",
+          name=state.open_llm_span.name,
+          start_ts=state.open_llm_span.start_ts,
+          end_ts=ts,
+          duration_ms=dur_ms,
+          status="ok",
+          metadata={"usage": event.usage or {}},
+        )
       )
-      closed.append(closed_span)
       state.open_llm_span = None
     if event.usage:
       added_in = int(event.usage.get("input_tokens", 0))
@@ -98,31 +103,17 @@ def project(event: Event, state: RunState) -> ProjectionResult:
       )
     return ProjectionResult(run=state.run, closed_spans=closed)
 
-  if isinstance(event, ToolCallStarted):
-    span = SpanRow(run_id=state.run.id, kind="tool", name=event.call.name, start_ts=ts)
-    state.open_tool_spans[event.call.id] = span
+  if isinstance(event, StepBegin) and event.type == "tool":
+    span = SpanRow(run_id=state.run.id, kind="tool", name=event.name or "tool", start_ts=ts)
+    state.open_tool_spans[event.id] = span
     return ProjectionResult(run=state.run, new_spans=[span])
 
-  if isinstance(event, ToolCallCompleted):
-    return _close_tool_span(state, event.call.id, ts, status="ok", metadata={"output": _preview(event.output)})
+  if isinstance(event, StepEnd) and event.type == "tool":
+    status = "ok" if event.success else "err"
+    metadata: dict[str, Any] = {"output": _preview(event.data)} if event.success else {"error": event.error}
+    return _close_tool_span(state, event.id, ts, status=status, metadata=metadata)
 
-  if isinstance(event, ToolCallFailed):
-    return _close_tool_span(state, event.call.id, ts, status="err", metadata={"error": event.error})
-
-  if isinstance(event, MemoryAccessed):
-    span = SpanRow(
-      run_id=state.run.id,
-      kind="memory",
-      name=event.op,
-      start_ts=ts,
-      end_ts=ts,
-      duration_ms=0.0,
-      status="ok",
-      metadata={"key": event.key},
-    )
-    return ProjectionResult(run=state.run, new_spans=[span], closed_spans=[span])
-
-  if isinstance(event, RunCompleted):
+  if isinstance(event, AgentEnd):
     state.run = replace(
       state.run,
       ended_at=ts,
@@ -133,7 +124,7 @@ def project(event: Event, state: RunState) -> ProjectionResult:
     )
     return ProjectionResult(run=state.run, closed_run=True)
 
-  if isinstance(event, RunErrored):
+  if isinstance(event, AgentError):
     state.run = replace(
       state.run,
       ended_at=ts,
@@ -143,7 +134,7 @@ def project(event: Event, state: RunState) -> ProjectionResult:
     )
     return ProjectionResult(run=state.run, closed_run=True)
 
-  # Unknown event (e.g. StreamChunkEvent) — no projection change.
+  # Other events (AgentBegin, StepDelta, reasoning steps) — no projection change.
   return ProjectionResult(run=state.run)
 
 

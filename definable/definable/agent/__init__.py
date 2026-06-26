@@ -18,48 +18,52 @@ Quick start::
         print(event)
 
 Public surface: Agent + the harness primitives in `agent.core`.
-Composition is via the EventBus (`agent.events.on(EventType)`) and the
-ToolRegistry (toolkits / mcp / skills / memory tools all flatten).
+Composition is via Hooks (control plane — mutate/abort) and the EventBus
+(observe-only step events; `agent.events.on(EventType)`).
 """
 
 from definable.agent.agent import Agent
 from definable.agent.core import (
+  AbortRun,
+  AgentBegin,
+  AgentEnd,
+  AgentError,
   Event,
   EventBus,
-  MemoryAccessed,
-  ModelResponded,
-  RunCompleted,
-  RunErrored,
+  Hook,
+  ModelHookContext,
   RunResult,
-  StreamChunkEvent,
+  SkipTool,
+  StepBegin,
+  StepDelta,
+  StepEnd,
+  StepType,
   ToolCall,
-  ToolCallCompleted,
-  ToolCallFailed,
-  ToolCallStarted,
+  ToolHookContext,
   ToolRegistry,
   ToolResult,
-  TurnSnapshot,
-  TurnStarted,
 )
 from definable.agent.memory import FileMemory
 
 __all__ = [
+  "AbortRun",
   "Agent",
+  "AgentBegin",
+  "AgentEnd",
+  "AgentError",
   "Event",
   "EventBus",
   "FileMemory",
-  "MemoryAccessed",
-  "ModelResponded",
-  "RunCompleted",
-  "RunErrored",
+  "Hook",
+  "ModelHookContext",
   "RunResult",
-  "StreamChunkEvent",
+  "SkipTool",
+  "StepBegin",
+  "StepDelta",
+  "StepEnd",
+  "StepType",
   "ToolCall",
-  "ToolCallCompleted",
-  "ToolCallFailed",
-  "ToolCallStarted",
+  "ToolHookContext",
   "ToolRegistry",
   "ToolResult",
-  "TurnSnapshot",
-  "TurnStarted",
 ]

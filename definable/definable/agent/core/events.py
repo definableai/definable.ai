@@ -1,7 +1,16 @@
-"""EventBus + Event types — the harness's only observability primitive.
+"""EventBus + step events — the harness's only observability primitive.
 
-Independent of run lifecycle. Fire-and-forget. Subscribers can be sync
-callbacks (fire on emit) or async consumers (via stream()).
+Everything the agent does is a *step*. A run is::
+
+    AgentBegin
+      StepBegin / StepDelta* / StepEnd   (type="reasoning")   ─┐ one model call
+      StepBegin / StepDelta* / StepEnd   (type="content")     ─┘ (content carries usage)
+      StepBegin / StepEnd                (type="tool")  × N
+      ... repeat per turn ...
+    AgentEnd  (or AgentError)
+
+Events are observe-only and fan out fire-and-forget. To *act* on the run
+(mutate messages/args, veto a tool, abort) use a Hook — see hooks.py.
 """
 
 from __future__ import annotations
@@ -9,11 +18,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, TypeVar
-
-if TYPE_CHECKING:
-  from definable.agent.core.debug import TurnSnapshot
+from dataclasses import dataclass
+from typing import Any, AsyncIterator, Callable, Literal, TypeVar
 
 log = logging.getLogger(__name__)
 
@@ -25,8 +31,8 @@ log = logging.getLogger(__name__)
 class ToolCall:
   """The harness's minimal view of a tool invocation request.
 
-  Decoupled from `definable.tool.function.FunctionCall` so the loop
-  doesn't drag in HITL/pre-hook/post-hook machinery.
+  Decoupled from `FunctionCall` so the loop doesn't drag in the heavier
+  tool machinery.
   """
 
   id: str
@@ -42,9 +48,13 @@ class ToolResult:
   success: bool
   output: Any | None = None
   error: str | None = None
+  skipped: bool = False  # a before_tool hook raised SkipTool
+  aborted: bool = False  # a hook raised AbortRun on this call
 
 
-# ---- Event hierarchy -----------------------------------------------------
+# ---- Step events ---------------------------------------------------------
+
+StepType = Literal["content", "reasoning", "tool"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -56,76 +66,70 @@ class Event:
 
 
 @dataclass(frozen=True, kw_only=True)
-class TurnStarted(Event):
-  """Fires at the top of each loop iteration, before the model call."""
-
-  snapshot: TurnSnapshot
+class AgentBegin(Event):
+  """Fires once, at the very start of a run."""
 
 
 @dataclass(frozen=True, kw_only=True)
-class StreamChunkEvent(Event):
-  """A delta from a streaming model call.
+class StepBegin(Event):
+  """A step opened. `id` correlates Begin/Delta/End.
 
-  `kind` is one of "content" | "reasoning" | "tool_call_delta".
+  For tool steps `id` is the provider tool_call_id and `name`/`args` are set.
+  For content/reasoning steps `id` is synthesized per model call.
   """
 
-  kind: str
+  id: str
+  type: StepType
+  turn: int
+  name: str | None = None  # tool steps only
+  args: dict[str, Any] | None = None  # tool steps only
+
+
+@dataclass(frozen=True, kw_only=True)
+class StepDelta(Event):
+  """An incremental fragment for an open step (streaming only).
+
+  `data` is a content/reasoning text fragment, or a partial tool-args
+  fragment when the provider streams them (OpenAI).
+  """
+
+  id: str
+  type: StepType
   data: str
 
 
 @dataclass(frozen=True, kw_only=True)
-class ModelResponded(Event):
-  """Fires after a model call completes, before tool dispatch.
+class StepEnd(Event):
+  """A step closed.
 
-  `usage` is a flat dict of provider-reported token counts when available.
-  Kept as a plain dict (not the `model.metrics.Metrics` dataclass) so this
-  layer stays free of `definable.model` imports — observability serialization
-  is trivial.
+  - content/reasoning: `data` = final text; content also carries `usage`
+    (the per-model-call token metrics — usage is per model call, not per tool).
+  - tool: `data` = stringified result, plus `success`/`error`/`duration_ms`.
   """
 
-  content: str | None
-  tool_calls: list[ToolCall] = field(default_factory=list)
-  usage: dict[str, int] | None = None
+  id: str
+  type: StepType
+  data: str | None = None
+  usage: dict[str, int] | None = None  # content step only
+  success: bool | None = None  # tool step only
+  error: str | None = None  # tool step only
+  duration_ms: float | None = None  # tool step only
 
 
 @dataclass(frozen=True, kw_only=True)
-class ToolCallStarted(Event):
-  call: ToolCall
+class AgentEnd(Event):
+  """Fires once, when the run completes. `usage` is the run total."""
 
-
-@dataclass(frozen=True, kw_only=True)
-class ToolCallCompleted(Event):
-  call: ToolCall
-  output: Any
-
-
-@dataclass(frozen=True, kw_only=True)
-class ToolCallFailed(Event):
-  call: ToolCall
-  error: str
-
-
-@dataclass(frozen=True, kw_only=True)
-class MemoryAccessed(Event):
-  """Fires when a memory tool reads/writes/lists/searches.
-
-  `op` is one of "read" | "write" | "list" | "search".
-  `key` is the file name for read/write, the query for search, None for list.
-  """
-
-  op: str
-  key: str | None = None
-
-
-@dataclass(frozen=True, kw_only=True)
-class RunCompleted(Event):
   content: str | None
   turns: int
-  exit_reason: str = "natural"
+  usage: dict[str, int] | None = None
+  exit_reason: Literal["natural", "max_turns", "aborted"] = "natural"
 
 
 @dataclass(frozen=True, kw_only=True)
-class RunErrored(Event):
+class AgentError(Event):
+  """Fires once, when a model call raises and ends the run."""
+
   error: str
   turns: int
 
@@ -161,8 +165,8 @@ class EventBus:
 
     Usage::
 
-        @bus.on(RunCompleted)
-        def handle(e: RunCompleted) -> None:
+        @bus.on(AgentEnd)
+        def handle(e: AgentEnd) -> None:
           print(e.content)
     """
 
