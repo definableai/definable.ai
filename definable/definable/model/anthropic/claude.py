@@ -22,7 +22,7 @@ from definable.model.message import Message
 from definable.tokens import count_schema_tokens
 from definable.agent.toolkit.function import Function
 from definable.utils.claude import MCPServerConfiguration, format_messages, format_tools_for_model
-from definable.utils.log import log_debug, log_warning
+from definable.utils.log import log_debug
 
 DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 ANTHROPIC_VERSION = "2023-06-01"
@@ -37,23 +37,6 @@ class Claude(Model):
     "claude-3-haiku-20240307",
     "claude-3-5-haiku-20241022",
     "claude-3-5-haiku-latest",
-  }
-
-  NON_STRUCTURED_OUTPUT_MODELS = {
-    "claude-3-opus-20240229",
-    "claude-3-sonnet-20240229",
-    "claude-3-haiku-20240307",
-    "claude-3-opus",
-    "claude-3-sonnet",
-    "claude-3-haiku",
-    "claude-3-5-sonnet-20240620",
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-sonnet",
-    "claude-3-5-haiku-20241022",
-    "claude-3-5-haiku-latest",
-    "claude-3-5-haiku",
-    "claude-sonnet-4-20250514",
-    "claude-sonnet-4",
   }
 
   id: str = "claude-sonnet-4-5-20250929"
@@ -95,8 +78,10 @@ class Claude(Model):
     super().__post_init__()
     if self.thinking:
       self._validate_thinking_support()
-    if self._supports_structured_outputs():
-      self.supports_native_structured_outputs = True
+    # Advertised capability metadata (read by observability/contract tests) —
+    # NOT a gate: output_format is sent whenever a schema is requested.
+    s = self.spec()
+    self.supports_native_structured_outputs = bool(s and s.supports("structured_output"))
     if self.id not in self.NON_THINKING_MODELS:
       self.supports_native_thinking = True
     if self.skills:
@@ -139,33 +124,6 @@ class Claude(Model):
       headers.update(self.default_headers)
     return headers
 
-  # --- structured output ----------------------------------------------------
-
-  def _supports_structured_outputs(self) -> bool:
-    if self.id in self.NON_STRUCTURED_OUTPUT_MODELS:
-      return False
-    if self.id.startswith("claude-3-"):
-      return False
-    if self.id.startswith("claude-sonnet-4-") and not self.id.startswith("claude-sonnet-4-5"):
-      return False
-    if self.id.startswith("claude-opus-4-") and not (self.id.startswith("claude-opus-4-1") or self.id.startswith("claude-opus-4-5")):
-      return False
-    return True
-
-  def _using_structured_outputs(
-    self,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-  ) -> bool:
-    if response_format is not None:
-      if self._supports_structured_outputs():
-        return True
-      log_warning(f"Model '{self.id}' does not support structured outputs. Structured output features will not be available for this model.")
-    for tool in tools or []:
-      if tool.get("type") == "function" and (tool.get("function", {}) or {}).get("strict") is True:
-        return True
-    return False
-
   def _validate_thinking_support(self) -> None:
     if self.thinking and self.id in self.NON_THINKING_MODELS:
       models = "\n  - ".join(sorted(self.NON_THINKING_MODELS))
@@ -194,7 +152,10 @@ class Claude(Model):
                 self._ensure_additional_properties_false(item)
 
   def _build_output_format(self, response_format: Optional[Union[Dict, Type[BaseModel]]]) -> Optional[Dict[str, Any]]:
-    if response_format is None or not self._supports_structured_outputs():
+    # No capability gate: send output_format whenever a schema is requested. A
+    # model that supports structured outputs honours it; one that doesn't returns
+    # an API error — we don't second-guess it from a spec sheet.
+    if response_format is None:
       return None
     if isinstance(response_format, type) and issubclass(response_format, BaseModel):
       schema = response_format.model_json_schema()
@@ -206,14 +167,6 @@ class Claude(Model):
     if response_format.get("type") == "json_object":
       return None
     return response_format
-
-  def _validate_structured_outputs_usage(
-    self,
-    response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
-    tools: Optional[List[Dict[str, Any]]] = None,
-  ) -> None:
-    if self._using_structured_outputs(response_format, tools) and not self._supports_structured_outputs():
-      raise ValueError(f"Model '{self.id}' does not support structured outputs.\n\n")
 
   # --- request body (called by the transform) -------------------------------
 
@@ -241,7 +194,10 @@ class Claude(Model):
       params["top_k"] = self.top_k
 
     betas = list(self.betas) if self.betas else []
-    if self._using_structured_outputs(response_format, tools) and "structured-outputs-2025-11-13" not in betas:
+    uses_structured = response_format is not None or any(
+      t.get("type") == "function" and (t.get("function") or {}).get("strict") is True for t in tools or []
+    )
+    if uses_structured and "structured-outputs-2025-11-13" not in betas:
       betas.append("structured-outputs-2025-11-13")
     if betas:
       params["betas"] = betas  # routed to the anthropic-beta header by the transform
@@ -263,7 +219,6 @@ class Claude(Model):
     response_format: Optional[Union[Dict, Type[BaseModel]]] = None,
     system_blocks: Optional[List[Dict[str, Any]]] = None,
   ) -> Dict[str, Any]:
-    self._validate_structured_outputs_usage(response_format, tools)
     body = self.get_request_params(response_format=response_format, tools=tools).copy()
 
     if self.system_prompt_blocks:

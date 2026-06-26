@@ -19,7 +19,7 @@ import os
 from abc import ABC
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Any, AsyncIterator, ClassVar, Dict, Iterator, List, Optional, Protocol, Sequence, Type, Union, runtime_checkable
+from typing import TYPE_CHECKING, Any, AsyncIterator, ClassVar, Dict, Iterator, List, Optional, Protocol, Sequence, Type, Union, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -29,6 +29,9 @@ from definable.model.message import Message
 from definable.model.metrics import Metrics
 from definable.model.response import ModelResponse
 from definable.types import ToolCallDict
+
+if TYPE_CHECKING:
+  from definable.model.pricing import ModelSpec
 
 # --- test guard: block accidental real API calls ---------------------------
 
@@ -191,12 +194,14 @@ class Model(ABC):
   ) -> ModelResponse:
     _check_model_requests_allowed()
     self._resolve_auth()
+    spec = self.spec()
     req = self._transform().request(self, messages, tools, response_format, tool_choice, False, compress_tool_results)
     t0 = perf_counter()
     raw = post_json(req.url, req.headers, req.body, self.timeout, self.name or self.id, self.id, params=req.params)
     resp = self._transform().response(self, raw, response_format)
     _stamp_timing(resp, perf_counter() - t0)
-    return resp
+    self._apply_cost(resp.response_usage, spec)
+    return self._ensure_role(resp)
 
   async def ainvoke(
     self,
@@ -208,12 +213,14 @@ class Model(ABC):
   ) -> ModelResponse:
     _check_model_requests_allowed()
     self._resolve_auth()
+    spec = self.spec()
     req = self._transform().request(self, messages, tools, response_format, tool_choice, False, compress_tool_results)
     t0 = perf_counter()
     raw = await apost_json(req.url, req.headers, req.body, self.timeout, self.name or self.id, self.id, params=req.params)
     resp = self._transform().response(self, raw, response_format)
     _stamp_timing(resp, perf_counter() - t0)
-    return resp
+    self._apply_cost(resp.response_usage, spec)
+    return self._ensure_role(resp)
 
   def invoke_stream(
     self,
@@ -225,25 +232,45 @@ class Model(ABC):
   ) -> Iterator[ModelResponse]:
     _check_model_requests_allowed()
     self._resolve_auth()
+    spec = self.spec()
     req = self._transform().request(self, messages, tools, response_format, tool_choice, True, compress_tool_results)
     decoder = self._transform().decoder(self, response_format)
     t0 = perf_counter()
     ttft: Optional[float] = None
     usage: Optional[Metrics] = None
+    pending_usage = None
     for event in stream_sse(req.url, req.headers, req.body, self.timeout, self.name or self.id, self.id, params=req.params):
       for delta in decoder.feed(event):
         if ttft is None and (delta.content or delta.tool_calls):
           ttft = perf_counter() - t0
         if delta.response_usage is not None:
           usage = delta.response_usage
-        yield delta
-    for delta in decoder.finish():
+          # A pure-usage delta (no content/tool_calls) is held back so cost +
+          # timing can be stamped onto it *before* the consumer sees it. Whether
+          # usage rides a mid-stream feed() chunk (OpenAI) or a finish() delta
+          # (Anthropic/Gemini), the terminal usage event reaches an eager reader
+          # already stamped — not mutated a tick after it was consumed.
+          if not (delta.content or delta.tool_calls):
+            pending_usage = delta
+            continue
+        yield self._ensure_role(delta)
+    finals = list(decoder.finish())
+    for delta in finals:
       if delta.response_usage is not None:
         usage = delta.response_usage
-      yield delta
+        if pending_usage is None and not (delta.content or delta.tool_calls):
+          pending_usage = delta
+    if pending_usage is not None:
+      usage = pending_usage.response_usage  # stamp the exact metrics that rides the emitted terminal delta
+    self._apply_cost(usage, spec)
     extra = _stamp_stream_timing(usage, perf_counter() - t0, ttft)
+    for delta in finals:
+      if delta is not pending_usage:
+        yield self._ensure_role(delta)
+    if pending_usage is not None:
+      yield self._ensure_role(pending_usage)
     if extra is not None:
-      yield extra
+      yield self._ensure_role(extra)
 
   async def ainvoke_stream(
     self,
@@ -255,25 +282,45 @@ class Model(ABC):
   ) -> AsyncIterator[ModelResponse]:
     _check_model_requests_allowed()
     self._resolve_auth()
+    spec = self.spec()
     req = self._transform().request(self, messages, tools, response_format, tool_choice, True, compress_tool_results)
     decoder = self._transform().decoder(self, response_format)
     t0 = perf_counter()
     ttft: Optional[float] = None
     usage: Optional[Metrics] = None
+    pending_usage = None
     async for event in astream_sse(req.url, req.headers, req.body, self.timeout, self.name or self.id, self.id, params=req.params):
       for delta in decoder.feed(event):
         if ttft is None and (delta.content or delta.tool_calls):
           ttft = perf_counter() - t0
         if delta.response_usage is not None:
           usage = delta.response_usage
-        yield delta
-    for delta in decoder.finish():
+          # A pure-usage delta (no content/tool_calls) is held back so cost +
+          # timing can be stamped onto it *before* the consumer sees it. Whether
+          # usage rides a mid-stream feed() chunk (OpenAI) or a finish() delta
+          # (Anthropic/Gemini), the terminal usage event reaches an eager reader
+          # already stamped — not mutated a tick after it was consumed.
+          if not (delta.content or delta.tool_calls):
+            pending_usage = delta
+            continue
+        yield self._ensure_role(delta)
+    finals = list(decoder.finish())
+    for delta in finals:
       if delta.response_usage is not None:
         usage = delta.response_usage
-      yield delta
+        if pending_usage is None and not (delta.content or delta.tool_calls):
+          pending_usage = delta
+    if pending_usage is not None:
+      usage = pending_usage.response_usage  # stamp the exact metrics that rides the emitted terminal delta
+    self._apply_cost(usage, spec)
     extra = _stamp_stream_timing(usage, perf_counter() - t0, ttft)
+    for delta in finals:
+      if delta is not pending_usage:
+        yield self._ensure_role(delta)
+    if pending_usage is not None:
+      yield self._ensure_role(pending_usage)
     if extra is not None:
-      yield extra
+      yield self._ensure_role(extra)
 
   # --- provider hooks (override as needed) ----------------------------------
 
@@ -305,12 +352,29 @@ class Model(ABC):
       out.append({"type": "function", "function": tool.to_dict()} if isinstance(tool, Function) else tool)
     return out
 
-  def _calculate_cost_if_needed(self, metrics: Metrics) -> None:
-    """Set cost on metrics from the central pricing table if a provider didn't."""
-    if metrics.cost is None:
-      from definable.model.pricing import calculate_cost
+  def spec(self) -> Optional["ModelSpec"]:
+    """This model's spec sheet — pricing, capabilities, modalities, limits — from
+    the per-provider JSON in ``model/pricing/``, or None if the model isn't
+    catalogued. The spec sheet is the single source of truth for capabilities."""
+    from definable.model.pricing import get_spec
 
-      metrics.cost = calculate_cost(self.provider, self.id, metrics)  # type: ignore[arg-type]
+    return get_spec(self.get_provider(), self.id)
+
+  def _apply_cost(self, metrics: Optional[Metrics], spec: Optional["ModelSpec"]) -> None:
+    """Stamp cost onto the response metrics from the spec sheet's pricing."""
+    if metrics is not None and metrics.cost is None and spec is not None:
+      metrics.cost = spec.pricing.calculate_cost(metrics)
+
+  @staticmethod
+  def _ensure_role(resp: ModelResponse) -> ModelResponse:
+    """The gateway's role invariant: every ModelResponse it emits carries the
+    unified ``assistant`` role. Providers report role inconsistently — some only
+    on the first stream chunk, Gemini as ``model``, none on streamed deltas — so
+    the seam normalizes it once, here, for both the streamed and non-streamed
+    paths. A model response is always the assistant turn."""
+    if resp.role is None:
+      resp.role = "assistant"
+    return resp
 
   def count_tokens(
     self,

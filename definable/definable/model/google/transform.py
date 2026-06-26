@@ -175,7 +175,6 @@ def _parse_response(model: Any, raw: Dict[str, Any], response_format: Optional[U
 
   if raw.get("usageMetadata"):
     mr.response_usage = _metrics(raw["usageMetadata"])
-    model._calculate_cost_if_needed(mr.response_usage)
 
   _parse_structured_output(mr, response_format, mr.content or "")
   return mr

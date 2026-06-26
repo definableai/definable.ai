@@ -136,7 +136,6 @@ def _parse_response(model: Any, response: Dict[str, Any], response_format: Optio
 
   if response.get("usage") is not None:
     mr.response_usage = _metrics(response["usage"])
-    model._calculate_cost_if_needed(mr.response_usage)
 
   if mr.provider_data is None:
     mr.provider_data = {}
@@ -204,7 +203,6 @@ def _parse_delta(model: Any, response_delta: Dict[str, Any]) -> ModelResponse:
 
   if response_delta.get("usage") is not None:
     mr.response_usage = _metrics(response_delta["usage"])
-    model._calculate_cost_if_needed(mr.response_usage)
 
   model._augment_delta(response_delta, mr)
   return mr
